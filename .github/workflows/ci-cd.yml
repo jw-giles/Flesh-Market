@@ -1,0 +1,95 @@
+
+name: CI & VPS Deploy
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm i; fi
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Test
+        run: npm test --if-present
+
+      - name: Build
+        run: npm run build --if-present
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: |
+            .
+            !node_modules/**
+            !.git/**
+            !.github/**
+            !**/*.log
+            !**/*.tmp
+            !**/*.cache
+          if-no-files-found: warn
+
+  deploy:
+    needs: ci
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tar bundle
+        run: tar czf deploy.tgz --exclude='.git' --exclude='node_modules' --exclude='.github' .
+
+      - name: Copy to VPS
+        if: ${{ secrets.SSH_HOST != '' }}
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "deploy.tgz"
+          target: "/tmp/fleshmarket-deploy.tgz"
+
+      - name: Remote install + restart
+        if: ${{ secrets.SSH_HOST != '' }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            APP_DIR="${{ secrets.REMOTE_DIR:-/opt/fleshmarket }}"
+            SERVICE_NAME="${{ secrets.SERVICE_NAME:-fleshmarket }}"
+            sudo mkdir -p "$APP_DIR"
+            sudo tar xzf /tmp/fleshmarket-deploy.tgz -C "$APP_DIR"
+            cd "$APP_DIR"
+            if [ -f package-lock.json ]; then sudo npm ci --omit=dev; fi
+            sudo touch .env
+            if systemctl list-units --type=service --all | grep -q "$SERVICE_NAME.service"; then
+              sudo systemctl restart "$SERVICE_NAME"
+            else
+              echo "Installing service $SERVICE_NAME"
+              sudo cp ops/fleshmarket.service "/etc/systemd/system/${SERVICE_NAME}.service"
+              sudo systemctl daemon-reload
+              sudo systemctl enable "$SERVICE_NAME"
+              sudo systemctl start "$SERVICE_NAME"
+            fi

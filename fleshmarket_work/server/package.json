@@ -1,0 +1,17 @@
+{
+  "name": "fleshmarket-local",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Flesh Market \u2014 local hosting bundle (server + static client)",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "postinstall": "node -e \"console.log('Install complete')\""
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0",
+    "uuid": "^9.0.1"
+  }
+}

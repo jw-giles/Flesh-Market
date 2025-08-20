@@ -1,0 +1,22 @@
+{
+  "enabled": true,
+  "tick_ms": 250,
+  "globalIntensity": 1.0,
+  "maxAgents": 120,
+  "liquidity": 50000.0,
+  "impact": 0.0025,
+  "noise": 0.15,
+  "inventoryLimitUSD": 200000.0,
+  "cooldowns": {
+    "newsSpikerMs": 20000,
+    "whaleMs": 45000
+  },
+  "strategyMix": {
+    "MomentumChaser": 0.3,
+    "MeanReverter": 0.25,
+    "RandomRetail": 0.25,
+    "LiquidityProvider": 0.15,
+    "Whale": 0.03,
+    "NewsSpiker": 0.02
+  }
+}

@@ -1,0 +1,16 @@
+
+[Unit]
+Description=Flesh Market Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/fleshmarket
+Environment=NODE_ENV=production
+Environment=PORT=7777
+ExecStart=/opt/fleshmarket/ops/run.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
