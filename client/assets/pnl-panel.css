@@ -1,0 +1,69 @@
+/* Injected P&L Panel styles (scoped) */
+.pnl-panel { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; color: #e5e7eb; }
+.pnl-panel .card { background: #0c0f13; border: 1px solid #1f2937; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+.pnl-panel .header { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #111827; }
+.pnl-panel .header h2 { margin:0; font-size: 16px; letter-spacing: 0.2px; color:#f3f4f6; }
+.pnl-panel .controls { display:flex; gap:8px; flex-wrap:wrap; }
+.pnl-panel .controls input, .pnl-panel .controls select { background:#0b1220; border:1px solid #1f2937; color:#d1d5db; padding:8px 10px; border-radius:10px; outline:none; }
+.pnl-panel .controls input::placeholder { color:#6b7280; }
+.pnl-panel .kpis { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:10px; padding:12px; }
+.pnl-panel .kpi { padding:10px 12px; background:#0b1220; border:1px solid #1f2937; border-radius:12px; }
+.pnl-panel .kpi .label { font-size:12px; color:#9ca3af; }
+.pnl-panel .kpi .value { margin-top:6px; font-size:15px; font-weight:600; color:#f9fafb; }
+.pnl-panel .body { padding:12px; display:grid; grid-template-columns: 2.2fr 1fr; gap:12px; }
+.pnl-panel .table-wrap { overflow:auto; border:1px solid #1f2937; border-radius:12px; }
+.pnl-panel table { width:100%; border-collapse:separate; border-spacing:0; }
+.pnl-panel thead th { position:sticky; top:0; background:#0b1220; font-size:12px; color:#9ca3af; text-align:left; padding:10px; border-bottom:1px solid #111827; }
+.pnl-panel tbody td { padding:10px; border-bottom:1px dashed #111827; font-size:13px; }
+.pnl-panel tbody tr:last-child td { border-bottom:none; }
+.pnl-panel .pos { color:#34d399; }
+.pnl-panel .neg { color:#f87171; }
+.pnl-panel .muted { color:#9ca3af; }
+.pnl-panel .btn { cursor:pointer; padding:6px 10px; border-radius:10px; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb; font-size:12px; transition: all .15s ease; }
+.pnl-panel .btn:hover { transform: translateY(-1px); border-color:#374151; }
+.pnl-panel .btn.danger { border-color:#7f1d1d; background:#111827; color:#fecaca; }
+.pnl-panel .btn.ghost { background:transparent; border-color:#1f2937; }
+.pnl-panel .btn.small { padding:4px 8px; font-size:11px; border-radius:8px; }
+.pnl-panel .row-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.pnl-panel .right-col { display:flex; flex-direction:column; gap:12px; }
+.pnl-panel .history { max-height:260px; overflow:auto; border:1px solid #1f2937; border-radius:12px; }
+.pnl-panel .history h3 { margin:0; padding:10px 12px; border-bottom:1px solid #111827; font-size:13px; color:#9ca3af; background:#0b1220; }
+.pnl-panel .history ul { list-style:none; margin:0; padding:8px 12px; }
+.pnl-panel .history li { font-size:12px; color:#d1d5db; padding:6px 0; border-bottom:1px dashed #111827; }
+.pnl-panel .history li:last-child { border-bottom:none; }
+.pnl-panel .chart-card { padding:12px; }
+.pnl-panel canvas { width:100%; height:260px; background:#0b1220; border:1px solid #1f2937; border-radius:12px; }
+.pnl-panel .footnote { font-size:11px; color:#9ca3af; padding:0 12px 12px; }
+@media (max-width: 1024px){ .pnl-panel .body { grid-template-columns: 1fr; } }
+/* Inline quantity input for per-row sell */
+.pnl-panel input.qty{width:72px;padding:4px 6px;border:1px solid #1f2937;background:#0b1220;color:#e5e7eb;border-radius:8px;font-size:12px}
+.pnl-panel input.qty:focus{outline:none;border-color:#374151}
+.pnl-panel table td:last-child{min-width:280px}
+
+/* Global quick actions in P&L */
+.pnl-panel .quick-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}
+.pnl-panel input.dollars{width:86px;padding:4px 6px;border:1px solid #1f2937;background:#0b1220;color:#e5e7eb;border-radius:8px;font-size:12px}
+.pnl-panel input.dollars:focus{outline:none;border-color:#374151}
+
+.pnl-panel input.pct{width:56px;padding:2px 6px;border:1px solid #1f2937;background:#0b1220;color:#e5e7eb;border-radius:8px;font-size:12px;margin:0 6px}
+
+
+/* Ensure Actions column stays visible */
+.pnl-panel td.actions { white-space: nowrap; }
+.pnl-panel .actions .btn { margin: 2px 4px; display: inline-block; }
+.pnl-panel table { table-layout: auto; }
+
+/* PnL coloring */
+.pnl-panel .value.pos{ color:#10b981; }
+.pnl-panel .value.neg{ color:#ef4444; }
+
+/* Hide line graph (filler) */
+.pnl-panel canvas{}
+
+/* Mini chart (CRT green) */
+.pnl-panel .minichart-wrap{ padding:10px 12px 14px 12px; border-top:1px solid #111827; }
+.pnl-panel .minichart-wrap h3{ margin:0 0 6px 0; font-size:13px; color:#9ca3af; font-weight:600; letter-spacing:0.2px; }
+.pnl-panel canvas.minichart{ width:100%; height:42px; display:block !important; opacity:0.6; }
+
+/* legacy spark removed */
+

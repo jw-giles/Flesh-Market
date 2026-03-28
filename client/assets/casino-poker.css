@@ -1,0 +1,44 @@
+
+#poker-wrap{font-family:monospace;max-width:none;width:100%;padding:12px 4px;}
+#poker-wrap h3{margin:0 0 12px;font-size:1rem;letter-spacing:.08em;color:#e6c27a;}
+.pk-table{background:radial-gradient(ellipse at center,#0e3d1e 0%,#061a0b 100%);border:2px solid #2d5a1e;border-radius:16px;padding:16px 20px 20px;margin-bottom:14px;}
+.pk-section{margin-bottom:10px;min-height:36px;}
+.pk-label{font-size:.75rem;letter-spacing:.08em;color:#6a9a70;margin-bottom:4px;}
+.pk-cards{display:flex;gap:6px;flex-wrap:wrap;min-height:56px;}
+.pk-card{width:40px;height:54px;border-radius:5px;border:1px solid #555;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.85rem;font-weight:bold;position:relative;line-height:1.1;}
+.pk-card.back{background:linear-gradient(135deg,#2a0a6a,#4a1a9a);border-color:#6a3aaa;color:#9a6aca;font-size:1.4rem;}
+.pk-card.red{color:#cc2200;}
+.pk-card.black{color:#111;}
+.pk-rank{font-size:.9rem;font-weight:900;}
+.pk-suit{font-size:.75rem;}
+.pk-info{display:flex;gap:20px;margin-bottom:10px;font-size:.85rem;flex-wrap:wrap;}
+.pk-info span{color:#8ab;}
+.pk-info strong{color:#e6c27a;}
+.pk-bet-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.pk-bet-row input{width:70px;padding:4px 6px;background:#0d0d08;border:1px solid #4a3a10;color:#e6c27a;font-size:.85rem;font-family:monospace;border-radius:4px;}
+.pk-chips{display:flex;gap:4px;flex-wrap:wrap;}
+.pk-chips button,.pk-actions button{padding:5px 10px;background:#1a1500;border:1px solid #5a4a10;color:#e6c27a;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.8rem;}
+.pk-chips button:hover,.pk-actions button:hover{background:#2a2200;}
+.pk-actions{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+.pk-actions button:disabled{opacity:.35;cursor:not-allowed;}
+.btn-fold{border-color:#8a2020!important;color:#ff8080!important;}
+.btn-fold:hover:not(:disabled){background:#2a0808!important;}
+.pk-result{padding:8px 12px;border-radius:6px;font-size:.95rem;margin:6px 0;}
+.pk-result.win{background:#0a2a0a;border:1px solid #2a6a2a;color:#4eff4e;}
+.pk-result.lose{background:#2a0808;border:1px solid #6a1a1a;color:#ff6b6b;}
+.pk-result.push{background:#1a1a00;border:1px solid #5a5a00;color:#ffff80;}
+#pk-log{max-height:110px;overflow-y:auto;font-size:.75rem;color:#7a9a7a;line-height:1.5;}
+#pk-log div{border-bottom:1px solid #1a2a1a;padding:1px 0;}
+/* ── 6-max seat ring ── */
+.pk-seats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.pk-seat{background:#0a1a0a;border:1px solid #2a4a2a;border-radius:8px;padding:6px 10px;min-width:110px;flex:1;}
+.pk-seat.folded{opacity:.4;}
+.pk-seat.active{border-color:#4eff4e;}
+.pk-seat.winner{border-color:#ffd700;background:#0a1a00;}
+.pk-seat .seat-name{font-size:.75rem;color:#8ab;letter-spacing:.06em;margin-bottom:2px;}
+.pk-seat .seat-stack{font-size:.8rem;color:#e6c27a;}
+.pk-seat .seat-bet{font-size:.7rem;color:#aaa;min-height:14px;}
+.pk-seat .seat-status{font-size:.7rem;color:#4ecdc4;min-height:14px;font-style:italic;}
+.pk-seat .seat-cards{display:flex;gap:3px;margin-top:4px;min-height:30px;}
+.pk-seat .seat-cards .pk-card{width:22px;height:30px;font-size:.6rem;}
+.pk-seat .seat-cards .pk-card.back{font-size:.9rem;}

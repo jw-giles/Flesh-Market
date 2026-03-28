@@ -1,0 +1,46 @@
+
+  #rl-wrap{font-family:monospace;width:100%;padding:10px 4px}
+  #rl-table{background:radial-gradient(ellipse at center,#1a0d00 0%,#0a0500 100%);border:2px solid #5a3010;border-radius:16px;padding:14px 16px 18px;margin-bottom:12px;display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+  #rl-wheel-col{display:flex;flex-direction:column;align-items:center;gap:8px}
+  #rl-controls{flex:1;min-width:260px;display:flex;flex-direction:column;gap:10px}
+  .rl-label{font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:#8a6a40;margin-bottom:3px}
+  .rl-info-row{display:flex;gap:18px;font-size:.85rem;flex-wrap:wrap;margin-bottom:4px}
+  .rl-info-row span{color:#8ab}.rl-info-row strong{color:#e6c27a}
+  .rl-bet-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .rl-bet-row input{width:90px;padding:5px 8px;background:#0d0d08;border:1px solid #4a3a10;color:#e6c27a;font-size:.85rem;font-family:monospace;border-radius:4px}
+  .rl-chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
+  .rl-chips button{padding:4px 9px;background:#1a1500;border:1px solid #5a4a10;color:#e6c27a;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.78rem;transition:background .15s}
+  .rl-chips button:hover{background:#2a2200}
+  .rl-bet-type-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .rl-bet-type-row select,.rl-bet-type-row input{padding:5px 8px;background:#0d0d08;border:1px solid #4a3a10;color:#e6c27a;font-size:.82rem;font-family:monospace;border-radius:4px}
+  #rl-action-row{display:flex;gap:8px;flex-wrap:wrap}
+  #rl-action-row button{padding:7px 18px;background:#1a1500;border:1px solid #5a4a10;color:#e6c27a;cursor:pointer;border-radius:5px;font-family:monospace;font-size:.85rem;transition:background .15s,border-color .15s}
+  #rl-action-row button:hover{background:#2a2200}
+  #rl-spin-btn{border-color:#8a6a00!important;color:#ffd700!important}
+  #rl-spin-btn:hover{background:#2a2000!important;border-color:#c8a000!important}
+  #rl-clear-btn{border-color:#6a2020!important;color:#ff9090!important}
+  #rl-clear-btn:hover{background:#2a0808!important}
+  #rl-bets-list{max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
+  .rl-bet-item{display:flex;justify-content:space-between;align-items:center;padding:3px 8px;border-radius:4px;background:#0d0a00;border:1px solid #2a1a00;font-size:.78rem}
+  .rl-bet-item .rl-bi-label{color:#c8a060}
+  .rl-bet-item .rl-bi-amt{color:#e6c27a}
+  .rl-bet-item .rl-bi-del{cursor:pointer;color:#884040;margin-left:6px;font-size:.7rem}
+  .rl-bet-item .rl-bi-del:hover{color:#ff6060}
+  #rl-result-banner{padding:8px 14px;border-radius:8px;font-size:.95rem;display:none;margin-top:4px;text-align:center;letter-spacing:.05em}
+  #rl-result-banner.win{background:#0a2a0a;border:1px solid #2a6a2a;color:#4eff4e}
+  #rl-result-banner.lose{background:#2a0808;border:1px solid #6a1a1a;color:#ff6b6b}
+  #rl-result-banner.neutral{background:#1a1500;border:1px solid #5a5000;color:#ffeb80}
+  #rl-log{max-height:90px;overflow-y:auto;font-size:.72rem;color:#7a8a6a;line-height:1.5;margin-top:4px}
+  #rl-log div{border-bottom:1px solid #1a1a0a;padding:1px 0}
+  /* Number grid for straight bets */
+  .rl-num-grid{display:grid;grid-template-columns:repeat(13,1fr);gap:2px;margin-top:6px}
+  .rl-num-cell{width:22px;height:20px;border-radius:3px;border:1px solid #2a1a00;display:flex;align-items:center;justify-content:center;font-size:.6rem;cursor:pointer;font-family:monospace;transition:filter .12s}
+  .rl-num-cell:hover{filter:brightness(1.6)}
+  .rl-num-cell.red-cell{background:#5a1010;color:#ff9090}
+  .rl-num-cell.black-cell{background:#1a1a1a;color:#b0b0b0}
+  .rl-num-cell.green-cell{background:#0a3a0a;color:#80ff80}
+  .rl-num-cell.selected-num{outline:2px solid #ffd700;filter:brightness(1.8)}
+  /* Last results strip */
+  #rl-history{display:flex;gap:3px;flex-wrap:nowrap;overflow:hidden;margin-top:6px;min-height:18px}
+  .rl-hist-dot{width:16px;height:16px;border-radius:50%;font-size:.55rem;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;color:#fff}
+  

@@ -1,0 +1,19 @@
+
+.mod-btn {
+  background: #0d1a2a;
+  border: 1px solid #1a3a5a;
+  border-radius: 5px;
+  color: #7ec8ff;
+  font-size: .76rem;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s, border-color .15s;
+}
+.mod-btn:hover { background: #162840; border-color: #4da6ff; color: #fff; }
+.mod-mute      { border-color: #2a4a1a; color: #86d66a; }
+.mod-mute:hover{ background: #162810; border-color: #6aff3a; color: #fff; }
+.mod-unmute    { border-color: #1a3a5a; color: #4ecdc4; }
+.mod-unmute:hover { background: #0d2a28; border-color: #4ecdc4; color: #fff; }
+.mod-timeout   { border-color: #4a1a1a; color: #ff8080; }
+.mod-timeout:hover { background: #2a0d0d; border-color: #ff4444; color: #fff; }

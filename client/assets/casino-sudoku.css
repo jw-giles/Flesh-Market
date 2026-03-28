@@ -1,0 +1,27 @@
+
+    #sdk-wrap{font-family:monospace;padding:12px;max-width:520px}
+    #sdk-board{display:grid;grid-template-columns:repeat(9,1fr);background:#1a1a0a;border:2px solid #6a5a20;border-radius:4px;width:369px;margin:10px 0;user-select:none}
+    .sdk-cell{width:41px;height:41px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;cursor:pointer;color:#e6c27a;border:1px solid #2a2a10;background:#0d0d06;box-sizing:border-box;transition:background .08s;outline:none;position:relative}
+    .sdk-cell.given{color:#ccc;cursor:default;font-weight:bold}
+    .sdk-cell.selected{background:#2a2510!important}
+    .sdk-cell.peer{background:#141408}
+    .sdk-cell.user-val{color:#e6c27a}
+    /* thick borders for 3x3 boxes */
+    .sdk-cell:nth-child(3n+1):not(:nth-child(1)){border-left:2px solid #6a5a20}
+    .sdk-cell:nth-child(n+19):nth-child(-n+27){border-bottom:2px solid #6a5a20}
+    .sdk-cell:nth-child(n+46):nth-child(-n+54){border-bottom:2px solid #6a5a20}
+    #sdk-numpad{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0}
+    #sdk-numpad button{width:34px;height:34px;font-size:.95rem;font-family:monospace;background:#1a1500;border:1px solid #4a3a10;color:#e6c27a;cursor:pointer;border-radius:4px}
+    #sdk-numpad button:hover{background:#2a2200}
+    #sdk-status{margin-top:6px;font-size:.85rem;color:#e6c27a;min-height:20px}
+    .sdk-diff-btn{padding:5px 10px;margin:2px;background:#1a1500;border:1px solid #4a3a10;color:#e6c27a;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.8rem;text-align:center}
+    .sdk-diff-btn.active{background:#2a2200;border-color:#e6c27a}
+    .sdk-diff-btn span{display:block;color:#888;font-size:.7rem}
+    #sdk-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+    #sdk-actions button{padding:6px 14px;font-family:monospace;font-size:.85rem;background:#1a1500;border:1px solid #5a4a10;color:#e6c27a;cursor:pointer;border-radius:4px}
+    #sdk-actions button:hover{background:#2a2200}
+    #sdk-actions button:disabled{opacity:.35;cursor:not-allowed}
+    #sdk-submit{border-color:#4ecdc4!important;color:#4ecdc4!important}
+    #sdk-submit:hover:not(:disabled){background:#0a1a1a!important}
+    #sdk-cells-left{font-size:.78rem;color:#888;margin-top:4px}
+  
