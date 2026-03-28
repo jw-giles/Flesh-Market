@@ -1,0 +1,2085 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<meta content="no-store, no-cache, must-revalidate, max-age=0" http-equiv="Cache-Control"/>
+<meta content="no-cache" http-equiv="Pragma"/>
+<meta content="0" http-equiv="Expires"/>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport">
+<title>Flesh Market — Local</title>
+<link href="style.css" rel="stylesheet"/>
+
+
+<body>
+<link rel="stylesheet" href="assets/eod-timer.css">
+<div class="wrap">
+<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+<div style="display:flex;align-items:center;gap:0">
+<div>
+<h1 style="margin:0;font-size:18px;letter-spacing:.14em">FLESH MARKET</h1>
+<small class="muted"></small>
+</div>
+<div id="eod-timer-wrap">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+    <div id="eod-timer-label">END OF DAY</div>
+    <div id="eod-timer">--:--</div>
+    <div id="passiveIncomeEOD" style="font-size:.6rem;color:#447744;letter-spacing:.08em;opacity:0;transition:opacity .3s"></div>
+  </div>
+</div>
+</div>
+<div class="row">
+<input class="input" id="name" placeholder="Your name" style="display:none"/><!-- legacy hidden -->
+<button class="btn" id="helloBtn" style="display:none">Join</button>
+<span id="fm-header-user" style="display:none;align-items:center;gap:6px;font-size:.85rem">
+  <span id="fm-header-name" style="color:#ffb547;opacity:.85"></span>
+  <span id="fm-tier-badge-hdr" style="font-size:.95rem"></span>
+  <button id="invNavBtn" onclick="if(window.toggleInvPanel){toggleInvPanel();}else if(window.lazyLoad){lazyLoad('assets/inventory.js',function(){if(window.toggleInvPanel)toggleInvPanel();})}" style="
+    background:transparent;border:1px solid #3a1a0a;border-radius:5px;
+    color:#884444;font-size:.72rem;padding:3px 9px;cursor:pointer;
+    font-family:inherit;letter-spacing:.05em;transition:all .15s;
+  " title="Inventory">👜 Inventory</button>
+  <button id="slotNavBtn" onclick="if(window.toggleSlotModal){toggleSlotModal();}else if(window.lazyLoad){lazyLoad('assets/inventory.js',function(){if(window.toggleSlotModal)toggleSlotModal();})}" style="
+    background:transparent;border:1px solid #3a1a0a;border-radius:5px;
+    color:#ff9900;font-size:.72rem;padding:3px 9px;cursor:pointer;
+    font-family:inherit;letter-spacing:.05em;transition:all .15s;
+  " title="Slot Machine">🎰 Slots <span id="slotNavSpinCount" style="color:#ff6a00;font-weight:500"></span></button>
+  <a href="https://www.patreon.com/FLSH" target="_blank" class="btn" style="padding:3px 10px;font-size:.78rem;border-color:#4a3510;color:#ffb547;text-decoration:none">Patreon</a>
+  <button class="btn" onclick="window.FM_Auth&&window.FM_Auth.logout()" style="padding:3px 10px;font-size:.78rem;border-color:#4a3510;color:#888">Logout</button>
+</span>
+</div>
+</div>
+<div class="grid">
+<!-- Left: tickers + news -->
+<div class="panel">
+<h2>Companies</h2>
+<input class="input" id="search" placeholder="Search symbol or name"/>
+<div class="list" id="tickers"></div>
+<hr/>
+<h2>News</h2>
+<div class="news" id="news"></div>
+</div>
+<!-- Center: chart + trade + tabs -->
+<div class="panel">
+<div class="tabs">
+<div class="tab active" data-tab="market">Market</div>
+<div class="tab" data-tab="heat">🔥 Heat</div>
+<div class="tab" data-tab="pnl">P&amp;L</div>
+<div class="tab" data-tab="casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none">⚖ Guild</div><div class="tab" data-tab="store">Store</div><div class="tab" data-tab="galactic">⬡ Galaxy</div><div class="tab" data-tab="bugs">🐛 Bugs</div>
+</div>
+<div id="marketTab">
+<canvas id="chart"></canvas>
+<div class="row" style="margin-top:8px">
+<input class="input" id="sym" placeholder="Symbol (e.g. ORGX)" style="max-width:140px"/>
+<input class="input" id="shares" min="1" style="max-width:120px" type="number" value="1"/>
+<button class="btn" id="buy">Buy</button>
+<button class="btn" id="sell">Sell</button>
+<button class="btn" id="shortBtn" style="background:#1a0808;border-color:#a83232;color:#ff7878;" title="Open/Cover short positions">⬇ Short</button>
+<div class="muted" id="cash" style="margin-left:auto"></div>
+</div>
+<!-- v5.0: Limit Orders Panel -->
+<div id="limitPanel" style="margin-top:6px;padding:8px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+  <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px">Limit Orders</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <select id="limitSide" class="input" style="max-width:70px"><option value="buy">BUY</option><option value="sell">SELL</option></select>
+    <input id="limitSym" class="input" placeholder="Symbol" style="max-width:90px" maxlength="5"/>
+    <input id="limitQty" class="input" type="number" min="1" placeholder="Qty" style="max-width:80px"/>
+    <input id="limitPrice" class="input" type="number" min="0.01" step="0.01" placeholder="Limit Ƒ" style="max-width:90px"/>
+    <button class="btn" id="limitPlaceBtn" style="font-size:.8rem">Place</button>
+    <span id="limitHint" style="font-size:.75rem;opacity:.6;margin-left:4px"></span>
+  </div>
+  <div id="openOrders" style="margin-top:6px;font-size:.78rem;max-height:80px;overflow:auto"></div>
+</div>
+<div class="list" id="positions" style="margin-top:8px"></div>
+<!-- XP Bar -->
+<div id="xp-bar-wrap" style="margin-top:8px;padding:6px 0 2px">
+  <div id="xp-bar-label" class="muted" style="font-size:.7rem;letter-spacing:.06em;margin-bottom:4px;opacity:.7">Lv.1  0 / 60 XP</div>
+  <div style="background:#0f0f0f;border-radius:4px;height:5px;overflow:hidden;border:1px solid rgba(152,255,159,.12)">
+    <div id="xp-bar-fill" style="height:100%;width:0%;background:linear-gradient(90deg,rgba(152,255,159,.5),rgba(152,255,159,.9));border-radius:4px;transition:width .6s ease"></div>
+  </div>
+</div>
+<div id="tradeFeedWrap" style="padding:4px 0 0 0">
+  <div style="font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;opacity:.4;margin-bottom:4px">Live Trades</div>
+  <div id="tradeFeedPanel"></div>
+</div>
+</div>
+<div id="pnlTab" style="display:none">
+<!-- Static snapshot charts: donut (allocation) + bars (per-position P&L) -->
+<div style="display:flex;gap:10px;margin-bottom:10px;align-items:stretch">
+  <canvas id="pnl-donut" width="180" height="180" style="flex:0 0 180px;height:180px;border-radius:6px"></canvas>
+  <canvas id="pnl-bars"  style="flex:1;height:180px;display:block;border-radius:6px;min-width:0"></canvas>
+</div>
+<div class="list" id="pnlBox"></div>
+<!-- v5.0 Sector Breakdown -->
+<div id="sectorBreakdown" style="margin-top:10px;padding:8px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+  <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px">Sector Exposure</div>
+  <div id="sectorBars" style="display:flex;flex-direction:column;gap:4px"></div>
+</div>
+</div>
+<!-- v5.0 Heatmap Tab -->
+<div id="heatTab" style="display:none;padding:8px">
+  <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:8px">Market Heatmap — % change today</div>
+  <div id="heatGrid" style="display:flex;flex-direction:column;gap:10px"></div>
+</div>
+<div id="casinoTab" style="display:none">
+<div class="tabs" id="casinoTabs">
+<div class="subtab active" data-subtab="roulette">Roulette</div>
+<div class="subtab" data-subtab="blackjack">Blackjack</div>
+<div class="subtab" data-subtab="poker">Poker</div>
+<div class="subtab" data-subtab="horseraces">Horse Races</div>
+<div class="subtab" data-subtab="chess">Chess</div>
+<div class="subtab" data-subtab="sudoku">Sudoku</div>
+<div class="subtab" data-subtab="mathgame">Math Quiz</div>
+<div class="subtab" data-subtab="minesweeper">Minesweeper</div>
+</div>
+<div id="casinoContent" style="margin-top:8px">
+<link rel="stylesheet" href="assets/casino-roulette.css">
+<div class="casino-pane" id="casino-roulette" style="display:block"></div>
+<div class="casino-pane" id="casino-blackjack" style="display:none"></div>
+<div class="casino-pane" id="casino-poker" style="display:none">
+<link rel="stylesheet" href="assets/casino-poker.css">
+<div id="poker-wrap">
+  <h3>Texas Hold'em — 6-max vs AI</h3>
+  <div class="pk-info">
+    <span>Stack: <strong id="pk-balance">Ƒ0</strong></span>
+    <span>Blind: <strong id="pk-blind-lbl">Ƒ10/Ƒ20</strong></span>
+    <span>Pot: <strong id="pk-pot">Ƒ0</strong></span>
+    <span id="pk-street-info" style="color:#ffb547;opacity:.8"></span>
+  </div>
+  <div class="pk-table">
+    <!-- AI seats -->
+    <div class="pk-label">OPPONENTS</div>
+    <div class="pk-seats" id="pk-seats"></div>
+    <!-- Community -->
+    <div class="pk-section">
+      <div class="pk-label">Community <span class="pk-street-label" id="pk-community-label"></span></div>
+      <div class="pk-cards" id="pk-community"></div>
+    </div>
+    <!-- Player hand -->
+    <div class="pk-section">
+      <div class="pk-label">Your Hand</div>
+      <div class="pk-cards" id="pk-player-cards"></div>
+    </div>
+  </div>
+
+  <!-- Bet sizing -->
+  <div class="pk-bet-row">
+    <span style="font-size:.78rem;opacity:.6">Bet: </span>
+    <input id="pk-bet-input" type="number" min="1" value="20"/>
+    <div class="pk-chips">
+      <button onclick="pkSetBet(10)">+10</button>
+      <button onclick="pkSetBet(50)">+50</button>
+      <button onclick="pkSetBet(100)">+100</button>
+      <button onclick="pkSetBet(500)">+500</button>
+      <button onclick="pkAllin()">ALL-IN</button>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="pk-actions" id="pk-actions">
+    <button id="pk-btn-deal" onclick="pkDeal()">Deal Hand</button>
+    <button id="pk-btn-fold" class="btn-fold" onclick="pkFold()" disabled>Fold</button>
+    <button id="pk-btn-check" onclick="pkCheck()" disabled>Check</button>
+    <button id="pk-btn-call" onclick="pkCall()" disabled>Call</button>
+    <button id="pk-btn-raise" onclick="pkRaise()" disabled>Bet/Raise</button>
+  </div>
+
+  <div id="pk-result-box"></div>
+  <div id="pk-log" style="margin-top:8px"></div>
+</div>
+<!-- casino-poker.js loaded lazily by core.js -->
+</div>
+<div class="casino-pane" id="casino-horseraces" style="display:none"></div>
+<div class="casino-pane" id="casino-chess" style="display:none"></div>
+<link rel="stylesheet" href="assets/casino-sudoku.css">
+<div class="casino-pane" id="casino-sudoku" style="display:none"></div>
+<link rel="stylesheet" href="assets/casino-mathgame.css">
+<div class="casino-pane" id="casino-mathgame" style="display:none"></div>
+<link rel="stylesheet" href="assets/casino-minesweeper.css">
+<div class="casino-pane" id="casino-minesweeper" style="display:none"></div>
+</div>
+</div><div class="tab-pane" id="storeTab" style="display:none; padding:8px;"><div id="patreon-panel" style="margin-bottom:16px;padding:12px;border:1px solid #3a2a08;border-radius:8px;background:#060504">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <span style="font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;color:#ffb547">Patreon Membership</span>
+    <span id="fm-tier-badge" style="font-size:1.1rem"></span>
+  </div>
+  <div style="font-size:.8rem;opacity:.7;margin-bottom:10px;line-height:1.5">
+    Link your Patreon email to unlock tier benefits.<br>
+    <span style="color:#c8a040">Premium ★ $5 · +Ƒ500/30min</span> · 
+    <span style="color:#2ecc71">Guild ⚖ $15 · +Ƒ1,500/30min</span> · 
+    <span style="color:#ffd700">CEO ♛ $100 · +Ƒ10,000/30min</span>
+  </div>
+  <div style="display:flex;gap:8px">
+    <input id="patreon-email" class="input" placeholder="Your Patreon email" type="email" style="flex:1;font-size:.85rem"/>
+    <button class="btn" id="patreon-link-btn" style="font-size:.85rem;white-space:nowrap">Link Account</button>
+  </div>
+  <div id="patreon-hint" style="font-size:.78rem;min-height:16px;margin-top:6px"></div>
+  <div style="margin-top:10px;font-size:.75rem;opacity:.5;line-height:1.4">
+    After linking, your tier updates automatically when Patreon processes your membership.
+    <a href="https://www.patreon.com/FLSH" target="_blank" style="color:#ffb547;opacity:.8">patreon.com/FLSH</a>
+  </div>
+</div>
+<div id="storeContainer">
+  <div id="store-equipped-bar" style="display:none;align-items:center;gap:8px;padding:7px 10px;margin-bottom:12px;border-radius:7px;background:#0f0f0f;border:1px solid #2a2a2a;font-size:.78rem">
+    <span style="opacity:.45;letter-spacing:.08em;text-transform:uppercase;font-size:.68rem">Equipped</span>
+    <span id="store-equipped-name" style="font-weight:700;flex:1"></span>
+    <span id="store-equipped-tier" style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;opacity:.7"></span>
+  </div>
+
+  <div id="title-inventory-block" style="margin-bottom:16px;display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer" onclick="var el=document.getElementById('title-inventory-list');var ar=document.getElementById('title-inv-arrow');if(el.style.display==='none'){el.style.display='block';ar.textContent='\u25BC';}else{el.style.display='none';ar.textContent='\u25B6';}">
+      <div style="font-size:.76rem;color:#aaa;letter-spacing:.12em;text-transform:uppercase">YOUR TITLES</div>
+      <span id="title-inv-arrow" style="font-size:.66rem;color:#555">&#x25BC;</span>
+    </div>
+    <div id="title-inventory-list"></div>
+  </div>
+
+  <div class="store-tier-block">
+    <div class="store-tier-head" style="--tc:#808080">
+      <span class="store-tier-label">Common</span>
+      <span class="store-tier-range">Ƒ1k – Ƒ5k</span>
+    </div>
+    <div class="store-section"></div>
+  </div>
+
+  <div class="store-tier-block">
+    <div class="store-tier-head" style="--tc:#5b82b5">
+      <span class="store-tier-label">Mid Prestige</span>
+      <span class="store-tier-range">Ƒ10k – Ƒ50k</span>
+    </div>
+    <div class="store-section"></div>
+  </div>
+
+  <div class="store-tier-block">
+    <div class="store-tier-head" style="--tc:#00d4ff">
+      <span class="store-tier-label">High Prestige</span>
+      <span class="store-tier-range">Ƒ100k – Ƒ500k</span>
+    </div>
+    <div class="store-section"></div>
+  </div>
+
+  <div class="store-tier-block">
+    <div class="store-tier-head" style="--tc:#a83232">
+      <span class="store-tier-label">Mythic</span>
+      <span class="store-tier-range">Ƒ1M – Ƒ50M</span>
+    </div>
+    <div class="store-section"></div>
+  </div>
+
+  <div class="store-tier-block" style="margin-top:20px">
+    <div class="store-tier-head" style="--tc:#888;border-left-color:#888">
+      <span class="store-tier-label" style="color:#888">Patreon Exclusive</span>
+      <span class="store-tier-range">Requires active membership</span>
+    </div>
+    <div id="patreon-titles-list" style="display:block"></div>
+  </div>
+
+  <div class="store-tier-block" style="margin-top:20px">
+    <div class="store-tier-head" style="--tc:#00bfff;border-left-color:#00bfff;border-top:1px solid #00bfff33">
+      <span class="store-tier-label" style="color:#00bfff;letter-spacing:.12em">⬡ LEGENDARY</span>
+      <span class="store-tier-range" style="color:#00bfff88">One seat. No permanence.</span>
+    </div>
+    <div id="legendary-titles-list" style="display:block"></div>
+  </div>
+
+</div></div>
+<!-- Guild Tab -->
+<div id="guildTab" style="display:none;padding:4px;overflow:auto">
+
+  <!-- DIRECTORY VIEW -->
+  <div id="guild-dir">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;opacity:.55">Hedge Funds</div>
+      <button class="btn" id="g-create-btn" style="padding:4px 14px;font-size:.8rem">+ Create Fund</button>
+    </div>
+    <div id="guild-fund-list" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div id="guild-dir-empty" style="display:none;text-align:center;padding:24px;opacity:.4;font-size:.85rem">No funds yet. Create one for Ƒ10,000,000.</div>
+  </div>
+
+  <!-- CREATE FUND FORM -->
+  <div id="guild-create-form" style="display:none;background:#060504;border:1px solid #2a1a04;border-radius:8px;padding:14px;margin-bottom:12px">
+    <div style="font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin-bottom:10px">New Hedge Fund — Cost: Ƒ10,000,000</div>
+    <input id="g-new-name" class="input" placeholder="Fund name (3–40 chars)" style="width:100%;margin-bottom:7px;box-sizing:border-box"/>
+    <textarea id="g-new-desc" class="input" placeholder="Description (optional)" rows="2" style="width:100%;resize:none;margin-bottom:7px;box-sizing:border-box"></textarea>
+    <div style="display:flex;gap:8px">
+      <button class="btn" id="g-create-submit">Launch Fund</button>
+      <button class="btn" id="g-create-cancel" style="border-color:#333;color:#666">Cancel</button>
+    </div>
+    <div id="g-create-hint" style="font-size:.78rem;min-height:14px;margin-top:6px"></div>
+  </div>
+
+  <!-- FUND DETAIL VIEW -->
+  <div id="guild-detail" style="display:none">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <button class="btn" id="g-back-btn" style="padding:3px 10px;font-size:.8rem">← Back</button>
+      <span id="g-detail-name" style="font-size:1rem;font-weight:700;color:#ffb547"></span>
+      <span id="g-detail-type-badge" style="font-size:.75rem;padding:2px 8px;border-radius:10px;border:1px solid #333"></span>
+    </div>
+    <div id="g-detail-desc" style="font-size:.8rem;opacity:.6;margin-bottom:10px"></div>
+
+    <!-- Stats row -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
+      <div class="guild-stat"><div class="gs-label">NAV</div><div class="gs-val" id="g-d-nav"></div></div>
+      <div class="guild-stat"><div class="gs-label">Cash</div><div class="gs-val" id="g-d-cash"></div></div>
+      <div class="guild-stat"><div class="gs-label">My Value</div><div class="gs-val" id="g-d-myval"></div></div>
+    </div>
+
+    <!-- Savings rate badge -->
+    <div id="g-savings-badge" style="font-size:.75rem;opacity:.6;margin-bottom:10px">
+      💰 <span id="g-savings-rate"></span>% hourly savings interest on idle cash
+    </div>
+
+    <!-- Deposit/Withdraw (members only) -->
+    <div id="g-dw-panel" style="display:none;margin-bottom:10px">
+      <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:5px">Deposit / Withdraw</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <input id="g-d-amount" class="input" type="number" min="1" placeholder="Deposit amt" style="max-width:130px"/>
+        <button class="btn" id="g-d-deposit-btn">Deposit</button>
+        <select id="g-d-withdraw-pct" class="input" style="max-width:90px">
+          <option value="0.25">25%</option><option value="0.5">50%</option><option value="1">100%</option>
+        </select>
+        <button class="btn" id="g-d-withdraw-btn" style="display:none">Withdraw</button>
+      </div>
+      <div id="g-dw-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
+    </div>
+
+    <!-- Owner controls: withdraw + assign cash to member -->
+    <div id="g-owner-panel" style="display:none;margin-bottom:10px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+      <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Owner Controls</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+        <select id="g-d-withdraw-pct-owner" class="input" style="max-width:90px">
+          <option value="0.25">25%</option><option value="0.5">50%</option><option value="1">100%</option>
+        </select>
+        <button class="btn" id="g-owner-withdraw-btn">Withdraw</button>
+        <span style="font-size:.72rem;opacity:.5">— withdraw your share from fund</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <input id="g-assign-name" class="input" placeholder="Member name" style="max-width:120px" maxlength="32"/>
+        <input id="g-assign-amt" class="input" type="number" min="1" placeholder="Amount Ƒ" style="max-width:110px"/>
+        <button class="btn" id="g-assign-btn" style="border-color:#86ff6a;color:#86ff6a">Assign Cash</button>
+      </div>
+      <div id="g-owner-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
+    </div>
+
+    <!-- Join button (non-members) -->
+    <div id="g-join-panel" style="display:none;margin-bottom:10px">
+      <button class="btn" id="g-join-btn" style="border-color:#2ecc71;color:#2ecc71">Join Fund</button>
+      <span style="font-size:.78rem;opacity:.5;margin-left:8px">Free to join, deposit anytime</span>
+    </div>
+
+    <!-- Buy slots (owner only) -->
+    <div id="g-slots-panel" style="display:none;margin-bottom:10px;font-size:.8rem">
+      <span id="g-slots-info" style="opacity:.6"></span>
+      <button class="btn" id="g-buy-slot-btn" style="padding:3px 10px;font-size:.78rem;margin-left:8px">+1 Slot (Ƒ100k)</button>
+    </div>
+
+    <!-- Trade panel (owner / dev / guild tier) -->
+    <div id="g-trade-panel" style="display:none;margin-bottom:10px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+      <div style="font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Fund Trade</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <select id="g-t-side" class="input" style="max-width:80px"><option value="buy">BUY</option><option value="sell">SELL</option></select>
+        <input id="g-t-sym" class="input" placeholder="Symbol" style="max-width:90px" maxlength="5"/>
+        <input id="g-t-qty" class="input" type="number" min="1" placeholder="Qty" style="max-width:90px"/>
+        <button class="btn" id="g-t-exec-btn">Execute</button>
+      </div>
+      <div id="g-trade-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <!-- Holdings -->
+      <div>
+        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Portfolio</div>
+        <div id="g-d-holdings" style="font-size:.8rem;max-height:110px;overflow:auto"></div>
+      </div>
+      <!-- Members -->
+      <div>
+        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Members <span id="g-member-count" style="opacity:.5"></span></div>
+        <div id="g-guild-bonus-bar" style="font-size:.75rem;color:#2ecc71;margin-bottom:6px;min-height:16px"></div>
+        <div id="g-d-members" style="font-size:.8rem;max-height:110px;overflow:auto"></div>
+      </div>
+    </div>
+
+    <!-- Activity log -->
+    <div style="margin-top:10px">
+      <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Activity</div>
+      <div id="g-d-activity" style="font-size:.75rem;opacity:.65;max-height:100px;overflow:auto"></div>
+    </div>
+
+    <!-- Polls -->
+    <div style="margin-top:10px" id="g-polls-section">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">Member Polls</div>
+        <button class="btn" id="g-create-poll-btn" style="padding:2px 10px;font-size:.72rem">+ New Poll</button>
+      </div>
+      <!-- Create poll form -->
+      <div id="g-poll-form" style="display:none;background:#060504;border:1px solid #2a1a04;border-radius:6px;padding:10px;margin-bottom:8px">
+        <input id="g-poll-question" class="input" placeholder="Poll question…" style="width:100%;margin-bottom:5px;box-sizing:border-box" maxlength="200"/>
+        <div id="g-poll-options-list">
+          <input class="input g-poll-opt" placeholder="Option 1" style="width:100%;margin-bottom:4px;box-sizing:border-box"/>
+          <input class="input g-poll-opt" placeholder="Option 2" style="width:100%;margin-bottom:4px;box-sizing:border-box"/>
+        </div>
+        <button class="btn" id="g-poll-add-opt" style="padding:2px 8px;font-size:.72rem;margin-bottom:6px">+ Option</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn" id="g-poll-submit">Create Poll</button>
+          <button class="btn" id="g-poll-cancel" style="border-color:#333;color:#666">Cancel</button>
+        </div>
+        <div id="g-poll-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
+      </div>
+      <!-- Active polls -->
+      <div id="g-polls-list" style="font-size:.8rem;max-height:200px;overflow:auto"></div>
+    </div>
+  </div>
+</div>
+<!-- ═══ Galaxy Tab ═══ -->
+<div id="galacticTab" style="display:none;padding:0;overflow:hidden;flex:1;min-height:0;font-family:'Courier New','Lucida Console',monospace">
+  <div id="galaxySubTabs" style="display:flex;border-bottom:1px solid #1a1a2e;background:#07070e">
+    <div class="galaxy-stab active" data-gstab="map" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid #4ecdc4;color:#4ecdc4;text-transform:uppercase;font-family:inherit">⬡ Sector Map</div>
+    <div class="galaxy-stab" data-gstab="factions" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit">◈ Factions</div>
+    <div class="galaxy-stab" data-gstab="contracts" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit">📋 Contracts</div>
+  </div>
+  <!-- Map pane -->
+  <div id="gMapPane" style="display:flex;flex:1;min-height:0;background:#02020a">
+    <div style="flex:1;position:relative;overflow:hidden;background:#050508">
+      <svg id="galaxySVG" viewBox="-150 -80 1200 900" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block">
+        <defs>
+          <filter id="gf-coalition" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#4ecdc4" flood-opacity="0.7" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="gf-syndicate" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#e74c3c" flood-opacity="0.7" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="gf-void" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#9b59b6" flood-opacity="0.7" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="gf-contested" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="10" result="b"/><feFlood flood-color="#f39c12" flood-opacity="0.9" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="gf-dev" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="10" result="b"/><feFlood flood-color="#ffd700" flood-opacity="0.8" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="gf-guild"  x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#2ecc71" flood-opacity="0.7" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <image id="gNebula" href="assets/space/backgrounds/blue_purple.png" x="-300" y="-300" width="1700" height="1400" preserveAspectRatio="xMidYMid slice" opacity="0" style="transition:opacity 1.2s ease"/>
+        <g id="gStars"></g>
+        <!-- Space loading spinner -->
+        <g id="gLoadSpinner" opacity="0" style="transition:opacity .3s">
+          <image id="gSpinImg" href="assets/space/ui/loading_wheel/loading_whee1.png" x="488" y="338" width="24" height="24" style="image-rendering:pixelated"/>
+        </g>
+        <ellipse cx="200" cy="490" rx="180" ry="120" fill="#9b59b6" opacity="0.03"/>
+        <ellipse cx="700" cy="210" rx="220" ry="140" fill="#4ecdc4" opacity="0.04"/>
+        <ellipse cx="600" cy="525" rx="160" ry="100" fill="#e74c3c" opacity="0.035"/>
+        <!-- Abaddon cluster — deep crimson northern nebula -->
+        <ellipse cx="490" cy="55"  rx="240" ry="75"  fill="#8b0000" opacity="0.07"/>
+        <ellipse cx="490" cy="70"  rx="140" ry="45"  fill="#c0392b" opacity="0.05"/>
+        <ellipse cx="490" cy="100" rx="60"  ry="35"  fill="#ff2200" opacity="0.04"/>
+        <g opacity="0.04" stroke="#ffffff" stroke-width="0.5">
+          <line x1="200" y1="0" x2="200" y2="700"/><line x1="400" y1="0" x2="400" y2="700"/>
+          <line x1="600" y1="0" x2="600" y2="700"/><line x1="800" y1="0" x2="800" y2="700"/>
+          <line x1="0" y1="175" x2="1000" y2="175"/><line x1="0" y1="350" x2="1000" y2="350"/>
+          <line x1="0" y1="525" x2="1000" y2="525"/>
+        </g>
+        <g id="gLanes"></g>
+        <g id="gShips"></g>
+        <g id="gColonies"></g>
+      </svg>
+      <div style="position:absolute;bottom:10px;left:10px;background:#07070eee;border:1px solid #1a1a2e;padding:8px 12px;font-size:.6rem;color:#666;line-height:1.9;letter-spacing:.05em">
+        <div style="color:#444;letter-spacing:.1em;margin-bottom:3px;text-transform:uppercase">Shipping Lanes</div>
+        <div><span style="display:inline-block;width:16px;height:2px;background:#4ecdc4;opacity:.7;vertical-align:middle;margin-right:5px"></span>Corporate</div>
+        <div><span style="display:inline-block;width:16px;height:2px;background:#999;opacity:.7;vertical-align:middle;margin-right:5px"></span>Grey Market</div>
+        <div><span style="display:inline-block;width:16px;height:2px;background:#9b59b6;opacity:.7;vertical-align:middle;margin-right:5px"></span>Dark Net</div>
+        <div><span style="display:inline-block;width:16px;height:2px;background:#f39c12;opacity:.7;vertical-align:middle;margin-right:5px"></span>Contested</div>
+        <div style="margin-top:3px;color:#555">&#9888; = Contested Colony</div>
+      </div>
+    </div>
+    <!-- Colony detail sidebar -->
+    <div id="gColonyDetail" style="width:240px;background:#07070e;border-left:1px solid #1a1a2e;overflow-y:auto;flex-shrink:0">
+      <div id="gColonyDetailInner" style="padding:14px">
+        <div style="text-align:center;padding:28px 0;opacity:.22">
+          <div style="font-size:1.8rem">&#9670;</div>
+          <div style="font-size:.66rem;letter-spacing:.14em;margin-top:6px;font-family:'Courier New',monospace">SELECT A COLONY</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Factions pane -->
+  <div id="gFactionsPane" style="display:none;padding:14px 16px;overflow-y:auto;flex:1;min-height:0">
+    <div style="font-size:.6rem;color:#555;letter-spacing:.13em;margin-bottom:14px;text-transform:uppercase">Choose Your Allegiance — Bonuses Apply To All Holdings</div>
+    <div id="gFactionList"></div>
+    <div style="margin-top:14px;padding:12px;border:1px solid #1a1a2e;font-size:.68rem;color:#666;line-height:1.7">
+      <div style="color:#4ecdc4;letter-spacing:.1em;margin-bottom:5px;font-size:.6rem;text-transform:uppercase">How Faction Wars Work</div>
+      Fund factions through colony panels on the Sector Map.
+      When a faction's control crosses <span style="color:#f39c12">75%</span>, a 24-hour conquest timer begins.
+      If it holds, the colony changes hands — all aligned players receive passive bonuses
+      on holdings tied to that colony's sectors.
+    </div>
+  </div>
+  <!-- Contracts pane -->
+  <div id="gContractsPane" style="display:none;padding:14px 16px;overflow-y:auto;flex:1;min-height:0">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:.72rem;color:#888;letter-spacing:.1em;text-transform:uppercase">Lane Shares — Bonding Curve Market</div>
+      <div style="font-size:.68rem;color:#2ecc71;letter-spacing:.06em">Dividends every 30 min</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <select id="gCtrFilterType" style="background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 10px;font-size:.72rem;font-family:inherit;border-radius:2px">
+        <option value="">All types</option><option value="corporate">Corporate</option><option value="grey">Grey Market</option><option value="dark">Dark Net</option><option value="contested">Contested</option>
+      </select>
+      <select id="gCtrFilterStatus" style="background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 10px;font-size:.72rem;font-family:inherit;border-radius:2px">
+        <option value="">All status</option><option value="open">Open slots</option><option value="held">Has holders</option><option value="mine">My share</option>
+      </select>
+      <select id="gCtrSort" style="background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 10px;font-size:.72rem;font-family:inherit;border-radius:2px">
+        <option value="vol">Sort: Volume</option><option value="supply">Sort: Supply</option><option value="price">Sort: Price</option><option value="type">Sort: Type</option>
+      </select>
+    </div>
+    <div id="gContractsTable"></div>
+    <div style="margin-top:14px;padding:12px 14px;border:1px solid #1a1a2e;font-size:.74rem;color:#777;line-height:1.7">
+      <div style="color:#3498db;letter-spacing:.1em;margin-bottom:5px;font-size:.68rem;text-transform:uppercase">How Lane Shares Work</div>
+      Buy a share in any shipping lane's trade volume. Price follows a bonding curve, so early buyers get in cheap and later buyers pay more.
+      Each share pays a dividend every 30 minutes (high vol: &#401;50, med: &#401;20, low: &#401;8).
+      War reduces dividends. Contested colonies halve income; high tension cuts it to 25%. Blockades stack another 50% cut.
+      If a colony is conquered, all shares on connected lanes are voided for a total loss.
+      Sell anytime at the current curve price. One share per player. Swap to rotate positions.
+    </div>
+  </div>
+</div>
+
+<!-- Bugs Tab ──────────────────────────────────────────────────────────────── -->
+<div id="bugsTab" style="display:none;overflow:hidden;
+  background:#02020a;font-family:'Courier New',monospace;flex-direction:column;
+  margin:-8px;border-radius:6px;">
+
+  <!-- Sub-tab bar -->
+  <div style="display:flex;border-bottom:1px solid #4ecdc422;background:#030e0e;flex-shrink:0">
+    <button class="comms-main-tab active" data-ctab="bugs"    onclick="commsMainTab('bugs')"   style="padding:9px 18px;font-size:.8rem;letter-spacing:.1em;background:none;border:none;border-bottom:2px solid #4ecdc4;color:#4ecdc4;cursor:pointer;font-family:inherit;text-transform:uppercase">🐛 Bug Reports</button>
+    <button class="comms-main-tab"        data-ctab="reports" onclick="commsMainTab('reports')" style="padding:9px 18px;font-size:.8rem;letter-spacing:.1em;background:none;border:none;border-bottom:2px solid transparent;color:#555;cursor:pointer;font-family:inherit;text-transform:uppercase">🚩 Player Reports</button>
+    <button class="comms-main-tab"        data-ctab="devchat" onclick="commsMainTab('devchat')" style="padding:9px 18px;font-size:.8rem;letter-spacing:.1em;background:none;border:none;border-bottom:2px solid transparent;color:#555;cursor:pointer;font-family:inherit;text-transform:uppercase">💬 Dev Chat</button>
+  </div>
+
+  <!-- Scrollable content -->
+  <div style="flex:1;overflow-y:auto;padding:20px 24px;max-width:800px;width:100%;box-sizing:border-box;margin:0 auto">
+
+    <!-- BUG REPORTS PANE -->
+    <div id="commsMain-bugs" class="comms-main-pane">
+      <div style="font-size:.82rem;color:#666;margin-bottom:14px;line-height:1.6">
+        Found a bug? Submit it below. If you see a report that matches yours, just 👍 it — no duplicates needed.
+        Resolved issues are marked green by the dev team.
+      </div>
+      <div style="background:#07070e;border:1px solid #4ecdc422;border-radius:8px;padding:14px;margin-bottom:18px">
+        <textarea id="bugs-input" placeholder="Describe the bug — what happened, what you expected, how to reproduce…"
+          rows="3" style="width:100%;box-sizing:border-box;background:#030e0e;border:1px solid #4ecdc433;
+          color:#ccc;padding:8px 10px;font-size:.84rem;font-family:inherit;resize:vertical;border-radius:5px;outline:none;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="bugsSubmit()" style="background:#4ecdc422;border:1px solid #4ecdc4;color:#4ecdc4;
+            padding:7px 18px;cursor:pointer;border-radius:5px;font-family:inherit;font-size:.82rem">Submit</button>
+          <span id="bugs-toast" style="font-size:.72rem;color:#51cf66;opacity:0;transition:opacity .5s"></span>
+        </div>
+      </div>
+      <div id="bugs-list" style="display:flex;flex-direction:column;gap:8px">
+        <div style="color:#555;font-size:.72rem">Loading…</div>
+      </div>
+    </div>
+
+    <!-- PLAYER REPORTS PANE -->
+    <div id="commsMain-reports" class="comms-main-pane" style="display:none">
+      <div style="font-size:.82rem;color:#888;margin-bottom:14px;line-height:1.6">
+        Report a player for harassment, cheating, or other violations. All reports go directly to the dev team and are kept confidential.
+      </div>
+      <div style="background:#07070e;border:1px solid #e74c3c22;border-radius:8px;padding:14px;margin-bottom:18px">
+        <div style="font-size:.65rem;color:#e74c3c;letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase">File a Report</div>
+        <input id="comms-report-target" placeholder="Player name to report…"
+          style="width:100%;box-sizing:border-box;background:#030e0e;border:1px solid #e74c3c33;color:#ccc;
+          padding:9px 10px;font-size:.84rem;font-family:inherit;border-radius:5px;outline:none;margin-bottom:6px">
+        <textarea id="comms-report-reason" placeholder="Describe what happened in detail…" rows="3"
+          style="width:100%;box-sizing:border-box;background:#030e0e;border:1px solid #e74c3c33;color:#ccc;
+          padding:9px 10px;font-size:.84rem;font-family:inherit;resize:vertical;border-radius:5px;outline:none;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="commsReportSubmit()" style="background:#e74c3c22;border:1px solid #e74c3c;color:#e74c3c;
+            padding:7px 18px;cursor:pointer;border-radius:5px;font-family:inherit;font-size:.82rem">🚩 Submit Report</button>
+          <span id="report-toast" style="font-size:.72rem;color:#51cf66;opacity:0;transition:opacity .5s"></span>
+        </div>
+      </div>
+      <div id="comms-report-list"></div>
+    </div>
+
+    <!-- DEV CHAT PANE -->
+    <div id="commsMain-devchat" class="comms-main-pane" style="display:none">
+      <div style="font-size:.82rem;color:#888;margin-bottom:14px;line-height:1.6">
+        Need to speak with a developer directly? Send a message below and a dev will reach out to you in-game chat.
+        We read every request.
+      </div>
+      <div style="background:#07070e;border:1px solid #f39c1222;border-radius:8px;padding:14px;margin-bottom:18px">
+        <div style="font-size:.65rem;color:#f39c12;letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase">Request a Dev Chat</div>
+        <textarea id="comms-request-msg" placeholder="What do you need to discuss? Include as much detail as you can…" rows="4"
+          style="width:100%;box-sizing:border-box;background:#030e0e;border:1px solid #f39c1233;color:#ccc;
+          padding:9px 10px;font-size:.84rem;font-family:inherit;resize:vertical;border-radius:5px;outline:none;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="commsRequestSubmit()" style="background:#f39c1222;border:1px solid #f39c12;color:#f39c12;
+            padding:7px 18px;cursor:pointer;border-radius:5px;font-family:inherit;font-size:.82rem">💬 Send Request</button>
+          <span id="request-toast" style="font-size:.72rem;color:#51cf66;opacity:0;transition:opacity .5s"></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+</div>
+
+
+
+<!-- Right: chat + transfer -->
+<div class="panel" id="rightPanel">
+<h2></h2>
+<!-- Unified Chat Box -->
+<div id="chatBox">
+  <div id="chatTabs">
+    <div class="chat-tab active" data-channel="global">Global<span class="chat-unread" id="unread-global" style="display:none">0</span></div>
+    <div class="chat-tab" data-channel="patreon">Premium<span class="chat-unread" id="unread-patreon" style="display:none">0</span></div>
+    <div class="chat-tab" data-channel="guild">Merchants Guild<span class="chat-unread" id="unread-guild" style="display:none">0</span></div>
+    <div class="chat-tab" data-channel="whisper" id="whisper-chat-tab" style="color:#a78bfa;border-color:transparent">💬<span class="chat-unread" id="unread-whisper" style="display:none">0</span></div>
+    <div class="chat-tab" data-channel="unmod" id="unmod-chat-tab" style="color:#ff8c00;border-color:transparent">🔞 Unmod<span class="chat-unread" id="unread-unmod" style="display:none">0</span></div>
+    <div class="chat-tab" data-channel="dunce" id="dunce-chat-tab" style="display:none;color:#ff4444;border-color:#ff2222">🎓 Dunce<span class="chat-unread" id="unread-dunce" style="display:none">0</span></div>
+  </div>
+
+  <!-- Global Room Pager -->
+  <div id="globalRoomPager" style="
+    display:flex;align-items:center;justify-content:space-between;
+    padding:3px 6px;background:#0a0505;border-bottom:1px solid #1a0a0a;
+    font-size:.68rem;user-select:none;
+  ">
+    <button onclick="channelRoomNav('global',-1)" style="
+      background:none;border:1px solid #2a1010;border-radius:4px;
+      color:#884444;font-size:.65rem;padding:1px 7px;cursor:pointer;line-height:1.5;
+    ">◀</button>
+    <div id="globalRoomDots" style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:220px"></div>
+    <button onclick="channelRoomNav('global',1)" style="
+      background:none;border:1px solid #2a1010;border-radius:4px;
+      color:#884444;font-size:.65rem;padding:1px 7px;cursor:pointer;line-height:1.5;
+    ">▶</button>
+  </div>
+
+  <!-- Global rooms 1-5 -->
+  <div class="chat-channel active" id="chatch-global" data-room="1"></div>
+  <div class="chat-channel" id="chatch-global-r2" data-room="2" style="display:none"></div>
+  <div class="chat-channel" id="chatch-global-r3" data-room="3" style="display:none"></div>
+  <div class="chat-channel" id="chatch-global-r4" data-room="4" style="display:none"></div>
+  <div class="chat-channel" id="chatch-global-r5" data-room="5" style="display:none"></div>
+
+  <!-- Patreon Room Pager -->
+  <div id="patreonRoomPager" class="roomPager" style="
+    display:none;align-items:center;justify-content:space-between;
+    padding:3px 6px;background:#0a0505;border-bottom:1px solid #1a0a0a;
+    font-size:.68rem;user-select:none;
+  ">
+    <button onclick="channelRoomNav('patreon',-1)" style="background:none;border:1px solid #2a1010;border-radius:4px;color:#884444;font-size:.65rem;padding:1px 7px;cursor:pointer;line-height:1.5">◀</button>
+    <div id="patreonRoomDots" class="roomDots" style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:220px"></div>
+    <button onclick="channelRoomNav('patreon',1)" style="background:none;border:1px solid #2a1010;border-radius:4px;color:#884444;font-size:.65rem;padding:1px 7px;cursor:pointer;line-height:1.5">▶</button>
+  </div>
+  <!-- Patreon rooms 1-5 -->
+  <div class="chat-channel" id="chatch-patreon" data-room="1"><div style="opacity:.75;font-size:.73rem;padding:6px;color:#d4a05e">Premium members only.</div></div>
+  <div class="chat-channel" id="chatch-patreon-r2" data-room="2" style="display:none"></div>
+  <div class="chat-channel" id="chatch-patreon-r3" data-room="3" style="display:none"></div>
+  <div class="chat-channel" id="chatch-patreon-r4" data-room="4" style="display:none"></div>
+  <div class="chat-channel" id="chatch-patreon-r5" data-room="5" style="display:none"></div>
+
+  <!-- Guild Room Pager -->
+  <div id="guildRoomPager" class="roomPager" style="
+    display:none;align-items:center;justify-content:space-between;
+    padding:3px 6px;background:#0a0505;border-bottom:1px solid #1a0a0a;
+    font-size:.68rem;user-select:none;
+  ">
+    <button onclick="channelRoomNav('guild',-1)" style="background:none;border:1px solid #2a1010;border-radius:4px;color:#884444;font-size:.65rem;padding:1px 7px;cursor:pointer;line-height:1.5">◀</button>
+    <div id="guildRoomDots" class="roomDots" style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:220px"></div>
+    <button onclick="channelRoomNav('guild',1)" style="background:none;border:1px solid #2a1010;border-radius:4px;color:#884444;font-size:.65rem;padding:1px 7px;cursor:pointer;line-height:1.5">▶</button>
+  </div>
+  <!-- Guild rooms 1-5 -->
+  <div class="chat-channel" id="chatch-guild" data-room="1"><div id="guildPlaceholder" style="opacity:.75;font-size:.73rem;padding:6px;color:#d4a05e">Merchants Guild members only.</div></div>
+  <div class="chat-channel" id="chatch-guild-r2" data-room="2" style="display:none"></div>
+  <div class="chat-channel" id="chatch-guild-r3" data-room="3" style="display:none"></div>
+  <div class="chat-channel" id="chatch-guild-r4" data-room="4" style="display:none"></div>
+  <div class="chat-channel" id="chatch-guild-r5" data-room="5" style="display:none"></div>
+
+  <!-- Whisper (single pane, no rooms) -->
+  <div class="chat-channel" id="chatch-whisper"><div class="chat-ph" style="opacity:.75;font-size:.73rem;padding:6px;color:#d4a05e">Private messages appear here.<br>Type <b style="color:#ffb547">@name message</b> to whisper.</div></div>
+
+  <!-- Dunce (single room, no pager) -->
+  <div class="chat-channel" id="chatch-dunce"><div style="opacity:.75;font-size:.73rem;padding:6px;color:#d4a05e">🎓 Dunce corner. Visible to dunced players and devs only.</div></div>
+
+  <!-- Unmod Room Pager -->
+  <div id="unmodRoomPager" class="roomPager" style="
+    display:none;align-items:center;justify-content:space-between;
+    padding:3px 6px;background:#0a0505;border-bottom:1px solid #1a0a0a;
+    font-size:.68rem;user-select:none;
+  ">
+    <button onclick="channelRoomNav('unmod',-1)" style="background:none;border:1px solid #2a1010;border-radius:4px;color:#884444;font-size:.65rem;padding:1px 7px;cursor:pointer;line-height:1.5">◀</button>
+    <div id="unmodRoomDots" class="roomDots" style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:220px"></div>
+    <button onclick="channelRoomNav('unmod',1)" style="background:none;border:1px solid #2a1010;border-radius:4px;color:#884444;font-size:.65rem;padding:1px 7px;cursor:pointer;line-height:1.5">▶</button>
+  </div>
+  <!-- Unmod rooms 1-10 -->
+  <div class="chat-channel" id="chatch-unmod" data-room="1"><div style="opacity:.75;font-size:.73rem;padding:6px;color:#d4a05e">🔞 Unmoderated. All content visible here. Premium access only.</div></div>
+  <div class="chat-channel" id="chatch-unmod-r2" data-room="2" style="display:none"></div>
+  <div class="chat-channel" id="chatch-unmod-r3" data-room="3" style="display:none"></div>
+  <div id="chatInputRow" style="position:relative">
+    <span id="chatChannelBadge" style="font-size:.68rem;opacity:.5;white-space:nowrap">global</span>
+    <span id="whisperTargetBadge" style="display:none;font-size:.68rem;color:#a78bfa;white-space:nowrap;padding:0 4px;border:1px solid #4a3580;border-radius:4px;cursor:pointer" title="Click to clear">→ …</span>
+    <input id="chatInput" placeholder="Say something… @mention" autocomplete="off"/>
+    <button id="chatSend">Send</button>
+    <div id="chatMentionDrop" style="display:none;bottom:34px;left:0"></div>
+    <div style="position:absolute;right:0;bottom:calc(100% + 2px);display:flex;gap:2px">
+      <button id="chatFontDec" title="Smaller text" style="background:rgba(30,20,5,.6);border:1px solid #5a4a2a;border-radius:3px;color:#c8a040;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#ffcc44';this.style.borderColor='#8a7a4a'" onmouseleave="this.style.color='#c8a040';this.style.borderColor='#5a4a2a'">A−</button>
+      <button id="chatFontInc" title="Larger text"  style="background:rgba(30,20,5,.6);border:1px solid #5a4a2a;border-radius:3px;color:#c8a040;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#ffcc44';this.style.borderColor='#8a7a4a'" onmouseleave="this.style.color='#c8a040';this.style.borderColor='#5a4a2a'">A+</button>
+    </div>
+  </div>
+</div>
+<!-- Dunce Banner (hidden unless player is dunced) -->
+<div id="dunce-banner" style="display:none;background:linear-gradient(135deg,#2a0000,#1a0000);border:2px solid #ff2222;border-radius:8px;padding:12px 14px;margin-bottom:10px;text-align:center">
+  <div style="font-size:1.5rem;margin-bottom:4px">🎓</div>
+  <div style="color:#ff4444;font-weight:700;letter-spacing:.1em;font-size:.85rem;text-transform:uppercase;margin-bottom:4px">You Are In The Dunce Corner</div>
+  <div id="dunce-reason-text" style="color:#884444;font-size:.73rem;margin-bottom:10px;font-style:italic"></div>
+  <div style="color:#666;font-size:.7rem;margin-bottom:8px">All chat channels are blocked. You may only use the Dunce channel.<br>To escape, pay <strong id="dunce-fine-display" style="color:#ffb547">45% of your net worth</strong> in cash.</div>
+  <button id="dunce-redeem-btn" onclick="window.dunceRedeem()" style="background:#1a0000;border:1px solid #ff4444;color:#ff6666;font-family:inherit;font-size:.78rem;padding:6px 18px;border-radius:5px;cursor:pointer;letter-spacing:.06em">💸 PAY FINE &amp; ESCAPE</button>
+  <div id="dunce-redeem-hint" style="font-size:.7rem;color:#666;margin-top:6px"></div>
+</div>
+<!-- Transfer pinned at bottom -->
+<div id="transferSection">
+  <h2>Wire Credits</h2>
+  <div class="row">
+    <input class="input" id="toName" placeholder="Recipient name"/>
+    <input class="input" id="amt" min="1" style="max-width:110px" type="number" value="10"/>
+    <button class="btn" id="xfer">Wire</button>
+  </div>
+  <div style="font-size:.62rem;color:#665533;margin-top:4px;letter-spacing:.03em;line-height:1.3">* Standard 2% transfer tax applies. Transfers exceeding Ƒ10,000 are subject to 90% taxation by the Merchant Guild.</div>
+</div>
+<div id="leaderboardCompact">
+  <h2 style="margin:4px 0 4px 0;font-size:11px">Leaderboard <span style="opacity:.4;font-weight:400;letter-spacing:.04em">NET WORTH</span></h2>
+  <div id="board"></div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Bottom: Live Activity Strip -->
+<div id="bottomRow">
+  <div style="display:flex;gap:10px;align-items:center;padding:4px 8px">
+    <span id="lb-cycle-counter" style="font-size:.70rem;color:#5a7a5a;letter-spacing:.04em;font-family:monospace">⟳ --:--</span>
+    <span style="font-size:.72rem;opacity:.4;letter-spacing:.06em">LIVE MARKET</span>
+    <div id="bottomTicker" style="display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;font-family:monospace"></div>
+  </div>
+</div>
+<script src="assets/core.js"></script>
+<!-- ── Unmoderated Chat 18+ Warning Modal ──────────────────────────────────────────── -->
+<div id="unmod-warning-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);align-items:center;justify-content:center">
+  <div style="background:#100a04;border:1px solid #8b0000;border-radius:10px;padding:28px 32px;max-width:480px;width:90%;box-shadow:0 0 40px rgba(180,0,0,.35)">
+    <div style="font-size:1.3rem;font-weight:700;color:#ff4444;letter-spacing:.08em;margin-bottom:12px;text-align:center">🔞 ADULTS ONLY — 18+</div>
+    <div style="font-size:.85rem;color:#ccc;line-height:1.7;margin-bottom:18px">
+      <strong style="color:#ffb547">Warning:</strong> The Unmoderated Chat channel contains <strong>no content filtering</strong>.
+      Users in this channel may be subject to a wide range of discriminatory language, slurs, and other offensive content that is explicitly permitted here.<br><br>
+      By entering, you confirm that you are <strong>18 years of age or older</strong> and that you <strong>voluntarily consent</strong> to viewing unfiltered content, including potentially hateful or offensive speech.
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button id="unmod-accept-btn" style="background:#8b0000;color:#fff;border:none;border-radius:5px;padding:8px 22px;font-size:.88rem;cursor:pointer;letter-spacing:.05em">I AM 18+ — ENTER CHANNEL</button>
+      <button id="unmod-decline-btn" style="background:#1a1a1a;color:#888;border:1px solid #333;border-radius:5px;padding:8px 22px;font-size:.88rem;cursor:pointer">Cancel</button>
+    </div>
+  </div>
+</div>
+<!-- ── Non-Patron Unmod Block Modal ─────────────────────────────────── -->
+<div id="unmod-patron-gate-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);align-items:center;justify-content:center">
+  <div style="background:#100a04;border:1px solid #4a3510;border-radius:10px;padding:28px 32px;max-width:480px;width:90%;box-shadow:0 0 40px rgba(100,60,0,.35)">
+    <div style="font-size:1.1rem;font-weight:700;color:#ffb547;letter-spacing:.08em;margin-bottom:12px;text-align:center">🔒 Premium-Only Channel</div>
+    <div style="font-size:.85rem;color:#ccc;line-height:1.7;margin-bottom:14px">
+      The <strong>Unmoderated Chat</strong> channel is available to all active Premium members (any tier).
+      <a href="https://www.patreon.com/FLSH" target="_blank" style="color:#ffb547">Support us on Patreon</a> to unlock access.<br><br>
+      <span style="color:#aaa;font-size:.8rem"><strong>Note:</strong> This channel contains no content filtering. Users may be subject to discriminatory language, slurs, and other offensive content. All participants 18+ and enter voluntarily.</span>
+    </div>
+    <div style="text-align:center">
+      <button id="unmod-gate-close-btn" style="background:#1a1a1a;color:#ccc;border:1px solid #333;border-radius:5px;padding:8px 22px;font-size:.88rem;cursor:pointer">Close</button>
+    </div>
+  </div>
+</div>
+<link rel="stylesheet" href="assets/sell-modal.css">
+<div id="sell-modal">
+<div class="card">
+<div class="hdr"><span id="sm-title">Sell</span></div>
+<div class="row"><div class="lab">Symbol</div><div class="val" id="sm-symbol"></div></div>
+<div class="row"><div class="lab">Owned</div><div class="val" id="sm-owned">0</div></div>
+<div class="row"><div class="lab">Avg Cost</div><div class="val" id="sm-avg">0</div></div>
+<div class="row"><div class="lab">Last Price</div><div class="val" id="sm-last">0</div></div>
+<div class="row"><div class="lab">Qty to sell</div><input id="sm-qty" min="1" step="1" style="width:120px;" type="number" value="1"/><span class="small">max <span id="sm-max">0</span></span></div>
+<div class="row small"><div class="lab">Sale Value</div><div class="val" id="sm-value" style="color:#e6c27a">0</div></div>
+<div class="row small"><div class="lab">Unrealized P&amp;L</div><div class="val" id="sm-pnl">0</div></div>
+<div class="actions">
+<button id="sm-cancel">Cancel</button>
+<button id="sm-confirm">Confirm Sell</button>
+</div>
+</div>
+</div>
+<script src="assets/market-orders.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var btn = document.querySelector('#sell');
+  if (!btn) return;
+  // Replace legacy: assign a single onclick for Sell -> open modal
+  btn.onclick = function(){
+    var symInput = document.querySelector('#sym');
+    var symbol = String(symInput && symInput.value || '').toUpperCase();
+    if (window.__SellModal && typeof __SellModal.open === 'function'){
+      __SellModal.open(symbol);
+    }
+  };
+});
+</script>
+<script>
+// --- Pending sell reconciliation ---
+window.__PENDING_SALES = window.__PENDING_SALES || {}; // symbol -> qty outstanding
+window.__SERVER_POSITIONS = window.__SERVER_POSITIONS || {}; // last raw server positions map
+window.__POSITIONS_MAP = window.__POSITIONS_MAP || {}; // effective positions (server minus pending)
+
+function __normQty(v){
+  if (v == null) return 0;
+  if (typeof v === 'number') return v|0;
+  if (typeof v === 'object') return Number(v.qty ?? v.position ?? 0) || 0;
+  return Number(v)||0;
+}
+
+// apply pending sells to a raw positions map
+function __applyPending(map){
+  const out = {};
+  const P = window.__PENDING_SALES || {};
+  for (const k in map){
+    const sym = String(k).toUpperCase();
+    const raw = __normQty(map[k]);
+    const eff = Math.max(0, raw - (P[sym]||0));
+    if (eff) out[sym] = eff;
+  }
+  return out;
+}
+
+// reconcile pending against new server snapshot to avoid growth over time
+function __reconcilePending(prevRaw, nextRaw){
+  try{
+    const P = window.__PENDING_SALES || {};
+    const syms = new Set([...Object.keys(prevRaw||{}), ...Object.keys(nextRaw||{})]);
+    syms.forEach(sym=>{
+      const a = __normQty(prevRaw[sym]||0);
+      const b = __normQty(nextRaw[sym]||0);
+      const drop = Math.max(0, a - b); // server caught up by 'drop'
+      if (drop > 0 && P[sym]){
+        P[sym] = Math.max(0, P[sym] - drop);
+        if (!P[sym]) delete P[sym];
+      }
+    });
+    window.__PENDING_SALES = P;
+  }catch(e){}
+}
+
+function __updateEffectivePositions(){
+  try{
+    window.__POSITIONS_MAP = __applyPending(window.__SERVER_POSITIONS||{});
+    // If modal open, refresh owned/max
+    const el = document.getElementById('sell-modal');
+    if (el && el.style.display === 'flex' && window.__SellModal && typeof __SellModal.updatePreview === 'function'){
+      __SellModal.updatePreview();
+      // refresh "Owned" and "max"
+      const sym = document.getElementById('sm-symbol').textContent;
+      const owned = window.getOwnedQty ? getOwnedQty(sym) : (__POSITIONS_MAP[sym]||0);
+      const maxEl = document.getElementById('sm-max'); if (maxEl) maxEl.textContent = String(owned|0);
+      const ownEl = document.getElementById('sm-owned'); if (ownEl) ownEl.textContent = String(owned|0);
+      const qtyEl = document.getElementById('sm-qty'); if (qtyEl) { qtyEl.max = String(owned|0); if (Number(qtyEl.value)>owned) qtyEl.value = String(owned|0); }
+    }
+  }catch(e){}
+}
+</script>
+<!-- ===== SHORT SELL MODAL ===== -->
+<link rel="stylesheet" href="assets/short-modal.css">
+<div id="short-modal">
+<div class="card">
+  <div class="shdr">⬇ Short Sell</div>
+  <div class="stabs">
+    <div class="stab active" id="short-tab-open" onclick="window.__ShortModal&&__ShortModal.setMode('open')">Open Short</div>
+    <div class="stab" id="short-tab-cover" onclick="window.__ShortModal&&__ShortModal.setMode('cover')">Cover Short</div>
+  </div>
+  <!-- Open Short fields -->
+  <div id="short-open-body">
+    <div class="srow"><div class="slab">Symbol</div><input id="sho-sym" placeholder="e.g. ORGX" maxlength="5" style="width:100px;text-transform:uppercase"/></div>
+    <div class="srow"><div class="slab">Current Price</div><div class="sval" id="sho-price">—</div></div>
+    <div class="srow"><div class="slab">Qty to Short</div><input id="sho-qty" type="number" min="1" max="500" step="1" value="1" style="width:100px"/></div>
+    <hr class="divider"/>
+    <div class="srow"><div class="slab">Proceeds</div><div class="sval" id="sho-proceeds">—</div></div>
+    <div class="srow"><div class="slab">Margin Req.</div><div class="sval" id="sho-margin">—</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px">(50% collateral)</span></div>
+    <div class="srow"><div class="slab">Borrow Fee</div><div class="sval" id="sho-fee">—</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px">/30 min</span></div>
+    <div id="sho-warn" class="warn-box" style="display:none"></div>
+    <div id="sho-ok" class="ok-box" style="display:none"></div>
+  </div>
+  <!-- Cover Short fields -->
+  <div id="short-cover-body" style="display:none">
+    <div class="srow"><div class="slab">Symbol</div><input id="shc-sym" placeholder="e.g. ORGX" maxlength="5" style="width:100px;text-transform:uppercase"/></div>
+    <div class="srow"><div class="slab">Short Position</div><div class="sval" id="shc-position">—</div></div>
+    <div class="srow"><div class="slab">Current Price</div><div class="sval" id="shc-price">—</div></div>
+    <div class="srow"><div class="slab">Avg Entry</div><div class="sval" id="shc-avg">—</div></div>
+    <div class="srow"><div class="slab">Qty to Cover</div><input id="shc-qty" type="number" min="1" step="1" value="1" style="width:100px"/></div>
+    <hr class="divider"/>
+    <div class="srow"><div class="slab">Cover Cost</div><div class="sval" id="shc-cost">—</div></div>
+    <div class="srow"><div class="slab">Estimated P&amp;L</div><div class="sval" id="shc-pnl">—</div></div>
+    <div id="shc-warn" class="warn-box" style="display:none"></div>
+    <!-- Open short positions list -->
+    <div style="font-size:.72rem;opacity:.6;margin-top:8px;margin-bottom:2px;letter-spacing:.08em">YOUR SHORT POSITIONS</div>
+    <div id="shc-pos-list" class="spos-list"></div>
+  </div>
+  <div class="sactions">
+    <button id="sho-cancel-btn">Cancel</button>
+    <button id="sho-confirm-btn" class="sconfirm" style="display:none">Confirm Short</button>
+    <button id="shc-confirm-btn" class="scovconfirm" style="display:none">Cover Position</button>
+  </div>
+</div>
+</div>
+<script src="assets/shorts.js"></script>
+
+<!-- ===== Chat System ===== -->
+<script src="assets/chat-ui.js"></script>
+
+<!-- ===== Chat Room Pager (all channels except dunce) ===== -->
+<script>
+(function(){
+  var ROOM_COUNTS = {global:5, patreon:5, guild:5, unmod:3};
+  var ROOMED_CHANNELS = ['global','patreon','guild','unmod'];
+  function getRoomCount(ch){ return ROOM_COUNTS[ch] || 5; }
+  // Track current room per channel
+  window.__chatRooms = {};
+  ROOMED_CHANNELS.forEach(function(ch){ window.__chatRooms[ch] = 1; });
+  // Backward compat
+  Object.defineProperty(window, '__globalChatRoom', {
+    get: function(){ return window.__chatRooms.global || 1; },
+    set: function(v){ window.__chatRooms.global = v; }
+  });
+
+  function getPagerEl(ch) { return document.getElementById(ch + 'RoomPager'); }
+  function getDotsEl(ch) { return document.getElementById(ch + 'RoomDots'); }
+
+  function updateRoomDots(ch) {
+    var dots = getDotsEl(ch);
+    if (!dots) return;
+    var cur = window.__chatRooms[ch] || 1;
+    var total = getRoomCount(ch);
+    dots.innerHTML = '';
+    for (var i = 1; i <= total; i++) {
+      (function(room){
+        var dot = document.createElement('button');
+        dot.title = 'Room ' + room;
+        dot.textContent = room;
+        dot.style.cssText = [
+          'background:' + (room === cur ? '#6a1a00' : '#110505'),
+          'border:1px solid ' + (room === cur ? '#ff6a00' : '#2a1010'),
+          'border-radius:4px',
+          'color:' + (room === cur ? '#ff9900' : '#552222'),
+          'font-size:.62rem',
+          'padding:1px 5px',
+          'cursor:pointer',
+          'line-height:1.5',
+          'font-family:inherit',
+          'min-width:20px',
+          'transition:all .15s'
+        ].join(';');
+        dot.addEventListener('click', function(){ switchChannelRoom(ch, room); });
+        dots.appendChild(dot);
+      })(i);
+    }
+  }
+  window.updateRoomPagerDots = function(){ updateRoomDots('global'); };
+  window.updateChannelRoomDots = updateRoomDots;
+
+  function getRoomPaneId(ch, room) {
+    return room === 1 ? ('chatch-' + ch) : ('chatch-' + ch + '-r' + room);
+  }
+
+  function switchChannelRoom(ch, room) {
+    var total = getRoomCount(ch);
+    room = Math.min(total, Math.max(1, room));
+    // Hide all room panes for this channel
+    var base = document.getElementById('chatch-' + ch);
+    if (base) { base.style.display = 'none'; base.classList.remove('active'); }
+    for (var r = 2; r <= total; r++) {
+      var el = document.getElementById('chatch-' + ch + '-r' + r);
+      if (el) { el.style.display = 'none'; el.classList.remove('active'); }
+    }
+    // Show target room
+    var pane = document.getElementById(getRoomPaneId(ch, room));
+    if (pane) { pane.style.display = ''; pane.classList.add('active'); pane.scrollTop = pane.scrollHeight; }
+    window.__chatRooms[ch] = room;
+    // Update badge label
+    var badge = document.getElementById('chatChannelBadge');
+    if (badge) badge.textContent = ch + ' · room ' + room;
+    // Clear unread
+    var unread = document.getElementById('unread-' + ch);
+    if (unread) { unread.style.display = 'none'; unread.textContent = '0'; }
+    updateRoomDots(ch);
+  }
+  window.switchChannelRoom = switchChannelRoom;
+  window.switchGlobalRoom = function(room){ switchChannelRoom('global', room); };
+
+  window.channelRoomNav = function(ch, delta) {
+    var cur = window.__chatRooms[ch] || 1;
+    switchChannelRoom(ch, cur + delta);
+  };
+  window.globalRoomNav = function(delta){ window.channelRoomNav('global', delta); };
+
+  // Init on DOM ready
+  document.addEventListener('DOMContentLoaded', function(){
+    ROOMED_CHANNELS.forEach(function(ch){ updateRoomDots(ch); });
+    // Only show global pager initially (others shown on tab switch)
+    ROOMED_CHANNELS.forEach(function(ch){
+      var p = getPagerEl(ch);
+      if (p) p.style.display = ch === 'global' ? 'flex' : 'none';
+    });
+    var badge = document.getElementById('chatChannelBadge');
+    if (badge) badge.textContent = 'global · room 1';
+  });
+})();
+</script>
+<!-- ===== Unmoderated Chat Modal + Block System ===== -->
+<script src="assets/block-users.js"></script>
+
+<script>
+// Injected: marketAPI buy/sell compatible with 0.04 wiring; used by trade-limit.js to guard 3 trades / 30m
+window.marketAPI = window.marketAPI || {};
+(function(){
+  function upper(s){ return String(s||'').toUpperCase(); }
+  function getSymbol(){
+    var e = document.getElementById('sym') || document.getElementById('symbol');
+    var v = upper(e && e.value || '');
+    if (!v && typeof window.CURRENT === 'string' && window.CURRENT) v = upper(window.CURRENT);
+    // fallback: selected ticker row, if any
+    if (!v){
+      var r = document.querySelector('#tickers .row.active [data-symbol]') || document.querySelector('#tickers .row [data-symbol]');
+      if (r && r.getAttribute) v = upper(r.getAttribute('data-symbol')||'');
+    }
+    return v;
+  }
+  function getQty(){
+    var e = document.getElementById('shares') || document.getElementById('qty') || document.getElementById('quantity');
+    var n = Number(e && e.value || 1);
+    return Math.max(1, n|0);
+  }
+  function getLast(sym){
+    try{
+      var S = upper(sym);
+      if (Array.isArray(window.TICKERS)){
+        for (var i=0;i<window.TICKERS.length;i++){
+          var t = window.TICKERS[i];
+          if (t && upper(t.symbol)===S) return Number(t.price||t.last||t.p||0) || 0;
+        }
+      }
+    }catch(e){}
+    return 0;
+  }
+  async function send(side, symbol, qty){
+    var sym = upper(symbol||getSymbol());
+    var q = Number(qty||getQty()||1)|0;
+    if (!sym || !q) return;
+    var payload = {type:'order', side:(side==='sell'?'sell':'buy'), symbol:sym, shares:q, qty:q, quantity:q};
+    try { ws && ws.send && ws.send(JSON.stringify(payload)); } catch(e){ try{ console.error(e); }catch(_){}}  // 0.04 uses 'ws' scoped var
+    try {
+      var last = getLast(sym);
+      window.PnLBridge && window.PnLBridge.onTrade && window.PnLBridge.onTrade({ id:`cli-${Date.now()}-${side==='sell'?'s':'b'}`, side:(side==='sell'?'SELL':'BUY'), symbol:sym, qty:q, price:last, ts: performance.now() });
+    } catch(e){}
+  }
+  window.marketAPI.buy = function(symbol, qty){ return send('buy', symbol, qty); };
+  window.marketAPI.sell = function(symbol, qty){ return send('sell', symbol, qty); };
+})();
+</script>
+<script src="assets/trade-limit.js"></script>
+<script>
+ws.addEventListener('message', function(ev){
+  try {
+    var _d = ev && ev.data != null ? ev.data : (ev && ev.detail && ev.detail.data);
+    var msg = JSON.parse(_d);
+    if (msg && msg.type === 'me') {
+      try { window.ME = Object.assign({}, window.ME||{}, msg.data||{}); } catch(e){}
+      try { window.postMessage(JSON.stringify({type:'me', data:msg.data||{}}), '*'); } catch(e){}
+      try { const c = document.getElementById('cash'); if (c && msg.data && typeof msg.data.cash === 'number') c.textContent = fmt(msg.data.cash); } catch(e){}
+    }
+  } catch(e){}
+});
+</script>
+<script src="/daytrade_reset_on_refresh.js"></script>
+<script>
+(function(){
+  function swallow(e){
+    try{ var msg = JSON.parse(e.data||'{}'); if (msg && msg.type === 'leaderboard') return; }catch(_){}
+    try{ if (typeof EventTarget !== 'undefined') EventTarget.prototype.dispatchEvent.call(this, e); }catch(_){}
+  }
+  try{
+    // patch WebSocket send/receive
+    const _WS = window.WebSocket;
+    if (_WS){
+      const _orig = _WS.prototype.addEventListener;
+      _WS.prototype.addEventListener = function(type, listener, options){
+        if (type === 'message'){
+          const wrapped = function(e){ swallow.call(this, e); };
+          return _orig.call(this, type, wrapped, options);
+        }
+        return _orig.call(this, type, listener, options);
+      };
+    }
+  }catch(e){}
+})();
+</script>
+<!-- Auth v3: server-side accounts -->
+<script src="assets/fm-auth.js"></script>
+<!-- leaderboard-local.js removed: server-frozen EOD snapshot is canonical -->
+<script src="assets/funds.js"></script>
+
+<script src="assets/market-state.js"></script>
+
+    <script>
+        function updateCountdown() {
+            const now = new Date();
+            const nextReset = new Date(Math.ceil(now.getTime() / (30 * 60 * 1000)) * (30 * 60 * 1000));
+            const timeLeft = nextReset - now;
+
+            const minutes = Math.floor(timeLeft / (1000 * 60));
+            const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+            const mm = String(minutes).padStart(2,'0');
+            const ss = String(seconds).padStart(2,'0');
+
+            // Legacy inline timer (small)
+            const countdownElement = document.getElementById('timeTillReset');
+            if (countdownElement) countdownElement.textContent = 'End of Day: ' + minutes + 'm ' + seconds + 's';
+
+            // Big glowing header timer
+            const bigTimer = document.getElementById('eod-timer');
+            if (bigTimer) {
+              bigTimer.textContent = mm + ':' + ss;
+              if (minutes < 3) {
+                bigTimer.classList.add('urgent');
+              } else {
+                bigTimer.classList.remove('urgent');
+              }
+            }
+        }
+
+        setInterval(updateCountdown, 1000);
+        updateCountdown();
+    </script>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- FleshMarket Features: Sound, Heatmap, XP/Levels, etc -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<link rel="stylesheet" href="assets/toast.css">
+
+<!-- Toast Area -->
+<div id="toastArea"></div>
+
+<!-- Sound Toggle -->
+<button id="soundToggle" onclick="toggleSound()">🔇 Sound</button>
+
+<script src="assets/sound.js"></script>
+<!-- ═══════════════════════════════════════════════════════════
+     DEV MOD PANEL — only rendered/visible for admin accounts
+     ═══════════════════════════════════════════════════════════ -->
+<div id="modPanel" style="
+  display:none;position:fixed;z-index:9999;
+  background:#0d0a06;border:1px solid #4da6ff44;
+  border-radius:10px;padding:0;min-width:210px;
+  box-shadow:0 8px 32px #000a,0 0 0 1px #4da6ff22;
+  font-family:inherit;overflow:hidden;
+">
+  <div style="background:#0a1a2e;padding:8px 14px 6px;border-bottom:1px solid #1a3a5a;display:flex;align-items:center;justify-content:space-between">
+    <span style="color:#4da6ff;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:700">⚙ Mod Panel</span>
+    <span id="modPanelName" style="color:#fff;font-size:.82rem;font-weight:600;opacity:.9"></span>
+    <button onclick="closeModPanel()" style="background:none;border:none;color:#4da6ff;font-size:1rem;cursor:pointer;padding:0 0 0 10px;line-height:1">✕</button>
+  </div>
+  <div style="padding:10px 12px;display:flex;flex-direction:column;gap:6px">
+
+    <div style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;opacity:.4;margin-bottom:2px">Mute Duration</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap">
+      <button class="mod-btn mod-mute" data-min="5"  onclick="modAction('mute',5)">5 min</button>
+      <button class="mod-btn mod-mute" data-min="30" onclick="modAction('mute',30)">30 min</button>
+      <button class="mod-btn mod-mute" data-min="60" onclick="modAction('mute',60)">1 hr</button>
+      <button class="mod-btn mod-mute" data-min="1440" onclick="modAction('mute',1440)">24 hr</button>
+    </div>
+
+    <div style="margin-top:4px">
+      <input id="modReason" placeholder="Reason (optional)" style="
+        width:100%;box-sizing:border-box;background:#050403;
+        border:1px solid #2a1a04;border-radius:5px;
+        color:#c8a86a;font-size:.78rem;padding:5px 8px;
+        outline:none;font-family:inherit
+      "/>
+    </div>
+
+    <div style="display:flex;gap:5px;margin-top:2px">
+      <button class="mod-btn mod-unmute" onclick="modAction('unmute')" style="flex:1">Unmute</button>
+      <button class="mod-btn mod-timeout" onclick="modAction('timeout')" style="flex:1">⚡ Timeout</button>
+    </div>
+
+    <div id="modFeedback" style="font-size:.75rem;color:#4da6ff;min-height:16px;text-align:center;margin-top:2px"></div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="assets/mod-panel.css">
+
+<script>
+(function(){
+  let _modTarget = null;
+
+  window.openModPanel = function(userName, x, y) {
+    if (!__isAdmin_g) return;
+    _modTarget = userName;
+    const panel = document.getElementById('modPanel');
+    const nameEl = document.getElementById('modPanelName');
+    const fb     = document.getElementById('modFeedback');
+    if (nameEl) nameEl.textContent = userName;
+    if (fb)     fb.textContent = '';
+    document.getElementById('modReason').value = '';
+
+    // Smart position — keep inside viewport
+    const pw = 220, ph = 220;
+    let left = x + 8, top = y + 8;
+    if (left + pw > window.innerWidth  - 12) left = x - pw - 8;
+    if (top  + ph > window.innerHeight - 12) top  = y - ph - 8;
+    panel.style.left    = Math.max(8, left) + 'px';
+    panel.style.top     = Math.max(8, top)  + 'px';
+    panel.style.display = 'block';
+  };
+
+  window.closeModPanel = function() {
+    document.getElementById('modPanel').style.display = 'none';
+    _modTarget = null;
+  };
+
+  window.modAction = function(cmd, minutes) {
+    if (!_modTarget || !window._ws) return;
+    const reason = document.getElementById('modReason')?.value?.trim() || '';
+    const fb = document.getElementById('modFeedback');
+
+    const payload = { type: 'admin_cmd', cmd, targetName: _modTarget, reason };
+    if (cmd === 'mute') payload.minutes = minutes;
+
+    try {
+      window._ws.send(JSON.stringify(payload));
+      if (fb) {
+        const labels = { mute: `Muted ${_modTarget} for ${minutes}m`, unmute: `Unmuted ${_modTarget}`, timeout: `Timed out ${_modTarget}` };
+        fb.textContent = '✓ ' + (labels[cmd] || cmd);
+        fb.style.color = '#86ff6a';
+      }
+      setTimeout(closeModPanel, 900);
+    } catch(e) {
+      if (fb) { fb.textContent = 'Error: ' + e.message; fb.style.color = '#ff6b6b'; }
+    }
+  };
+
+  // Close panel on outside click
+  document.addEventListener('click', e => {
+    const panel = document.getElementById('modPanel');
+    if (panel && panel.style.display !== 'none' && !panel.contains(e.target)) {
+      closeModPanel();
+    }
+  });
+
+  // Handle server admin responses
+  document.addEventListener('fm_ws_msg', e => {
+    const msg = e.detail;
+    if (!msg) return;
+    if (msg.type === 'admin_ack') {
+      const fb = document.getElementById('modFeedback');
+      if (fb) { fb.textContent = '✓ ' + msg.data?.msg; fb.style.color = '#86ff6a'; }
+    }
+    if (msg.type === 'admin_broadcast') {
+      addChat({ user: '📢 ADMIN', text: msg.data?.text || '', color: '#ff9944', badge: '📢', channel: 'global' });
+    }
+    if (msg.type === 'system_message') {
+      addChat({ user: 'SYSTEM', text: msg.data?.text || '', color: msg.data?.color || '#ff6b6b', badge: '⚠', channel: 'global' });
+    }
+    if (msg.type === 'kicked') {
+      addChat({ user: 'SYSTEM', text: '⚡ ' + (msg.data?.reason || 'You were timed out.'), color: '#ff4444', badge: '⚠', channel: 'global' });
+    }
+  });
+})();
+</script>
+
+<script>
+(function(){
+  var _lazyLoaded = {};
+  function lazyLoad(src, cb){
+    if(_lazyLoaded[src]){ if(cb) cb(); return; }
+    _lazyLoaded[src] = true;
+    var s = document.createElement('script');
+    s.src = src;
+    s.onload = cb || null;
+    document.head.appendChild(s);
+  }
+  window.lazyLoad = lazyLoad; // expose globally for nav buttons
+  // Lazy load galaxy on first galactic tab click
+  // After load, call __galaxyOpen() directly since DOMContentLoaded already fired
+  document.addEventListener('click', function(e){
+    var t = e.target.closest('[data-tab]');
+    if(!t) return;
+    var tab = t.getAttribute('data-tab');
+    if(tab === 'galactic'){
+      lazyLoad('assets/galaxy.js', function(){
+        if(window.__galaxyOpen) window.__galaxyOpen();
+      });
+    }
+    if(tab === 'inventory') lazyLoad('assets/inventory.js');
+    if(tab === 'store')     lazyLoad('assets/inventory.js');
+  }, true);
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     GOD MODE PANEL — DEV accounts only
+     ═══════════════════════════════════════════════════════════ -->
+<div id="godPanel" style="
+  display:none;position:fixed;z-index:10000;top:60px;right:18px;
+  background:#080506;border:1px solid #ff990055;
+  border-radius:12px;min-width:340px;max-width:400px;max-height:88vh;
+  box-shadow:0 8px 40px #000c,0 0 0 1px #ff990022,0 0 30px #ff990011;
+  font-family:inherit;overflow:hidden;display:none;flex-direction:column;
+">
+  <!-- Header -->
+  <div id="godPanelHeader" style="
+    background:linear-gradient(135deg,#1a0a00,#0d0600);
+    padding:10px 14px 8px;border-bottom:1px solid #ff990033;
+    display:flex;align-items:center;justify-content:space-between;cursor:move;
+    user-select:none;
+  ">
+    <span style="color:#ff9900;font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;font-weight:800">⚡ God Mode</span>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span id="godStatusDot" style="width:7px;height:7px;border-radius:50%;background:#ff3333;display:inline-block"></span>
+      <button onclick="toggleGodPanel()" style="background:none;border:none;color:#ff9900;font-size:1rem;cursor:pointer;padding:0 0 0 8px;line-height:1">✕</button>
+    </div>
+  </div>
+
+  <!-- Tab Bar -->
+  <div style="display:flex;border-bottom:1px solid #ff990022;background:#0d0600">
+    <button class="god-tab active" data-tab="economy"  onclick="godTab('economy')">💰 Economy</button>
+    <button class="god-tab"        data-tab="market"   onclick="godTab('market')">📊 Market</button>
+    <button class="god-tab"        data-tab="news"     onclick="godTab('news')">📰 News</button>
+    <button class="god-tab"        data-tab="players"  onclick="godTab('players')">👥 Players</button>
+    <button class="god-tab"        data-tab="tools"    onclick="godTab('tools')">🔧 Tools</button>
+    <button class="god-tab"        data-tab="colony"   onclick="godTab('colony')">🌍 Colony</button>
+    <button class="god-tab"        data-tab="control"  onclick="godTab('control')">⚡ Control</button>
+    <button class="god-tab"        data-tab="comms"    onclick="godTab('comms')">📡 Comms</button>
+  </div>
+
+  <!-- Scrollable Content -->
+  <div style="overflow-y:auto;max-height:calc(88vh - 95px);padding:12px">
+
+    <!-- ECONOMY TAB -->
+    <div id="godTab-economy" class="god-tab-content">
+      <div class="god-section-title">Target Player</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <input id="god-player-input" placeholder="Player name…" class="god-input" style="flex:1"
+          oninput="godPlayerSearch(this.value)">
+        <button class="god-btn" onclick="godLookup()">Look Up</button>
+      </div>
+      <div id="god-player-info" style="display:none;background:#0d0800;border:1px solid #ff990022;border-radius:7px;padding:8px 10px;margin-bottom:10px;font-size:.76rem;color:#c8a86a;line-height:1.7"></div>
+
+      <div class="god-section-title">Add / Remove Cash</div>
+      <div style="display:flex;gap:5px;margin-bottom:6px;flex-wrap:wrap">
+        <button class="god-btn god-btn-green" onclick="godQuickCash(1000)">+$1K</button>
+        <button class="god-btn god-btn-green" onclick="godQuickCash(10000)">+$10K</button>
+        <button class="god-btn god-btn-green" onclick="godQuickCash(100000)">+$100K</button>
+        <button class="god-btn god-btn-red" onclick="godQuickCash(-1000)">-$1K</button>
+        <button class="god-btn god-btn-red" onclick="godQuickCash(-10000)">-$10K</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <input id="god-cash-amount" type="number" placeholder="Custom amount (neg to remove)" class="god-input" style="flex:1">
+        <button class="god-btn god-btn-orange" onclick="godGiveCash()">Apply</button>
+      </div>
+
+      <div class="god-section-title">Give / Remove Holdings</div>
+      <div style="display:flex;gap:5px;margin-bottom:6px">
+        <input id="god-holding-sym" placeholder="TICKER" class="god-input" style="width:80px;text-transform:uppercase">
+        <input id="god-holding-qty" type="number" placeholder="Qty (neg removes)" class="god-input" style="flex:1">
+        <button class="god-btn god-btn-orange" onclick="godGiveHoldings()">Give</button>
+      </div>
+
+      <div class="god-section-title">Patreon Tier</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="god-btn" onclick="godSetPatreon(0)">Free (0)</button>
+        <button class="god-btn god-btn-gold" onclick="godSetPatreon(1)">★ Premium (1)</button>
+        <button class="god-btn god-btn-teal" onclick="godSetPatreon(2)">⚖ Guild (2)</button>
+        <button class="god-btn god-btn-gold" onclick="godSetPatreon(3)">♛ CEO (3)</button>
+      </div>
+
+      <div class="god-section-title">Set XP</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input id="god-xp-amount" type="number" placeholder="XP amount" class="god-input" style="flex:1">
+        <button class="god-btn" onclick="godSetXP()">Set XP</button>
+      </div>
+    </div>
+
+    <!-- MARKET TAB -->
+    <div id="godTab-market" class="god-tab-content" style="display:none">
+      <div class="god-section-title">Set Ticker Price</div>
+      <div style="display:flex;gap:5px;margin-bottom:10px">
+        <input id="god-price-sym" placeholder="TICKER" class="god-input" style="width:80px;text-transform:uppercase">
+        <input id="god-price-val" type="number" min="0.01" step="0.01" placeholder="New price $" class="god-input" style="flex:1">
+        <button class="god-btn god-btn-orange" onclick="godSetPrice()">Set</button>
+      </div>
+
+      <div class="god-section-title">Market Event</div>
+      <div style="margin-bottom:8px">
+        <label style="color:#888;font-size:.74rem">Magnitude: <span id="god-mag-label">5%</span></label>
+        <input id="god-market-mag" type="range" min="1" max="50" value="5" style="width:100%;margin:4px 0"
+          oninput="document.getElementById('god-mag-label').textContent=this.value+'%'">
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="god-btn god-btn-green" onclick="godMarketEvent('pump')" style="flex:1">📈 PUMP ALL</button>
+        <button class="god-btn god-btn-red" onclick="godMarketEvent('crash')" style="flex:1">📉 CRASH ALL</button>
+      </div>
+
+      <div class="god-section-title" style="margin-bottom:6px">Live Prices (click to edit)</div>
+      <div id="god-ticker-list" style="max-height:260px;overflow-y:auto;font-size:.74rem"></div>
+    </div>
+
+    <!-- NEWS TAB -->
+    <div id="godTab-news" class="god-tab-content" style="display:none">
+      <div class="god-section-title">Inject Custom Headline</div>
+      <textarea id="god-news-text" placeholder="Headline text…" class="god-input" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:7px"></textarea>
+      <div style="display:flex;gap:6px;margin-bottom:7px">
+        <select id="god-news-tone" class="god-input" style="flex:1">
+          <option value="neutral">😐 Neutral</option>
+          <option value="good">📈 Good (price up)</option>
+          <option value="bad">📉 Bad (price down)</option>
+        </select>
+        <input id="god-news-sym" placeholder="TICKER (opt)" class="god-input" style="width:110px;text-transform:uppercase">
+      </div>
+      <button class="god-btn god-btn-orange" onclick="godInjectNews()" style="width:100%">📰 Inject News</button>
+
+      <div class="god-section-title" style="margin-top:14px">Preset Events</div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <div style="font-size:.65rem;color:#555;letter-spacing:.08em;margin-bottom:4px;text-transform:uppercase">Market Presets — affect prices + headline</div>
+        <button class="god-btn god-btn-red"   onclick="godPresetEvent('crash')">💥 Market Crash Warning</button>
+        <button class="god-btn god-btn-green" onclick="godPresetEvent('boom')">🚀 Economic Boom Announced</button>
+        <button class="god-btn god-btn-gold"  onclick="godPresetEvent('raid')">🚔 Enforcement Raid (random ticker)</button>
+        <button class="god-btn"               onclick="godPresetEvent('blackout')">⚡ Grid Blackout Event</button>
+        <button class="god-btn god-btn-orange" onclick="godPresetEvent('halt30')">⏸ Market Halt (30s)</button>
+        <button class="god-btn god-btn-teal"  onclick="godPresetEvent('volatility_spike')">📊 Volatility Spike</button>
+        <div style="font-size:.65rem;color:#555;letter-spacing:.08em;margin:8px 0 4px;text-transform:uppercase">Colony Battle Events</div>
+        <button class="god-btn god-btn-red"   onclick="godPresetNews('battle_start')">⚔ Colony Conflict Declared</button>
+        <button class="god-btn god-btn-teal"  onclick="godPresetNews('battle_won')">🏴 Colony Seized (random)</button>
+        <button class="god-btn"               onclick="godPresetNews('battle_contested')">⚠ Colony Contested (random)</button>
+        <button class="god-btn god-btn-red"   onclick="godPresetNews('battle_lost')">💀 Colony Lost (random)</button>
+        <div style="font-size:.65rem;color:#555;letter-spacing:.08em;margin:8px 0 4px;text-transform:uppercase">Lore Events</div>
+        <button class="god-btn"               onclick="godPresetNews('baron_slowdown')">⛏ Gluttonis Slowdown</button>
+        <button class="god-btn god-btn-gold"  onclick="godPresetNews('sweet_shortage')">🍷 S'weet Shortage</button>
+        <button class="god-btn god-btn-red"   onclick="godPresetNews('null_breach')">🔒 Null Point Breach</button>
+        <button class="god-btn"               onclick="godPresetNews('signal_seized')">🚢 Signal Run Update</button>
+        <button class="god-btn god-btn-red"   onclick="godPresetNews('abaddon_tremor')">🔴 Abaddon Cluster Alert</button>
+        <button class="god-btn god-btn-teal"  onclick="godPresetNews('guild_toll')">⬢ Guild Toll Revision</button>
+        <button class="god-btn god-btn-red"   onclick="godPresetNews('corporate_war')">💼 Corporate War Bulletin</button>
+      </div>
+    </div>
+
+    <!-- PLAYERS TAB -->
+    <div id="godTab-players" class="god-tab-content" style="display:none">
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <input id="god-search-name" placeholder="Search player…" class="god-input" style="flex:1">
+        <button class="god-btn" onclick="godSearchPlayer()">Search</button>
+        <button class="god-btn" onclick="godListAll()">All</button>
+      </div>
+      <div id="god-player-list" style="max-height:380px;overflow-y:auto;font-size:.74rem"></div>
+    </div>
+
+    <!-- TOOLS TAB -->
+    <div id="godTab-tools" class="god-tab-content" style="display:none">
+      <div class="god-section-title">God Broadcast</div>
+      <textarea id="god-bcast-text" placeholder="Broadcast message…" class="god-input" rows="2" style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:6px"></textarea>
+      <button class="god-btn god-btn-orange" onclick="godBroadcast()" style="width:100%;margin-bottom:12px">⚡ Broadcast to All</button>
+
+      <div class="god-section-title">Display Name Override</div>
+      <div style="font-size:.68rem;color:#666;margin-bottom:6px;line-height:1.5">Censors a player's visible display name without changing their login credentials. Use to replace offensive usernames. The player continues to log in with their original name.</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+        <input id="god-rename-target" placeholder="Player's current login name…" class="god-input" style="width:100%">
+        <input id="god-rename-newname" placeholder="New display name to show publicly…" class="god-input" style="width:100%">
+        <button class="god-btn god-btn-orange" onclick="godRenamePlayer()" style="width:100%">✏ Override Display Name</button>
+        <button class="god-btn" onclick="godClearRename()" style="width:100%">↩ Restore Original Name</button>
+      </div>
+
+      <div class="god-section-title">Dangerous Actions</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;gap:6px">
+          <input id="god-reset-name" placeholder="Player name to reset…" class="god-input" style="flex:1">
+          <button class="god-btn god-btn-red" onclick="godResetPlayer()">🗑 Reset Player</button>
+        </div>
+      </div>
+
+      <div class="god-section-title" style="margin-top:14px">Dunce Corner</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input id="god-dunce-name" placeholder="Player name…" class="god-input" style="flex:1">
+          <input id="god-dunce-reason" placeholder="Reason (optional)…" class="god-input" style="flex:1">
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="god-btn god-btn-red" onclick="godDuncePlayer()" style="flex:1">🎓 Dunce Player</button>
+          <button class="god-btn god-btn-teal" onclick="godUnduncePlayer()" style="flex:1">✓ Un-Dunce</button>
+        </div>
+      </div>
+
+      <div class="god-section-title" style="margin-top:14px">Item Tools</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <input id="god-item-target" placeholder="Player name…" class="god-input" style="width:100%">
+        <div style="display:flex;gap:5px">
+          <select id="god-item-select" class="god-input" style="flex:1;font-size:.72rem">
+            <optgroup label="── Vehicles ──">
+              <option value="rusted_bicycle">Scrap Moped (Common)</option>
+              <option value="honda_civic">Ghost Runner (Common)</option>
+              <option value="ford_mustang">Neon Racer (Uncommon)</option>
+              <option value="bmw_m3">Chrome Blade (Rare)</option>
+              <option value="lamborghini">Phantom GT (Epic)</option>
+              <option value="bugatti">Apex Wraith (Epic)</option>
+              <option value="yacht">Syndicate Cruiser (Legendary)</option>
+              <option value="private_jet">Blackwing Jet (Legendary)</option>
+            </optgroup>
+            <optgroup label="── Property ──">
+              <option value="cardboard_box">Gutter Bunk (Common)</option>
+              <option value="studio_apartment">Stack Pod (Common)</option>
+              <option value="one_bed_flat">Hab Unit (Uncommon)</option>
+              <option value="condo">Mid-Stack Condo (Rare)</option>
+              <option value="penthouse">Spire Suite (Epic)</option>
+              <option value="private_island">Sovereign Atoll (Legendary)</option>
+              <option value="flesh_suite">Flesh Station Suite (Legendary)</option>
+            </optgroup>
+            <optgroup label="── Watch ──">
+              <option value="casio">Axiom Steel (Common)</option>
+              <option value="seiko">Axiom Silver (Uncommon)</option>
+              <option value="tag_heuer">Axiom Gold (Rare)</option>
+              <option value="rolex">Axiom Diamond (Epic)</option>
+              <option value="patek">Axiom Obsidian (Legendary)</option>
+            </optgroup>
+            <optgroup label="── Necklace ──">
+              <option value="rope_chain">Steel Chain (Common)</option>
+              <option value="silver_chain">Silver Chain (Uncommon)</option>
+              <option value="gold_chain">Gold Chain (Rare)</option>
+              <option value="diamond_chain">Diamond Chain (Epic)</option>
+              <option value="flesh_chain">Obsidian Chain (Legendary)</option>
+            </optgroup>
+            <optgroup label="── Glasses ──">
+              <option value="plastic_frames">Vex Basics (Common)</option>
+              <option value="wayfarers">Vex Silver (Uncommon)</option>
+              <option value="aviators">Vex Gold (Rare)</option>
+              <option value="gold_frames">Vex Diamond (Epic)</option>
+              <option value="diamond_monocle">Vex Obsidian (Legendary)</option>
+            </optgroup>
+            <optgroup label="── Hats ──">
+              <option value="neon_beanie">Neon Beanie (Common)</option>
+              <option value="snap_cap">Snap Cap (Common)</option>
+              <option value="pom_beanie">Knit Beanie (Common)</option>
+              <option value="cat_ear_beanie">Cat-Ear Beanie (Uncommon)</option>
+              <option value="visor_band">Neon Visor (Uncommon)</option>
+              <option value="assassin_hood">Assassin Hood (Rare)</option>
+              <option value="shadow_cowl">Shadow Cowl (Rare)</option>
+              <option value="combat_mask">Combat Mask (Epic)</option>
+              <option value="syndicate_top_hat">Syndicate Top Hat (Epic)</option>
+              <option value="warlord_helm">Warlord Helm (Legendary)</option>
+            </optgroup>
+            <optgroup label="── Upper Body ──">
+              <option value="neon_zip_jacket">Neon Track Jacket (Common)</option>
+              <option value="corp_tee">Corp Tee (Common)</option>
+              <option value="puffer_shell">Puffer Jacket (Common)</option>
+              <option value="street_blazer">Street Blazer (Uncommon)</option>
+              <option value="medic_jacket">Medic Jacket (Uncommon)</option>
+              <option value="neon_hoodie">Neon Hoodie (Uncommon)</option>
+              <option value="armored_chest_rig">Armored Chest Rig (Rare)</option>
+              <option value="chrome_chest_plate">Chrome Chest Plate (Rare)</option>
+              <option value="ghost_coat">Ghost Coat (Epic)</option>
+              <option value="void_chest_rig">Void Chest Rig (Legendary)</option>
+            </optgroup>
+            <optgroup label="── Pants ──">
+              <option value="track_pants">Track Pants (Common)</option>
+              <option value="street_shorts">Street Shorts (Common)</option>
+              <option value="cargo_shorts">Cargo Shorts (Common)</option>
+              <option value="patched_jeans">Patched Jeans (Uncommon)</option>
+              <option value="dark_jeans">Dark Jeans (Uncommon)</option>
+              <option value="cargo_trousers">Cargo Trousers (Uncommon)</option>
+              <option value="neon_shorts">Neon Shorts (Rare)</option>
+              <option value="neon_trousers">Pink Slacks (Rare)</option>
+              <option value="armored_pants">Armored Pants (Epic)</option>
+              <option value="wide_leg_trousers">Wide-Leg Trousers (Legendary)</option>
+            </optgroup>
+            <optgroup label="── Shoes ──">
+              <option value="neon_kicks">Neon Kicks (Common)</option>
+              <option value="street_slides">Street Slides (Common)</option>
+              <option value="dark_ankle_boots">Ankle Boots (Uncommon)</option>
+              <option value="dark_slippers">Slip-Ons (Uncommon)</option>
+              <option value="blue_runners">Blue Runners (Rare)</option>
+              <option value="corp_shoes">Corp Shoes (Rare)</option>
+              <option value="street_loafers">Street Loafers (Rare)</option>
+              <option value="dark_lace_ups">Dark Lace-Ups (Epic)</option>
+              <option value="neon_ankle_boots">Neon Ankle Boots (Epic)</option>
+              <option value="stiletto_boots">Stiletto Boots (Legendary)</option>
+            </optgroup>
+            <optgroup label="── Implants ──">
+              <option value="cyber_lungs">Cyber Lungs (Epic)</option>
+              <option value="synth_liver">Synth Liver (Uncommon)</option>
+              <option value="blood_sac">Blood Reservoir (Uncommon)</option>
+              <option value="organ_case">Organ Transit Case (Common)</option>
+              <option value="cyber_heart">Cyber Heart (Rare)</option>
+              <option value="spine_cluster">Vertebral Cluster (Uncommon)</option>
+              <option value="jarred_brain">Preserved Brain (Legendary)</option>
+              <option value="chrome_spine">Chrome Spine (Rare)</option>
+              <option value="chem_strip">Chem Capsule Strip (Common)</option>
+              <option value="cyber_eye">Cyber Eye (Rare)</option>
+              <option value="kidney_pair">Synth Kidneys (Uncommon)</option>
+              <option value="pelvic_frame">Pelvic Frame (Rare)</option>
+              <option value="spinal_column">Spinal Column (Epic)</option>
+              <option value="synth_stomach">Synth Stomach (Uncommon)</option>
+              <option value="skull_plate">Skull Plate (Epic)</option>
+              <option value="muscle_strip">Muscle Graft (Common)</option>
+              <option value="injector_rig">Injector Rig (Uncommon)</option>
+              <option value="cortex_wheel">Cortex Gear (Legendary)</option>
+              <option value="sternum_plate">Sternum Plate (Rare)</option>
+              <option value="data_chip">Data Chip (Common)</option>
+              <option value="elbow_joint">Elbow Joint (Uncommon)</option>
+              <option value="cyber_hand">Cyber Hand (Rare)</option>
+              <option value="wired_leg">Wired Leg (Rare)</option>
+              <option value="arm_brace">Arm Brace (Uncommon)</option>
+              <option value="bone_blade">Bone Blade (Epic)</option>
+              <option value="iris_disk">Iris Disk (Rare)</option>
+              <option value="cyber_leg">Cyber Leg (Rare)</option>
+              <option value="brain_display">Augmented Brain (Epic)</option>
+              <option value="knee_joint">Knee Joint (Uncommon)</option>
+              <option value="organ_capsule">Organ Capsule (Rare)</option>
+              <option value="blood_jar">Blood Jar (Uncommon)</option>
+              <option value="void_lungs">Void Lungs (Epic)</option>
+              <option value="spine_strip">Spine Strip (Uncommon)</option>
+              <option value="muscle_bundle">Muscle Bundle (Common)</option>
+              <option value="joint_brace">Joint Brace (Uncommon)</option>
+              <option value="capacitor_pair">Capacitor Pair (Uncommon)</option>
+              <option value="bio_eye">Bio Eye (Rare)</option>
+              <option value="ribcage_frame">Ribcage Frame (Legendary)</option>
+              <option value="micro_missile">Micro Missile (Epic)</option>
+              <option value="fuel_cell">Fuel Cell (Rare)</option>
+            </optgroup>
+            <optgroup label="── Ring ──">
+              <option value="silver_pearl_ring">Silver Pearl Ring (Common)</option>
+              <option value="banded_ring">Banded Ring (Common)</option>
+              <option value="green_gem_ring">Green Gem Ring (Uncommon)</option>
+              <option value="neon_ring">Neon Ring (Uncommon)</option>
+              <option value="blue_gem_ring">Blue Gem Ring (Rare)</option>
+              <option value="studded_ring">Studded Ring (Rare)</option>
+              <option value="red_gold_ring">Red-Gold Ring (Epic)</option>
+              <option value="bolt_ring">Bolt Ring (Epic)</option>
+              <option value="crystal_charm_ring">Crystal Charm Ring (Legendary)</option>
+              <option value="void_ring">Void Ring (Legendary)</option>
+            </optgroup>
+            <optgroup label="── Earring ──">
+              <option value="silver_drop_earrings">Silver Drops (Common)</option>
+              <option value="striped_earrings">Striped Earrings (Common)</option>
+              <option value="green_gem_earrings">Green Gem Drops (Uncommon)</option>
+              <option value="dark_teardrop_earrings">Dark Teardrops (Uncommon)</option>
+              <option value="blue_crystal_earrings">Blue Crystals (Rare)</option>
+              <option value="cube_earrings">Cube Studs (Rare)</option>
+              <option value="spiral_earrings">Spiral Drops (Epic)</option>
+              <option value="dark_ball_earrings">Dark Ball Drops (Epic)</option>
+              <option value="triangle_earrings">Triangle Drops (Legendary)</option>
+              <option value="spike_earrings">Crystal Spikes (Legendary)</option>
+            </optgroup>
+            <optgroup label="── Bracelet ──">
+              <option value="pearl_bangle">Pearl Bangle (Common)</option>
+              <option value="striped_bangle">Striped Bangle (Common)</option>
+              <option value="silver_bangle">Silver Bangle (Uncommon)</option>
+              <option value="neon_bangle">Neon Bangle (Uncommon)</option>
+              <option value="gem_bangle">Gem Bangle (Rare)</option>
+              <option value="hex_bangle">Hex Bangle (Rare)</option>
+              <option value="charm_bracelet">Charm Bracelet (Epic)</option>
+              <option value="etched_bangle">Etched Bangle (Epic)</option>
+              <option value="stripe_cuff">Stripe Cuff (Legendary)</option>
+              <option value="void_bangle">Void Bangle (Legendary)</option>
+            </optgroup>
+                    </select>
+          <button class="god-btn god-btn-orange" onclick="godGiveItem()" title="Give item directly">Give</button>
+        </div>
+        <div style="display:flex;gap:5px">
+          <input id="god-spin-count" type="number" min="1" max="500" value="5" class="god-input" style="width:60px">
+          <button class="god-btn" onclick="godGiveSpins()" style="flex:1">🎰 Give Spins</button>
+        </div>
+        <div style="display:flex;gap:5px">
+          <button class="god-btn god-btn-gold" onclick="godGiveRareDrop('epic')" style="flex:1">🎁 Epic Drop</button>
+          <button class="god-btn" onclick="godGiveRareDrop('legendary')" style="flex:1;border-color:#ff6a0066;color:#ff6a00">⭐ Legendary</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- COLONY TAB -->
+    <div id="godTab-colony" class="god-tab-content" style="display:none">
+      <div class="god-section-title">Colony Control</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <select id="god-colony-select" class="god-input" style="flex:1">
+          <option value="new_anchor">New Anchor</option>
+          <option value="cascade_station">Cascade Station</option>
+          <option value="frontier_outpost">Frontier Outpost</option>
+          <option value="the_hollow">The Hollow</option>
+          <option value="vein_cluster">Vein Cluster</option>
+          <option value="aurora_prime">Aurora Prime</option>
+          <option value="null_point">Null Point</option>
+          <option value="limbosis">Limbosis</option>
+          <option value="lustandia">Lustandia</option>
+          <option value="gluttonis">Gluttonis</option>
+          <option value="eyejog">Eyejog</option>
+          <option value="dust_basin">Dust Basin</option>
+          <option value="nova_reach">Nova Reach</option>
+          <option value="iron_shelf">Iron Shelf</option>
+          <option value="the_ledger">The Ledger</option>
+          <option value="signal_run">Signal Run</option>
+          <option value="scrub_yard">Scrub Yard</option>
+          <option value="the_escrow">The Escrow</option>
+          <option value="margin_call">Margin Call</option>
+        </select>
+      </div>
+      <div class="god-section-title" style="margin-top:0">Tension Level</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input id="god-tension-val" type="number" min="0" max="100" value="0" placeholder="0-100" class="god-input" style="flex:1">
+        <button class="god-btn god-btn-orange" onclick="godSetTension()">Set Tension</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button class="god-btn god-btn-red" onclick="godSetTension(75)" style="flex:1">⚠ Contested (75)</button>
+        <button class="god-btn" onclick="godSetTension(0)" style="flex:1">✓ Peaceful (0)</button>
+      </div>
+
+      <div class="god-section-title">Faction Control %</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px">
+        <div>
+          <div style="font-size:.65rem;color:#4ecdc4;margin-bottom:3px">Coalition</div>
+          <input id="god-ctrl-coalition" type="number" min="0" max="100" value="0" class="god-input" style="width:100%">
+        </div>
+        <div>
+          <div style="font-size:.65rem;color:#e74c3c;margin-bottom:3px">Syndicate</div>
+          <input id="god-ctrl-syndicate" type="number" min="0" max="100" value="0" class="god-input" style="width:100%">
+        </div>
+        <div>
+          <div style="font-size:.65rem;color:#9b59b6;margin-bottom:3px">The Void</div>
+          <input id="god-ctrl-void" type="number" min="0" max="100" value="0" class="god-input" style="width:100%">
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <button class="god-btn god-btn-orange" onclick="godSetColonyControl()" style="flex:1">Apply Control</button>
+        <button class="god-btn god-btn-red" onclick="godResetColony()" style="flex:1">🗑 Reset Colony</button>
+      </div>
+
+      <div class="god-section-title">Sector Shock</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <select id="god-sector-select" class="god-input" style="flex:1">
+          <option value="0">Finance</option>
+          <option value="1">Biotech</option>
+          <option value="2">Insurance</option>
+          <option value="3">Manufacturing</option>
+          <option value="4">Energy</option>
+          <option value="5">Logistics</option>
+          <option value="6">Tech</option>
+          <option value="7">Misc</option>
+        </select>
+        <input id="god-sector-pct" type="number" min="-50" max="50" value="-15" placeholder="%" class="god-input" style="width:70px">
+        <button class="god-btn god-btn-orange" onclick="godSectorShock()">Shock</button>
+      </div>
+    </div>
+
+    <!-- CONTROL TAB -->
+    <div id="godTab-control" class="god-tab-content" style="display:none">
+      <div class="god-section-title">Market State</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="god-btn god-btn-red" onclick="godFreezeMarket()" style="flex:1">🔴 Freeze Market</button>
+        <button class="god-btn god-btn-green" onclick="godUnfreezeMarket()" style="flex:1">🟢 Unfreeze</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="god-btn" onclick="godMarketHalt(15)" style="flex:1">⏸ Halt 15s</button>
+        <button class="god-btn" onclick="godMarketHalt(30)" style="flex:1">⏸ Halt 30s</button>
+        <button class="god-btn" onclick="godMarketHalt(60)" style="flex:1">⏸ Halt 60s</button>
+      </div>
+
+      <div class="god-section-title">Volatility</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input id="god-vol-sym" placeholder="TICKER or ALL" class="god-input" style="width:110px;text-transform:uppercase">
+        <input id="god-vol-val" type="number" min="0.1" max="15" step="0.1" value="2.5" placeholder="%" class="god-input" style="flex:1">
+        <button class="god-btn god-btn-orange" onclick="godSetVolatility()">Set</button>
+      </div>
+      <div style="display:flex;gap:5px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="god-btn" onclick="godSetVolatility('ALL',0.8)" style="flex:1">🟢 Calm</button>
+        <button class="god-btn god-btn-orange" onclick="godSetVolatility('ALL',2.5)" style="flex:1">📊 Normal</button>
+        <button class="god-btn god-btn-red" onclick="godSetVolatility('ALL',8)" style="flex:1">🔥 Wild</button>
+      </div>
+
+      <div class="god-section-title">Transfer Tax</div>
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <input id="god-tax-bps" type="number" min="0" max="1000" value="25" placeholder="bps" class="god-input" style="flex:1">
+        <button class="god-btn god-btn-orange" onclick="godSetTax()">Set Tax</button>
+        <button class="god-btn" onclick="godSetTaxQuick(0)">0%</button>
+        <button class="god-btn" onclick="godSetTaxQuick(25)">0.25%</button>
+      </div>
+
+      <div class="god-section-title">Force Dividend</div>
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <button class="god-btn god-btn-green" onclick="godForceDividend()" style="flex:1">💰 Pay Dividends Now</button>
+      </div>
+
+      <div class="god-section-title">Clear Limit Orders</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input id="god-clear-orders-name" placeholder="Player name (blank=all)" class="god-input" style="flex:1">
+        <button class="god-btn god-btn-red" onclick="godClearOrders()">Clear</button>
+      </div>
+    </div>
+
+    <!-- COMMS TAB (dev-only view of all queues) -->
+    <div id="godTab-comms" class="god-tab-content" style="display:none">
+      <div class="god-section-title" style="display:flex;justify-content:space-between;align-items:center">
+        Bug Reports <button class="god-btn" onclick="godCommsRefresh()" style="font-size:.65rem;padding:2px 8px">↻ Refresh</button>
+      </div>
+      <div id="god-comms-bugs" style="max-height:200px;overflow-y:auto;margin-bottom:12px;font-size:.74rem"></div>
+
+      <div class="god-section-title">Player Reports</div>
+      <div id="god-comms-reports" style="max-height:160px;overflow-y:auto;margin-bottom:12px;font-size:.74rem"></div>
+
+      <div class="god-section-title">Dev Chat Requests</div>
+      <div id="god-comms-requests" style="max-height:160px;overflow-y:auto;margin-bottom:12px;font-size:.74rem"></div>
+    </div>
+
+  </div><!-- end scroll -->
+
+  <!-- Status bar -->
+  <div style="padding:6px 12px;border-top:1px solid #ff990022;background:#0d0600;display:flex;align-items:center;justify-content:space-between">
+    <div id="god-feedback" style="font-size:.73rem;color:#86ff6a;min-height:14px;flex:1"></div>
+    <span style="font-size:.65rem;color:#ff990055;letter-spacing:.08em">GOD MODE</span>
+  </div>
+</div>
+
+<!-- God Mode Toggle Button (DEV only) -->
+<button id="godModeBtn" onclick="toggleGodPanel()" style="
+  display:none;position:fixed;bottom:22px;right:22px;z-index:9998;
+  background:linear-gradient(135deg,#1a0800,#0d0400);
+  border:1px solid #ff990066;border-radius:50%;
+  width:48px;height:48px;font-size:1.3rem;
+  cursor:pointer;color:#ff9900;
+  box-shadow:0 4px 18px #ff990033,0 0 0 1px #ff990022;
+  transition:all .2s;
+" title="God Mode">⚡</button>
+
+<link rel="stylesheet" href="assets/god-panel.css">
+
+<script src="assets/god-panel.js"></script>
+<script src="assets/dev-comms.js"></script>
+
+<!-- ===== INVENTORY / SLOT / MARKET SYSTEM ===== -->
+<div id="invPanel" style="
+  display:none;position:fixed;z-index:9500;top:60px;left:50%;transform:translateX(-50%);
+  background:#060303;border:1px solid #2a1010;border-radius:12px;
+  width:820px;max-width:96vw;max-height:88vh;overflow:hidden;
+  flex-direction:column;
+  box-shadow:0 8px 40px #000c;font-family:inherit;
+">
+  <!-- Header -->
+  <div style="background:linear-gradient(135deg,#0d0303,#060303);padding:10px 16px;border-bottom:1px solid #2a1010;display:flex;align-items:center;justify-content:space-between;cursor:move;user-select:none" id="invPanelHeader">
+    <div style="display:flex;gap:0">
+      <button class="inv-tab active" data-tab="inventory" onclick="invTab('inventory')">👜 Inventory</button>
+      <button class="inv-tab" data-tab="market" onclick="invTab('market')">🏪 Market</button>
+    </div>
+    <button onclick="if(window.toggleInvPanel){toggleInvPanel();}else if(window.lazyLoad){lazyLoad('assets/inventory.js',function(){if(window.toggleInvPanel)toggleInvPanel();})}" style="background:none;border:none;color:#884444;font-size:1rem;cursor:pointer;padding:0 4px">✕</button>
+  </div>
+
+  <!-- Content -->
+  <div style="overflow-y:auto;flex:1;padding:14px">
+
+    <!-- INVENTORY TAB -->
+    <div id="invTab-inventory" class="inv-tab-content">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <!-- Equipped slots -->
+        <div>
+          <div style="font-size:.65rem;letter-spacing:.12em;color:#884444;text-transform:uppercase;margin-bottom:10px">Equipped</div>
+          <div id="equippedGrid"></div>
+          <div style="font-size:.68rem;color:#553333;margin-top:8px">Item passive: <span id="invPassiveTotal" style="color:#ff9900">+0 Ƒ/30min</span></div>
+          <div id="invSetBonuses" style="display:none;margin-top:8px"></div>
+        </div>
+        <!-- Bag -->
+        <div>
+          <div style="font-size:.65rem;letter-spacing:.12em;color:#884444;text-transform:uppercase;margin-bottom:10px">Bag <span id="invBagCount" style="color:#553333"></span></div>
+          <div id="bagGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-height:320px;overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MARKET TAB -->
+    <div id="invTab-market" class="inv-tab-content" style="display:none">
+      <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:.65rem;color:#884444;letter-spacing:.1em;text-transform:uppercase">Market</span>
+        <select id="mktFilterSlot" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
+          <option value="">All Slots</option>
+          <option value="hat">Hat</option>
+          <option value="glasses">Glasses</option>
+          <option value="upperbody">Upper Body</option>
+          <option value="necklace">Necklace</option>
+          <option value="watch">Watch</option>
+          <option value="pants">Pants</option>
+          <option value="shoes">Shoes</option>
+          <option value="vehicle">Vehicle</option>
+          <option value="property">Property</option>
+          <option value="implant">Implant</option>
+          <option value="ring">Ring</option>
+          <option value="earring">Earring</option>
+          <option value="bracelet">Bracelet</option>
+        </select>
+        <select id="mktFilterRarity" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
+          <option value="">All Rarities</option>
+          <option value="common">Common</option>
+          <option value="uncommon">Uncommon</option>
+          <option value="rare">Rare</option>
+          <option value="epic">Epic</option>
+          <option value="legendary">Legendary</option>
+        </select>
+        <select id="mktSortBy" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
+          <option value="newest">Newest</option>
+          <option value="price_asc">Price ↑</option>
+          <option value="price_desc">Price ↓</option>
+          <option value="rarity">Rarity</option>
+        </select>
+        <div style="flex:1"></div>
+        <button onclick="loadMarket()" style="background:#0d0505;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">↻</button>
+        <button onclick="showListForm()" style="background:#0d0505;border:1px solid #ff6a0044;color:#ff9900;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">+ List</button>
+      </div>
+      <div id="listForm" style="display:none;background:#0a0303;border:1px solid #2a1010;border-radius:6px;padding:10px;margin-bottom:10px">
+        <div style="font-size:.68rem;color:#884444;margin-bottom:8px">List an item for sale</div>
+        <select id="listInvSelect" style="width:100%;background:#060303;border:1px solid #2a1010;color:#c8a86a;padding:5px;font-family:inherit;font-size:.75rem;margin-bottom:6px;border-radius:4px"></select>
+        <div style="display:flex;gap:6px">
+          <input id="listPrice" type="number" min="1" placeholder="Price in Ƒ" style="flex:1;background:#060303;border:1px solid #2a1010;color:#c8a86a;padding:5px 8px;font-family:inherit;font-size:.75rem;border-radius:4px">
+          <button onclick="submitListing()" style="background:#0d0505;border:1px solid #ff6a0055;color:#ff9900;font-size:.75rem;padding:5px 14px;border-radius:4px;cursor:pointer;font-family:inherit">List</button>
+          <button onclick="document.getElementById('listForm').style.display='none'" style="background:none;border:1px solid #2a1010;color:#553333;font-size:.75rem;padding:5px 10px;border-radius:4px;cursor:pointer;font-family:inherit">✕</button>
+        </div>
+      </div>
+      <div id="marketListings"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== STANDALONE SLOT MACHINE MODAL ===== -->
+<div id="slotModal" style="
+  display:none;position:fixed;z-index:9600;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,.85);align-items:center;justify-content:center;
+">
+  <div style="
+    background:#060303;border:1px solid #3a1010;border-radius:14px;
+    width:420px;max-width:94vw;padding:0;overflow:hidden;
+    box-shadow:0 12px 60px #000e;font-family:inherit;
+  ">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#120303,#060303);padding:12px 16px;border-bottom:1px solid #2a1010;display:flex;align-items:center;justify-content:space-between">
+      <span style="color:#ff9900;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;font-weight:500">🎰 Slot Machine</span>
+      <button onclick="if(window.toggleSlotModal){toggleSlotModal();}else if(window.lazyLoad){lazyLoad('assets/inventory.js',function(){if(window.toggleSlotModal)toggleSlotModal();})}" style="background:none;border:none;color:#664444;font-size:1rem;cursor:pointer;padding:0 4px;line-height:1">✕</button>
+    </div>
+
+    <div style="padding:20px 24px;text-align:center">
+      <!-- Spin count -->
+      <div style="font-size:.65rem;color:#553333;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px">Spins Available</div>
+      <div id="slotModalSpinCount" style="font-size:3rem;font-weight:500;color:#ff9900;line-height:1;margin-bottom:4px">0</div>
+      <div style="font-size:.68rem;color:#443333;margin-bottom:20px">
+        <div style="margin-bottom:6px">Every 9 day trades earns a free spin</div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+          <span style="color:#ff9900;font-size:.75rem;font-weight:600" id="slotMilestoneCount">0</span>
+          <div style="flex:0 0 140px;height:6px;background:#1a0800;border:1px solid #331500;border-radius:3px;overflow:hidden">
+            <div id="slotMilestoneBar" style="height:100%;width:0%;background:linear-gradient(90deg,#ff6a00,#ff9900);border-radius:3px;transition:width .3s"></div>
+          </div>
+          <span style="color:#553333;font-size:.7rem">/ 9</span>
+        </div>
+      </div>
+
+      <!-- Reels -->
+      <div style="display:flex;justify-content:center;gap:10px;margin-bottom:16px">
+        <div class="slot-reel" id="slotReel1"><span>🎰</span></div>
+        <div class="slot-reel" id="slotReel2"><span>🎰</span></div>
+        <div class="slot-reel" id="slotReel3"><span>🎰</span></div>
+      </div>
+
+      <!-- Result -->
+      <div id="slotModalResult" style="min-height:80px;margin-bottom:16px;display:flex;align-items:center;justify-content:center"></div>
+
+      <!-- Spin button -->
+      <button id="slotModalBtn" onclick="doSlotSpin()" style="
+        background:linear-gradient(135deg,#2a0800,#180400);
+        border:1px solid #ff6a00;color:#ff9900;
+        font-size:.9rem;padding:11px 40px;border-radius:6px;
+        cursor:pointer;font-family:inherit;letter-spacing:.12em;text-transform:uppercase;
+        width:100%;transition:all .15s;margin-bottom:16px;
+      ">Spin</button>
+
+      <!-- Drop rates -->
+      <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:.62rem;color:#888780;border:1px solid #88878033;padding:1px 7px;border-radius:3px">Common 55%</span>
+        <span style="font-size:.62rem;color:#1D9E75;border:1px solid #1D9E7533;padding:1px 7px;border-radius:3px">Uncommon 25%</span>
+        <span style="font-size:.62rem;color:#3B8BD4;border:1px solid #3B8BD433;padding:1px 7px;border-radius:3px">Rare 12%</span>
+        <span style="font-size:.62rem;color:#8B5CF6;border:1px solid #8B5CF633;padding:1px 7px;border-radius:3px">Epic 6%</span>
+        <span style="font-size:.62rem;color:#ff6a00;border:1px solid #ff6a0033;padding:1px 7px;border-radius:3px">Legendary 0.5%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="assets/inventory.css">
+
+<!-- inventory.js loaded lazily above -->
+<!-- ===== PLAYER PROFILE POPUP ===== -->
+<div id="playerProfilePopup" style="
+  display:none;position:fixed;z-index:10500;
+  background:#060303;border:1px solid #3a1010;border-radius:10px;
+  width:280px;padding:0;overflow:hidden;
+  box-shadow:0 8px 32px #000d;font-family:inherit;
+">
+  <div style="background:linear-gradient(135deg,#120303,#060303);padding:10px 14px 8px;border-bottom:1px solid #2a1010;display:flex;align-items:center;justify-content:space-between">
+    <div>
+      <div id="ppName" style="font-size:.9rem;font-weight:500;color:#c8a86a"></div>
+      <div id="ppTitle" style="font-size:.65rem;color:#553333;letter-spacing:.06em"></div>
+    </div>
+    <button onclick="closePlayerProfile()" style="background:none;border:none;color:#553333;font-size:.9rem;cursor:pointer;padding:0 2px;line-height:1">✕</button>
+  </div>
+  <div style="padding:10px 14px">
+    <!-- Equipped items grid -->
+    <div style="font-size:.6rem;color:#553333;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px">Equipped</div>
+    <div id="ppEquipped" style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px"></div>
+    <!-- Assets row -->
+    <div id="ppAssets" style="display:flex;gap:6px;margin-bottom:10px"></div>
+    <!-- Passive bonus -->
+    <div id="ppPassive" style="font-size:.68rem;color:#553333;border-top:1px solid #1a0808;padding-top:8px"></div>
+  </div>
+  <!-- Admin actions (only visible to admins) -->
+  <div id="ppAdminBar" style="display:none;padding:8px 14px;border-top:1px solid #1a0808;background:#08020202">
+    <div style="font-size:.6rem;color:#553333;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px">Admin</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap">
+      <button onclick="ppAdmin('mute')" style="font-size:.65rem;background:none;border:1px solid #3a1010;color:#884444;padding:2px 8px;border-radius:3px;cursor:pointer;font-family:inherit">Mute 10m</button>
+      <button onclick="ppAdmin('timeout')" style="font-size:.65rem;background:none;border:1px solid #3a1010;color:#884444;padding:2px 8px;border-radius:3px;cursor:pointer;font-family:inherit">Timeout</button>
+    </div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="assets/player-profile.css">
+
+<script src="assets/player-profile.js"></script>
+
+<!-- ══ System View Overlay ══════════════════════════════════════════════ -->
+<div id="spSystemView">
+  <canvas id="spStarCanvas"></canvas>
+  <div id="spSysBar">
+    <button class="sp-back-btn" onclick="spCloseSystem()">← GALAXY</button>
+    <span id="spSysBarTitle">SYSTEM</span>
+    <span id="spSysBarSub"></span>
+  </div>
+  <div id="spSolarStage"></div>
+  <!-- Inline planet HUD — slides in from right when planet clicked -->
+  <div id="spSysHUD" style="position:absolute;top:0;right:0;bottom:0;width:280px;
+    background:rgba(5,5,15,.88);border-left:1px solid #1a1a2e;
+    display:flex;flex-direction:column;overflow-y:auto;z-index:20;
+    transform:translateX(100%);transition:transform .25s ease;
+    backdrop-filter:blur(6px);">
+    <div id="spHUDZoneTabs" style="display:none;border-bottom:1px solid #1a1a2e;"></div>
+    <div style="padding:12px 14px 8px;border-bottom:1px solid #1a1a2e;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div id="spHUDPlanetName" style="font-size:.85rem;letter-spacing:.16em;color:#ccc;font-weight:bold">PLANET</div>
+        <div id="spHUDColony" style="font-size:.62rem;color:#444;letter-spacing:.1em;margin-top:1px"></div>
+        <div id="spHUDSector" style="margin-top:3px"></div>
+      </div>
+      <button onclick="spCloseSurface()" style="background:transparent;border:1px solid #2a2a3e;color:#555;padding:3px 8px;cursor:pointer;font-size:.65rem;font-family:inherit;border-radius:2px">✕</button>
+    </div>
+    <div class="sp-hud-section" id="spHUDPrices">
+      <div class="sp-hud-label">LIVE MARKET</div>
+      <div id="spPriceList"></div>
+    </div>
+    <div class="sp-hud-section" id="spHUDControl">
+      <div class="sp-hud-label">FACTION CONTROL</div>
+      <div id="spCtrlBars"></div>
+    </div>
+    <div class="sp-hud-section" id="spHUDFund">
+      <div class="sp-hud-label">FUND FACTION</div>
+      <div id="spFundBtns"></div>
+    </div>
+  </div>
+</div>
+</body></html>
+

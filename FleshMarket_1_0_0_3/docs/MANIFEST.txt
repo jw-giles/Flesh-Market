@@ -1,0 +1,116 @@
+# FleshMarket v1.0.0.2 — MANIFEST
+
+## Structure
+
+```
+game/
+  client/
+    index.html              thin shell (~102 KB), loads all modules
+    style.css               global styles
+    version.json            version metadata
+    app-config.json         app configuration
+    favicon.ico
+    chess_worker.js          chess engine web worker
+    daytrade_reset_on_refresh.js  daytrade state reset
+    assets/
+      core.js               WebSocket, market engine, tab routing, leaderboard
+      market-orders.js      buy/sell modal controllers
+      market-state.js       persistence helpers, full tab switcher
+      shorts.js             short position UI
+      funds.js              guild and hedge fund UI
+      chat-ui.js            chat tab switching
+      block-users.js        client-side user blocking
+      trade-limit.js        3-trades-per-30min rate limiter
+      sound.js              Web Audio engine, sector name constants, font size controls
+      god-panel.js          dev/admin tools (DEV_ACCOUNTS only)
+      player-profile.js     player profile popup
+      fm-auth.js            login/register, token management
+      account-auth.js       auth UI helpers
+      account-persist.js    account persistence helpers
+      auth-ui.js            auth UI components
+      dev-comms.js          dev communications
+      pnl-livepatch.js      P&L live patching
+      pnl-panel.js          P&L panel logic
+      pnl-panel.css         P&L panel styles
+      pnl-simple.css        P&L simplified styles
+      eod-timer.css         end-of-day timer styles
+      sell-modal.css        sell confirmation modal
+      short-modal.css       short sell modal
+      toast.css             toast notification styles
+      mod-panel.css         moderator panel styles
+      god-panel.css         god panel styles
+      inventory.css         inventory panel styles
+      inventory.js          pixel art data, items, slot machine (lazy-loaded)
+      player-profile.css    player profile popup styles
+      casino-blackjack.js   blackjack (eager-loaded)
+      casino-poker.js       Texas Hold'em (lazy-loaded)
+      casino-chess.js       chess (lazy-loaded)
+      casino-sudoku.js      sudoku (lazy-loaded)
+      casino-mathgame.js    math quiz (lazy-loaded)
+      casino-minesweeper.js minesweeper (lazy-loaded)
+      casino-roulette.css   roulette styles
+      casino-poker.css      poker styles
+      casino-sudoku.css     sudoku styles
+      casino-mathgame.css   math game styles
+      casino-minesweeper.css minesweeper styles
+      galaxy.js             galaxy map, factions, colony UI (lazy-loaded)
+      pnl_stream/
+        pnl-boot.js
+        pnl-bridge.js
+        pnl-canvas.js
+        pnl-store.js
+      space/
+        ui/                 cursors, loading wheel, panel images, icons
+        planets/            animated planet sprites, static planets, icons, suns
+        backgrounds/        background images
+        landscapes/         landscape images
+        cities/             city illustrations
+        ships/              ship sprite parts
+
+  server/
+    server.js               main server (WebSocket + Express + SQLite)
+    db.js                   database layer
+    marketDay.js            market day scheduling
+    subscriptions.js        Patreon subscription handling
+    chat-filter.js          chat content filtering
+    package.json
+    package-lock.json
+    seed_devaccounts.mjs    dev account seeding script
+    start_server.sh         Linux/macOS launcher
+    start_server.bat        Windows launcher
+    start_server_safe.bat   Windows safe-mode launcher
+    start_server_debug.bat  Windows debug launcher
+    free_port.bat           Windows port utility
+    .env.example            environment variable template
+
+  docs/
+    CHANGELOG.md            full version history (this is the canonical record)
+    README_LOCAL.md         local setup guide with load order documentation
+    README_NPC_TRADERS.md   NPC trader configuration guide
+    P_N_L_PANEL_README.txt  P&L panel integration notes
+    MANIFEST.txt            this file
+
+  deploy/
+    setup.sh                VPS setup script
+    setup_github.sh         GitHub-based deploy script
+    update.sh               update script
+    backup.sh               backup script
+    DEPLOY_README.md        deployment documentation
+    GITHUB_DEPLOY.md        GitHub deployment guide
+```
+
+## Version History Summary
+
+See `CHANGELOG.md` for full details.
+
+| Version | Key Change |
+|---|---|
+| v1.0.0.2 | Market stabilization, Wire Credits, leaderboard EOD freeze, SWT/BRNC normalized, smuggling 15min cooldown |
+| v0.9.0 | Client modularised — 18 JS modules, 13 CSS files, lazy loading |
+| v0.8.x | Cyberpunk augmentation update — implants, pixel art, set bonuses |
+| Build H | UI/casino overhaul — blackjack AI, roulette rewrite, EOD timer |
+| v5.0 | Full Flesh — limit orders, shorts, earnings, IPOs, dividends, quests, heatmap |
+| Patch G | Quest system removed, activity-based XP introduced |
+| Patch F | Casino stability fixes |
+| v3.0/E | SQLite player persistence (requires Node 22.5+) |
+| v2.1/A-D | Foundation — health endpoint, autosave, token auth, unique usernames |

@@ -1,0 +1,249 @@
+
+#eod-timer-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 18px;
+}
+#eod-timer {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: #00ff88;
+  text-shadow: 0 0 8px #00ff88, 0 0 18px #00ff5580, 0 0 32px #00ff3340;
+  background: rgba(0,255,100,.06);
+  border: 1px solid rgba(0,255,100,.22);
+  border-radius: 7px;
+  padding: 3px 13px;
+  min-width: 96px;
+  text-align: center;
+  animation: eod-pulse 2s ease-in-out infinite;
+}
+#eod-timer.urgent {
+  color: #ff4444;
+  text-shadow: 0 0 8px #ff4444, 0 0 18px #ff222280, 0 0 32px #ff000040;
+  background: rgba(255,40,40,.07);
+  border-color: rgba(255,50,50,.3);
+  animation: eod-pulse-urgent 0.6s ease-in-out infinite;
+}
+#eod-timer-label {
+  font-size: .62rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  opacity: .45;
+  color: #00ff88;
+  line-height: 1;
+  white-space: nowrap;
+}
+@keyframes eod-pulse {
+  0%,100% { box-shadow: 0 0 6px rgba(0,255,100,.2), 0 0 14px rgba(0,255,100,.1); }
+  50%      { box-shadow: 0 0 14px rgba(0,255,100,.45), 0 0 28px rgba(0,255,100,.2); }
+}
+@keyframes eod-pulse-urgent {
+  0%,100% { box-shadow: 0 0 8px rgba(255,50,50,.4), 0 0 18px rgba(255,50,50,.2); }
+  50%      { box-shadow: 0 0 18px rgba(255,50,50,.8), 0 0 36px rgba(255,50,50,.4); }
+}
+
+/* ── Space Assets: Cursor ─────────────────────────── */
+/* Universal custom cursor — covers every element including divs, canvases, SVGs */
+*, *::before, *::after {
+  cursor: url(space/ui/cursors/cursor1.png) 6 6, auto !important;
+}
+/* Clicked state for interactive elements */
+button:active, a:active, [onclick]:active, input:active, select:active, textarea:active,
+.btn:active, .tab:active, .chat-tab:active, .subtab:active, .god-btn:active {
+  cursor: url(space/ui/cursors/cursor1_clicked.png) 6 6, auto !important;
+}
+/* Text inputs keep the cursor visible for typing — still use custom but text hotspot */
+input[type="text"], input[type="number"], input[type="password"], input[type="email"],
+input[type="search"], textarea, [contenteditable] {
+  cursor: url(space/ui/cursors/cursor1.png) 6 6, text !important;
+}
+
+/* ── Space Assets: Loading Wheel ──────────────────── */
+@keyframes lw-spin{from{opacity:1}to{opacity:.3}}
+.space-spinner{display:inline-block;width:20px;height:20px;image-rendering:pixelated;vertical-align:middle}
+
+/* ── Space Assets: Galaxy Map ─────────────────────── */
+#galaxySVG{background:#02020a}
+.g-planet-img{image-rendering:pixelated;image-rendering:crisp-edges}
+
+/* ── Space Assets: Detail Panel ──────────────────── */
+#gColonyDetail{
+  background:#07070e !important;
+  border-left:1px solid #1a1a2e !important;
+  image-rendering:pixelated;
+}
+/* ── Galaxy tab: increase text sizes for readability ─ */
+#gColonyDetailInner { font-size:.82rem; }
+#gColonyDetailInner div[style*=".66rem"] { font-size:.72rem !important; }
+#gColonyDetailInner div[style*=".68rem"] { font-size:.74rem !important; }
+#gColonyDetailInner div[style*=".70rem"] { font-size:.76rem !important; }
+#gColonyDetailInner div[style*=".72rem"] { font-size:.78rem !important; }
+#gColonyDetailInner div[style*=".74rem"] { font-size:.80rem !important; }
+#gColonyDetailInner div[style*=".76rem"] { font-size:.83rem !important; }
+#gColonyDetailInner div[style*=".78rem"] { font-size:.85rem !important; }
+#gColonyDetailInner div[style*=".84rem"] { font-size:.92rem !important; }
+#gColonyDetailInner div[style*=".92rem"] { font-size:1rem !important; }
+/* Faction list + colony description (factions pane) */
+#gFactionsPane { font-size:.82rem; }
+#gFactionList div[style*=".6rem"],
+#gFactionList div[style*=".7rem"]  { font-size:.78rem !important; }
+#gFactionsPane div[style*=".6rem"] { font-size:.74rem !important; }
+#gFactionsPane div[style*=".68rem"]{ font-size:.76rem !important; }
+/* Galaxy sub-tab buttons */
+.galaxy-stab { font-size:.78rem !important; }
+.space-banner{
+  width:100%;height:48px;object-fit:cover;
+  display:block;image-rendering:pixelated;
+  border-bottom:1px solid #1a1a2e;opacity:.75;
+}
+.space-detail-planet{
+  display:flex;align-items:center;justify-content:center;
+  padding:10px 0 6px;background:linear-gradient(180deg,#07070e 0%,#0a0a18 100%);
+}
+.space-detail-planet img{
+  width:64px;height:64px;image-rendering:pixelated;
+  filter:drop-shadow(0 0 8px var(--pc,#4ecdc4));
+}
+.space-picon{width:12px;height:12px;image-rendering:pixelated;vertical-align:middle;margin-right:3px}
+
+/* ── System View ─────────────────────────────────────── */
+#spSystemView,#spSurfaceView{
+  display:none;position:fixed;inset:0;z-index:9000;
+  overflow:hidden;font-family:'Courier New','Lucida Console',monospace;
+}
+#spSystemView{background:#02020a}
+#spSystemView.sp-open,#spSurfaceView.sp-open{display:flex;flex-direction:column}
+
+/* star field behind system view */
+#spSystemView canvas{position:absolute;inset:0;pointer-events:none}
+
+/* system view solar system stage */
+#spSolarStage{
+  flex:1;position:relative;display:flex;
+  align-items:center;justify-content:center;overflow:hidden;
+  clip-path:inset(0);
+}
+#spSunImg{
+  position:absolute;
+  image-rendering:pixelated;z-index:2;
+  /* size/position/filter set dynamically per-colony in JS */
+}
+
+/* orbital ring */
+.sp-orbit-ring{
+  position:absolute;
+  border:none;/* replaced by SVG ellipses drawn in JS */
+  pointer-events:none;z-index:1;
+}
+
+/* planet on orbit */
+.sp-orbit-wrap{
+  position:absolute;left:50%;top:50%;
+  width:0;height:0;z-index:3;
+}
+.sp-orbit-arm{
+  position:absolute;left:0;top:0;
+  transform-origin:0 0;
+}
+/* Orbit driven by rAF JS — no CSS animation needed */
+.sp-planet-btn{
+  position:absolute;
+  image-rendering:pixelated;
+  cursor:pointer;
+  transition:filter .2s,transform .2s;
+  border:none;background:transparent;padding:0;
+}
+.sp-planet-btn:hover{
+  filter:drop-shadow(0 0 12px rgba(255,255,255,.85));
+}
+.sp-planet-label{
+  position:absolute;font-size:10px;letter-spacing:.08em;
+  color:#aaa;pointer-events:none;white-space:nowrap;
+  text-align:center;transform:translateX(-50%);
+}
+.sp-planet-sector-badge{
+  position:absolute;font-size:9px;padding:1px 5px;
+  border:1px solid rgba(255,255,255,.15);border-radius:2px;
+  color:#888;background:rgba(0,0,0,.5);pointer-events:none;
+  white-space:nowrap;text-align:center;transform:translateX(-50%);
+}
+
+/* system view top bar */
+#spSysBar{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 18px;background:#07070eee;
+  border-bottom:1px solid #1a1a2e;flex-shrink:0;z-index:10;
+}
+#spSysBarTitle{font-size:.85rem;letter-spacing:.18em;color:#ccc}
+#spSysBarSub{font-size:.68rem;color:#555;letter-spacing:.1em;margin-left:4px}
+.sp-back-btn{
+  background:transparent;border:1px solid #2a2a3e;color:#888;
+  padding:4px 10px;cursor:pointer;font-family:inherit;font-size:.75rem;
+  letter-spacing:.06em;border-radius:2px;
+}
+.sp-back-btn:hover{border-color:#4ecdc4;color:#4ecdc4}
+
+/* ── Surface View ────────────────────────────────────── */
+#spSurfaceView{flex-direction:column}
+#spCityStage{
+  flex:1;position:relative;overflow:hidden;
+  background:#000;
+}
+.sp-city-layer{
+  position:absolute;inset:0;
+  background-size:100% auto;
+  background-position:center bottom;
+  background-repeat:no-repeat;
+  will-change:transform;transition:transform .05s linear;
+  image-rendering:pixelated;
+}
+/* HUD overlay */
+#spHUD{
+  position:absolute;top:0;right:0;bottom:0;
+  width:300px;background:rgba(5,5,15,.82);
+  border-left:1px solid #1a1a2e;
+  display:flex;flex-direction:column;
+  overflow-y:auto;z-index:5;
+  backdrop-filter:blur(4px);
+}
+#spHUDTitle{
+  padding:14px 14px 8px;
+  border-bottom:1px solid #1a1a2e;
+}
+#spHUDPlanetName{font-size:.88rem;letter-spacing:.16em;color:#ccc;font-weight:bold}
+#spHUDColony{font-size:.65rem;color:#555;letter-spacing:.12em;margin-top:2px}
+#spHUDSector{font-size:.68rem;margin-top:4px}
+.sp-hud-section{padding:10px 14px;border-bottom:1px solid #0f0f1a}
+.sp-hud-label{font-size:.62rem;color:#444;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}
+.sp-price-row{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid #0a0a12}
+.sp-price-row:last-child{border-bottom:none}
+.sp-price-sym{font-size:.72rem;color:#888;letter-spacing:.04em}
+.sp-price-name{font-size:.68rem;color:#555;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-price-val{font-size:.76rem;font-weight:bold;color:#98ff9f;letter-spacing:.04em;font-family:monospace}
+.sp-price-pct{font-size:.65rem;margin-left:4px;font-family:monospace}
+.sp-ctrl-bar-wrap{margin:4px 0}
+.sp-ctrl-label{display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:2px}
+.sp-ctrl-bar{background:#111;height:4px;border-radius:1px;overflow:hidden}
+.sp-ctrl-fill{height:100%;border-radius:1px;transition:width .4s ease}
+/* fund buttons */
+.sp-fund-row{display:flex;gap:5px;margin:3px 0}
+.sp-fund-btn{
+  flex:1;background:transparent;border:1px solid;
+  padding:5px 6px;cursor:pointer;font-family:inherit;
+  font-size:.65rem;letter-spacing:.06em;border-radius:2px;
+  transition:background .15s;
+}
+
+/* landscape surface (no city) */
+#spLandscapeLayer{
+  position:absolute;inset:0;
+  background-size:cover;background-position:center;
+  image-rendering:pixelated;
+}
+#spNoCity{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  text-align:center;color:#333;font-size:.75rem;letter-spacing:.1em;
+}

@@ -1,0 +1,22 @@
+{
+  "name": "fleshmarket-local",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "FleshMarket \u2014 multiplayer space trading game (server + static client)",
+  "scripts": {
+    "start": "node --experimental-sqlite server.js",
+    "dev": "node --experimental-sqlite server.js",
+    "postinstall": "node -e \"console.log('Install complete')\"",
+    "start:prod": "node --experimental-sqlite server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0",
+    "uuid": "^9.0.1",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

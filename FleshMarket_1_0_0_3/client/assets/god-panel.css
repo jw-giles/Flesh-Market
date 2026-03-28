@@ -1,0 +1,38 @@
+
+.god-tab {
+  flex:1;background:none;border:none;border-bottom:2px solid transparent;
+  color:#665544;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;
+  padding:7px 4px;cursor:pointer;font-family:inherit;transition:all .15s;
+}
+.god-tab:hover { color:#ff9900;background:#1a0900; }
+.god-tab.active { color:#ff9900;border-bottom-color:#ff9900;background:#1a0a00; }
+.god-input {
+  background:#050300;border:1px solid #2a1800;border-radius:5px;
+  color:#c8a86a;font-size:.78rem;padding:5px 8px;outline:none;
+  font-family:inherit;
+}
+.god-input:focus { border-color:#ff9900;box-shadow:0 0 0 1px #ff990033; }
+.god-section-title {
+  font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;
+  color:#ff9900;opacity:.6;margin-bottom:6px;margin-top:6px;
+}
+.god-btn {
+  background:#110800;border:1px solid #2a1800;border-radius:5px;
+  color:#ff9900;font-size:.75rem;padding:5px 10px;cursor:pointer;
+  font-family:inherit;transition:background .15s,border-color .15s;white-space:nowrap;
+}
+.god-btn:hover { background:#1a1000;border-color:#ff9900; }
+.god-btn-green { border-color:#1a4a1a;color:#86ff6a; }
+.god-btn-green:hover { background:#0d2810;border-color:#86ff6a; }
+.god-btn-red   { border-color:#4a1a1a;color:#ff8080; }
+.god-btn-red:hover  { background:#2a0d0d;border-color:#ff4444; }
+.god-btn-orange{ border-color:#4a2a00;color:#ff9900; }
+.god-btn-orange:hover{ background:#2a1800;border-color:#ffaa44; }
+.god-btn-gold  { border-color:#4a3a00;color:#ffd700; }
+.god-btn-gold:hover  { background:#2a2000;border-color:#ffd700; }
+.god-btn-teal  { border-color:#004a3a;color:#4ecdc4; }
+.god-btn-teal:hover  { background:#002a24;border-color:#4ecdc4; }
+.god-ticker-row { display:flex;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:4px;cursor:pointer; }
+.god-ticker-row:hover { background:#1a0a00; }
+.god-player-row { display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-radius:4px;cursor:pointer; }
+.god-player-row:hover { background:#1a0a00; }

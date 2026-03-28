@@ -1,0 +1,12 @@
+
+  #sell-modal{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:9999;}
+  #sell-modal .card{min-width:420px;max-width:520px;background:#111;border:1px solid #d8a74a33;border-radius:10px;box-shadow:0 0 0 1px #d8a74a22 inset;padding:16px;color:#e6c27a;font-family:monospace;}
+  #sell-modal .row{display:flex;gap:10px;align-items:center;margin:8px 0;}
+  #sell-modal .row .lab{width:120px;opacity:.8;}
+  #sell-modal input, #sell-modal button{background:#18120a;border:1px solid #d8a74a55;color:#e6c27a;border-radius:8px;padding:6px 10px;}
+  #sell-modal .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:12px;}
+  #sell-modal .warn{color:#ff7d7d;font-weight:700;}
+  #sell-modal .ok{color:#9be58c;}
+  #sell-modal .hdr{font-weight:800;margin-bottom:8px;font-size:14px;}
+  #sell-modal .small{font-size:12px;opacity:.8;}
+  #sell-modal .val{font-variant-numeric:tabular-nums;}

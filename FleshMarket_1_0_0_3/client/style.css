@@ -1,0 +1,139 @@
+
+:root{
+  --bg:#0a0a0a; --amber:#ffb547; --dim:#7c5b1e99; --good:#86ff6a; --bad:#ff6b6b;
+}
+*{box-sizing:border-box}
+/* Universal custom cursor */
+*, *::before, *::after { cursor: url(assets/space/ui/cursors/cursor1.png) 6 6, auto !important; }
+button:active, a:active, [onclick]:active { cursor: url(assets/space/ui/cursors/cursor1_clicked.png) 6 6, auto !important; }
+html{height:100%;overflow:hidden}
+body{margin:0;background:var(--bg);color:var(--amber);font:15px/1.5 ui-monospace, Menlo, Consolas, monospace;height:100%;overflow:hidden}
+.wrap{width:100%; max-width:none;margin:0 auto;padding:12px;display:flex;flex-direction:column;height:100vh;box-sizing:border-box;overflow:hidden}
+.panel{border:1px solid var(--dim);padding:8px;border-radius:8px;box-shadow:0 0 24px #ffb54718,inset 0 0 1px #ffb54733}
+h2{margin:.2rem 0 .6rem 0;font-size:16px;text-transform:uppercase;letter-spacing:.12em;color:var(--amber)}
+small, .muted{color:#d4a05e;opacity:.9}
+hr{border:0;border-top:1px dashed var(--dim);margin:8px 0}
+.input{width:100%;padding:6px 8px;background:#000;border:1px solid var(--dim);color:var(--amber);border-radius:6px;outline:none}
+.btn{cursor:pointer;padding:6px 10px;border:1px solid var(--amber);border-radius:6px;background:transparent;color:var(--amber)}
+.row{display:flex;gap:8px;align-items:center}
+.list{max-height:280px;overflow:auto}
+.badge{border:1px solid var(--amber);padding:2px 6px;border-radius:999px;margin-right:4px}
+#chart{width:100%;height:360px;background:radial-gradient(ellipse at center, #201505, #0b0702);border:1px solid var(--dim);border-radius:8px}
+.ticker{display:grid;grid-template-columns: 1fr auto;gap:4px}
+.ticker .sym{font-weight:700}
+.ticker .px{color:#ffdca4}
+.chatlog{max-height:400px;overflow:auto;background:#000;border:1px solid var(--dim);padding:6px;border-radius:8px}
+.news{max-height:340px;overflow:auto}
+.green{color:var(--good)} .red{color:var(--bad)}
+.tabs{display:flex;gap:8px;margin-bottom:6px;flex-shrink:0}
+/* Center panel tab content: fill available space */
+#marketTab,#pnlTab,#heatTab,#casinoTab,#storeTab,#guildTab,#bugsTab{flex:1;min-height:0;overflow-y:auto}
+.tab{padding:4px 8px;border:1px dashed var(--dim);cursor:pointer;border-radius:8px}
+.tab.active{border-color:var(--amber);box-shadow:0 0 8px #ffb54733}
+
+/* Guild / Hedge Fund Tab */
+.guild-stat{background:#0a0804;border:1px solid #2a1a04;border-radius:6px;padding:8px 10px}
+.gs-label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;opacity:.55;margin-bottom:3px}
+.gs-val{font-size:1rem;color:#ffb547;font-weight:700}
+.g-fund-card{
+  padding:10px 12px;border:1px solid #2a1a04;border-radius:6px;
+  background:#060504;transition:border-color .15s;
+}
+.g-fund-card:hover{border-color:#5a3a14;background:#090705}
+
+/* FleshMarket: Themed scrollbar (amber CRT) */
+*::-webkit-scrollbar { width: 12px; height: 12px; }
+*::-webkit-scrollbar-track { background: #000; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(152, 255, 159, 0.35);
+  border: 2px solid #000;
+  border-radius: 8px;
+  box-shadow: 0 0 8px rgba(152,255,159,0.2) inset;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(152, 255, 159, 0.6); }
+*::-webkit-scrollbar-thumb:active {
+  background: #98ff9f;
+  box-shadow: 0 0 12px rgba(152,255,159,0.6);
+}
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: rgba(152,255,159,0.35) #000; }
+
+
+/* Casino subtabs: horizontal flex, wraps on narrow screens */
+#casinoTabs{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.subtab{padding:5px 14px;border:1px dashed var(--dim);cursor:pointer;border-radius:8px;white-space:nowrap;font-size:.85rem}
+.subtab.active{border-color:var(--amber);box-shadow:0 0 8px #ffb54733}
+
+/* Casino pane: full width, scrollable on small screens */
+#casinoContent{overflow-x:auto}
+
+/* Responsive: stack panels on narrow (portrait/mobile) screens */
+@media (max-width: 900px) {
+  .grid{grid-template-columns:1fr !important}
+  .panel{margin-bottom:8px}
+}
+@media (max-width: 1300px) and (min-width:901px) {
+  .grid{grid-template-columns:1fr 2fr 1fr}
+}
+
+/* Grid: left = tickers+news (half), center = main, right = chat */
+.grid{display:grid;grid-template-columns:minmax(280px,1fr) 2fr minmax(280px,1fr);grid-template-rows:minmax(0,1fr);gap:12px;align-items:stretch;flex:1;min-height:0;overflow:hidden}
+.grid>.panel{min-height:0;max-height:100%;overflow:hidden;display:flex;flex-direction:column}
+.grid>.panel:first-child{overflow-y:auto;display:block}
+
+/* Right panel: fixed-height chat, does not stretch with center column */
+#rightPanel{display:flex;flex-direction:column;overflow:hidden;min-height:0}
+#rightPanel>h2:first-child{display:none} /* remove empty h2 */
+
+/* Chat box fills all remaining space in right panel */
+#chatBox{display:flex;flex-direction:column;height:420px;min-height:0;background:#000;border:1px solid var(--dim);border-radius:8px;overflow:hidden}
+#chatTabs{display:flex;gap:0;border-bottom:1px solid #1a1208;flex-shrink:0}
+.chat-tab{flex:1;padding:5px 8px;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;text-align:center;opacity:.72;border-bottom:2px solid transparent;background:transparent;color:var(--amber)}
+.chat-tab.active{opacity:1;border-bottom-color:var(--amber)}
+.chat-tab .chat-unread{display:inline-block;background:#c0392b;color:#fff;border-radius:10px;padding:0 5px;font-size:.65rem;margin-left:3px;line-height:1.5;vertical-align:middle}
+.chat-channel{display:none;flex:1;overflow-y:auto;padding:6px 8px;font-size:.78rem;line-height:1.45}
+.chat-channel.active{display:block}
+.chat-channel .cm{margin:3px 0;font-size:calc(.88rem * var(--chat-font-scale, 1));line-height:1.45}
+.chat-mention{background:rgba(255,181,71,0.18);border-radius:3px;padding:0 2px;color:#ffdb70}
+#chatInputRow{display:flex;gap:6px;padding:5px 6px;border-top:1px solid #1a1208;background:#050403;flex-shrink:0}
+#chatInput{flex:1;background:#000;border:1px solid #2a1a04;color:var(--amber);border-radius:5px;padding:4px 8px;font-family:inherit;font-size:.8rem}
+#chatInput:focus{outline:none;border-color:var(--dim)}
+#chatSend{background:transparent;border:1px solid var(--dim);color:var(--amber);border-radius:5px;padding:4px 10px;cursor:pointer;font-size:.8rem;flex-shrink:0}
+#chatSend:hover{border-color:var(--amber)}
+#chatMentionDrop{position:absolute;background:#0d0d0d;border:1px solid var(--dim);border-radius:6px;z-index:99;max-height:120px;overflow-y:auto;font-size:.8rem;min-width:160px}
+
+/* Transfer section pinned at bottom of right panel */
+#transferSection{flex-shrink:0;padding-top:8px;border-top:1px solid var(--dim);margin-top:6px}
+#transferSection h2{margin:.2rem 0 .5rem 0;font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--amber)}
+
+/* Leaderboard bottom row */
+#bottomRow{margin-top:4px;flex-shrink:0;overflow:hidden}
+#leaderboardCompact{flex-shrink:0;padding-top:6px;border-top:1px solid var(--dim);margin-top:6px}
+#leaderboardCompact #board{display:flex;flex-direction:column;gap:2px;max-height:none;overflow:hidden;padding-right:0}
+#leaderboardCompact #board .lb-row{display:flex;align-items:center;gap:4px;padding:2px 6px;border:1px solid #1a1208;border-radius:4px;background:#050403;font-size:.72rem;min-width:0}
+#leaderboardCompact #board .lb-sep{border-top:1px dashed #333;margin:2px 0}
+#bottomTicker{display:flex;gap:14px;flex-wrap:wrap}
+
+/* Casino: panes use full available area */
+#casinoContent{overflow-x:auto;min-height:460px}
+#galacticTab{flex-direction:column}
+#gFactionsPane,#gContractsPane{max-height:none;flex:1;overflow-y:auto}
+.casino-pane{padding:4px 0}
+
+
+/* === Simple Chess Clock === */
+.clock-simple{display:flex;gap:8px;margin-top:8px;align-items:stretch}
+.clock-simple .face{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:8px;border:1px solid rgba(255,255,255,0.15);border-radius:8px}
+.clock-simple .digits{font-family:monospace;font-size:28px;line-height:1}
+.clock-simple .label{font-size:12px;opacity:.8;margin-bottom:4px;letter-spacing:.08em}
+.clock-simple .face.active{background:rgba(255,255,255,0.08);box-shadow:0 0 0 1px rgba(255,255,255,0.1) inset}
+.clock-simple .tc{display:flex;align-items:center;gap:6px}
+.clock-simple .input.small{padding:2px 6px;font-size:12px}
+
+
+/* Hide legacy P&L UI to avoid duplication with new panel */
+/* rollback: legacy equity visible */
+/* #pnlBox, #equity { display: none !important; } */
+
+
