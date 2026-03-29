@@ -101,6 +101,16 @@ const TRADE_TAX_BPS = parseInt(process.env.TRADE_TAX_BPS || '25', 10);
 const PATREON_WEBHOOK_SECRET = process.env.PATREON_WEBHOOK_SECRET || '';
 const INCOME_INTERVAL_MS = 30 * 60 * 1000;
 
+// ─── Day-trade limiter (server-authoritative, resets each 30-min EOD cycle) ──
+const DAY_TRADE_CAP = 3;
+const _dtState = new Map(); // playerId → { roundTrips, tickets:{SYM:n}, shortTickets:{SYM:n} }
+function _dtGet(pid) {
+  if (!_dtState.has(pid)) _dtState.set(pid, { roundTrips:0, tickets:{}, shortTickets:{} });
+  return _dtState.get(pid);
+}
+function _dtRemaining(pid) { return Math.max(0, DAY_TRADE_CAP - _dtGet(pid).roundTrips); }
+function _dtResetAll() { _dtState.clear(); }
+
 // ─── President of The Coalition — singular contested title ────────────────────
 let president = null; // { id, name } or null
 const PRESIDENT_PASSIVE = 15_000;
@@ -287,7 +297,7 @@ function fireTensionEvent(colonyId, band, tension) {
 
 // ─── Smuggling Run System ─────────────────────────────────────────────────────
 const activeSmuggling = new Map();
-const SMUGGLE_COOLDOWN_MS = 60_000;
+const SMUGGLE_COOLDOWN_MS = 15 * 60_000;
 const _lastSmuggle = new Map();
 
 const CARGO_TYPES = [
@@ -386,7 +396,9 @@ function resolveSmuggling(playerId) {
         from:run.from, to:run.to, interceptChance:Math.round(interceptChance*100),
         cash: p.cash,
       }});
-      for (const ws of sockets) { try { if(ws.readyState===1) ws.send(msg); } catch(e){} }
+      // Also push portfolio so P&L updates immediately after interception
+      const pfMsg = JSON.stringify({type:'portfolio',data:snapshotPortfolio(p)});
+      for (const ws of sockets) { try { if(ws.readyState===1) { ws.send(msg); ws.send(pfMsg); } } catch(e){} }
     }
   } else {
     const payout = Math.round(run.stake * cargo.baseMult * laneRisk.payMult * 100) / 100;
@@ -400,7 +412,9 @@ function resolveSmuggling(playerId) {
         from:run.from, to:run.to, interceptChance:Math.round(interceptChance*100),
         cash: p.cash,
       }});
-      for (const ws of sockets) { try { if(ws.readyState===1) ws.send(msg); } catch(e){} }
+      // Also push portfolio so P&L updates immediately
+      const pfMsg = JSON.stringify({type:'portfolio',data:snapshotPortfolio(p)});
+      for (const ws of sockets) { try { if(ws.readyState===1) { ws.send(msg); ws.send(pfMsg); } } catch(e){} }
     }
   }
 }
@@ -591,21 +605,23 @@ const FLSH_COMPANY = {
 companies.push(FLSH_COMPANY);
 
 // ─── Abaddon cluster special companies ────────────────────────────────────────
-// SWT — S'weet (Lustandia wine). Highly volatile, premium price, Misc sector.
+// SWT — S'weet (Lustandia wine). Trades like a normal ticker but at higher price levels.
 const SWT_COMPANY = {
   id: 9998, name: "S'weet", symbol: 'SWT',
-  price: 280, lnP: Math.log(280),
-  sigma: 0.042, mu: 0.00004,
-  ohlc: [], sector: 7, _special: true,
+  price: 280, lnP: Math.log(280), _spawnLnP: Math.log(280),
+  sigma: 0.030, mu: 0.00002, kappa: 0.07,
+  offset: 2.23,
+  ohlc: [], sector: 7,
 };
 companies.push(SWT_COMPANY);
 
-// BRNC — Baron Corps (Gluttonis material refining). Manufacturing sector.
+// BRNC — Baron Corps (Gluttonis material refining). Trades like a normal ticker.
 const BRNC_COMPANY = {
   id: 9997, name: 'Baron Corps', symbol: 'BRNC',
-  price: 65, lnP: Math.log(65),
-  sigma: 0.028, mu: -0.00002,
-  ohlc: [], sector: 3, _special: true,
+  price: 65, lnP: Math.log(65), _spawnLnP: Math.log(65),
+  sigma: 0.025, mu: -0.00005, kappa: 0.07,
+  offset: 0.77,
+  ohlc: [], sector: 3,
 };
 companies.push(BRNC_COMPANY);
 
@@ -626,25 +642,6 @@ function updateFLSHPrice() {
   const open=prev, close=f.price;
   const high=Math.max(open,close)*(1+Math.abs(randn()*0.0002));
   const low =Math.min(open,close)*(1-Math.abs(randn()*0.0002));
-  if (!Array.isArray(f.ohlc)) f.ohlc=[];
-  f.ohlc.push({t:now,o:open,h:high,l:low,c:close,v:0});
-  if (f.ohlc.length>400) f.ohlc.shift();
-}
-
-// Generic slow random walk for Abaddon-cluster special companies (SWT, BRNC)
-function updateSpecialCompanyPrice(f) {
-  const eps = randn() * f.sigma;
-  f.lnP += f.mu + eps;
-  // Rare ±3% shock (0.5% chance/tick) — these are wilder than FLSH
-  if (Math.random() < 0.005) f.lnP += randn() * 0.03;
-  // Floor at Ƒ1 — they can crater but never zero
-  f.lnP = Math.max(Math.log(1), f.lnP);
-  const prev = f.price;
-  f.price = Math.exp(f.lnP);
-  const now = Date.now();
-  const open=prev, close=f.price;
-  const high=Math.max(open,close)*(1+Math.abs(randn()*0.0003));
-  const low =Math.min(open,close)*(1-Math.abs(randn()*0.0003));
   if (!Array.isArray(f.ohlc)) f.ohlc=[];
   f.ohlc.push({t:now,o:open,h:high,l:low,c:close,v:0});
   if (f.ohlc.length>400) f.ohlc.shift();
@@ -694,6 +691,15 @@ function restoreMarketState(){
   console.log('[Market] State restored');
 }
 restoreMarketState();
+// One-time fixup: if SWT/BRNC have exploded prices from the old special-ticker bug, reset them
+for (const sc of [SWT_COMPANY, BRNC_COMPANY]) {
+  if (sc.price > 5000) {
+    console.log(`[FIXUP] ${sc.symbol} price was Ƒ${sc.price.toFixed(2)} — resetting to compiled default`);
+    sc.price = sc === SWT_COMPANY ? 280 : 65;
+    sc.lnP = Math.log(sc.price);
+    sc._spawnLnP = sc.lnP;
+  }
+}
 restoreGalaxySystems();
 resetDailyPrevClose();
 
@@ -797,6 +803,12 @@ function processLimitOrders() {
       if (o.side === 'sell' && c.price >= o.limitPrice) fill = true;
       if (!fill) continue;
 
+      // Day-trade gate for limit fills
+      if (_dtRemaining(playerId) <= 0) {
+        broadcastToPlayer(playerId, {type:'error',data:{msg:'❌ Limit order skipped — day-trade limit reached.'}});
+        continue;
+      }
+
       const fillPrice = c.price;
       if (o.side === 'buy') {
         const costC = toCents(fillPrice) * o.qty;
@@ -813,6 +825,8 @@ function processLimitOrders() {
         actor.xp += 3;
         FMI.treasury += (taxC / 100); FMI.hourlyTaxAccrual += (taxC / 100);
         try { addFundCash('FLSH', fromCents(costC) * FLSH_TRADE_PCT); } catch(_) {}
+        // Day-trade: limit buy fill — cover short = round trip, else issue ticket
+        { const dt=_dtGet(playerId); if(dt.shortTickets[o.symbol]>0){dt.shortTickets[o.symbol]--;dt.roundTrips=Math.min(DAY_TRADE_CAP,dt.roundTrips+1);} else {dt.tickets[o.symbol]=(dt.tickets[o.symbol]||0)+1;} }
         broadcastTradeFeed({ side: 'buy', symbol: o.symbol, qty: o.qty, price: fillPrice, isLimit: true });
       } else {
         const have = actor.holdings ? (actor.holdings[o.symbol] || 0) : 0;
@@ -839,6 +853,8 @@ function processLimitOrders() {
               broadcastToPlayer(actor.id, { type:'spin_grant', data:{ spins:newSpins, reason:'9 day trades milestone' }});
             }
           } catch(_) {}
+          // Day-trade: limit sell fill pairs with buy ticket → round trip
+          { const dt=_dtGet(playerId); if(dt.tickets[o.symbol]>0){dt.tickets[o.symbol]--;dt.roundTrips=Math.min(DAY_TRADE_CAP,dt.roundTrips+1);} }
           broadcastTradeFeed({ side: 'sell', symbol: o.symbol, qty: sellQty, price: fillPrice, isLimit: true });
         }
       }
@@ -1143,7 +1159,7 @@ app.post('/api/login',(req,res)=>{
     if(!verifyPassword(password,player.password_hash,player.password_salt))
       return res.status(401).json({ok:false,error:'invalid_credentials'});
     touchPlayer(player.id);
-    res.json({ok:true,token:player.id,name:player.name,cash:player.cash,xp:player.xp,level:player.level,title:player.title,patreon_tier:player.patreon_tier||0,is_dev:!!(isDevAccount(player.id)),is_admin:!!(isAdminAccount(player.id)),is_prime:!!(isOwnerAccount(player.id)),void_locked:!!(isVoidLocked(player.id))});
+    res.json({ok:true,token:player.id,name:player.name,cash:player.cash,xp:player.xp,level:player.level,title:player.title,faction:player.faction||null,patreon_tier:player.patreon_tier||0,is_dev:!!(isDevAccount(player.id)),is_admin:!!(isAdminAccount(player.id)),is_prime:!!(isOwnerAccount(player.id)),void_locked:!!(isVoidLocked(player.id))});
   }catch(e){console.error('/api/login:',e);res.status(500).json({ok:false,error:'server_error'});}
 });
 
@@ -1286,6 +1302,7 @@ function fundSnapshot() {
       name:       m.name,
       shares:     m.shares,
       value:      m.shares * pricePerShare,
+      deposited:  m.deposited || 0,
       pct:        totalShares > 0 ? (m.shares / totalShares * 100).toFixed(1) : '0.0',
       patreon_tier: m.patreon_tier,
     })),
@@ -1467,6 +1484,7 @@ function fundDetailSnapshot(fundId, playerId) {
     savingsRate: fund.savings_rate,
     members: members.map(m=>({
       name:m.name, shares:m.shares, value:m.shares*spp,
+      deposited: m.deposited || 0,
       pct: totalShares>0?(m.shares/totalShares*100).toFixed(1):'0.0',
       patreon_tier:m.patreon_tier,
       isOwner: m.player_id === fund.owner_id,
@@ -1612,6 +1630,7 @@ app.post('/api/funds/:id/join', (req, res) => {
     if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
     if (fund.type==='flsh') return res.status(403).json({ ok:false, error:'dev_only' });
     if (fund.type==='patreon') return res.status(403).json({ ok:false, error:'patreon_only' });
+    if (fund.type==='player') return res.status(403).json({ ok:false, error:'invite_only' });
     joinFund(fund.id, actor.id);
     logFundActivity(fund.id,'join',actor.id,null,null,null,null,`${actor.name} joined`);
     res.json({ ok:true });
@@ -1686,6 +1705,28 @@ app.post('/api/funds/:id/kick', (req, res) => {
     kickFundMember(fund.id, target.id);
     logFundActivity(fund.id, 'kick', actor.id, null, null, null, null, `${target.name} kicked by owner`);
     broadcastToPlayer(target.id, { type:'system_message', data:{ text:`You were removed from the fund "${fund.name}".`, color:'#ff6b6b' }});
+    const snap = fundDetailSnapshot(fund.id, actor.id);
+    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+    res.json({ ok:true });
+  } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
+});
+
+// Invite a player to a fund (owner only)
+app.post('/api/funds/:id/invite', (req, res) => {
+  try {
+    const tok   = tokenFrom(req);
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund  = getFund(req.params.id);
+    if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (fund.owner_id !== actor.id && !isDevAccount(actor.id))
+      return res.status(403).json({ ok:false, error:'owner_only' });
+    const targetName = String(req.body?.targetName || '').trim();
+    const target     = targetName ? getPlayerByName(targetName) : null;
+    if (!target) return res.status(404).json({ ok:false, error:'player_not_found' });
+    joinFund(fund.id, target.id);
+    logFundActivity(fund.id, 'invite', actor.id, null, null, null, null, `${actor.name} invited ${target.name}`);
+    broadcastToPlayer(target.id, { type:'system_message', data:{ text:`You were invited to the fund "${fund.name}".`, color:'#4ecdc4' }});
     const snap = fundDetailSnapshot(fund.id, actor.id);
     broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
     res.json({ ok:true });
@@ -2571,8 +2612,6 @@ function stepMarket(){
   });
 
   updateFLSHPrice();
-  updateSpecialCompanyPrice(SWT_COMPANY);
-  updateSpecialCompanyPrice(BRNC_COMPANY);
   processLimitOrders();
 
   // Build tick with pct change and sector
@@ -2662,14 +2701,24 @@ function snapshotPortfolio(player){
     tierName: tier?.name || 'Free', badge: _snapCyborg ? (player.patreon_tier === 3 ? '♛' : '🤖') : (tier?.badge || null),
     chatColor: _snapColor, transferFree: !tier?.transferFee,
     faction: playerFaction, passiveIncome,
+    dayTradesRemaining: _dtRemaining(player.id),
   };
 }
 
 // ─── Leaderboard ─────────────────────────────────────────────────────────────
+// Leaderboard is frozen at each 30-min EOD reset, not live-computed.
+let _leaderboardSnapshot = null;
+
+function snapshotLeaderboard(){
+  _leaderboardSnapshot = getLeaderboard(companies);
+  _leaderboardSnapshot._snapshotTs = Date.now();
+  console.log(`[Leaderboard] Snapshot taken — ${_leaderboardSnapshot.length} players`);
+}
 
 function broadcastLeaderboard(){
   if(process.env.DISABLE_LEADERBOARD==='1')return;
-  try{broadcast({type:'leaderboard',data:getLeaderboard(companies)});}catch(e){}
+  if(!_leaderboardSnapshot) snapshotLeaderboard();
+  try{broadcast({type:'leaderboard',data:_leaderboardSnapshot});}catch(e){}
 }
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
@@ -2706,7 +2755,7 @@ wss.on('connection',(ws,req)=>{
     ws.send(JSON.stringify({type:'welcome',data:{id:null,name:'Guest',cash:START_CASH}}));
   }
 
-  ws.send(JSON.stringify({type:'init',data:{companies:companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector,hq:c.hq||null})).sort((a,b)=>a.name.localeCompare(b.name)),headlines:headlines.slice(-30),leaderboard:getLeaderboard(companies)}}));
+  ws.send(JSON.stringify({type:'init',data:{companies:companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector,hq:c.hq||null})).sort((a,b)=>a.name.localeCompare(b.name)),headlines:headlines.slice(-30),leaderboard:_leaderboardSnapshot||getLeaderboard(companies)}}));
 
   ws.on('message',(buf)=>{
     let msg; try{msg=JSON.parse(buf.toString());}catch{return;}
@@ -2734,6 +2783,13 @@ wss.on('connection',(ws,req)=>{
       const s=String(symbol||'').toUpperCase(),qty=Math.max(1,Math.min(Number(shares)||0,MAX_SHARES));
       const c=companies.find(x=>x.symbol===s); if(!c||!qty)return;
 
+      // Day-trade gate — server-authoritative
+      if(_dtRemaining(actor.id) <= 0){
+        ws.send(JSON.stringify({type:'error',data:{msg:'❌ Day-trade limit reached (3 per cycle). Resets at next EOD.'}}));
+        ws.send(JSON.stringify({type:'dt_update',data:{dayTradesRemaining:0}}));
+        return;
+      }
+
       if(side==='buy'){
         const costC=toCents(c.price)*qty,taxC=Math.floor(costC*TRADE_TAX_BPS/10000),totalC=costC+taxC,total=fromCents(totalC);
         if(actor.cash>=total){
@@ -2743,6 +2799,8 @@ wss.on('connection',(ws,req)=>{
           actor.basisC=actor.basisC||{};actor.basisC[s]=(actor.basisC[s]||0)+costC;
           actor.xp += Math.max(3, Math.min(50, Math.floor(fromCents(costC) / 20)));
           try{addFundCash('FLSH', fromCents(costC)*FLSH_TRADE_PCT);}catch(_){}
+          // Day-trade: issue buy ticket (covering a short = round trip)
+          { const dt=_dtGet(actor.id); if(dt.shortTickets[s]>0){dt.shortTickets[s]--;dt.roundTrips=Math.min(DAY_TRADE_CAP,dt.roundTrips+1);} else {dt.tickets[s]=(dt.tickets[s]||0)+1;} }
           broadcastTradeFeed({side:'buy',symbol:s,qty,price:c.price});
                 }
       } else if(side==='sell'){
@@ -2768,6 +2826,8 @@ wss.on('connection',(ws,req)=>{
               broadcastToPlayer(actor.id, { type:'spin_grant', data:{ spins:newSpins, reason:'9 day trades milestone' }});
             }
           } catch(_) {}
+          // Day-trade: sell pairs with buy ticket → round trip
+          { const dt=_dtGet(actor.id); if(dt.tickets[s]>0){dt.tickets[s]--;dt.roundTrips=Math.min(DAY_TRADE_CAP,dt.roundTrips+1);} }
           broadcastTradeFeed({side:'sell',symbol:s,qty,price:c.price});
             } else if(qty>0) {
           // SHORT SELL — sell more than owned
@@ -2803,12 +2863,16 @@ wss.on('connection',(ws,req)=>{
           actor.basisC=actor.basisC||{};
           actor.basisC[s]=(actor.basisC[s]||0) - toCents(c.price)*shortQty;
           actor.xp+=3;
+          // Day-trade: opening short issues a short ticket
+          { const dt=_dtGet(actor.id); dt.shortTickets[s]=(dt.shortTickets[s]||0)+1; }
           broadcastTradeFeed({side:'sell',symbol:s,qty,price:c.price});
                 }
       }
 
       actor.level=calcLevel(actor.xp);
       savePlayer(actor);
+      // Send day-trade remaining after every trade
+      ws.send(JSON.stringify({type:'dt_update',data:{dayTradesRemaining:_dtRemaining(actor.id)}}));
       try{
         const equity=Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{const co=companies.find(x=>x.symbol===sym);return acc+(co?co.price*Math.abs(qty):0);},0);
         recordNetWorth(actor.id,actor.cash+equity,actor.cash,equity);
@@ -2827,6 +2891,12 @@ wss.on('connection',(ws,req)=>{
       const lp=Math.max(0.01,Number(limitPrice)||0);
       const c=companies.find(x=>x.symbol===s); if(!c||!qty||!lp)return;
       if(c._special){ ws.send(JSON.stringify({type:'error',data:{msg:'Limit orders are not available for special securities.'}})); return; }
+
+      // Day-trade gate for limit orders
+      if(_dtRemaining(actor.id) <= 0){
+        ws.send(JSON.stringify({type:'error',data:{msg:'❌ Day-trade limit reached (3 per cycle). Cannot place limit order.'}}));
+        return;
+      }
 
       let reservedCash = 0;
       if(side==='buy'){
@@ -3007,19 +3077,40 @@ wss.on('connection',(ws,req)=>{
       const{toName,amount}=msg;
       const amt=Math.max(1,Math.floor(Number(amount)||0));
       if(!toName||!amt)return;
-      const _effectiveTaxRate = global._godTaxOverride != null ? global._godTaxOverride/10000 : TAX_RATE;
-      const fee = tier?.transferFee ? Math.ceil(amt*_effectiveTaxRate) : 0;
-      const total=amt+fee;
-      if(actor.cash<total)return;
       const recipient=getPlayerByName(toName);
       if(!recipient)return ws.send(JSON.stringify({type:'error',data:{msg:`Player "${toName}" not found.`}}));
+      // Block self-transfers
+      if(recipient.id===actor.id)return ws.send(JSON.stringify({type:'error',data:{msg:`You cannot wire credits to yourself.`}}));
+      const _effectiveTaxRate = global._godTaxOverride != null ? global._godTaxOverride/10000 : TAX_RATE;
+      // Standard 2% tax on the full amount
+      let baseFee = tier?.transferFee ? Math.ceil(amt*_effectiveTaxRate) : 0;
+      // Merchant Guild surcharge: 90% on the portion exceeding 10,000
+      let guildTax = 0;
+      if(amt > 10000){
+        guildTax = Math.ceil((amt - 10000) * 0.90);
+      }
+      const fee = baseFee + guildTax;
+      const total=amt+fee;
+      if(actor.cash<total)return ws.send(JSON.stringify({type:'error',data:{msg:`Insufficient funds. Need Ƒ${total.toLocaleString()} (Ƒ${amt.toLocaleString()} + Ƒ${fee.toLocaleString()} tax).`}}));
       actor.cash-=total; recipient.cash+=amt; actor.xp+=2;
       actor.level=calcLevel(actor.xp);
       savePlayer(actor); savePlayer(recipient);
+      // Update sender portfolio
       ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
+      const feeNote=guildTax>0?` (Ƒ${baseFee.toLocaleString()} tax + Ƒ${guildTax.toLocaleString()} Guild surcharge)`:baseFee>0?` (Ƒ${baseFee.toLocaleString()} tax sink)`:' (no fee — CEO tier)';
+      // Confirm to sender via chat system message
+      ws.send(JSON.stringify({type:'chat_system',data:{text:`You wired Ƒ${amt.toLocaleString()} to ${recipient.name}${feeNote}.`}}));
+      // Notify recipient via portfolio update + chat system message
+      const recipientSockets = playerSockets.get(recipient.id);
+      if(recipientSockets){
+        for(const rws of recipientSockets){
+          if(rws.readyState===1){
+            rws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(recipient)}));
+            rws.send(JSON.stringify({type:'chat_system',data:{text:`You received Ƒ${amt.toLocaleString()} from ${actor.name}.`}}));
+          }
+        }
+      }
       broadcastLeaderboard();
-      const feeNote=fee>0?` (Ƒ${fee} tax sink)`:'  (no fee — CEO tier)';
-      pushHeadline(`${actor.name} wired Ƒ${amt} to ${recipient.name}${feeNote}`,'neutral');
     }
 
     // ── Chart ────────────────────────────────────────────────────────────────
@@ -3028,7 +3119,7 @@ wss.on('connection',(ws,req)=>{
     // ── Request state ─────────────────────────────────────────────────────────
     if(msg.type==='request_state'){
       ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
-      ws.send(JSON.stringify({type:'leaderboard',data:getLeaderboard(companies)}));
+      ws.send(JSON.stringify({type:'leaderboard',data:_leaderboardSnapshot||getLeaderboard(companies)}));
       ws.send(JSON.stringify({type:'orders',data:getPlayerOrders(playerId)}));
     }
 
@@ -3728,7 +3819,13 @@ wss.on('connection',(ws,req)=>{
       if (!from || !to || !cargoId || !stake) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Missing fields' })); return; }
       if (activeSmuggling.has(actor.id)) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Run already in progress' })); return; }
       const lastRun = _lastSmuggle.get(actor.id) || 0;
-      if (Date.now() - lastRun < SMUGGLE_COOLDOWN_MS) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Cooldown active' })); return; }
+      if (Date.now() - lastRun < SMUGGLE_COOLDOWN_MS) {
+        const remaining = Math.ceil((SMUGGLE_COOLDOWN_MS - (Date.now() - lastRun)) / 1000);
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        ws.send(JSON.stringify({ type:'smuggling_error', error:`Cooldown active — ${mins}m ${secs}s remaining` }));
+        return;
+      }
       const lane = findLane(from, to);
       if (!lane) { ws.send(JSON.stringify({ type:'smuggling_error', error:'No lane exists' })); return; }
       const cargo = CARGO_TYPES.find(c => c.id === cargoId);
@@ -3747,6 +3844,8 @@ wss.on('connection',(ws,req)=>{
       // Set timer
       setTimeout(() => resolveSmuggling(actor.id), durMs);
       ws.send(JSON.stringify({ type:'smuggling_started', data: { from, to, cargo: cargo.name, stake: amt, laneType: lane.type, resolveTs, durSec: laneRisk.durSec, cash: actor.cash } }));
+      // Refresh P&L after stake deduction
+      ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
     }
 
     // ── Smuggling: get active run state ──────────────────────────────────────
@@ -3989,6 +4088,10 @@ setInterval(() => {
 // Passive income every 30 minutes
 setInterval(()=>{
   try{
+    // Reset day-trade counters for all players at each 30-min cycle
+    _dtResetAll();
+    broadcast({type:'dt_update',data:{dayTradesRemaining:DAY_TRADE_CAP}});
+
     const result=creditPassiveIncome();
     const {count, payouts, guildMemberCount} = result;
 
@@ -4162,6 +4265,8 @@ setInterval(()=>{
       } catch(e) { console.error('[President income]', e); }
     }
   }catch(e){console.error('[Income error]',e);}
+  // Snapshot leaderboard after all income is credited
+  try { snapshotLeaderboard(); broadcastLeaderboard(); } catch(e) { console.error('[Leaderboard snapshot]', e); }
 }, INCOME_INTERVAL_MS);
 
 // ── Scheduled daily tasks (midnight PST = 08:00 UTC) ─────────────────────────

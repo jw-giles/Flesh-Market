@@ -240,6 +240,7 @@ function hydratePlayer(row) {
     patreon_email: row.patreon_email||null,
     patreon_member_id: row.patreon_member_id||null,
     patreon_expires_at: row.patreon_expires_at||null,
+    faction: row.faction||null,
     holdings, basisC,
     createdAt:row.created_at, updatedAt:row.updated_at, lastSeen:row.last_seen,
   };
@@ -316,12 +317,6 @@ export function creditPassiveIncome() {
   const now = Date.now();
   for (const row of players) {
     const isDev = !!(row.is_dev);
-    if (isDev) {
-      const total = DEV_INCOME_EVERY30;
-      stmt('UPDATE players SET cash=cash+?,updated_at=? WHERE id=?').run(total, now, row.id);
-      payouts.push({ id: row.id, base: total, bonus: 0, total, guildMemberCount, isDev: true });
-      continue;
-    }
     const tier = TIERS[row.patreon_tier ?? 0];
     if (!tier || !tier.incomeEvery30) continue;
     const base = tier.incomeEvery30;
@@ -331,7 +326,7 @@ export function creditPassiveIncome() {
     const bonus = Math.floor(base * bonusMult);
     const total = base + bonus;
     stmt('UPDATE players SET cash=cash+?,updated_at=? WHERE id=?').run(total, now, row.id);
-    payouts.push({ id: row.id, base, bonus, total, guildMemberCount });
+    payouts.push({ id: row.id, base, bonus, total, guildMemberCount, isDev });
   }
   return { count: players.length, payouts, guildMemberCount };
 }
@@ -348,7 +343,7 @@ export function getNetWorthHistory(playerId, limit=200) {
 
 export function getLeaderboard(companies, limit=20) {
   const cutoff = Date.now() - 2*60*1000;
-  const players = stmt(`SELECT id,name,cash,xp,level,title,patreon_tier,is_dev,is_admin,is_prime FROM players WHERE last_seen>=? AND (is_dev=0 AND is_admin=0 OR is_prime=1)`).all(cutoff);
+  const players = stmt(`SELECT id,name,cash,xp,level,title,patreon_tier,is_dev,is_admin,is_prime FROM players WHERE last_seen>=? AND is_dev=0 AND is_admin=0 AND is_prime=0`).all(cutoff);
   return players.map(p=>{
     const holdRows = stmt('SELECT symbol,qty FROM holdings WHERE player_id=?').all(p.id);
     const equity   = holdRows.reduce((acc,h)=>{ const c=companies.find(x=>x.symbol===h.symbol); return acc+(c?c.price*h.qty:0); },0);
@@ -1637,7 +1632,7 @@ export function getPassiveIncome(playerId, patreonTier) {
     const row = stmt(`SELECT is_dev FROM players WHERE id=?`).get(playerId);
     isDev = !!(row?.is_dev);
   } catch(_) {}
-  const base = isDev ? DEV_INCOME_EVERY30 : (TIERS[patreonTier || 0]?.incomeEvery30 || 0);
+  const base = TIERS[patreonTier || 0]?.incomeEvery30 || 0;
   // Item bonus from equipped items
   let itemBonus = 0;
   try { itemBonus = getEquippedPassiveBonus(playerId); } catch(_) {}

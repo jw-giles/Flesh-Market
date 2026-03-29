@@ -137,7 +137,7 @@ function renderFundDetail(f) {
     const kickBtn = (f.isOwner && !m.isOwner && isPlayerFund)
       ? `<button onclick="kickMember('${m.name}')" style="font-size:.65rem;padding:1px 5px;background:#2a0d0d;border:1px solid #4a1a1a;color:#ff8080;border-radius:4px;cursor:pointer;margin-left:4px">kick</button>`
       : '';
-    return `<div class="ticker"><span>${g} ${m.name}${own}${kickBtn}</span><span>${_mfmt(m.value)} <span style="opacity:.4">${m.pct}%</span></span></div>`;
+    return `<div class="ticker"><span>${g} ${m.name}${own}${kickBtn}</span><span>${_mfmt(m.deposited||0)} <span style="opacity:.4">deposited</span></span></div>`;
   }).join('') || '<span style="opacity:.4">No members</span>';
 
   // Guild bonus bar — EXCLUSIVE to Merchants Guild (patreon fund only)
@@ -198,7 +198,7 @@ function renderFundDetail(f) {
   }
 
   show('g-dw-panel',    f.isMember && f.type !== 'player');  // non-player funds: deposit only for members
-  show('g-join-panel',  !f.isMember && f.type==='player');
+  show('g-join-panel',  !f.isMember && f.type!=='player' && f.type!=='flsh');
   show('g-slots-panel', f.isOwner);
   show('g-owner-panel', f.isOwner && f.type==='player');  // owner controls for player funds
   // For player funds, members can deposit but only owner can withdraw
@@ -405,6 +405,15 @@ function initGuildUI() {
     if (d?.ok) { document.getElementById('g-assign-name').value=''; document.getElementById('g-assign-amt').value=''; openFund(__currentFundId); }
   });
 
+  // Invite member to fund
+  document.getElementById('g-invite-btn')?.addEventListener('click', async () => {
+    if (!__currentFundId) return;
+    const targetName = document.getElementById('g-invite-name')?.value?.trim();
+    if (!targetName) { const h=document.getElementById('g-owner-hint'); if(h){h.textContent='Enter player name to invite';h.style.color='#ff6b6b';} return; }
+    const d = await guildPost(`/api/funds/${__currentFundId}/invite`, {targetName}, 'g-owner-hint', `✓ ${targetName} invited`);
+    if (d?.ok) { document.getElementById('g-invite-name').value=''; openFund(__currentFundId); }
+  });
+
   // Poll: toggle form
   document.getElementById('g-create-poll-btn')?.addEventListener('click', () => {
     const form = document.getElementById('g-poll-form');
@@ -454,6 +463,7 @@ document.addEventListener('fm:authed', (ev) => {
     id:           ev.detail?.token        || window.ME?.id   || '',
     token:        ev.detail?.token        || window.ME?.token|| '',
     name:         ev.detail?.name         || window.ME?.name || '',
+    faction:      ev.detail?.faction      || window.ME?.faction || null,
     patreon_tier: ev.detail?.patreon_tier || 0,
     is_dev:       !!(ev.detail?.is_dev),
     is_admin:     !!(ev.detail?.is_admin),

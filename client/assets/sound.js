@@ -110,14 +110,7 @@ window.renderTradeFeed = function(d) {
   while (panel.children.length > TRADE_FEED_MAX) panel.removeChild(panel.lastChild);
 };
 
-// Inject trade feed into left panel under news
-(function injectTradeFeed() {
-  const wrap = document.getElementById('tradeFeedWrap');
-  const news = document.querySelector('.panel .news') || document.querySelector('#news')?.parentElement;
-  if (wrap && news && news.parentElement) {
-    news.parentElement.appendChild(wrap);
-  }
-})();
+// Trade feed is positioned in marketTab after XP bar (no injection needed)
 
 // ── Heatmap ───────────────────────────────────────────────────────────────────
 
@@ -298,27 +291,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const hint = document.getElementById('limitHint');
       if (!sym || !qty || !lp) { if (hint) hint.textContent = 'Fill all fields.'; return; }
 
-      // ── Day-trade check ───────────────────────────────────────────────────
-      // Limit buys issue a ticket; limit sells consume a round-trip if a ticket exists.
+      // ── Day-trade check (server-authoritative, client shows early warning) ──
       try {
-        const _load   = window.__dtLoad   || function(){ return {}; };
-        const _save   = window.__dtSave   || function(){};
-        const _ensure = window.__dtEnsure || function(st){ return st; };
-        let st = _ensure(_load());
-        const left = Math.max(0, 3 - st.roundTrips);
+        const left = typeof window._dtServerRemaining === 'number' ? window._dtServerRemaining : 3;
         if (left <= 0) {
-          try{ showToast('❌ Day-trade limit reached (3). Cannot place limit order.', '#ff6a6a'); }catch(e){ alert('Day-trade limit reached for today (3).'); }
+          try{ showToast('❌ Day-trade limit reached (3). Cannot place limit order.', '#ff6a6a'); }catch(e){ alert('Day-trade limit reached (3).'); }
           return;
-        }
-        if (side === 'buy') {
-          st.tickets[sym] = Number(st.tickets[sym]||0) + 1;
-          _save(st);
-        } else {
-          if (Number(st.tickets[sym]||0) > 0) {
-            st.tickets[sym] = Number(st.tickets[sym]) - 1;
-            st.roundTrips = Math.min(3, st.roundTrips + 1);
-            _save(st);
-          }
         }
       } catch(e) {}
       // ─────────────────────────────────────────────────────────────────────

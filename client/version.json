@@ -1,7 +1,7 @@
 {
-  "version": "0.9.8",
-  "built": "2026-03-27T00:00:00Z",
+  "version": "1.0.0.4",
+  "built": "2026-03-28T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "0.9.8-galaxy-systems",
-  "notes": "Galaxy Systems: tension threshold market events, smuggling runs, blockades, shipping contracts"
+  "patch": "1.0.0.4",
+  "notes": "Faction persistence fix; Server-authoritative day-trade enforcement; hydratePlayer faction hydration"
 }

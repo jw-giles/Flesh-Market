@@ -6,8 +6,9 @@
 /* Universal custom cursor */
 *, *::before, *::after { cursor: url(assets/space/ui/cursors/cursor1.png) 6 6, auto !important; }
 button:active, a:active, [onclick]:active { cursor: url(assets/space/ui/cursors/cursor1_clicked.png) 6 6, auto !important; }
-body{margin:0;background:var(--bg);color:var(--amber);font:15px/1.5 ui-monospace, Menlo, Consolas, monospace}
-.wrap{width:100%; max-width:none;margin:0 auto;padding:12px}
+html{height:100%;overflow:hidden}
+body{margin:0;background:var(--bg);color:var(--amber);font:15px/1.5 ui-monospace, Menlo, Consolas, monospace;height:100%;overflow:hidden}
+.wrap{width:100%; max-width:none;margin:0 auto;padding:12px;display:flex;flex-direction:column;height:100vh;box-sizing:border-box;overflow:hidden}
 .panel{border:1px solid var(--dim);padding:8px;border-radius:8px;box-shadow:0 0 24px #ffb54718,inset 0 0 1px #ffb54733}
 h2{margin:.2rem 0 .6rem 0;font-size:16px;text-transform:uppercase;letter-spacing:.12em;color:var(--amber)}
 small, .muted{color:#d4a05e;opacity:.9}
@@ -24,7 +25,9 @@ hr{border:0;border-top:1px dashed var(--dim);margin:8px 0}
 .chatlog{max-height:400px;overflow:auto;background:#000;border:1px solid var(--dim);padding:6px;border-radius:8px}
 .news{max-height:340px;overflow:auto}
 .green{color:var(--good)} .red{color:var(--bad)}
-.tabs{display:flex;gap:8px;margin-bottom:6px}
+.tabs{display:flex;gap:8px;margin-bottom:6px;flex-shrink:0}
+/* Center panel tab content: fill available space */
+#marketTab,#pnlTab,#heatTab,#casinoTab,#storeTab,#guildTab,#bugsTab{flex:1;min-height:0;overflow-y:auto}
 .tab{padding:4px 8px;border:1px dashed var(--dim);cursor:pointer;border-radius:8px}
 .tab.active{border-color:var(--amber);box-shadow:0 0 8px #ffb54733}
 
@@ -75,14 +78,16 @@ hr{border:0;border-top:1px dashed var(--dim);margin:8px 0}
 }
 
 /* Grid: left = tickers+news (half), center = main, right = chat */
-.grid{display:grid;grid-template-columns:minmax(280px,1fr) 2fr minmax(280px,1fr);gap:12px;align-items:stretch}
+.grid{display:grid;grid-template-columns:minmax(280px,1fr) 2fr minmax(280px,1fr);grid-template-rows:minmax(0,1fr);gap:12px;align-items:stretch;flex:1;min-height:0;overflow:hidden}
+.grid>.panel{min-height:0;max-height:100%;overflow:hidden;display:flex;flex-direction:column}
+.grid>.panel:first-child{overflow-y:auto;display:block}
 
-/* Right panel: full-height flex column so chat fills it */
-#rightPanel{display:flex;flex-direction:column;overflow:hidden}
+/* Right panel: fixed-height chat, does not stretch with center column */
+#rightPanel{display:flex;flex-direction:column;overflow:hidden;min-height:0}
 #rightPanel>h2:first-child{display:none} /* remove empty h2 */
 
 /* Chat box fills all remaining space in right panel */
-#chatBox{display:flex;flex-direction:column;flex:1;min-height:0;background:#000;border:1px solid var(--dim);border-radius:8px;overflow:hidden}
+#chatBox{display:flex;flex-direction:column;height:420px;min-height:0;background:#000;border:1px solid var(--dim);border-radius:8px;overflow:hidden}
 #chatTabs{display:flex;gap:0;border-bottom:1px solid #1a1208;flex-shrink:0}
 .chat-tab{flex:1;padding:5px 8px;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;text-align:center;opacity:.72;border-bottom:2px solid transparent;background:transparent;color:var(--amber)}
 .chat-tab.active{opacity:1;border-bottom-color:var(--amber)}
@@ -103,14 +108,17 @@ hr{border:0;border-top:1px dashed var(--dim);margin:8px 0}
 #transferSection h2{margin:.2rem 0 .5rem 0;font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--amber)}
 
 /* Leaderboard bottom row */
-#bottomRow{margin-top:12px}
-#leaderboardPanel{border:1px solid var(--dim);padding:12px 14px;border-radius:8px;box-shadow:0 0 24px #ffb54718,inset 0 0 1px #ffb54733}
-#leaderboardPanel h2{margin:0;font-size:16px;text-transform:uppercase;letter-spacing:.12em;color:var(--amber)}
-#board{display:flex;flex-direction:column;gap:4px;margin-top:6px;max-height:260px;overflow-y:auto;overflow-x:hidden;padding-right:4px}
+#bottomRow{margin-top:4px;flex-shrink:0;overflow:hidden}
+#leaderboardCompact{flex-shrink:0;padding-top:6px;border-top:1px solid var(--dim);margin-top:6px}
+#leaderboardCompact #board{display:flex;flex-direction:column;gap:2px;max-height:none;overflow:hidden;padding-right:0}
+#leaderboardCompact #board .lb-row{display:flex;align-items:center;gap:4px;padding:2px 6px;border:1px solid #1a1208;border-radius:4px;background:#050403;font-size:.72rem;min-width:0}
+#leaderboardCompact #board .lb-sep{border-top:1px dashed #333;margin:2px 0}
 #bottomTicker{display:flex;gap:14px;flex-wrap:wrap}
 
 /* Casino: panes use full available area */
 #casinoContent{overflow-x:auto;min-height:460px}
+#galacticTab{flex-direction:column}
+#gFactionsPane,#gContractsPane{max-height:none;flex:1;overflow-y:auto}
 .casino-pane{padding:4px 0}
 
 

@@ -1,6 +1,6 @@
 {
   "name": "fleshmarket-local",
-  "version": "0.9.5",
+  "version": "1.0.0.4",
   "private": true,
   "type": "module",
   "description": "FleshMarket \u2014 multiplayer space trading game (server + static client)",

@@ -1407,7 +1407,7 @@ function apiBase(){ return location.origin; }
 // ── Galaxy Map Pan / Drag ─────────────────────────────────────────────────────
 (function(){
   var svg, isPanning=false, startX, startY, vbX=-150, vbY=-80, vbW=1200, vbH=873; // zoomed out to show full map (vbH = vbW*800/1100)
-  var minX=-200, minY=-120, maxX=150, maxY=200; // pan bounds covering all colonies
+  var minX=-200, minY=-120, maxX=700, maxY=550; // pan bounds covering all colonies
   var minZoom=600, maxZoom=1400; // vbW range
   function clampView(){
     vbX=Math.max(minX,Math.min(maxX,vbX));
@@ -1829,6 +1829,7 @@ function onGalaxyOpen(){
   gMapActive=true;
   // Pick up token from core.js — galaxy.js is lazy-loaded so fm:authed may have fired already
   if(!gToken && window.__fmToken) gToken = window.__fmToken;
+  if(!gPlayerFaction && window.ME && window.ME.faction) gPlayerFaction = window.ME.faction;
   if(!gStarsSeeded){ seedStars(); gStarsSeeded=true; }
   spFadeNebula();
   if(Object.keys(gState).length===0) galaxyFetch();
@@ -2579,6 +2580,9 @@ document.addEventListener('fm_ws_msg',function(e){
     galaxyFetch();
     // Refresh passive income — colony control changed
     setTimeout(function(){ _sendWSGalaxy({type:'portfolio_request'}); }, 800);
+  }
+  if(msg.type==='welcome'&&msg.data&&msg.data.faction){
+    gPlayerFaction=msg.data.faction;
   }
   if(msg.type==='faction_joined'&&msg.data&&msg.data.faction){
     gPlayerFaction=msg.data.faction;

@@ -369,45 +369,66 @@ const _OWNER_COLOR = '#ff6a00';
 // ── Leaderboard: stable in-place update (no flicker) ─────────────────────────
 // Rows are keyed by player id; only text/color values are updated in place.
 // Layout/order only shifts when rank actually changes.
+// Leaderboard is frozen at each 30-min EOD reset on the server.
+// Cached in localStorage so it survives browser refresh.
 const _lbRows = new Map(); // id → { row, els }
 let _lbLastData = [];
+const _LB_CACHE_KEY = 'fm:lb_snapshot';
+
+function _lbCacheSave(data) { try { localStorage.setItem(_LB_CACHE_KEY, JSON.stringify(data)); } catch(_) {} }
+function _lbCacheLoad() { try { return JSON.parse(localStorage.getItem(_LB_CACHE_KEY) || '[]'); } catch(_) { return []; } }
+
+// Restore cached leaderboard immediately on load (before WS connects)
+(function(){ const cached = _lbCacheLoad(); if (cached.length) { requestAnimationFrame(() => renderBoard(cached)); } })();
 
 function renderBoard(data) {
   const box = el('#board');
   if (!box) return;
 
-  // First call or player list changed — do a full rebuild
-  const incomingIds = data.map(p => p.id).join(',');
-  const existingIds = _lbLastData.map(p => p.id).join(',');
-  if (incomingIds !== existingIds) {
+  // Build display list: top 10 + current player if not in top 10
+  const top10 = data.slice(0, 10);
+  let myIdx = -1;
+  const myId = (typeof ME === 'object' && ME) ? ME.id : null;
+  if (myId) myIdx = data.findIndex(p => p.id === myId);
+  const showSelf = myId && myIdx >= 10;
+  const displayList = showSelf ? [...top10, data[myIdx]] : top10;
+  const displayIds = displayList.map(p => p.id).join(',') + (showSelf ? ':self' : '');
+  const existingIds = (_lbLastData._displayIds || '');
+
+  if (displayIds !== existingIds) {
     box.innerHTML = '';
     _lbRows.clear();
-    data.forEach((p, i) => {
+    displayList.forEach((p, i) => {
+      // Add separator before self row
+      if (showSelf && i === 10) {
+        const sep = document.createElement('div');
+        sep.className = 'lb-sep';
+        box.appendChild(sep);
+      }
       const row = document.createElement('div');
+      row.className = 'lb-row';
       row.dataset.pid = p.id;
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid #1a1208;border-radius:6px;background:#050403;min-width:0';
-      // Create fixed child spans by role
-      const rankEl  = document.createElement('span'); rankEl.style.cssText = 'opacity:.5;min-width:24px;text-align:right';
-      const badgeEl = document.createElement('span');
-      const nameEl  = document.createElement('b'); nameEl.style.flex = '1';
-      const netEl   = document.createElement('span'); netEl.style.color = '#ffb547';
-      const levelEl = document.createElement('span'); levelEl.className = 'muted'; levelEl.style.fontSize = '.72rem';
-      row.appendChild(rankEl); row.appendChild(badgeEl); row.appendChild(nameEl);
-      row.appendChild(netEl);  row.appendChild(levelEl);
+      const rankEl  = document.createElement('span'); rankEl.style.cssText = 'opacity:.5;min-width:20px;text-align:right;font-size:.7rem';
+      const badgeEl = document.createElement('span'); badgeEl.style.fontSize = '.7rem';
+      const nameEl  = document.createElement('b'); nameEl.style.cssText = 'flex:1;font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      const netEl   = document.createElement('span'); netEl.style.cssText = 'color:#ffb547;font-size:.7rem';
+      row.appendChild(rankEl); row.appendChild(badgeEl); row.appendChild(nameEl); row.appendChild(netEl);
       box.appendChild(row);
-      _lbRows.set(p.id, { row, rankEl, badgeEl, nameEl, netEl, levelEl });
+      _lbRows.set(p.id + (showSelf && i === 10 ? '_self' : ''), { row, rankEl, badgeEl, nameEl, netEl, realIdx: showSelf && i === 10 ? myIdx : i });
     });
   }
 
-  // In-place value update — no DOM create/destroy
-  data.forEach((p, i) => {
-    const els = _lbRows.get(p.id);
+  // In-place value update
+  displayList.forEach((p, i) => {
+    const key = p.id + (showSelf && i === 10 ? '_self' : '');
+    const els = _lbRows.get(key);
     if (!els) return;
+    const actualRank = showSelf && i === 10 ? myIdx : i;
     const isOwner = !!(p.is_prime);
     const isDev   = !isOwner && !!(p.is_dev || p.is_admin);
     const tier    = p.patreon_tier || 0;
     const color   = isOwner ? _OWNER_COLOR : (isDev ? _DEV_COLOR : (_TIER_COLORS[tier] || '#d4b87a'));
-    const rank    = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
+    const rank    = actualRank === 0 ? '🥇' : actualRank === 1 ? '🥈' : actualRank === 2 ? '🥉' : `${actualRank+1}.`;
     const badge   = isOwner ? _OWNER_BADGE : (isDev ? _DEV_BADGE : (_TIER_BADGES[tier] || ''));
     els.rankEl.textContent  = rank;
     els.badgeEl.textContent = badge;
@@ -415,10 +436,15 @@ function renderBoard(data) {
     els.nameEl.textContent  = p.name;
     els.nameEl.style.color  = color;
     els.netEl.textContent   = fmt(p.net);
-    els.levelEl.textContent = ` Lv.${p.level}`;
+    // Highlight own row
+    if (myId && p.id === myId) {
+      els.row.style.borderColor = '#ffb54755';
+      els.row.style.background = '#0d0a04';
+    }
   });
 
   _lbLastData = data;
+  _lbLastData._displayIds = displayIds;
 }
 
 // ── 30-min cycle counter (aligned to :00 and :30) ────────────────────────────
@@ -958,6 +984,9 @@ function addChat(item){
   const ph = box.querySelector('.chat-ph');
   if (ph) ph.remove();
   box.appendChild(div);
+  // Trim old messages to prevent infinite scroll — keep last 20 per pane
+  const MAX_CHAT_MSGS = 15;
+  while (box.children.length > MAX_CHAT_MSGS) { box.removeChild(box.firstChild); }
   box.scrollTop = box.scrollHeight;
 
   const activeChannel = document.querySelector('.chat-tab.active')?.dataset?.channel || 'global';
@@ -987,7 +1016,7 @@ $all('.tab').forEach(tab=>{
     el('#casinoTab').style.display = sel==='casino'?'block':'none';
     const _gt = el('#guildTab'); if(_gt) _gt.style.display = sel==='guild'?'block':'none';
     const _bugsTab = el('#bugsTab'); if(_bugsTab) _bugsTab.style.display = sel==='bugs'?'flex':'none';
-    const _galTab = el('#galacticTab'); if(_galTab) _galTab.style.display = sel==='galactic'?'block':'none';
+    const _galTab = el('#galacticTab'); if(_galTab) _galTab.style.display = sel==='galactic'?'flex':'none';
     if (sel==='guild') { loadGuildDirectory(); }
     if (sel==='bugs') { if(window.bugsTabLoad) window.bugsTabLoad(); else lazyLoad('assets/dev-comms.js', ()=>window.bugsTabLoad&&window.bugsTabLoad()); }
     // ensure the equity line renders when the P&L tab becomes visible
@@ -1163,6 +1192,8 @@ ws.addEventListener('message', (ev)=>{
     // Ensure token/id fields are populated for inventory system
     if (!ME.token) ME.token = window.FM_TOKEN || '';
     if (!ME.id)    ME.id    = window.FM_TOKEN || '';
+    // Sync faction to window.ME so lazy-loaded modules (galaxy.js) can read it
+    if (window.ME) window.ME.faction = ME.faction || null;
     // Update guild chat placeholder based on guild eligibility
     var gph = document.getElementById('guildPlaceholder');
     if (gph) {
@@ -1177,7 +1208,7 @@ ws.addEventListener('message', (ev)=>{
   if (msg.type === 'init') {
     TICKERS = msg.data.companies.map(c => ({ ...c, pct: 0 }));
     renderTickers();
-    msg.data.leaderboard && renderBoard(msg.data.leaderboard);
+    if (msg.data.leaderboard) { _lbCacheSave(msg.data.leaderboard); renderBoard(msg.data.leaderboard); }
     msg.data.headlines && msg.data.headlines.slice(-10).forEach(renderNews);
     // Auto-select first stock on load so chart is never blank
     if (!CURRENT && TICKERS.length) {
@@ -1245,6 +1276,7 @@ ws.addEventListener('message', (ev)=>{
     renderNews(msg.data);
   }
   if (msg.type === 'leaderboard') {
+    _lbCacheSave(msg.data);
     renderBoard(msg.data);
   }
   if (msg.type === 'portfolio') {
@@ -1410,7 +1442,7 @@ ws.addEventListener('message', (ev)=>{
           if(ci)ci.placeholder='Reply to '+d.from+'…';
         }
       }
-      pane.appendChild(row); pane.scrollTop=pane.scrollHeight;
+      pane.appendChild(row); while(pane.children.length>100){pane.removeChild(pane.firstChild);} pane.scrollTop=pane.scrollHeight;
     }
     const _acNow=document.querySelector('.chat-tab.active')?.dataset?.channel||'global';
     if(_acNow!=='whisper'){const b2=document.getElementById('unread-whisper');if(b2){b2.style.display='inline-block';b2.textContent=String((parseInt(b2.textContent)||0)+1);}}

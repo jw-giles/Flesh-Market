@@ -188,7 +188,7 @@
           saveSession(data.token, data.name);
           window.FM_TOKEN = data.token;
           closeModal();
-          emit({name:data.name, token:data.token, cash:data.cash, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_prime:!!(data.is_prime)});
+          emit({name:data.name, token:data.token, cash:data.cash, faction:data.faction||null, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_prime:!!(data.is_prime)});
         } else {
           const msgs = {invalid_credentials:'Wrong name or password.',missing_fields:'Fill in all fields.'};
           setHint(ui.hint, msgs[data.error]||data.error||'Login failed.','err');
@@ -238,7 +238,7 @@
           saveSession(data.token, data.name);
           window.FM_TOKEN = data.token;
           closeModal();
-          emit({name:data.name, token:data.token, cash:data.cash, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_prime:!!(data.is_prime)});
+          emit({name:data.name, token:data.token, cash:data.cash, faction:data.faction||null, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_prime:!!(data.is_prime)});
         } else {
           const msgs = {name_taken:'That name is taken.',password_too_short:'Password too short (min 4).',name_required:'Name required.'};
           setHint(ui.hint, msgs[data.error]||data.error||'Registration failed.','err');
@@ -277,7 +277,7 @@
           const data = await res.json();
           if (data.ok) {
             window.FM_TOKEN = tok;
-            emit({name:data.name, token:tok, cash:data.cash, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_dunced:!!(data.is_dunced), is_prime:!!(data.is_prime)});
+            emit({name:data.name, token:tok, cash:data.cash, faction:data.faction||null, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_dunced:!!(data.is_dunced), is_prime:!!(data.is_prime)});
             return;
           }
         }

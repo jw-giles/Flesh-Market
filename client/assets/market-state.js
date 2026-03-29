@@ -621,11 +621,13 @@
   // --- Tab switching: include Store ---
   (function(){
     function showTab(name){
-      var ids = ['marketTab','pnlTab','casinoTab','guildTab','storeTab','heatTab','galacticTab'];
+      var ids = ['marketTab','pnlTab','casinoTab','guildTab','storeTab','heatTab','galacticTab','bugsTab'];
       ids.forEach(function(id){
         var el = document.getElementById(id);
         if (!el) return;
-        el.style.display = (id.toLowerCase().indexOf(name)>=0) ? 'block' : 'none';
+        var match = (id.toLowerCase().indexOf(name)>=0);
+        var useFlex = (id==='galacticTab'||id==='bugsTab');
+        el.style.display = match ? (useFlex ? 'flex' : 'block') : 'none';
       });
       Array.from(document.querySelectorAll('.tab')||[]).forEach(function(t){
         var on = (t.getAttribute('data-tab')===name);

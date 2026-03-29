@@ -98,6 +98,10 @@
     <div id="xp-bar-fill" style="height:100%;width:0%;background:linear-gradient(90deg,rgba(152,255,159,.5),rgba(152,255,159,.9));border-radius:4px;transition:width .6s ease"></div>
   </div>
 </div>
+<div id="tradeFeedWrap" style="padding:4px 0 0 0">
+  <div style="font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;opacity:.4;margin-bottom:4px">Live Trades</div>
+  <div id="tradeFeedPanel"></div>
+</div>
 </div>
 <div id="pnlTab" style="display:none">
 <!-- Static snapshot charts: donut (allocation) + bars (per-position P&L) -->
@@ -280,7 +284,7 @@
 
 </div></div>
 <!-- Guild Tab -->
-<div id="guildTab" style="display:none;padding:4px;overflow:auto;max-height:calc(100vh - 110px)">
+<div id="guildTab" style="display:none;padding:4px;overflow:auto">
 
   <!-- DIRECTORY VIEW -->
   <div id="guild-dir">
@@ -353,6 +357,10 @@
         <input id="g-assign-name" class="input" placeholder="Member name" style="max-width:120px" maxlength="32"/>
         <input id="g-assign-amt" class="input" type="number" min="1" placeholder="Amount Ƒ" style="max-width:110px"/>
         <button class="btn" id="g-assign-btn" style="border-color:#86ff6a;color:#86ff6a">Assign Cash</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+        <input id="g-invite-name" class="input" placeholder="Player name" style="max-width:140px" maxlength="32"/>
+        <button class="btn" id="g-invite-btn" style="border-color:#4ecdc4;color:#4ecdc4">Invite Member</button>
       </div>
       <div id="g-owner-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
     </div>
@@ -427,14 +435,14 @@
   </div>
 </div>
 <!-- ═══ Galaxy Tab ═══ -->
-<div id="galacticTab" style="display:none;padding:0;overflow:hidden;max-height:calc(100vh - 110px);font-family:'Courier New','Lucida Console',monospace">
+<div id="galacticTab" style="display:none;padding:0;overflow:hidden;flex:1;min-height:0;font-family:'Courier New','Lucida Console',monospace">
   <div id="galaxySubTabs" style="display:flex;border-bottom:1px solid #1a1a2e;background:#07070e">
     <div class="galaxy-stab active" data-gstab="map" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid #4ecdc4;color:#4ecdc4;text-transform:uppercase;font-family:inherit">⬡ Sector Map</div>
     <div class="galaxy-stab" data-gstab="factions" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit">◈ Factions</div>
     <div class="galaxy-stab" data-gstab="contracts" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit">📋 Contracts</div>
   </div>
   <!-- Map pane -->
-  <div id="gMapPane" style="display:flex;height:calc(100vh - 158px);min-height:380px;background:#02020a">
+  <div id="gMapPane" style="display:flex;flex:1;min-height:0;background:#02020a">
     <div style="flex:1;position:relative;overflow:hidden;background:#050508">
       <svg id="galaxySVG" viewBox="-150 -80 1200 900" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block">
         <defs>
@@ -488,7 +496,7 @@
     </div>
   </div>
   <!-- Factions pane -->
-  <div id="gFactionsPane" style="display:none;padding:14px 16px;overflow-y:auto;max-height:calc(100vh - 158px)">
+  <div id="gFactionsPane" style="display:none;padding:14px 16px;overflow-y:auto;flex:1;min-height:0">
     <div style="font-size:.6rem;color:#555;letter-spacing:.13em;margin-bottom:14px;text-transform:uppercase">Choose Your Allegiance — Bonuses Apply To All Holdings</div>
     <div id="gFactionList"></div>
     <div style="margin-top:14px;padding:12px;border:1px solid #1a1a2e;font-size:.68rem;color:#666;line-height:1.7">
@@ -500,7 +508,7 @@
     </div>
   </div>
   <!-- Contracts pane -->
-  <div id="gContractsPane" style="display:none;padding:14px 16px;overflow-y:auto;max-height:calc(100vh - 158px)">
+  <div id="gContractsPane" style="display:none;padding:14px 16px;overflow-y:auto;flex:1;min-height:0">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:.72rem;color:#888;letter-spacing:.1em;text-transform:uppercase">Lane Shares — Bonding Curve Market</div>
       <div style="font-size:.68rem;color:#2ecc71;letter-spacing:.06em">Dividends every 30 min</div>
@@ -529,7 +537,7 @@
 </div>
 
 <!-- Bugs Tab ──────────────────────────────────────────────────────────────── -->
-<div id="bugsTab" style="display:none;height:calc(100vh - 126px);overflow:hidden;
+<div id="bugsTab" style="display:none;overflow:hidden;
   background:#02020a;font-family:'Courier New',monospace;flex-direction:column;
   margin:-8px;border-radius:6px;">
 
@@ -712,8 +720,8 @@
     <button id="chatSend">Send</button>
     <div id="chatMentionDrop" style="display:none;bottom:34px;left:0"></div>
     <div style="position:absolute;right:0;bottom:calc(100% + 2px);display:flex;gap:2px">
-      <button id="chatFontDec" title="Smaller text" style="background:transparent;border:none;color:#3a2a0a;font-size:.72rem;cursor:pointer;padding:1px 4px;line-height:1;user-select:none" onmouseenter="this.style.color='#7a5a2a'" onmouseleave="this.style.color='#3a2a0a'">A−</button>
-      <button id="chatFontInc" title="Larger text"  style="background:transparent;border:none;color:#3a2a0a;font-size:.72rem;cursor:pointer;padding:1px 4px;line-height:1;user-select:none" onmouseenter="this.style.color='#7a5a2a'" onmouseleave="this.style.color='#3a2a0a'">A+</button>
+      <button id="chatFontDec" title="Smaller text" style="background:rgba(30,20,5,.6);border:1px solid #5a4a2a;border-radius:3px;color:#c8a040;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#ffcc44';this.style.borderColor='#8a7a4a'" onmouseleave="this.style.color='#c8a040';this.style.borderColor='#5a4a2a'">A−</button>
+      <button id="chatFontInc" title="Larger text"  style="background:rgba(30,20,5,.6);border:1px solid #5a4a2a;border-radius:3px;color:#c8a040;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#ffcc44';this.style.borderColor='#8a7a4a'" onmouseleave="this.style.color='#c8a040';this.style.borderColor='#5a4a2a'">A+</button>
     </div>
   </div>
 </div>
@@ -728,30 +736,28 @@
 </div>
 <!-- Transfer pinned at bottom -->
 <div id="transferSection">
-  <h2>Transfer (2% tax)</h2>
+  <h2>Wire Credits</h2>
   <div class="row">
     <input class="input" id="toName" placeholder="Recipient name"/>
     <input class="input" id="amt" min="1" style="max-width:110px" type="number" value="10"/>
-    <button class="btn" id="xfer">Send</button>
+    <button class="btn" id="xfer">Wire</button>
   </div>
+  <div style="font-size:.62rem;color:#665533;margin-top:4px;letter-spacing:.03em;line-height:1.3">* Standard 2% transfer tax applies. Transfers exceeding Ƒ10,000 are subject to 90% taxation by the Merchant Guild.</div>
+</div>
+<div id="leaderboardCompact">
+  <h2 style="margin:4px 0 4px 0;font-size:11px">Leaderboard <span style="opacity:.4;font-weight:400;letter-spacing:.04em">NET WORTH</span></h2>
+  <div id="board"></div>
 </div>
 </div>
 </div>
 </div>
 
-<!-- Bottom: Leaderboard + Live Activity Strip -->
+<!-- Bottom: Live Activity Strip -->
 <div id="bottomRow">
-  <div id="leaderboardPanel">
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;flex-wrap:wrap">
-      <h2 style="margin:0">Leaderboard</h2>
-      <span style="font-size:.72rem;opacity:.4;letter-spacing:.06em">NET WORTH RANKING</span>
-      <span id="lb-cycle-counter" style="font-size:.70rem;color:#5a7a5a;letter-spacing:.04em;font-family:monospace">⟳ --:--</span>
-      <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
-        <span style="font-size:.72rem;opacity:.4;letter-spacing:.06em">LIVE MARKET</span>
-        <div id="bottomTicker" style="display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;font-family:monospace"></div>
-      </div>
-    </div>
-    <div id="board"></div>
+  <div style="display:flex;gap:10px;align-items:center;padding:4px 8px">
+    <span id="lb-cycle-counter" style="font-size:.70rem;color:#5a7a5a;letter-spacing:.04em;font-family:monospace">⟳ --:--</span>
+    <span style="font-size:.72rem;opacity:.4;letter-spacing:.06em">LIVE MARKET</span>
+    <div id="bottomTicker" style="display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;font-family:monospace"></div>
   </div>
 </div>
 <script src="assets/core.js"></script>
@@ -1027,7 +1033,7 @@ function __updateEffectivePositions(){
 <script src="assets/block-users.js"></script>
 
 <script>
-// Injected: marketAPI buy/sell compatible with 0.04 wiring; used by trade-limit.js to guard 3 trades / 30m
+// Injected: marketAPI buy/sell — sends WS order messages. Day-trade limit enforced server-side.
 window.marketAPI = window.marketAPI || {};
 (function(){
   function upper(s){ return String(s||'').toUpperCase(); }
@@ -1088,7 +1094,7 @@ ws.addEventListener('message', function(ev){
   } catch(e){}
 });
 </script>
-<script src="/daytrade_reset_on_refresh.js"></script>
+<!-- daytrade_reset_on_refresh.js removed: accounts are live, day trades persist -->
 <script>
 (function(){
   function swallow(e){
@@ -1113,7 +1119,7 @@ ws.addEventListener('message', function(ev){
 </script>
 <!-- Auth v3: server-side accounts -->
 <script src="assets/fm-auth.js"></script>
-<script defer="" src="assets/leaderboard-local.js"></script>
+<!-- leaderboard-local.js removed: server-frozen EOD snapshot is canonical -->
 <script src="assets/funds.js"></script>
 
 <script src="assets/market-state.js"></script>
@@ -1159,12 +1165,6 @@ ws.addEventListener('message', function(ev){
 
 <!-- Sound Toggle -->
 <button id="soundToggle" onclick="toggleSound()">🔇 Sound</button>
-
-<!-- Trade Feed (injected into right panel area) -->
-<div id="tradeFeedWrap" style="padding:0 8px 8px 8px">
-  <div style="font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;opacity:.4;margin-bottom:4px;margin-top:8px">Live Trades</div>
-  <div id="tradeFeedPanel"></div>
-</div>
 
 <script src="assets/sound.js"></script>
 <!-- ═══════════════════════════════════════════════════════════
