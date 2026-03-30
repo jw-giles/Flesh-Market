@@ -349,8 +349,7 @@ export function getNetWorthHistory(playerId, limit=200) {
 // ─── Leaderboard ─────────────────────────────────────────────────────────────
 
 export function getLeaderboard(companies, limit=20) {
-  const cutoff = Date.now() - 2*60*1000;
-  const players = stmt(`SELECT id,name,cash,xp,level,title,patreon_tier,is_dev,is_admin,is_prime FROM players WHERE last_seen>=? AND is_dev=0 AND is_admin=0 AND is_prime=0`).all(cutoff);
+  const players = stmt(`SELECT id,name,cash,xp,level,title,patreon_tier,is_dev,is_admin,is_prime FROM players WHERE is_dev=0 AND is_admin=0 AND is_prime=0`).all();
   return players.map(p=>{
     const holdRows = stmt('SELECT symbol,qty FROM holdings WHERE player_id=?').all(p.id);
     const equity   = holdRows.reduce((acc,h)=>{ const c=companies.find(x=>x.symbol===h.symbol); return acc+(c?c.price*h.qty:0); },0);
