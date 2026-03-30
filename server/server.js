@@ -3643,7 +3643,7 @@ wss.on('connection',(ws,req)=>{
         try {
           const current = getColonyState(colonyId) || {};
           const contested = syndicate > 10 || voidCtrl > 10 || (coalition < 80 && (syndicate + voidCtrl) > 20);
-          updateColonyState(colonyId, { ...current, id: colonyId,
+          updateColonyState(colonyId, {
             control_coalition: coalition, control_syndicate: syndicate, control_void: voidCtrl, contested });
           broadcast({ type: 'colony_update', data: { id: colonyId, control_coalition: coalition, control_syndicate: syndicate, control_void: voidCtrl, contested } });
           ack(`✓ ${colonyId} → Coalition:${coalition}% Syndicate:${syndicate}% Void:${voidCtrl}%`);
@@ -3656,7 +3656,7 @@ wss.on('connection',(ws,req)=>{
         const tension = Math.max(0, Math.min(100, Number(msg.tension) || 0));
         try {
           const current = getColonyState(colonyId) || {};
-          updateColonyState(colonyId, { ...current, id: colonyId, tension, contested: tension > 50 });
+          updateColonyState(colonyId, { tension, contested: tension > 50 });
           broadcast({ type: 'colony_update', data: { id: colonyId, tension, contested: tension > 50 } });
           ack(`✓ ${colonyId} tension → ${tension}%`);
         } catch(e) { err('Colony update failed: ' + e.message); }
@@ -3666,7 +3666,7 @@ wss.on('connection',(ws,req)=>{
       else if (cmd === 'reset_colony') {
         const colonyId = String(msg.colony || '').toLowerCase().replace(/ /g,'_');
         try {
-          updateColonyState(colonyId, { id: colonyId, control_coalition: 0, control_syndicate: 0, control_void: 0, coalition: 0, contested: false, tension: 0, war_chest: 0 });
+          updateColonyState(colonyId, { control_coalition: 0, control_syndicate: 0, control_void: 0, contested: 0, tension: 0, war_chest: 0 });
           broadcast({ type: 'colony_update', data: { id: colonyId, reset: true } });
           ack(`✓ Colony ${colonyId} control reset to zero.`);
         } catch(e) { err('Colony reset failed: ' + e.message); }
