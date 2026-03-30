@@ -210,9 +210,10 @@ function resetDailyPrevClose() {
 const COMPANY_NAMES=["Anchor Biotech","Anchor International","Anchor Realty","Anchor Retail","ApexContraband","AshenTextiles","Aspen Automation","Aspen Energy","Aspen Financial","Atlas Consulting","Atlas Dynamics","Atlas Energy","Atlas Realty","Atlas Supplies","Atlas Textiles","Aurora Electric","Aurora Enterprises","Aurora Metals","Aurora Robotics","Beacon Consulting","Beacon Technologies","BlackCapital","BloodWorks","Blue Media","Blue Packaging","Blue Shipping","BoneMarkets","BoneYards","CarrionFarms","Cascade Minerals","Cascade Pharma","Catalyst Insurance","Catalyst Packaging","Catalyst Pharma","Cedar Dynamics","Cedar Insurance","Cedar Networks","CipherHoldings","CoalitionMetals","Comet Foods","Comet Packaging","Copper Dynamics","Copper Industries","Copper Insurance","Copper Marine","CorpseSystems","Crescent Robotics","Crescent Ventures","CrimsonChains","DarkRobotics","East Consulting","East Foods","East Retail","East Ventures","Evergreen Financial","First Minerals","First Networks","First Works","Frontier Supplies","GhostFoundry","Global Enterprises","Global Supplies","Golden Aerospace","Golden Insurance","Golden Packaging","GraftBiotech","Granite Aerospace","Granite Realty","GraveWorks","Green Shipping","GreyMining","GreywaterLabs","Grove Enterprises","Harbor Enterprises","Harbor Financial","Harbor Media","HollowLogistics","Horizon Automation","Horizon Retail","Liberty Packaging","Liberty Ventures","Lighthouse Logistics","Lumen Shipping","Maple Industries","MireInsurance","Momentum Logistics","National Foods","National Media","National Packaging","National Retail","Neon Retail","Neon Technologies","Nexus Aerospace","Nexus Financial","Nexus Supplies","NightFinance","Nimbus Biotech","Nimbus Realty","NoirTransport","North Biotech","North Consulting","North Industries","North Motors","Nova Biotech","NullSyndicate","Oak Capital","Oak Marine","Oak Ventures","ObsidianShipping","OccultMaterials","OrganCorp","Orion Foods","Orion Logistics","Orion Supplies","PhantomCourier","Pioneer Aerospace","Pioneer Realty","Pioneer Supplies","Pixel Biotech","Pixel Dynamics","Pixel Software","Prairie Financial","Prime Automation","Redwood Materials","Redwood Retail","River Aerospace","River Materials","RogueMinerals","SableSecurity","SeverShipping","ShadePharma","ShadowDynamics","Sierra Aerospace","Sierra Apparel","Sierra Consulting","Sierra Hospitality","Silver Holdings","Silver Motors","Silver Shipping","Silver Works","SinisterFoods","Skyline Packaging","SmugglerIndustries","SmugglerMedia","SmugglerNetworks","South Consulting","South Hardware","South Industries","South Minerals","SpecterIndustries","Summit Automation","Summit Logistics","Summit Retail","Sycamore Partners","Sycamore Software","TempestArms","ToxicChains","UnderNet","United Hospitality","United Insurance","United Technologies","Valley Realty","VeinConsortium","Vertex Aerospace","Vertex Dynamics","Vertex Foods","Vertex Logistics","Vertex Robotics","Vertex Shipping","Vertex Systems","Vertex Ventures","West Hospitality","West Works","Willow Aerospace","Willow Hardware","Willow Labs","WraithEnergy","Zenith Automation","Zenith Health","Zenith Insurance","Zenith Media"];
 const NAMES=Array.from(new Set(COMPANY_NAMES.map(n=>n.replace(/\d+$/,'').trim())));
 function symbolize(name){const words=String(name||'').replace(/[^A-Za-z ]/g,' ').trim().split(/\s+/).filter(Boolean);let t=words.map(w=>w[0]).join('').toUpperCase();if(t.length<3){const letters=words.join('').toUpperCase();for(let i=1;i<letters.length&&t.length<3;i++)t+=letters[i];}if(t.length<3)t=(t+'FMK').slice(0,3);if(t.length>4)t=t.slice(0,4);return t;}
-const companies=NAMES.map((n,i)=>({id:i,name:n,symbol:symbolize(n),price:rng(8,60),ohlc:[],lnP:0,sigma:0.025+seededRand()*0.015,mu:-0.0006+seededRand()*0.0006,kappa:0.06+seededRand()*0.06,sector:(i%8),offset:-0.3+seededRand()*0.6}));
+const companies=NAMES.map((n,i)=>({id:i,name:n,symbol:symbolize(n),price:rng(8,60),ohlc:[],lnP:0,sigma:0.035+seededRand()*0.020,mu:-0.0004+seededRand()*0.0004,kappa:0.015+seededRand()*0.015,sector:(i%8),offset:-0.3+seededRand()*0.6}));
 (()=>{const used=new Set(),letters='ABCDEFGHIJKLMNOPQRSTUVWXYZ';for(const c of companies){let sym=c.symbol.replace(/[^A-Z]/g,'').slice(0,4);if(sym.length<3)sym=(sym+'FMKT').slice(0,3);let k=0;while(used.has(sym)){sym=k<26?sym.slice(0,3)+letters[k]:sym.slice(0,2)+letters[Math.floor((k-26)/26)%26]+letters[(k-26)%26];sym=sym.slice(0,4);k++;}c.symbol=sym;used.add(sym);}})();
-const SECTORS=new Array(8).fill(0).map(()=>({lnIndex:Math.log(20+20*seededRand()),sigma:0.008+seededRand()*0.010,mu:-0.0002+seededRand()*0.0002,kappa:0.025+seededRand()*0.010}));
+const SECTOR_TARGETS = [15, 25, 35, 45, 20, 55, 30, 70]; // varied anchors per sector
+const SECTORS=new Array(8).fill(0).map((_,i)=>({lnIndex:Math.log(SECTOR_TARGETS[i]*(0.8+0.4*seededRand())),sigma:0.012+seededRand()*0.012,mu:-0.0001+seededRand()*0.0002,kappa:0.004+seededRand()*0.004,target:SECTOR_TARGETS[i]}));
 companies.forEach(c=>{c.lnP=Math.log(c.price); c._spawnLnP=c.lnP;});
 
 // ─── Colony HQ Mapping: company index → colony headquarters ───────────────────
@@ -2474,8 +2475,8 @@ function genHeadline(){
   const c=pick(companies),r=Math.random();
   const themes=r<0.45?THEMES_GOOD:(r<0.9?THEMES_BAD:THEMES_WEIRD);
   const tone=themes===THEMES_GOOD?'good':(themes===THEMES_BAD?'bad':'neutral');
-  if(themes===THEMES_GOOD){c.lnP+=0.01+Math.random()*0.03;c.price=Math.max(0.5,Math.exp(c.lnP));}
-  else if(themes===THEMES_BAD){c.lnP-=0.01+Math.random()*0.03;c.price=Math.max(0.5,Math.exp(c.lnP));}
+  if(themes===THEMES_GOOD){c.lnP+=0.02+Math.random()*0.06;c.price=Math.max(0.5,Math.exp(c.lnP));}
+  else if(themes===THEMES_BAD){c.lnP-=0.02+Math.random()*0.06;c.price=Math.max(0.5,Math.exp(c.lnP));}
   pushHeadline(`${c.name} (${c.symbol}): ${pick(themes)}`,tone,c.symbol);
 }
 
@@ -2489,16 +2490,16 @@ function stepMarket(){
   // ── Sector index step with GARCH-style vol clustering ────────────────────
   for(let s=0;s<SECTORS.length;s++){
     const S=SECTORS[s];
-    // Rare sector-wide shock — 0.08% chance per tick
-    const sectorShock = Math.random()<0.0008 ? randn()*0.03 : 0;
+    // Rare sector-wide shock — 0.15% chance per tick, bigger magnitude
+    const sectorShock = Math.random()<0.0015 ? randn()*0.05 : 0;
     const eps = randn()*S.sigma + sectorShock;
-    // Mean-reversion back toward log(30) so sectors don't pin to ceiling over 23h
-    const sectorTarget = Math.log(30);
+    // Mean-reversion back toward per-sector target
+    const sectorTarget = Math.log(S.target || 30);
     S.lnIndex += S.mu + S.kappa*(sectorTarget - S.lnIndex) + eps;
-    // Tighter ceiling: log(100) so stock targets stay reasonable over 23h
-    S.lnIndex = Math.max(Math.log(5), Math.min(Math.log(100), S.lnIndex));
+    // Ceiling: log(200) so sectors have room to move
+    S.lnIndex = Math.max(Math.log(3), Math.min(Math.log(200), S.lnIndex));
     // GARCH vol decay
-    S.sigma = Math.max(0.004, Math.min(0.06, 0.90*S.sigma + 0.10*Math.abs(eps)));
+    S.sigma = Math.max(0.006, Math.min(0.09, 0.92*S.sigma + 0.08*Math.abs(eps)));
   }
 
   companies.forEach(c=>{
@@ -2506,16 +2507,16 @@ function stepMarket(){
     const S    = SECTORS[c.sector||0];
     const base = S.lnIndex + (c.offset||0);
 
-    // Idiosyncratic shock — reduced fat tails
+    // Idiosyncratic shock — fatter tails for real price action
     const u    = Math.random();
-    const tail = u < 0.015 ? 1.8 : (u < 0.05 ? 1.2 : 1.0);  // tamer tails
-    const eps  = randn() * (c.sigma||0.025) * tail;
+    const tail = u < 0.02 ? 2.5 : (u < 0.08 ? 1.5 : 1.0);
+    const eps  = randn() * (c.sigma||0.035) * tail;
 
     // If admin recently set price, use stronger mean-reversion toward admin target
-    const kappa = c._adminBias ? 0.002 : (c.kappa||0.07);
+    const kappa = c._adminBias ? 0.002 : (c.kappa||0.025);
     const mu    = c._adminBias
       ? (c._adminBias > 0 ? 0.0002 : -0.0002)
-      : Math.min(0.0001, c.mu||0);   // tightly cap upward drift (was 0.0005)
+      : Math.min(0.0003, c.mu||0);   // allow slight upward drift
 
     // Mean-reversion toward sector base
     const target = c._adminBias ? c._adminTargetLnP : base;
@@ -2526,18 +2527,16 @@ function stepMarket(){
     const spawnLnP   = c._spawnLnP || c.lnP;
     const lifetimeGain = c.lnP - spawnLnP; // in log-space; ln(10)≈2.3 = +900%
 
-    // Graduated gravity: stronger pull as price deviates more from spawn
-    // Kicks in at +100% (ln≈0.69), maxes out at +400% (ln≈1.6)
-    if (lifetimeGain > 0.69 && !c._adminBias) {
-      // gravity strength scales from 0 to 0.15 over the +100% to +500% range
-      const gravityStrength = Math.min(0.15, (lifetimeGain - 0.69) * 0.05);
+    // Graduated gravity: kicks in at +400% (ln≈1.6), softer pull
+    if (lifetimeGain > 1.6 && !c._adminBias) {
+      const gravityStrength = Math.min(0.08, (lifetimeGain - 1.6) * 0.025);
       delta -= gravityStrength;
     }
 
-    // Emergency brake: if up >700% from spawn, apply hard mean-reversion toward spawn+300%
-    if (lifetimeGain > 2.08 && !c._adminBias) { // ln(8) ≈ 2.08
-      const emergencyTarget = spawnLnP + 1.39; // spawn × 4 (+300%)
-      delta += 0.08 * (emergencyTarget - c.lnP);
+    // Emergency brake: if up >1500% from spawn, mean-revert toward spawn+500%
+    if (lifetimeGain > 2.77 && !c._adminBias) { // ln(16) ≈ 2.77
+      const emergencyTarget = spawnLnP + 1.79; // spawn × 6 (+500%)
+      delta += 0.05 * (emergencyTarget - c.lnP);
     }
 
     c.lnP += delta;
@@ -2556,18 +2555,18 @@ function stepMarket(){
     // Hard price floor/ceiling: Ƒ0.50 – Ƒ5000
     c.lnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.lnP));
 
-    // Vol clustering: tighter ceiling (was 0.18), faster decay
+    // Vol clustering: wider range, slower decay for sustained moves
     const absEps = Math.abs(eps);
-    c.sigma = Math.max(0.008, Math.min(0.10,
-      0.88*(c.sigma||0.025) + 0.08*absEps + 0.04*0.025
+    c.sigma = Math.max(0.012, Math.min(0.14,
+      0.92*(c.sigma||0.035) + 0.06*absEps + 0.02*0.035
     ));
 
-    // Rare idiosyncratic event (0.1%/tick — was 0.2%), smaller magnitude
-    if(Math.random()<0.001){
-      const eventMag = 0.03 + Math.random()*0.07;  // 3–10% move (was 5–20%)
+    // Rare idiosyncratic event (0.15%/tick), meaningful magnitude
+    if(Math.random()<0.0015){
+      const eventMag = 0.05 + Math.random()*0.12;  // 5–17% move
       c.lnP += (Math.random()<0.5?1:-1) * eventMag;
       c.lnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.lnP));
-      c.sigma = Math.min(0.10, c.sigma * 1.8);     // smaller vol spike (was 2.5×)
+      c.sigma = Math.min(0.14, c.sigma * 2.2);     // vol spike on event
     }
 
     const prev=c.price;
