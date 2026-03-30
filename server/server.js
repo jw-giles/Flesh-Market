@@ -3637,12 +3637,22 @@ wss.on('connection',(ws,req)=>{
       // ── set_colony_control: set faction control percentages ─────────────────
       else if (cmd === 'set_colony_control') {
         const colonyId = String(msg.colony || '').toLowerCase().replace(/ /g,'_');
-        const coalition = Math.max(0, Math.min(100, Number(msg.coalition) || 0));
-        const syndicate = Math.max(0, Math.min(100, Number(msg.syndicate) || 0));
-        const voidCtrl  = Math.max(0, Math.min(100, Number(msg.void) || 0));
+        let coalition = Math.max(0, Math.min(100, Number(msg.coalition) || 0));
+        let syndicate = Math.max(0, Math.min(100, Number(msg.syndicate) || 0));
+        let voidCtrl  = Math.max(0, Math.min(100, Number(msg.void) || 0));
+        // Normalize to 100% — if total != 100, scale proportionally
+        const total = coalition + syndicate + voidCtrl;
+        if (total > 0 && total !== 100) {
+          const scale = 100 / total;
+          coalition = Math.round(coalition * scale);
+          syndicate = Math.round(syndicate * scale);
+          voidCtrl = 100 - coalition - syndicate; // remainder absorbs rounding
+          voidCtrl = Math.max(0, voidCtrl);
+        } else if (total === 0) {
+          coalition = 34; syndicate = 33; voidCtrl = 33;
+        }
         try {
-          const current = getColonyState(colonyId) || {};
-          const contested = syndicate > 10 || voidCtrl > 10 || (coalition < 80 && (syndicate + voidCtrl) > 20);
+          const contested = (syndicate > 10 || voidCtrl > 10 || (coalition < 80 && (syndicate + voidCtrl) > 20)) ? 1 : 0;
           updateColonyState(colonyId, {
             control_coalition: coalition, control_syndicate: syndicate, control_void: voidCtrl, contested });
           broadcast({ type: 'colony_update', data: { id: colonyId, control_coalition: coalition, control_syndicate: syndicate, control_void: voidCtrl, contested } });
@@ -3656,8 +3666,8 @@ wss.on('connection',(ws,req)=>{
         const tension = Math.max(0, Math.min(100, Number(msg.tension) || 0));
         try {
           const current = getColonyState(colonyId) || {};
-          updateColonyState(colonyId, { tension, contested: tension > 50 });
-          broadcast({ type: 'colony_update', data: { id: colonyId, tension, contested: tension > 50 } });
+          updateColonyState(colonyId, { tension, contested: tension > 50 ? 1 : 0 });
+          broadcast({ type: 'colony_update', data: { id: colonyId, tension, contested: tension > 50 ? 1 : 0 } });
           ack(`✓ ${colonyId} tension → ${tension}%`);
         } catch(e) { err('Colony update failed: ' + e.message); }
       }

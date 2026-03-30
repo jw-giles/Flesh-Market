@@ -480,8 +480,50 @@ window.godSetColonyControl = function() {
   const coalition = Number(document.getElementById('god-ctrl-coalition').value) || 0;
   const syndicate = Number(document.getElementById('god-ctrl-syndicate').value) || 0;
   const void_  = Number(document.getElementById('god-ctrl-void').value) || 0;
-  // Inject as a god_cmd — server handles state update + broadcast
   godCmd({ cmd:'set_colony_control', colony, coalition, syndicate, void: void_ });
+};
+
+// Auto-rebalance: when one faction input changes, redistribute the remainder to the other two
+window.godRebalanceCtrl = function(changed) {
+  const cEl = document.getElementById('god-ctrl-coalition');
+  const sEl = document.getElementById('god-ctrl-syndicate');
+  const vEl = document.getElementById('god-ctrl-void');
+  const val = Math.max(0, Math.min(100, Number(document.getElementById('god-ctrl-' + changed).value) || 0));
+  const remainder = 100 - val;
+  if (changed === 'coalition') {
+    const oldS = Number(sEl.value) || 0;
+    const oldV = Number(vEl.value) || 0;
+    const oldOther = oldS + oldV;
+    if (oldOther > 0) {
+      sEl.value = Math.round(remainder * (oldS / oldOther));
+      vEl.value = remainder - Number(sEl.value);
+    } else {
+      sEl.value = Math.round(remainder / 2);
+      vEl.value = remainder - Number(sEl.value);
+    }
+  } else if (changed === 'syndicate') {
+    const oldC = Number(cEl.value) || 0;
+    const oldV = Number(vEl.value) || 0;
+    const oldOther = oldC + oldV;
+    if (oldOther > 0) {
+      cEl.value = Math.round(remainder * (oldC / oldOther));
+      vEl.value = remainder - Number(cEl.value);
+    } else {
+      cEl.value = Math.round(remainder / 2);
+      vEl.value = remainder - Number(cEl.value);
+    }
+  } else if (changed === 'void') {
+    const oldC = Number(cEl.value) || 0;
+    const oldS = Number(sEl.value) || 0;
+    const oldOther = oldC + oldS;
+    if (oldOther > 0) {
+      cEl.value = Math.round(remainder * (oldC / oldOther));
+      sEl.value = remainder - Number(cEl.value);
+    } else {
+      cEl.value = Math.round(remainder / 2);
+      sEl.value = remainder - Number(cEl.value);
+    }
+  }
 };
 
 window.godResetColony = function() {

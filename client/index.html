@@ -1738,15 +1738,15 @@ ws.addEventListener('message', function(ev){
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px">
         <div>
           <div style="font-size:.65rem;color:#4ecdc4;margin-bottom:3px">Coalition</div>
-          <input id="god-ctrl-coalition" type="number" min="0" max="100" value="0" class="god-input" style="width:100%">
+          <input id="god-ctrl-coalition" type="number" min="0" max="100" value="0" class="god-input" style="width:100%" oninput="godRebalanceCtrl('coalition')">
         </div>
         <div>
           <div style="font-size:.65rem;color:#e74c3c;margin-bottom:3px">Syndicate</div>
-          <input id="god-ctrl-syndicate" type="number" min="0" max="100" value="0" class="god-input" style="width:100%">
+          <input id="god-ctrl-syndicate" type="number" min="0" max="100" value="0" class="god-input" style="width:100%" oninput="godRebalanceCtrl('syndicate')">
         </div>
         <div>
           <div style="font-size:.65rem;color:#9b59b6;margin-bottom:3px">The Void</div>
-          <input id="god-ctrl-void" type="number" min="0" max="100" value="0" class="god-input" style="width:100%">
+          <input id="god-ctrl-void" type="number" min="0" max="100" value="0" class="god-input" style="width:100%" oninput="godRebalanceCtrl('void')">
         </div>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:14px">
