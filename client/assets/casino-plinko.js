@@ -1,5 +1,5 @@
 
-// === PLINKO — Mathematically balanced with animated ball ===
+// === PLINKO — Pure physics, real collisions ===
 (function(){
   'use strict';
   const pane=document.getElementById('casino-plinko');
@@ -9,27 +9,26 @@
     const st=document.createElement('style'); st.id='plinkoCSS';
     st.textContent=`
 #plinko-wrap{font-family:monospace;width:100%;padding:12px 4px}
-#plinko-wrap h3{margin:0 0 12px;font-size:1rem;letter-spacing:.08em;color:#e6c27a}
-#plinko-canvas{width:100%;max-width:480px;display:block;margin:0 auto 12px;background:radial-gradient(ellipse at center,#0e1a2e 0%,#060a12 100%);border:1.5px solid #1a2a4a;border-radius:10px}
-.plinko-info{display:flex;gap:16px;margin-bottom:10px;font-size:.9rem;flex-wrap:wrap;justify-content:center}
+#plinko-wrap h3{margin:0 0 10px;font-size:1rem;letter-spacing:.08em;color:#e6c27a}
+#plinko-canvas{width:100%;max-width:460px;display:block;margin:0 auto 10px;background:radial-gradient(ellipse at center,#0e1a2e 0%,#060a12 100%);border:1.5px solid #1a2a4a;border-radius:10px}
+.plinko-info{display:flex;gap:16px;margin-bottom:8px;font-size:.85rem;flex-wrap:wrap;justify-content:center}
 .plinko-info span{color:#8ab}
 .plinko-info strong{color:#e6c27a}
-.plinko-bet-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;justify-content:center}
-.plinko-bet-row input{width:80px;padding:5px 8px;background:#0d0d08;border:1px solid #4a3a10;color:#e6c27a;font-size:.9rem;font-family:monospace;border-radius:4px}
-.plinko-chips{display:flex;gap:5px;flex-wrap:wrap}
-.plinko-chips button,.plinko-actions button{padding:6px 12px;background:#1a1500;border:1px solid #5a4a10;color:#e6c27a;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.85rem;transition:background .15s}
+.plinko-bet-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;justify-content:center}
+.plinko-bet-row input{width:80px;padding:5px 8px;background:#0d0d08;border:1px solid #4a3a10;color:#e6c27a;font-size:.85rem;font-family:monospace;border-radius:4px}
+.plinko-chips{display:flex;gap:4px;flex-wrap:wrap}
+.plinko-chips button,.plinko-actions button{padding:5px 10px;background:#1a1500;border:1px solid #5a4a10;color:#e6c27a;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.8rem;transition:background .15s}
 .plinko-chips button:hover,.plinko-actions button:hover{background:#2a2200}
-.plinko-actions{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;justify-content:center}
+.plinko-actions{display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;justify-content:center}
 .plinko-actions button:disabled{opacity:.35;cursor:not-allowed}
-.plinko-result{padding:8px 14px;border-radius:6px;font-size:1rem;margin:6px auto;text-align:center;max-width:300px}
+.plinko-result{padding:8px 14px;border-radius:6px;font-size:.95rem;margin:6px auto;text-align:center;max-width:280px}
 .plinko-result.win{background:#0a2a0a;border:1px solid #2a6a2a;color:#4eff4e}
 .plinko-result.lose{background:#2a0808;border:1px solid #6a1a1a;color:#ff6b6b}
 .plinko-result.push{background:#1a1a00;border:1px solid #5a5a00;color:#ffff80}
 .plinko-result.jackpot{background:#1a0a2a;border:1px solid #6a2aaa;color:#cf8aff}
-#plinko-log{max-height:60px;overflow-y:auto;font-size:.72rem;color:#7a9a7a;line-height:1.4;margin-top:6px;text-align:center}
-#plinko-log div{padding:1px 0}
-.plinko-risk-row{display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:10px;font-size:.8rem;color:#8ab}
-.plinko-risk-row button{padding:4px 10px;background:#0d0d08;border:1px solid #3a3a2a;color:#aaa;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.78rem}
+#plinko-log{max-height:50px;overflow-y:auto;font-size:.7rem;color:#7a9a7a;line-height:1.4;margin-top:4px;text-align:center}
+.plinko-risk-row{display:flex;gap:5px;align-items:center;justify-content:center;margin-bottom:8px;font-size:.78rem;color:#8ab}
+.plinko-risk-row button{padding:3px 9px;background:#0d0d08;border:1px solid #3a3a2a;color:#aaa;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.75rem}
 .plinko-risk-row button.active{border-color:#e6c27a;color:#e6c27a;background:#1a1500}
     `;
     document.head.appendChild(st);
@@ -47,9 +46,9 @@
     <button onclick="plinkoSetRisk('mid')" id="plinko-risk-mid">Med (\u0191500-5k)</button>
     <button onclick="plinkoSetRisk('high')" id="plinko-risk-high">High (\u01915k+)</button>
   </div>
-  <canvas id="plinko-canvas" width="480" height="580"></canvas>
+  <canvas id="plinko-canvas" width="460" height="620"></canvas>
   <div class="plinko-bet-row">
-    <span style="font-size:.82rem;opacity:.6">Bet:</span>
+    <span style="font-size:.78rem;opacity:.6">Bet:</span>
     <input id="plinko-bet-input" type="number" min="5" max="500" value="5"/>
     <div class="plinko-chips">
       <button onclick="plinkoAddBet(10)">+10</button>
@@ -66,19 +65,19 @@
 </div>
 `;
 
-  // ── Config ───────────────────────────────────────────────────────
+  // ── Board ────────────────────────────────────────────────────────
   const ROWS = 16;
-  const SLOTS = ROWS + 1; // 17 slots
-  const W = 480, H = 580;
-  const PEG_RAD = 2.5;
-  const BALL_RAD = 5;
-  const TOP_PAD = 35;
-  const BOT_PAD = 45;
-  const ROW_H = (H - TOP_PAD - BOT_PAD) / ROWS;
+  const SLOTS = ROWS + 1; // 17
+  const W = 460, H = 620;
+  const PEG_RAD = 3;
+  const BALL_RAD = 3.5;
+  const TOP_PAD = 30;
+  const BOT_PAD = 38;
+  const SLOT_H = 28;
+  const PLAY_H = H - TOP_PAD - BOT_PAD - SLOT_H;
+  const PEG_GAP = 24; // horizontal gap between pegs in a row
 
-  // Multipliers: 17 slots for 16 rows. Binomial(16, 0.5) distribution.
-  // Center slot gets ~20% of balls, edges get ~0.0015% each.
-  // Verified EV: low 0.938 (6.2% edge), mid 0.904 (9.6% edge), high 0.847 (15.3% edge)
+  // Multipliers (17 slots)
   const MULTIPLIERS = {
     low:  [25,  10,  5,   2,   1.3, 1.1, 1,   0.8, 0.7, 0.8, 1,   1.1, 1.3, 2,   5,   10,  25],
     mid:  [50,  20,  8,   3,   1.5, 1.1, 0.9, 0.7, 0.6, 0.7, 0.9, 1.1, 1.5, 3,   8,   20,  50],
@@ -100,78 +99,37 @@
   let riskLevel = 'low';
   let balls = [];
   let pegs = [];
-  let animId = null;
+  let dropping = false;
 
-  // ── Build peg grid ───────────────────────────────────────────────
+  // ── Build pegs ───────────────────────────────────────────────────
   function buildPegs(){
     pegs = [];
     for(let row=0; row<ROWS; row++){
       const count = row + 3;
-      const spacing = W / (count + 1);
+      const y = TOP_PAD + (row + 1) * (PLAY_H / (ROWS + 1));
+      const totalW = (count - 1) * PEG_GAP;
+      const startX = (W - totalW) / 2;
       for(let i=0; i<count; i++){
-        pegs.push({ x: spacing * (i + 1), y: TOP_PAD + row * ROW_H });
+        pegs.push({ x: startX + i * PEG_GAP, y });
       }
     }
   }
   buildPegs();
 
-  // ── Peg positions per row (for path animation) ──────────────────
-  function getPegRow(row){
-    const count = row + 3;
-    const spacing = W / (count + 1);
-    const positions = [];
-    for(let i=0; i<count; i++) positions.push(spacing * (i + 1));
-    return positions;
-  }
-
-  // ── Determine outcome via binomial (pure math, no physics) ──────
-  // Each row: 50/50 left or right. After 16 rows, the slot index
-  // follows a binomial(16, 0.5) distribution. This is mathematically
-  // guaranteed to produce a bell curve.
-  function rollOutcome(){
-    let slot = 0;
-    const path = [{ x: W/2, y: 10 }]; // start position
-    // Track position as an index offset from leftmost peg
-    let pos = 0; // will accumulate rights
-    for(let row=0; row<ROWS; row++){
-      const goRight = Math.random() < 0.5 ? 0 : 1;
-      pos += goRight;
-      // Ball position: between pegs of this row
-      const nextRowPegs = getPegRow(row);
-      // Ball sits between peg[pos-1] and peg[pos], or at edge
-      let bx;
-      if(pos <= 0) bx = nextRowPegs[0] - (W / (row + 4)) * 0.5;
-      else if(pos >= nextRowPegs.length) bx = nextRowPegs[nextRowPegs.length-1] + (W / (row + 4)) * 0.5;
-      else bx = (nextRowPegs[pos-1] + nextRowPegs[pos]) / 2;
-      // Add slight random wobble for visual interest (does NOT affect outcome)
-      bx += (Math.random() - 0.5) * 6;
-      const by = TOP_PAD + row * ROW_H + ROW_H * 0.5;
-      path.push({ x: bx, y: by });
-    }
-    // Final slot: pos is 0..16 (17 possible values = 17 slots)
-    slot = pos;
-    // Final resting position
-    const slotW = W / SLOTS;
-    const finalX = slot * slotW + slotW / 2;
-    const finalY = H - BOT_PAD + 5 - BALL_RAD;
-    path.push({ x: finalX, y: finalY });
-    return { slot, path };
-  }
-
-  // ── Balance helpers ──────────────────────────────────────────────
+  // ── Balance ──────────────────────────────────────────────────────
   function fmtLocal(n){ return '\u0191'+(Math.round(n*100)/100).toLocaleString(); }
   function getBalance(){
     try{ if(typeof ME==='object'&&ME&&typeof ME.cash==='number') return ME.cash; }catch(e){}
     return 0;
   }
-  function setBalance(newVal){
+  function setBalance(v){
     try{ if(typeof ME==='object'&&ME&&typeof ME.cash==='number'){
-      ME.cash=newVal;
-      try{window.__PnLLastCash=Number(newVal)||0;window.__MY_CASH=Number(newVal)||0;}catch(_){}
+      ME.cash=v;
+      try{window.__PnLLastCash=Number(v)||0;window.__MY_CASH=Number(v)||0;}catch(_){}
       try{window.PnLBridge&&typeof window.PnLBridge.pushNow==='function'&&window.PnLBridge.pushNow();}catch(_){}
     }}catch(e){}
-    const c=document.getElementById('cash'); if(c) c.textContent=fmtLocal(newVal);
-    try{if(window.ws&&window.ws.readyState===1)window.ws.send(JSON.stringify({type:'casino',sync:Number(newVal)||0}));}catch(_){}
+    const c=document.getElementById('cash'); if(c) c.textContent=fmtLocal(v);
+    try{if(window.ws&&window.ws.readyState===1)window.ws.send(JSON.stringify({type:'casino',sync:Number(v)||0}));}catch(_){}
     refreshBalance();
   }
   function deltaBalance(d){ setBalance(getBalance()+d); }
@@ -179,7 +137,6 @@
   function plinkoLog(msg){ const box=document.getElementById('plinko-log'); if(!box) return; const d=document.createElement('div'); d.textContent=msg; box.insertBefore(d,box.firstChild); while(box.children.length>30) box.removeChild(box.lastChild); }
 
   window.plinkoAddBet=function(n){ const inp=document.getElementById('plinko-bet-input'); inp.value=Math.max(BET_LIMITS[riskLevel].min,(Number(inp.value)||0)+n); };
-
   window.plinkoSetRisk=function(level){
     riskLevel=level;
     ['low','mid','high'].forEach(l=>{
@@ -207,27 +164,20 @@
     for(const p of pegs){
       ctx.beginPath();
       ctx.arc(p.x, p.y, PEG_RAD, 0, Math.PI*2);
-      ctx.fillStyle = '#2a4a6a';
+      ctx.fillStyle = '#3a5a7a';
       ctx.fill();
-      ctx.strokeStyle = '#4a7aaa';
-      ctx.lineWidth = 0.5;
-      ctx.stroke();
     }
 
-    // Multiplier slots
+    // Slots
     const mults = MULTIPLIERS[riskLevel];
     const colors = SLOT_COLORS[riskLevel];
     const slotW = W / SLOTS;
-    const slotY = H - BOT_PAD + 5;
-    const slotH = 28;
+    const slotY = H - BOT_PAD;
     for(let i=0; i<SLOTS; i++){
       ctx.fillStyle = colors[i];
-      ctx.fillRect(i * slotW + 1, slotY, slotW - 2, slotH);
-      ctx.strokeStyle = 'rgba(255,255,255,.08)';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(i * slotW + 1, slotY, slotW - 2, slotH);
+      ctx.fillRect(i * slotW + 1, slotY, slotW - 2, SLOT_H);
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 9px monospace';
+      ctx.font = 'bold 8px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(mults[i]+'x', i * slotW + slotW/2, slotY + 18);
     }
@@ -235,62 +185,89 @@
     // Balls
     for(const ball of balls){
       ctx.beginPath();
-      ctx.arc(ball.cx, ball.cy, BALL_RAD, 0, Math.PI*2);
-      ctx.fillStyle = ball.settled ? ball.resultColor || '#e6c27a' : '#e6c27a';
+      ctx.arc(ball.x, ball.y, BALL_RAD, 0, Math.PI*2);
+      ctx.fillStyle = ball.settled ? (ball.color || '#e6c27a') : '#e6c27a';
       ctx.fill();
       ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(ball.cx, ball.cy, BALL_RAD + 3, 0, Math.PI*2);
-      ctx.strokeStyle = 'rgba(230,194,122,.15)';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 0.8;
       ctx.stroke();
     }
   }
 
-  // ── Animation ────────────────────────────────────────────────────
-  const STEP_DURATION = 50; // ms per row transition
+  // ── Physics ──────────────────────────────────────────────────────
+  // Pure simulation. Ball bounces off pegs via circle-circle collision.
+  // No predetermined outcome. The physics determines where it lands.
+  const GRAV = 0.12;
+  const FRICTION = 0.98;
+  const RESTITUTION = 0.45; // bounciness off pegs
+  const SUB_STEPS = 3; // sub-steps per frame for accuracy
 
-  function animate(){
-    const now = performance.now();
-    for(const ball of balls){
-      if(ball.settled) continue;
-      const elapsed = now - ball.startTime;
-      const totalSteps = ball.path.length - 1;
-      const totalDuration = totalSteps * STEP_DURATION;
-      if(elapsed >= totalDuration){
-        // Arrived
-        const last = ball.path[ball.path.length - 1];
-        ball.cx = last.x;
-        ball.cy = last.y;
-        ball.settled = true;
-        settleBall(ball);
-        continue;
+  function stepBall(ball){
+    if(ball.settled) return;
+
+    for(let sub=0; sub<SUB_STEPS; sub++){
+      ball.vy += GRAV / SUB_STEPS;
+      ball.vx *= FRICTION;
+      ball.x += ball.vx / SUB_STEPS;
+      ball.y += ball.vy / SUB_STEPS;
+
+      // Peg collisions
+      for(const p of pegs){
+        const dx = ball.x - p.x;
+        const dy = ball.y - p.y;
+        const distSq = dx*dx + dy*dy;
+        const minDist = PEG_RAD + BALL_RAD;
+        if(distSq < minDist * minDist && distSq > 0.01){
+          const dist = Math.sqrt(distSq);
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          // Push ball out of peg
+          const overlap = minDist - dist;
+          ball.x += nx * overlap;
+          ball.y += ny * overlap;
+
+          // Reflect velocity off peg surface
+          const dotVN = ball.vx * nx + ball.vy * ny;
+          if(dotVN < 0){ // only bounce if moving toward peg
+            ball.vx -= (1 + RESTITUTION) * dotVN * nx;
+            ball.vy -= (1 + RESTITUTION) * dotVN * ny;
+
+            // Small random nudge so ball doesn't sit on top of pegs
+            ball.vx += (Math.random() - 0.5) * 0.15;
+          }
+        }
       }
-      // Interpolate between path points
-      const progress = elapsed / STEP_DURATION;
-      const stepIdx = Math.floor(progress);
-      const stepFrac = progress - stepIdx;
-      const from = ball.path[stepIdx];
-      const to = ball.path[Math.min(stepIdx + 1, totalSteps)];
-      // Ease-in-out for natural arc feel
-      const t = stepFrac < 0.5 ? 2*stepFrac*stepFrac : 1 - Math.pow(-2*stepFrac+2,2)/2;
-      ball.cx = from.x + (to.x - from.x) * t;
-      ball.cy = from.y + (to.y - from.y) * t;
+
+      // Walls
+      if(ball.x < BALL_RAD){ ball.x = BALL_RAD; ball.vx = Math.abs(ball.vx) * 0.3; }
+      if(ball.x > W - BALL_RAD){ ball.x = W - BALL_RAD; ball.vx = -Math.abs(ball.vx) * 0.3; }
+
+      // Floor / slot detection
+      const slotY = H - BOT_PAD;
+      if(ball.y >= slotY - BALL_RAD){
+        ball.y = slotY - BALL_RAD;
+        ball.vy = 0;
+        ball.vx = 0;
+        ball.settled = true;
+
+        // Determine which slot from X position
+        const slotW = W / SLOTS;
+        let slotIdx = Math.floor(ball.x / slotW);
+        slotIdx = Math.max(0, Math.min(SLOTS - 1, slotIdx));
+        ball.slot = slotIdx;
+        settleBall(ball);
+        return;
+      }
     }
-    draw();
-    animId = requestAnimationFrame(animate);
   }
-  animate();
 
   function settleBall(ball){
     const mults = MULTIPLIERS[riskLevel];
     const mult = mults[ball.slot];
     const payout = Math.round(ball.bet * mult * 100) / 100;
     const profit = payout - ball.bet;
-    const colors = SLOT_COLORS[riskLevel];
-    ball.resultColor = colors[ball.slot];
+    ball.color = SLOT_COLORS[riskLevel][ball.slot];
 
     deltaBalance(payout);
 
@@ -311,8 +288,9 @@
     setTimeout(()=>{
       const idx = balls.indexOf(ball);
       if(idx >= 0) balls.splice(idx, 1);
+      dropping = false;
       document.getElementById('plinko-btn-drop').disabled = false;
-    }, 1500);
+    }, 1200);
   }
 
   function showResult(msg, cls){
@@ -321,36 +299,45 @@
     setTimeout(()=>{ if(box) box.innerHTML=''; }, 3000);
   }
 
+  // ── Loop ─────────────────────────────────────────────────────────
+  function animate(){
+    for(const ball of balls) stepBall(ball);
+    draw();
+    requestAnimationFrame(animate);
+  }
+  animate();
+
   // ── Drop ─────────────────────────────────────────────────────────
   window.plinkoDrop=function(){
-    if(balls.some(b => !b.settled)) return;
+    if(dropping) return;
     const betInp = document.getElementById('plinko-bet-input');
     const lim = BET_LIMITS[riskLevel];
     const amt = Math.max(1, Number(betInp.value || 5));
-    if(amt < lim.min){ plinkoLog(`Minimum bet for ${riskLevel} risk: ${fmtLocal(lim.min)}`); return; }
-    if(lim.max !== Infinity && amt > lim.max){ plinkoLog(`Maximum bet for ${riskLevel} risk: ${fmtLocal(lim.max)}`); return; }
+    if(amt < lim.min){ plinkoLog(`Min bet ${riskLevel}: ${fmtLocal(lim.min)}`); return; }
+    if(lim.max !== Infinity && amt > lim.max){ plinkoLog(`Max bet ${riskLevel}: ${fmtLocal(lim.max)}`); return; }
     if(amt > getBalance()){ plinkoLog('Insufficient funds.'); return; }
 
+    dropping = true;
     document.getElementById('plinko-btn-drop').disabled = true;
     deltaBalance(-amt);
     plinkoLog(`Bet ${fmtLocal(amt)}.`);
 
-    // Determine outcome mathematically, then animate
-    const { slot, path } = rollOutcome();
+    // Drop from center with tiny random offset
     balls.push({
-      cx: path[0].x, cy: path[0].y,
-      path, slot,
+      x: W / 2 + (Math.random() - 0.5) * 6,
+      y: TOP_PAD - 10,
+      vx: (Math.random() - 0.5) * 0.2,
+      vy: 0,
       bet: amt,
       settled: false,
-      resultColor: null,
-      startTime: performance.now(),
+      slot: -1,
+      color: null,
     });
   };
 
   // ── Init ─────────────────────────────────────────────────────────
   refreshBalance();
   draw();
-
   document.addEventListener('fm_ws_msg',(e)=>{
     if(e.detail&&(e.detail.type==='portfolio'||e.detail.type==='income')) refreshBalance();
   });
