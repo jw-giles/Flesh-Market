@@ -51,7 +51,7 @@ import {
   getFundNAVById, applyFundSavingsInterest,
   fundDepositFn, fundWithdrawFn,
   getFundActivity, logFundActivity,
-  kickFundMember,
+  kickFundMember, deleteFund, updateFundInfo,
   initFundPolls, createFundPoll, getFundPolls, voteFundPoll, closeFundPoll, expireOldFundPolls,
   setDevAccount, isDevAccount, syncDevAccounts,
   isAdminAccount, setAdminAccount, isOwnerAccount, initModerationTable,
@@ -1168,12 +1168,35 @@ app.use('/',express.static(path.join(__dirname,'..','client')));
 
 // ─── REST: Auth ───────────────────────────────────────────────────────────────
 
+// ── Name validation ───────────────────────────────────────────────────────────
+const BANNED_WORDS = [
+  'nigger','nigga','nigg','n1gger','n1gga','faggot','fag','f4g','fagg','retard','retarded',
+  'tranny','trannie','kike','spic','wetback','chink','gook','coon','darkie','beaner',
+  'towelhead','raghead','sandnigger','zipperhead','cracker','honky',
+  'dyke','paki','wog','abo','jap','slant','slope','gypsy','gypsie'
+];
+function isNameClean(name) {
+  const lower = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  for (const word of BANNED_WORDS) {
+    if (lower.includes(word)) return false;
+  }
+  return true;
+}
+function isNameValid(name) {
+  // Only allow letters, numbers, spaces, underscores, hyphens
+  if (!/^[A-Za-z0-9 _-]+$/.test(name)) return false;
+  if (name.length < 2 || name.length > 32) return false;
+  return true;
+}
+
 app.post('/api/register',(req,res)=>{
   try{
     const {name,password}=req.body||{};
     if(!name||!name.trim()) return res.status(400).json({ok:false,error:'name_required'});
     if(!password||password.length<4) return res.status(400).json({ok:false,error:'password_too_short'});
     const trimmed=name.trim().slice(0,32);
+    if(!isNameValid(trimmed)) return res.status(400).json({ok:false,error:'name_invalid',message:'Names can only contain letters, numbers, spaces, underscores, and hyphens. No emojis or special characters.'});
+    if(!isNameClean(trimmed)) return res.status(400).json({ok:false,error:'name_inappropriate',message:'That name contains inappropriate language.'});
     if(!isNameAvailable(trimmed)) return res.status(409).json({ok:false,error:'name_taken'});
     const id=uuidv4();
     const player=createPlayerSync(id,trimmed,password);
@@ -1213,6 +1236,8 @@ app.post('/api/rename',(req,res)=>{
     if(!p) return res.status(401).json({ok:false,error:'unauthorized'});
     const name=String(req.body?.name||req.query.name||'').trim().slice(0,32);
     if(!name) return res.status(400).json({ok:false,error:'invalid_name'});
+    if(!isNameValid(name)) return res.status(400).json({ok:false,error:'name_invalid',message:'Names can only contain letters, numbers, spaces, underscores, and hyphens.'});
+    if(!isNameClean(name)) return res.status(400).json({ok:false,error:'name_inappropriate',message:'That name contains inappropriate language.'});
     if(!isNameAvailable(name)) return res.status(409).json({ok:false,error:'name_taken'});
     renamePlayer(p.id,name);
     res.json({ok:true,name});
@@ -1907,6 +1932,75 @@ app.post('/api/tutorial/dismiss', (req, res) => {
     markTutorialSeen(player.id);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ─── Fund delete (owner disband) ──────────────────────────────────────────────
+app.post('/api/funds/:id/delete', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund = getFund(req.params.id);
+    if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (fund.owner_id !== actor.id) return res.status(403).json({ ok:false, error:'not_owner' });
+
+    // Refund member deposits
+    const members = getFundMemberships(fund.id);
+    for (const m of members) {
+      if (m.deposited > 0 && m.player_id !== actor.id) {
+        const mp = getPlayer(m.player_id);
+        if (mp) {
+          mp.cash = Math.round((mp.cash + m.deposited) * 100) / 100;
+          savePlayerFn(mp);
+          broadcastToPlayer(mp.id, { type:'income', data:{ base:m.deposited, bonus:0, total:m.deposited, text:`+Ƒ${m.deposited.toLocaleString()} refund — hedge fund "${fund.name}" disbanded` }});
+        }
+      }
+    }
+
+    // Refund Ƒ5M to owner
+    const DISBAND_REFUND = 5_000_000;
+    const p = getPlayer(actor.id);
+    p.cash = Math.round((p.cash + DISBAND_REFUND) * 100) / 100;
+    savePlayerFn(p);
+
+    // Delete fund
+    deleteFund(fund.id);
+    pushHeadline(`${actor.name} disbanded hedge fund "${fund.name}"`, 'bad', null);
+    broadcast({ type:'fund_deleted', data:{ fundId: fund.id, name: fund.name }});
+    res.json({ ok:true, refund: DISBAND_REFUND });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// ─── Fund edit (rename + description, Ƒ250k) ─────────────────────────────────
+app.post('/api/funds/:id/edit', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund = getFund(req.params.id);
+    if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (fund.owner_id !== actor.id) return res.status(403).json({ ok:false, error:'not_owner' });
+
+    const EDIT_COST = 250_000;
+    if (actor.cash < EDIT_COST) return res.status(400).json({ ok:false, error:'insufficient_funds', need: EDIT_COST });
+
+    const newName = String(req.body?.name||'').trim().slice(0,40);
+    const newDesc = String(req.body?.description||'').slice(0,200);
+    if (!newName || newName.length < 3) return res.status(400).json({ ok:false, error:'name_too_short' });
+
+    // Check name not taken (if changed)
+    if (newName !== fund.name && getFundByName(newName)) {
+      return res.status(409).json({ ok:false, error:'name_taken' });
+    }
+
+    const p = getPlayer(actor.id);
+    p.cash -= EDIT_COST;
+    savePlayerFn(p);
+
+    updateFundInfo(fund.id, newName, newDesc);
+    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId: fund.id, name: newName, description: newDesc }});
+    res.json({ ok:true, name: newName, description: newDesc });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
 
 app.post('/api/galaxy/join-faction', (req, res) => {
@@ -2709,14 +2803,15 @@ function snapshotPortfolio(player){
   // Coalition colony control bonus
   try {
     const pfd = getPlayerFactionData(player.id);
-    if (pfd?.faction === 'coalition') {
+    const pFaction = pfd?.faction;
+    if (pFaction && ['coalition','syndicate','void'].includes(pFaction)) {
       const colonies = getAllColonyStates().filter(c => {
         if (c.id === 'flesh_station') return false;
         const ctrl = {coalition:c.control_coalition||0,syndicate:c.control_syndicate||0,void:c.control_void||0};
-        return ['coalition','syndicate','void'].reduce((b,f)=>ctrl[f]>ctrl[b]?f:b,'coalition') === 'coalition';
+        return ['coalition','syndicate','void'].reduce((b,f)=>ctrl[f]>ctrl[b]?f:b,'coalition') === pFaction;
       });
-      const coalBonus = colonies.length * 75;
-      if (coalBonus > 0) { passiveIncome.coalitionBonus = coalBonus; passiveIncome.total += coalBonus; }
+      const factionBonus = colonies.length * 15;
+      if (factionBonus > 0) { passiveIncome.coalitionBonus = factionBonus; passiveIncome.total += factionBonus; }
     }
   } catch(_) {}
   // Lane share dividend
@@ -3827,7 +3922,7 @@ wss.on('connection',(ws,req)=>{
       const chatText = channel==='unmod' ? rawText : text;
       // For all channels (except dunce), include room number (1-15) for multi-room support
       const chatRoom = channel !== 'dunce' ? Math.min(5, Math.max(1, parseInt(msg.room) || 1)) : undefined;
-      const payload={type:'chat',data:{id:uuidv4(),t:Date.now(),user:actor.name,text:chatText,badge:chatBadge,color:chatColor,channel,title:actor.title||null,is_dev:_isDev,is_prime:_isOwner,...(chatRoom !== undefined && {room:chatRoom})}};
+      const payload={type:'chat',data:{id:uuidv4(),t:Date.now(),user:actor.name,text:chatText,badge:chatBadge,color:chatColor,channel,title:actor.title||null,is_dev:_isDev,is_prime:_isOwner,faction:actor.faction||null,...(chatRoom !== undefined && {room:chatRoom})}};
       if(channel==='global'){
         broadcast(payload);
       } else {
@@ -4179,14 +4274,15 @@ setInterval(()=>{
     try { colonyStates = getAllColonyStates(); } catch(_) {}
     try { playerFactions = getPlayerFactionsBulk(); } catch(_) {}
 
-    // Count Coalition-controlled colonies for passive bonus
-    const coalitionColonies = colonyStates.filter(c => {
-      if (c.id === 'flesh_station') return false;
+    // Count colonies controlled by each faction for passive bonus
+    const FACTION_COLONY_BONUS = 15; // Ƒ per controlled colony per 30min (all factions)
+    const factionColonyCounts = { coalition: 0, syndicate: 0, void: 0 };
+    for (const c of colonyStates) {
+      if (c.id === 'flesh_station') continue;
       const ctrl = {coalition:c.control_coalition||0,syndicate:c.control_syndicate||0,void:c.control_void||0};
       const leading = ['coalition','syndicate','void'].reduce((b,f)=>ctrl[f]>ctrl[b]?f:b,'coalition');
-      return leading === 'coalition';
-    });
-    const COALITION_COLONY_BONUS = 75; // Ƒ per controlled colony per 30min
+      if (ctrl[leading] > 0) factionColonyCounts[leading]++;
+    }
 
     if(count>0){
       console.log(`[Income] Credited passive income to ${count} players`);
@@ -4212,10 +4308,11 @@ setInterval(()=>{
           }
         } catch(_) {}
 
-        // Coalition colony control bonus
+        // Faction colony control bonus (all factions get Ƒ15/colony)
         let coalBonus = 0;
-        if (playerFactions[payout.id]?.faction === 'coalition' && coalitionColonies.length > 0) {
-          coalBonus = coalitionColonies.length * COALITION_COLONY_BONUS;
+        const playerFaction = playerFactions[payout.id]?.faction;
+        if (playerFaction && factionColonyCounts[playerFaction] > 0) {
+          coalBonus = factionColonyCounts[playerFaction] * FACTION_COLONY_BONUS;
           p.cash = Math.round((p.cash + coalBonus) * 100) / 100;
           savePlayer(p);
         }
@@ -4266,7 +4363,8 @@ setInterval(()=>{
         if (payout.isDev) {
           incomeText = `⚡ Dev passive: +Ƒ${payout.total.toLocaleString()} — FLSH Capital dividend`;
         } else if (coalBonus > 0) {
-          incomeText = `+Ƒ${payout.total} passive  ·  +Ƒ${coalBonus} Coalition colony control (${coalitionColonies.length} colony)`;
+          const fName = (playerFaction||'faction').charAt(0).toUpperCase() + (playerFaction||'faction').slice(1);
+          incomeText = `+Ƒ${payout.total} passive  ·  +Ƒ${coalBonus} ${fName} colony control (${factionColonyCounts[playerFaction]} colony)`;
         } else if (payout.bonus > 0) {
           incomeText = `+Ƒ${payout.base} passive income  ·  +Ƒ${payout.bonus} guild bonus`;
         } else {

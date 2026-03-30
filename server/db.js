@@ -349,11 +349,12 @@ export function getNetWorthHistory(playerId, limit=200) {
 // ─── Leaderboard ─────────────────────────────────────────────────────────────
 
 export function getLeaderboard(companies, limit=20) {
-  const players = stmt(`SELECT id,name,cash,xp,level,title,patreon_tier,is_dev,is_admin,is_prime FROM players WHERE is_dev=0 AND is_admin=0 AND is_prime=0`).all();
+  try { db.exec('ALTER TABLE players ADD COLUMN faction TEXT'); } catch(_){}
+  const players = stmt(`SELECT id,name,cash,xp,level,title,patreon_tier,is_dev,is_admin,is_prime,faction FROM players WHERE is_dev=0 AND is_admin=0 AND is_prime=0`).all();
   return players.map(p=>{
     const holdRows = stmt('SELECT symbol,qty FROM holdings WHERE player_id=?').all(p.id);
     const equity   = holdRows.reduce((acc,h)=>{ const c=companies.find(x=>x.symbol===h.symbol); return acc+(c?c.price*h.qty:0); },0);
-    return { id:p.id, name:p.name, net:p.cash+equity, xp:p.xp, level:p.level, title:p.title, patreon_tier:p.patreon_tier||0, is_dev:!!(p.is_dev||p.is_admin), is_prime:!!(p.is_prime) };
+    return { id:p.id, name:p.name, net:p.cash+equity, xp:p.xp, level:p.level, title:p.title, patreon_tier:p.patreon_tier||0, is_dev:!!(p.is_dev||p.is_admin), is_prime:!!(p.is_prime), faction:p.faction||null };
   }).sort((a,b)=>b.net-a.net).slice(0,limit);
 }
 
@@ -799,6 +800,19 @@ export function joinFund(fundId, playerId) {
 // ── Kick member ───────────────────────────────────────────────────────────────
 export function kickFundMember(fundId, targetPlayerId) {
   stmt('DELETE FROM fund_memberships WHERE fund_id=? AND player_id=?').run(fundId, targetPlayerId);
+}
+
+// ── Delete fund (owner disband) ───────────────────────────────────────────────
+export function deleteFund(fundId) {
+  stmt('DELETE FROM fund_memberships WHERE fund_id=?').run(fundId);
+  try { stmt('DELETE FROM fund_polls WHERE fund_id=?').run(fundId); } catch(_){}
+  try { stmt('DELETE FROM fund_activity WHERE fund_id=?').run(fundId); } catch(_){}
+  stmt('DELETE FROM funds WHERE id=?').run(fundId);
+}
+
+// ── Update fund name/description ──────────────────────────────────────────────
+export function updateFundInfo(fundId, name, description) {
+  stmt('UPDATE funds SET name=?,description=? WHERE id=?').run(name, description||'', fundId);
 }
 
 // ── Fund polls (player funds only) ───────────────────────────────────────────

@@ -10,17 +10,17 @@ var FACTIONS = {
   coalition:{
     id:'coalition', name:'The Coalition', short:'COALITION', color:'#4ecdc4', dim:'#1a4f4d', bg:'#061a1a', sym:'◇', devOnly:false,
     desc:'The legitimate face of interstellar commerce. Coalition colonies enforce corporate law and pay dividends on schedule.',
-    bonusSummary:'Colony dividend bonuses: Finance, Insurance &amp; Tech sectors + ƒ75/colony passive income',
+    bonusSummary:'Colony dividend bonuses: Finance, Insurance &amp; Tech sectors + ƒ15/colony passive income',
   },
   syndicate:{
     id:'syndicate', name:'The Syndicate', short:'SYNDICATE', color:'#e74c3c', dim:'#4d1a1a', bg:'#1a0606', sym:'◈', devOnly:false,
     desc:'A distributed criminal network. No inspections, no tariffs — just a cut of every deal passing through Syndicate space.',
-    bonusSummary:'Colony dividend bonuses on controlled territory',
+    bonusSummary:'Colony dividend bonuses on controlled territory + ƒ15/colony passive income',
   },
   void:{
     id:'void', name:'The Void Collective', short:'THE VOID', color:'#9b59b6', dim:'#2d1a40', bg:'#0d0617', sym:'◆', devOnly:false,
     desc:"Data-cult anarchists running NullSyndicate relays from uncharted debris fields. Nobody audits them.",
-    bonusSummary:'Colony dividend bonuses: Biotech &amp; Energy sectors + permanent +ƒ15 cyborg augment',
+    bonusSummary:'Colony dividend bonuses: Biotech &amp; Energy sectors + ƒ15/colony passive income + permanent +ƒ15 cyborg augment',
   },
   fleshstation:{
     id:'fleshstation', name:'Flesh Station', short:'FLESH STN', color:'#ffd700', dim:'#4d3a00', bg:'#1a1200', sym:'⬡', devOnly:true,
@@ -1339,7 +1339,6 @@ function spUpdateHUDControl(colonyId, f, s){
   var el = document.getElementById('spCtrlBars'); if(!el) return;
   var ctrl = {coalition:s.control_coalition||0, syndicate:s.control_syndicate||0, void:s.control_void||0};
   var fundFactions = ['coalition','syndicate','void'];
-  if(gPlayerFaction==='guild') fundFactions.push('guild');
   el.innerHTML = fundFactions.map(function(fid){
     var fc = FACTIONS[fid]; var p = ctrl[fid]||0;
     return '<div class="sp-ctrl-bar-wrap">'
@@ -1353,13 +1352,12 @@ function spUpdateHUDControl(colonyId, f, s){
 function spBuildFundButtons(colonyId, f, s){
   var el = document.getElementById('spFundBtns'); if(!el) return;
   var ctrl = {coalition:s.control_coalition||0, syndicate:s.control_syndicate||0, void:s.control_void||0};
-  el.innerHTML = ['coalition','syndicate','void','guild'].map(function(fid){
+  el.innerHTML = ['coalition','syndicate','void'].map(function(fid){
     var fc = FACTIONS[fid];
-    var gNote = fid==='guild' ? ' ⬢' : '';
     return '<div class="sp-fund-row" id="spFR_'+colonyId+'_'+fid+'">'
       +'<button class="sp-fund-btn" style="border-color:'+fc.dim+';color:'+fc.color
       +'" onclick="spShowFundInput(\''+colonyId+'\',\''+fid+'\')">'
-      +fc.short+gNote+' · '+(ctrl[fid]||0)+'%</button></div>';
+      +fc.short+' · '+(ctrl[fid]||0)+'%</button></div>';
   }).join('');
 }
 
@@ -1969,8 +1967,8 @@ function getLeadingFaction(s){
   if(!s) return 'coalition';
   if(s.faction==='fleshstation') return 'fleshstation';
   if(s.faction==='guild') return 'guild';
-  var ctrl={coalition:s.control_coalition||0,syndicate:s.control_syndicate||0,void:s.control_void||0,guild:s.control_guild||0};
-  return ['coalition','syndicate','void','guild'].reduce(function(b,f){ return ctrl[f]>ctrl[b]?f:b; },'coalition');
+  var ctrl={coalition:s.control_coalition||0,syndicate:s.control_syndicate||0,void:s.control_void||0};
+  return ['coalition','syndicate','void'].reduce(function(b,f){ return ctrl[f]>ctrl[b]?f:b; },'coalition');
 }
 
 // Render colony nodes (star systems) — add small planet rings around each
@@ -2301,10 +2299,9 @@ function renderDetail(id){
        +'</div>';
     } else if(!isFlesh){
       h+='<div><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase">Fund a Faction</div>';
-      ['coalition','syndicate','void','guild'].forEach(function(fid){
+      ['coalition','syndicate','void'].forEach(function(fid){
         var fc=FACTIONS[fid];
-        var guildNote = fid==='guild' ? ' <span style="font-size:.62rem;color:#2ecc7177"> — Patreon</span>' : '';
-        h+='<div style="margin-bottom:5px" id="gFR_'+id+'_'+fid+'"><button onclick="window.gShowFund(\''+id+'\',\''+fid+'\')" style="width:100%;background:transparent;border:1px solid '+fc.dim+';color:'+fc.color+';padding:5px 8px;cursor:pointer;font-size:.73rem;letter-spacing:.06em;font-family:inherit;text-align:left">'+fc.name+guildNote+' — '+(ctrl[fid]||0)+'% ctrl</button></div>';
+        h+='<div style="margin-bottom:5px" id="gFR_'+id+'_'+fid+'"><button onclick="window.gShowFund(\''+id+'\',\''+fid+'\')" style="width:100%;background:transparent;border:1px solid '+fc.dim+';color:'+fc.color+';padding:5px 8px;cursor:pointer;font-size:.73rem;letter-spacing:.06em;font-family:inherit;text-align:left">'+fc.name+' — '+(ctrl[fid]||0)+'% ctrl</button></div>';
       });
       h+='</div>';
     }

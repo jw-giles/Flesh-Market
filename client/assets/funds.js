@@ -414,6 +414,31 @@ function initGuildUI() {
     if (d?.ok) { document.getElementById('g-invite-name').value=''; openFund(__currentFundId); }
   });
 
+  // Edit fund name/description (Ƒ250k)
+  document.getElementById('g-edit-btn')?.addEventListener('click', async () => {
+    if (!__currentFundId) return;
+    const newName = prompt('New fund name (3-40 chars):');
+    if (!newName || newName.trim().length < 3) return;
+    const newDesc = prompt('New description (optional, max 200 chars):') || '';
+    const h = document.getElementById('g-owner-hint');
+    const d = await guildPost(`/api/funds/${__currentFundId}/edit`, {name:newName.trim(),description:newDesc.trim()}, 'g-owner-hint', `✓ Fund renamed to "${newName.trim()}"`);
+    if (d?.ok) openFund(__currentFundId);
+  });
+
+  // Delete/disband fund (refund Ƒ5M)
+  document.getElementById('g-delete-btn')?.addEventListener('click', async () => {
+    if (!__currentFundId) return;
+    if (!confirm('Disband this fund? All members will be kicked and refunded their deposits. You will receive Ƒ5,000,000.')) return;
+    if (!confirm('Are you sure? This cannot be undone.')) return;
+    const d = await guildPost(`/api/funds/${__currentFundId}/delete`, {}, 'g-owner-hint', '✓ Fund disbanded');
+    if (d?.ok) {
+      __currentFundId = null;
+      document.getElementById('g-detail')?.setAttribute('style','display:none');
+      document.getElementById('g-list')?.setAttribute('style','');
+      try { loadFundList(); } catch(_){}
+    }
+  });
+
   // Poll: toggle form
   document.getElementById('g-create-poll-btn')?.addEventListener('click', () => {
     const form = document.getElementById('g-poll-form');

@@ -430,10 +430,11 @@ function renderBoard(data) {
     const color   = isOwner ? _OWNER_COLOR : (isDev ? _DEV_COLOR : (_TIER_COLORS[tier] || '#d4b87a'));
     const rank    = actualRank === 0 ? '🥇' : actualRank === 1 ? '🥈' : actualRank === 2 ? '🥉' : `${actualRank+1}.`;
     const badge   = isOwner ? _OWNER_BADGE : (isDev ? _DEV_BADGE : (_TIER_BADGES[tier] || ''));
+    const factionBadge = p.faction === 'syndicate' ? ' 💀' : '';
     els.rankEl.textContent  = rank;
     els.badgeEl.textContent = badge;
     els.badgeEl.style.color = color;
-    els.nameEl.textContent  = p.name;
+    els.nameEl.textContent  = p.name + factionBadge;
     els.nameEl.style.color  = color;
     els.netEl.textContent   = fmt(p.net);
     // Highlight own row
@@ -937,7 +938,8 @@ function addChat(item){
   const isSystem = item.user === 'SYSTEM';
   const titleTag = (!isSystem && item.title) ? ` <span style="font-size:.72rem;opacity:.65;color:${color}">[${item.title}]</span>` : '';
   const nameStyle = `color:${color};${(__isAdmin_g && !isSystem) ? 'cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px' : ''}`;
-  const userSpan  = `<b class="chat-username" data-user="${item.user}" style="${nameStyle}">${item.user}${titleTag}</b>`;
+  const factionIcon = (!isSystem && item.faction === 'syndicate') ? '💀 ' : '';
+  const userSpan  = `<b class="chat-username" data-user="${item.user}" style="${nameStyle}">${factionIcon}${item.user}${titleTag}</b>`;
 
   // Block button (shown on hover, client-side only)
   const blockBtnHtml = (!isSystem && item.user !== (ME && ME.name))
