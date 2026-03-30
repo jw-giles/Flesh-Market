@@ -24,7 +24,7 @@ import {
   initDB, setupTransactions,
   createPlayerSync, getPlayer, getPlayerByName,
   getPlayerByPatreonEmail, getPlayerByPatreonMemberId,
-  isNameAvailable, touchPlayer, renamePlayer,
+  isNameAvailable, touchPlayer, renamePlayer, markTutorialSeen,
   savePlayerFn, recordNetWorthFn,
   getNetWorthHistory, getLeaderboard,
   verifyPassword, createPasswordHash,
@@ -73,6 +73,7 @@ import {
   getInventory, getEquipped, equipItem, unequipItem, getEquippedPassiveBonus, getPassiveIncome,
   getSlotRecord, addSpins, recordMilestoneTrade, useSpinAndDrop, grantMonthlySpins,
   listItemOnMarket, getMarketListings, buyMarketItem, cancelMarketListing, getPatreonSubscribers,
+  getTutorialSeen,
 } from './db.js';
 
 initDB();
@@ -1866,6 +1867,18 @@ app.get('/api/galaxy/state', (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// ─── Tutorial dismiss ─────────────────────────────────────────────────────────
+app.post('/api/tutorial/dismiss', (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token) return res.status(400).json({ ok: false, error: 'Missing token' });
+    const player = getPlayer(token);
+    if (!player) return res.status(404).json({ ok: false, error: 'Player not found' });
+    markTutorialSeen(player.id);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 app.post('/api/galaxy/join-faction', (req, res) => {
   try {
     const { token, factionId } = req.body || {};
@@ -2725,7 +2738,28 @@ function broadcastLeaderboard(){
 
 const wsPlayers = new WeakMap();
 
+// ─── WebSocket heartbeat — kill zombie connections ───────────────────────────
+const HEARTBEAT_MS = 30_000;
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws._fmAlive === false) {
+      // Didn't pong since last ping — dead
+      const pid = wsPlayers.get(ws);
+      if (pid && playerSockets.has(pid)) {
+        playerSockets.get(pid).delete(ws);
+        if (playerSockets.get(pid).size === 0) playerSockets.delete(pid);
+      }
+      ws.terminate();
+      continue;
+    }
+    ws._fmAlive = false;
+    try { ws.ping(); } catch(_) {}
+  }
+}, HEARTBEAT_MS);
+
 wss.on('connection',(ws,req)=>{
+  ws._fmAlive = true;
+  ws.on('pong', () => { ws._fmAlive = true; });
   let player=null;
   try{
     const urlObj=new URL(req.url,`http://localhost:${PORT}`);
@@ -2739,7 +2773,7 @@ wss.on('connection',(ws,req)=>{
     if(!playerSockets.has(player.id))playerSockets.set(player.id,new Set());
     playerSockets.get(player.id).add(ws);
     ws.send(JSON.stringify({type:'hello',data:{playerId:player.id,name:player.name}}));
-    ws.send(JSON.stringify({type:'welcome',data:{id:player.id,name:player.name,cash:player.cash,faction:player.faction||null,is_dunced:isDunced(player.id),dunce_reason:(()=>{try{return getDunceRecord(player.id)?.dunce_reason||'';}catch(_){return '';}})(),is_prime:!!(isOwnerAccount(player.id)),is_dev:!!(isDevAccount(player.id)),is_admin:!!(isAdminAccount(player.id)),void_locked:!!(isVoidLocked(player.id))}}));
+    ws.send(JSON.stringify({type:'welcome',data:{id:player.id,name:player.name,cash:player.cash,faction:player.faction||null,is_dunced:isDunced(player.id),dunce_reason:(()=>{try{return getDunceRecord(player.id)?.dunce_reason||'';}catch(_){return '';}})(),is_prime:!!(isOwnerAccount(player.id)),is_dev:!!(isDevAccount(player.id)),is_admin:!!(isAdminAccount(player.id)),void_locked:!!(isVoidLocked(player.id)),tutorial_seen:getTutorialSeen(player.id)}}));
     ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(player)}));
     ws.send(JSON.stringify({type:'president_state',data:{holder:president}}));
     // Send last 30min of chat history to new connection
@@ -4092,7 +4126,7 @@ setInterval(()=>{
     _dtResetAll();
     broadcast({type:'dt_update',data:{dayTradesRemaining:DAY_TRADE_CAP}});
 
-    const result=creditPassiveIncome();
+    const result=creditPassiveIncome(new Set(playerSockets.keys()));
     const {count, payouts, guildMemberCount} = result;
 
     // ── Coalition colony control bonus (flat per controlled colony) ─────────
@@ -4230,6 +4264,8 @@ setInterval(()=>{
         const members = getFundMemberships(fund.id);
         for (const m of members) {
           if (!m.shares || m.shares <= 0) continue;
+          // Only credit online players — no offline accumulation
+          if (!playerSockets.has(m.player_id)) continue;
           const share = m.shares / totalShares;
           const payout_amt = Math.round(totalDist * share * 100) / 100;
           if (payout_amt < 0.01) continue;
@@ -4249,7 +4285,7 @@ setInterval(()=>{
     } catch(e) { console.error('[Guild dist error]', e); }
 
     // ── President passive income ──────────────────────────────────────────────
-    if (president) {
+    if (president && playerSockets.has(president.id)) {
       try {
         const p = getPlayer(president.id);
         if (p) {

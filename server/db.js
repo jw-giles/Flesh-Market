@@ -151,6 +151,7 @@ export function initDB() {
     ['void_locked',       'INTEGER NOT NULL DEFAULT 0'],
     ['void_president_escaped', 'INTEGER NOT NULL DEFAULT 0'],
     ['owned_titles',          "TEXT NOT NULL DEFAULT '[]'"],
+    ['tutorial_seen',         'INTEGER NOT NULL DEFAULT 0'],
   ];
   for (const [col, def] of _migrations) {
     if (!_existingCols.has(col)) {
@@ -242,6 +243,7 @@ function hydratePlayer(row) {
     patreon_expires_at: row.patreon_expires_at||null,
     faction: row.faction||null,
     holdings, basisC,
+    tutorial_seen: row.tutorial_seen || 0,
     createdAt:row.created_at, updatedAt:row.updated_at, lastSeen:row.last_seen,
   };
 }
@@ -264,6 +266,7 @@ export function isNameAvailable(name) {
 }
 export function touchPlayer(id) { stmt('UPDATE players SET last_seen=? WHERE id=?').run(Date.now(),id); }
 export function renamePlayer(id,newName) { stmt('UPDATE players SET name=?,updated_at=? WHERE id=?').run(newName.trim(),Date.now(),id); }
+export function markTutorialSeen(id) { stmt('UPDATE players SET tutorial_seen=1,updated_at=? WHERE id=?').run(Date.now(),id); }
 export function countCEOs() { return (stmt('SELECT COUNT(*) as n FROM players WHERE patreon_tier=3').get()||{n:0}).n; }
 
 // ─── Patreon tier management ──────────────────────────────────────────────────
@@ -292,8 +295,12 @@ export function revokeExpiredPatreon() {
 // MERCHANTS_GUILD members get +1% base income per MERCHANTS_GUILD member (exclusive feature).
 // Player-created guilds do NOT grant this bonus.
 // Returns { count, payouts: [{id, base, bonus, total, guildMemberCount}] }
-export function creditPassiveIncome() {
-  const players = stmt('SELECT id,patreon_tier,is_dev FROM players').all();
+export function creditPassiveIncome(onlineIds) {
+  // Only credit players who are currently connected (have active WebSocket)
+  if (!onlineIds || onlineIds.size === 0) return { count: 0, payouts: [], guildMemberCount: 0 };
+  const idList = [...onlineIds];
+  const placeholders = idList.map(() => '?').join(',');
+  const players = stmt(`SELECT id,patreon_tier,is_dev FROM players WHERE id IN (${placeholders})`).all(...idList);
 
   // Count only MERCHANTS_GUILD members for the bonus — not all tier>=2 players
   let guildMemberCount = 0;
@@ -976,6 +983,12 @@ export function syncDevAccounts(devNames) {
   try { db.exec('ALTER TABLE players ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0'); } catch(_){}
   try { db.exec('ALTER TABLE players ADD COLUMN is_prime INTEGER NOT NULL DEFAULT 0'); } catch(_){}
   try { db.exec('ALTER TABLE players ADD COLUMN faction TEXT'); } catch(_){}
+  try {
+    db.exec('ALTER TABLE players ADD COLUMN tutorial_seen INTEGER NOT NULL DEFAULT 0');
+    // Column just created — mark all EXISTING players as seen so only new accounts get the tutorial
+    db.exec('UPDATE players SET tutorial_seen=1');
+    console.log('[Migration] Added tutorial_seen column, marked all existing players as seen');
+  } catch(_){}
   // Reset all devs EXCEPT the owner (is_prime=1) — owner role is immutable
   stmt('UPDATE players SET is_dev=0, is_admin=0 WHERE is_prime=0').run();
   for (const name of devNames) {
@@ -1764,3 +1777,14 @@ export function getPatreonSubscribers() {
     });
   } catch(_) { return []; }
 }
+
+// ─── Tutorial ─────────────────────────────────────────────────────────────────
+
+export function getTutorialSeen(playerId) {
+  try {
+    try { db.exec('ALTER TABLE players ADD COLUMN tutorial_seen INTEGER NOT NULL DEFAULT 0'); } catch(_){}
+    const row = stmt('SELECT tutorial_seen FROM players WHERE id=?').get(playerId);
+    return !!(row?.tutorial_seen);
+  } catch(_) { return false; }
+}
+// markTutorialSeen is defined near line 269 alongside other player helpers

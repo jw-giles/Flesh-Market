@@ -45,6 +45,7 @@
     font-family:inherit;letter-spacing:.05em;transition:all .15s;
   " title="Slot Machine">🎰 Slots <span id="slotNavSpinCount" style="color:#ff6a00;font-weight:500"></span></button>
   <a href="https://www.patreon.com/FLSH" target="_blank" class="btn" style="padding:3px 10px;font-size:.78rem;border-color:#4a3510;color:#ffb547;text-decoration:none">Patreon</a>
+  <button class="btn" onclick="window.showTutorial&&window.showTutorial()" style="padding:3px 10px;font-size:.78rem;border-color:#1a3a1a;color:#4a8a4a" title="Replay Tutorial">? Tutorial</button>
   <button class="btn" onclick="window.FM_Auth&&window.FM_Auth.logout()" style="padding:3px 10px;font-size:.78rem;border-color:#4a3510;color:#888">Logout</button>
 </span>
 </div>
@@ -2046,6 +2047,10 @@ ws.addEventListener('message', function(ev){
 <link rel="stylesheet" href="assets/player-profile.css">
 
 <script src="assets/player-profile.js"></script>
+
+<!-- ══ Tutorial (UNIT-7 Onboarding) ═══════════════════════════════════════ -->
+<link rel="stylesheet" href="assets/tutorial.css">
+<script src="assets/tutorial.js"></script>
 
 <!-- ══ System View Overlay ══════════════════════════════════════════════ -->
 <div id="spSystemView">
