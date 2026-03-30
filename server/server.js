@@ -210,11 +210,40 @@ function resetDailyPrevClose() {
 const COMPANY_NAMES=["Anchor Biotech","Anchor International","Anchor Realty","Anchor Retail","ApexContraband","AshenTextiles","Aspen Automation","Aspen Energy","Aspen Financial","Atlas Consulting","Atlas Dynamics","Atlas Energy","Atlas Realty","Atlas Supplies","Atlas Textiles","Aurora Electric","Aurora Enterprises","Aurora Metals","Aurora Robotics","Beacon Consulting","Beacon Technologies","BlackCapital","BloodWorks","Blue Media","Blue Packaging","Blue Shipping","BoneMarkets","BoneYards","CarrionFarms","Cascade Minerals","Cascade Pharma","Catalyst Insurance","Catalyst Packaging","Catalyst Pharma","Cedar Dynamics","Cedar Insurance","Cedar Networks","CipherHoldings","CoalitionMetals","Comet Foods","Comet Packaging","Copper Dynamics","Copper Industries","Copper Insurance","Copper Marine","CorpseSystems","Crescent Robotics","Crescent Ventures","CrimsonChains","DarkRobotics","East Consulting","East Foods","East Retail","East Ventures","Evergreen Financial","First Minerals","First Networks","First Works","Frontier Supplies","GhostFoundry","Global Enterprises","Global Supplies","Golden Aerospace","Golden Insurance","Golden Packaging","GraftBiotech","Granite Aerospace","Granite Realty","GraveWorks","Green Shipping","GreyMining","GreywaterLabs","Grove Enterprises","Harbor Enterprises","Harbor Financial","Harbor Media","HollowLogistics","Horizon Automation","Horizon Retail","Liberty Packaging","Liberty Ventures","Lighthouse Logistics","Lumen Shipping","Maple Industries","MireInsurance","Momentum Logistics","National Foods","National Media","National Packaging","National Retail","Neon Retail","Neon Technologies","Nexus Aerospace","Nexus Financial","Nexus Supplies","NightFinance","Nimbus Biotech","Nimbus Realty","NoirTransport","North Biotech","North Consulting","North Industries","North Motors","Nova Biotech","NullSyndicate","Oak Capital","Oak Marine","Oak Ventures","ObsidianShipping","OccultMaterials","OrganCorp","Orion Foods","Orion Logistics","Orion Supplies","PhantomCourier","Pioneer Aerospace","Pioneer Realty","Pioneer Supplies","Pixel Biotech","Pixel Dynamics","Pixel Software","Prairie Financial","Prime Automation","Redwood Materials","Redwood Retail","River Aerospace","River Materials","RogueMinerals","SableSecurity","SeverShipping","ShadePharma","ShadowDynamics","Sierra Aerospace","Sierra Apparel","Sierra Consulting","Sierra Hospitality","Silver Holdings","Silver Motors","Silver Shipping","Silver Works","SinisterFoods","Skyline Packaging","SmugglerIndustries","SmugglerMedia","SmugglerNetworks","South Consulting","South Hardware","South Industries","South Minerals","SpecterIndustries","Summit Automation","Summit Logistics","Summit Retail","Sycamore Partners","Sycamore Software","TempestArms","ToxicChains","UnderNet","United Hospitality","United Insurance","United Technologies","Valley Realty","VeinConsortium","Vertex Aerospace","Vertex Dynamics","Vertex Foods","Vertex Logistics","Vertex Robotics","Vertex Shipping","Vertex Systems","Vertex Ventures","West Hospitality","West Works","Willow Aerospace","Willow Hardware","Willow Labs","WraithEnergy","Zenith Automation","Zenith Health","Zenith Insurance","Zenith Media"];
 const NAMES=Array.from(new Set(COMPANY_NAMES.map(n=>n.replace(/\d+$/,'').trim())));
 function symbolize(name){const words=String(name||'').replace(/[^A-Za-z ]/g,' ').trim().split(/\s+/).filter(Boolean);let t=words.map(w=>w[0]).join('').toUpperCase();if(t.length<3){const letters=words.join('').toUpperCase();for(let i=1;i<letters.length&&t.length<3;i++)t+=letters[i];}if(t.length<3)t=(t+'FMK').slice(0,3);if(t.length>4)t=t.slice(0,4);return t;}
-const companies=NAMES.map((n,i)=>({id:i,name:n,symbol:symbolize(n),price:rng(8,60),ohlc:[],lnP:0,sigma:0.035+seededRand()*0.020,mu:-0.0004+seededRand()*0.0004,kappa:0.015+seededRand()*0.015,sector:(i%8),offset:-0.3+seededRand()*0.6}));
+const companies=NAMES.map((n,i)=>({id:i,name:n,symbol:symbolize(n),price:rng(8,60),ohlc:[],lnP:0,sigma:0.022+seededRand()*0.012,mu:-0.0003+seededRand()*0.0003,kappa:0.015+seededRand()*0.015,sector:(i%8),offset:-0.3+seededRand()*0.6}));
 (()=>{const used=new Set(),letters='ABCDEFGHIJKLMNOPQRSTUVWXYZ';for(const c of companies){let sym=c.symbol.replace(/[^A-Z]/g,'').slice(0,4);if(sym.length<3)sym=(sym+'FMKT').slice(0,3);let k=0;while(used.has(sym)){sym=k<26?sym.slice(0,3)+letters[k]:sym.slice(0,2)+letters[Math.floor((k-26)/26)%26]+letters[(k-26)%26];sym=sym.slice(0,4);k++;}c.symbol=sym;used.add(sym);}})();
 const SECTOR_TARGETS = [15, 25, 35, 45, 20, 55, 30, 70]; // varied anchors per sector
-const SECTORS=new Array(8).fill(0).map((_,i)=>({lnIndex:Math.log(SECTOR_TARGETS[i]*(0.8+0.4*seededRand())),sigma:0.012+seededRand()*0.012,mu:-0.0001+seededRand()*0.0002,kappa:0.004+seededRand()*0.004,target:SECTOR_TARGETS[i]}));
+const SECTORS=new Array(8).fill(0).map((_,i)=>({lnIndex:Math.log(SECTOR_TARGETS[i]*(0.8+0.4*seededRand())),sigma:0.008+seededRand()*0.008,mu:-0.0001+seededRand()*0.0002,kappa:0.004+seededRand()*0.004,target:SECTOR_TARGETS[i]}));
 companies.forEach(c=>{c.lnP=Math.log(c.price); c._spawnLnP=c.lnP;});
+
+// ─── Hot Stocks Rotation ──────────────────────────────────────────────────────
+// Every 30 minutes, 10 random stocks get a drift boost (5 bullish, 5 bearish).
+// Creates natural rotation — players watch the heatmap to spot movers.
+let _hotStocks = new Set();
+let _hotBias = {}; // stock id → direction (+1 or -1)
+
+function rotateHotStocks() {
+  _hotStocks.clear();
+  _hotBias = {};
+  const indices = companies.filter(c => !c._special).map(c => c.id);
+  // Shuffle and pick 10
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  const picked = indices.slice(0, 10);
+  picked.forEach((id, i) => {
+    _hotStocks.add(id);
+    _hotBias[id] = i < 5 ? 1 : -1; // first 5 bull, last 5 bear
+  });
+  // Announce hot stocks via headline
+  const bulls = picked.slice(0, 5).map(id => companies[id].symbol);
+  const bears = picked.slice(5).map(id => companies[id].symbol);
+  pushHeadline(`Market rotation: ${bulls.join(', ')} showing strength — ${bears.join(', ')} under pressure`, 'neutral', null);
+  console.log(`[Hot Stocks] Bulls: ${bulls.join(',')} | Bears: ${bears.join(',')}`);
+}
+// Initial rotation on boot
+setTimeout(rotateHotStocks, 5000);
 
 // ─── Colony HQ Mapping: company index → colony headquarters ───────────────────
 // Thematic overrides by name prefix, remainder hash-distributed
@@ -2475,8 +2504,8 @@ function genHeadline(){
   const c=pick(companies),r=Math.random();
   const themes=r<0.45?THEMES_GOOD:(r<0.9?THEMES_BAD:THEMES_WEIRD);
   const tone=themes===THEMES_GOOD?'good':(themes===THEMES_BAD?'bad':'neutral');
-  if(themes===THEMES_GOOD){c.lnP+=0.02+Math.random()*0.06;c.price=Math.max(0.5,Math.exp(c.lnP));}
-  else if(themes===THEMES_BAD){c.lnP-=0.02+Math.random()*0.06;c.price=Math.max(0.5,Math.exp(c.lnP));}
+  if(themes===THEMES_GOOD){c.lnP+=0.015+Math.random()*0.045;c.price=Math.max(0.5,Math.exp(c.lnP));}
+  else if(themes===THEMES_BAD){c.lnP-=0.015+Math.random()*0.045;c.price=Math.max(0.5,Math.exp(c.lnP));}
   pushHeadline(`${c.name} (${c.symbol}): ${pick(themes)}`,tone,c.symbol);
 }
 
@@ -2490,8 +2519,8 @@ function stepMarket(){
   // ── Sector index step with GARCH-style vol clustering ────────────────────
   for(let s=0;s<SECTORS.length;s++){
     const S=SECTORS[s];
-    // Rare sector-wide shock — 0.15% chance per tick, bigger magnitude
-    const sectorShock = Math.random()<0.0015 ? randn()*0.05 : 0;
+    // Rare sector-wide shock — 0.1% chance per tick
+    const sectorShock = Math.random()<0.001 ? randn()*0.04 : 0;
     const eps = randn()*S.sigma + sectorShock;
     // Mean-reversion back toward per-sector target
     const sectorTarget = Math.log(S.target || 30);
@@ -2499,7 +2528,7 @@ function stepMarket(){
     // Ceiling: log(200) so sectors have room to move
     S.lnIndex = Math.max(Math.log(3), Math.min(Math.log(200), S.lnIndex));
     // GARCH vol decay
-    S.sigma = Math.max(0.006, Math.min(0.09, 0.92*S.sigma + 0.08*Math.abs(eps)));
+    S.sigma = Math.max(0.005, Math.min(0.07, 0.91*S.sigma + 0.09*Math.abs(eps)));
   }
 
   companies.forEach(c=>{
@@ -2507,16 +2536,21 @@ function stepMarket(){
     const S    = SECTORS[c.sector||0];
     const base = S.lnIndex + (c.offset||0);
 
-    // Idiosyncratic shock — fatter tails for real price action
+    // Hot stocks get boosted volatility and directional drift
+    const isHot = _hotStocks.has(c.id);
+    const hotSigma = isHot ? 1.4 : 1.0;
+    const hotBias = isHot ? (_hotBias[c.id] || 0) * 0.0006 : 0;
+
+    // Idiosyncratic shock — moderate fat tails
     const u    = Math.random();
-    const tail = u < 0.02 ? 2.5 : (u < 0.08 ? 1.5 : 1.0);
-    const eps  = randn() * (c.sigma||0.035) * tail;
+    const tail = u < 0.015 ? 2.0 : (u < 0.06 ? 1.3 : 1.0);
+    const eps  = randn() * (c.sigma||0.025) * tail * hotSigma;
 
     // If admin recently set price, use stronger mean-reversion toward admin target
     const kappa = c._adminBias ? 0.002 : (c.kappa||0.025);
     const mu    = c._adminBias
       ? (c._adminBias > 0 ? 0.0002 : -0.0002)
-      : Math.min(0.0003, c.mu||0);   // allow slight upward drift
+      : Math.min(0.0003, (c.mu||0)) + hotBias;
 
     // Mean-reversion toward sector base
     const target = c._adminBias ? c._adminTargetLnP : base;
@@ -2555,18 +2589,18 @@ function stepMarket(){
     // Hard price floor/ceiling: Ƒ0.50 – Ƒ5000
     c.lnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.lnP));
 
-    // Vol clustering: wider range, slower decay for sustained moves
+    // Vol clustering: moderate range, natural decay
     const absEps = Math.abs(eps);
-    c.sigma = Math.max(0.012, Math.min(0.14,
-      0.92*(c.sigma||0.035) + 0.06*absEps + 0.02*0.035
+    c.sigma = Math.max(0.010, Math.min(0.11,
+      0.90*(c.sigma||0.025) + 0.07*absEps + 0.03*0.025
     ));
 
-    // Rare idiosyncratic event (0.15%/tick), meaningful magnitude
-    if(Math.random()<0.0015){
-      const eventMag = 0.05 + Math.random()*0.12;  // 5–17% move
+    // Rare idiosyncratic event (0.12%/tick), moderate magnitude
+    if(Math.random()<0.0012){
+      const eventMag = 0.04 + Math.random()*0.08;  // 4–12% move
       c.lnP += (Math.random()<0.5?1:-1) * eventMag;
       c.lnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.lnP));
-      c.sigma = Math.min(0.14, c.sigma * 2.2);     // vol spike on event
+      c.sigma = Math.min(0.11, c.sigma * 2.0);     // vol spike on event
     }
 
     const prev=c.price;
@@ -4124,6 +4158,9 @@ setInterval(()=>{
     // Reset day-trade counters for all players at each 30-min cycle
     _dtResetAll();
     broadcast({type:'dt_update',data:{dayTradesRemaining:DAY_TRADE_CAP}});
+
+    // Rotate hot stocks — 10 new movers each cycle
+    try { rotateHotStocks(); } catch(e) { console.error('[Hot Stocks]', e); }
 
     const result=creditPassiveIncome(new Set(playerSockets.keys()));
     const {count, payouts, guildMemberCount} = result;
