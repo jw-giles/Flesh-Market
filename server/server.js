@@ -2000,8 +2000,8 @@ app.post('/api/galaxy/fund', (req, res) => {
     // Record funding
     recordFactionFunding(p.id, colonyId, factionId, amt);
 
-    // Adjust control %
-    const boost = Math.min(12, Math.max(1, Math.round(amt / 80000)));
+    // Adjust control % — Ƒ100,000 = 1% control, capped at 12% per donation
+    const boost = Math.min(12, Math.max(1, Math.round(amt / 100000)));
     const ctrl = {
       coalition: colony.control_coalition,
       syndicate: colony.control_syndicate,
@@ -3640,16 +3640,14 @@ wss.on('connection',(ws,req)=>{
         let coalition = Math.max(0, Math.min(100, Number(msg.coalition) || 0));
         let syndicate = Math.max(0, Math.min(100, Number(msg.syndicate) || 0));
         let voidCtrl  = Math.max(0, Math.min(100, Number(msg.void) || 0));
-        // Normalize to 100% — if total != 100, scale proportionally
+        // Only scale down if total exceeds 100 — never scale up
         const total = coalition + syndicate + voidCtrl;
-        if (total > 0 && total !== 100) {
+        if (total > 100) {
           const scale = 100 / total;
           coalition = Math.round(coalition * scale);
           syndicate = Math.round(syndicate * scale);
-          voidCtrl = 100 - coalition - syndicate; // remainder absorbs rounding
+          voidCtrl = 100 - coalition - syndicate;
           voidCtrl = Math.max(0, voidCtrl);
-        } else if (total === 0) {
-          coalition = 34; syndicate = 33; voidCtrl = 33;
         }
         try {
           const contested = (syndicate > 10 || voidCtrl > 10 || (coalition < 80 && (syndicate + voidCtrl) > 20)) ? 1 : 0;

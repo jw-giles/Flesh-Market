@@ -1026,9 +1026,10 @@ $all('.tab').forEach(tab=>{
   // Casino subtabs — lazy script loading
   // Scripts for roulette and blackjack load immediately (default views).
   // All others inject their <script> tag on first click, then init.
-  const CASINO_PANES = ['roulette','blackjack','poker','horseraces','chess','sudoku','mathgame','minesweeper'];
+  const CASINO_PANES = ['roulette','blackjack','plinko','poker','horseraces','chess','sudoku','mathgame','minesweeper'];
   const CASINO_SCRIPTS = {
     'blackjack':   'assets/casino-blackjack.js',
+    'plinko':      'assets/casino-plinko.js',
     'poker':       'assets/casino-poker.js',
     'chess':       'assets/casino-chess.js',
     'sudoku':      'assets/casino-sudoku.js',
