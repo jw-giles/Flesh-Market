@@ -1239,7 +1239,7 @@ $all('.tab').forEach(tab=>{
   const CASINO_PANES = ['roulette','blackjack','plinko','poker','horseraces','chess','sudoku','mathgame','minesweeper'];
   const CASINO_SCRIPTS = {
     'blackjack':   'assets/casino-blackjack.js',
-    'plinko':      'assets/casino-plinko.js',
+    'plinko':      null, // disabled — under repair
     'poker':       'assets/casino-poker.js',
     'chess':       'assets/casino-chess.js',
     'sudoku':      'assets/casino-sudoku.js',
