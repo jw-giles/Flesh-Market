@@ -40,6 +40,20 @@
 .bj-result.lose{background:#2a0808;border:1px solid #6a1a1a;color:#ff6b6b}
 .bj-result.push{background:#1a1a00;border:1px solid #5a5a00;color:#ffff80}
 .bj-result.bj{background:#0a1a2a;border:1px solid #1a5a8a;color:#60c8ff}
+#bj-shoe-bar-wrap{margin-bottom:10px;padding:8px 12px;border:1px solid #2d5a1e;border-radius:8px;background:rgba(10,30,15,.6)}
+#bj-shoe-bar-wrap .bj-shoe-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+#bj-shoe-bar-wrap .bj-shoe-title{font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:#6a9a70}
+#bj-shoe-bar-wrap .bj-shoe-stat{font-size:.85rem;color:#e6c27a;font-weight:bold}
+#bj-shoe-track{height:8px;background:#0a1a0d;border-radius:4px;overflow:hidden;border:1px solid #1a3a1a}
+#bj-shoe-fill{height:100%;width:0%;border-radius:4px;transition:width .3s ease;background:linear-gradient(90deg,#2a8a3a,#e6c27a)}
+#bj-shoe-fill.warn{background:linear-gradient(90deg,#c8a020,#e05020)}
+#bj-shoe-fill.hot{background:linear-gradient(90deg,#e05020,#ff2020)}
+#bj-shuffle-overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.75);border-radius:16px;z-index:10;flex-direction:column;gap:8px}
+#bj-shuffle-overlay.show{display:flex}
+#bj-shuffle-overlay .shuffle-text{font-size:1.1rem;letter-spacing:.15em;color:#e6c27a;text-transform:uppercase;animation:bjShufflePulse 0.6s ease-in-out infinite alternate}
+#bj-shuffle-overlay .shuffle-cards{font-size:2rem;animation:bjShuffleSpin 0.8s linear infinite}
+@keyframes bjShufflePulse{from{opacity:.5;transform:scale(.97)}to{opacity:1;transform:scale(1.03)}}
+@keyframes bjShuffleSpin{0%{transform:rotateY(0)}100%{transform:rotateY(360deg)}}
 #bj-log{max-height:80px;overflow-y:auto;font-size:.75rem;color:#7a9a7a;line-height:1.5;margin-top:8px}
 #bj-log div{border-bottom:1px solid #1a2a1a;padding:1px 0}
     `;
@@ -52,9 +66,16 @@
   <h3>Blackjack</h3>
   <div class="bj-info">
     <span>Stack: <strong id="bj-balance">Ƒ0</strong></span>
-    <span>Shoe: <strong id="bj-shoe-lbl">6 decks</strong></span>
   </div>
-  <div class="bj-table">
+  <div id="bj-shoe-bar-wrap">
+    <div class="bj-shoe-header">
+      <span class="bj-shoe-title">🂠 Shoe Status</span>
+      <span class="bj-shoe-stat" id="bj-shoe-lbl">6 decks · 312 cards</span>
+    </div>
+    <div id="bj-shoe-track"><div id="bj-shoe-fill"></div></div>
+  </div>
+  <div class="bj-table" style="position:relative">
+    <div id="bj-shuffle-overlay"><div class="shuffle-cards">🂠</div><div class="shuffle-text">Shuffling New Shoe…</div></div>
     <div class="bj-section">
       <div class="bj-label">Dealer <span class="bj-total" id="bj-dealer-total"></span></div>
       <div class="bj-cards" id="bj-dealer-hand"></div>
@@ -82,7 +103,7 @@
     <button id="bj-btn-stand" class="bj-btn-stand" onclick="bjStand()" disabled>Stand</button>
     <button id="bj-btn-double" onclick="bjDouble()" disabled>Double</button>
   </div>
-  <div style="font-size:.72rem;opacity:.45;margin-bottom:6px">6-deck shoe · Dealer stands soft 17 · Blackjack 3:2 · No splits/insurance</div>
+  <div style="font-size:.72rem;opacity:.45;margin-bottom:6px">6-deck shoe · Dealer stands soft 17 · Blackjack 3:2 · No splits/insurance · Shoe reshuffles at cut card</div>
   <div id="bj-result-box"></div>
   <div id="bj-log"></div>
 </div>
@@ -96,19 +117,33 @@
   function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]; } return a; }
 
   function Shoe(decks=6){
-    let cards=[],idx=0,cutAt=0;
+    let cards=[],idx=0,cutAt=0,totalCards=0;
     function reset(){
       cards=[]; for(let i=0;i<decks;i++) cards=cards.concat(makeDeck()); shuffle(cards);
-      idx=0; const pen=0.65+Math.random()*0.1; cutAt=Math.floor(cards.length*pen); updateShoe();
+      totalCards=cards.length; idx=0; const pen=0.65+Math.random()*0.1; cutAt=Math.floor(cards.length*pen); updateShoe();
     }
     function updateShoe(){
-      const left=Math.max(cards.length-idx,0); const pct=((idx/cards.length)*100)|0;
-      const el=document.getElementById('bj-shoe-lbl'); if(el) el.textContent=`${decks}d · ${pct}% used · ${left} left`;
+      const left=Math.max(totalCards-idx,0); const pct=((idx/totalCards)*100)|0;
+      const el=document.getElementById('bj-shoe-lbl'); if(el) el.textContent=`${decks}d · ${pct}% dealt · ${left} left`;
+      const fill=document.getElementById('bj-shoe-fill');
+      if(fill){ fill.style.width=pct+'%'; fill.className= pct>=80?'hot':pct>=60?'warn':''; }
     }
-    function draw(){ if(idx>=cutAt){ bjLog('Shuffling shoe...'); reset(); } const c=cards[idx++]; updateShoe(); return c; }
-    reset(); return {draw,reset};
+    function needsShuffle(){ return idx>=cutAt; }
+    function doShuffle(){ bjLog('✦ Cut card reached — shuffling new shoe…'); reset(); }
+    function draw(){ if(idx>=cards.length){ reset(); } const c=cards[idx++]; updateShoe(); return c; }
+    reset(); return {draw,reset,needsShuffle,doShuffle};
   }
   const shoe=Shoe(6);
+
+  async function shoeCheckAndShuffle(){
+    if(!shoe.needsShuffle()) return;
+    const overlay=document.getElementById('bj-shuffle-overlay');
+    if(overlay){ overlay.classList.add('show'); }
+    bjLog('✦ Cut card reached — shuffling new shoe…');
+    await sleep(1500);
+    shoe.doShuffle();
+    if(overlay){ overlay.classList.remove('show'); }
+  }
 
   function cardVal(c){ if(c.r==='A') return [1,11]; if(['K','Q','J','10'].includes(c.r)) return [10]; return [Number(c.r)]; }
   function handTotal(hand){
@@ -239,6 +274,10 @@
     const betInp=document.getElementById('bj-bet-input');
     const amt=Math.max(1,Number(betInp.value||20));
     if(amt>getBalance()){ bjLog('Insufficient funds.'); return; }
+
+    // Check if shoe needs reshuffling before dealing
+    await shoeCheckAndShuffle();
+
     playerBet=amt; deltaBalance(-playerBet);
     bjLog(`Bet ${fmtLocal(playerBet)}.`);
 
