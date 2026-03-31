@@ -3516,6 +3516,16 @@ wss.on('connection',(ws,req)=>{
       const{toName,amount}=msg;
       const amt=Math.max(1,Math.floor(Number(amount)||0));
       if(!toName||!amt)return;
+      // 12-hour cooldown
+      const WIRE_COOLDOWN_MS = 12 * 60 * 60 * 1000;
+      if (!global._lastWire) global._lastWire = new Map();
+      const lastWire = global._lastWire.get(actor.id) || 0;
+      if (Date.now() - lastWire < WIRE_COOLDOWN_MS) {
+        const remaining = WIRE_COOLDOWN_MS - (Date.now() - lastWire);
+        const hrs = Math.floor(remaining / 3600000);
+        const mins = Math.ceil((remaining % 3600000) / 60000);
+        return ws.send(JSON.stringify({type:'error',data:{msg:`Wire cooldown: ${hrs}h ${mins}m remaining. One transfer per 12 hours.`}}));
+      }
       const recipient=getPlayerByName(toName);
       if(!recipient)return ws.send(JSON.stringify({type:'error',data:{msg:`Player "${toName}" not found.`}}));
       // Block self-transfers
@@ -3534,6 +3544,7 @@ wss.on('connection',(ws,req)=>{
       actor.cash-=total; recipient.cash+=amt; actor.xp+=2;
       actor.level=calcLevel(actor.xp);
       savePlayer(actor); savePlayer(recipient);
+      global._lastWire.set(actor.id, Date.now());
       // Update sender portfolio
       ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
       const feeNote=guildTax>0?` (Ƒ${baseFee.toLocaleString()} tax + Ƒ${guildTax.toLocaleString()} Guild surcharge)`:baseFee>0?` (Ƒ${baseFee.toLocaleString()} tax sink)`:' (no fee — CEO tier)';

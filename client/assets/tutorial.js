@@ -56,51 +56,65 @@
 </svg>`)}`;
 
   // ── Tutorial slide data ──────────────────────────────────────────────────
+  // tab: if set, clicks the matching .tab[data-tab] button to switch tabs
+  // galaxySub: if set, clicks the galaxy sub-tab (e.g. 'shipping', 'factions')
   const SLIDES = [
     {
       heading: 'TERMINAL ACTIVATED',
-      text: `Welcome to the Flesh Market trading network. Your account has been provisioned with an opening balance of <em>Ƒ1,000 Social Credits</em>. This terminal provides access to live stock trading, inter-colony logistics, faction governance, and casino operations. All features are available immediately. Please review the following orientation materials before proceeding.<span class="tut-cursor"></span>`,
+      text: `Welcome to the Flesh Market trading network. Your account has been provisioned with an opening balance of <em>Ƒ1,000 Social Credits</em>. This terminal provides access to live stock trading, inter-colony shipping, faction warfare, and casino operations. All features are available immediately.<span class="tut-cursor"></span>`,
       callout: 'OBJECTIVE: Accumulate Social Credits, build influence, and climb the network leaderboard.',
+      tab: 'market',
     },
     {
       heading: 'STOCK TRADING',
-      text: `The ticker feed on the left panel displays live company prices across all sectors. Select any stock to view its price chart. <em>Market Orders</em> execute at the current price. <em>Limit Orders</em> allow you to specify a target price for automatic execution. Each player is allocated <strong>3 day trades</strong> per market cycle. The news feed below the chart reports events that affect stock prices directly; monitor it for trading signals.`,
-      callout: 'The chart displays OHLC candles for the selected stock. Sector indices rotate on a 23-hour cycle.',
+      text: `The ticker feed on the left displays live prices across all sectors. Click any stock to view its <em>real-time waveform chart</em>. Prices drift slowly and trends develop over <strong>hours, not minutes</strong>. <em>Market Orders</em> execute instantly. <em>Limit Orders</em> let you set a target price. You get <strong>3 day trades</strong> per 30-minute cycle. When they're gone, your buy/sell buttons lock until the next reset. The news feed reports events that nudge prices, so watch for earnings reports.`,
+      callout: 'Scalping is penalized. Buying and selling the same stock in one cycle costs 2x trade tax.',
+      tab: 'market',
     },
     {
-      heading: 'PASSIVE INCOME',
-      text: `The system distributes passive income payments every <em>30 minutes</em> to all <strong>currently connected</strong> players. Free accounts receive <em>Ƒ25</em> per cycle. Patreon subscribers receive Ƒ500, Ƒ1,500, or Ƒ10,000 depending on tier. Additional bonuses from equipped items, faction membership, and guild participation are applied on top of the base rate. Players must be connected at the time of distribution to receive payment.`,
-      callout: 'Passive income requires an active connection. Offline terminals do not receive distributions.',
+      heading: 'DIVIDENDS AND HOLDING',
+      text: `Every stock pays <em>dividends every 2 hours</em> to holders with active connections. Finance, Insurance, Energy, and Tech sectors pay <em>0.6%</em> of position value. All other sectors pay <em>0.2%</em>. Faction colony bonuses can boost dividend rates further. Holding is the most reliable way to grow wealth. The market rewards patience over day trading.`,
+      callout: 'Passive income (Ƒ25/30min for free accounts) also requires an active connection.',
+      tab: 'market',
+    },
+    {
+      heading: 'THE GALAXY',
+      text: `This is the Galaxy tab, your gateway to the colony network. The <em>Sector Map</em> shows all 21 colonies, their faction control, and tension levels. Colonies are the foundation of everything: faction funding, shipping routes, and dividend bonuses all flow through them. High tension colonies trigger stock drops for headquartered companies. Next we'll look at factions.`,
+      callout: 'Click any colony on the map to see its details, tension, and headquartered companies.',
+      tab: 'galactic',
+      galaxySub: 'map',
     },
     {
       heading: 'FACTIONS',
-      text: `Three factions operate across the colony network. <em>The Coalition</em> receives Ƒ75 per colony under its control. <em>The Syndicate</em> provides enhanced smuggling returns. <em>Void Collective</em> offers permanent cybernetic conversion with a <em>+Ƒ15 passive bonus</em> per cycle. <span class="warn">Note: Void conversion is irreversible.</span> Faction selection is available through the Galaxy panel. Colony control shifts based on player influence spending.`,
-      callout: 'Your faction determines your bonus structure and available perks. Choose accordingly.',
+      text: `Three factions compete for colony control. <em style="color:#4ecdc4">The Coalition</em> focuses on stability. Control both endpoints of a shipping route for -5% risk. <em style="color:#e74c3c">The Syndicate</em> gets +15% payout bonus on smuggling, but +5% risk on Syndicate-controlled turf. No free rides. <em style="color:#9b59b6">Void Collective</em> earns 2% of all intercepted cargo as raid income, plus permanent cybernetic conversion with +Ƒ15 passive bonus. <span class="warn">Void conversion is irreversible.</span> All three factions earn <em>Ƒ15 per controlled colony</em> every 30 minutes.`,
+      callout: 'Join a faction through this panel. Fund colony control to shift influence. Choose wisely.',
+      tab: 'galactic',
+      galaxySub: 'factions',
     },
     {
-      heading: 'SMUGGLING',
-      text: `The Galaxy panel provides access to inter-colony trade lanes. Select a lane, load cargo, and dispatch your shipment. Successful deliveries generate profit based on lane markup. Intercepted shipments result in full cargo loss. The <em>Merchant Guild</em> operates official trade routes; smuggling lanes offer higher margins at higher risk. A <em>15-minute cooldown</em> applies between shipment runs. Lane risk ratings are displayed before dispatch.`,
-      callout: 'Higher risk lanes offer better payouts. Interception rates vary by lane and faction control.',
+      heading: 'SHIPPING LANES',
+      text: `This is the Shipping tab. You can move cargo between colonies for profit two ways. <em style="color:#3498db">Shipping Lanes</em> are legal commerce with lower risk and steady returns. Choose a route, pick a cargo tier (Standard x1.15, Premium x1.25, Luxury x1.35), and stake your credits. <em>Insurance</em> costs 5% but refunds your stake if cargo is lost. <em style="color:#e74c3c">Smuggling Runs</em> are high-risk contraband transport with massive payouts. Base risk ranges from 15% to 55% depending on lane type, and bet-size scaling pushes it higher. There is a <strong>15-minute cooldown</strong> between all runs.`,
+      callout: 'Blockaded lanes block shipping entirely. You must smuggle or wait. Check risk before launching.',
+      tab: 'galactic',
+      galaxySub: 'shipping',
     },
     {
       heading: 'THE CASINO',
-      text: `Five casino games are available: Poker, Minesweeper, Chess, Horse Racing, and the Slot Machine. The <em>Slot Machine</em> is the exclusive source of equipment item drops. Items are distributed across five rarity tiers and can be equipped for passive stat bonuses through the inventory panel. Patreon subscribers receive monthly spin allocations based on their tier level.`,
-      callout: 'Equipment drops are only available through slot machine spins. Check inventory for equipped item bonuses.',
+      text: `Seven casino games are available: <em>Blackjack</em> (with shoe tracking), <em>Poker</em>, <em>Plinko</em>, <em>Minesweeper</em>, <em>Chess</em>, <em>Horse Racing</em>, and the <em>Slot Machine</em>. The Slot Machine is the exclusive source of <strong>equipment item drops</strong>. Items come in five rarity tiers and provide passive stat bonuses when equipped through the Inventory panel. Milestone day trades earn bonus spins.`,
+      callout: 'Equipment drops are only available through slot machine spins. Check Inventory for equipped items.',
+      tab: 'casino',
     },
     {
-      heading: 'GUILDS AND LANE SHARES',
-      text: `The <em>Merchants Guild</em> (Patreon Tier 2+) provides a stacking income bonus of <em>+1% per active member</em>. Player-created guilds allow capital pooling and proportional profit distribution among shareholders. <strong>Lane Shares</strong> represent permanent equity positions in trade lanes, with 100 slots available per lane on a bonding curve price structure. Dividends are distributed every 30 minutes, subject to faction war modifiers.`,
-      callout: 'Guild membership and lane shares provide additional passive income streams.',
-    },
-    {
-      heading: 'THE PRESIDENCY',
-      text: `The office of President of The Coalition may be claimed by any player for <strong>Ƒ1,000,000,000</strong>. The sitting President receives <em>Ƒ15,000 per 30-minute cycle</em>, a unique legendary title, and triggers a market-wide bull rally upon election. The presidency can be claimed by any player willing to meet the cost requirement, replacing the current holder.`,
-      callout: 'The Presidency is the highest-yield single position available on the network.',
+      heading: 'GUILDS AND WIRE TRANSFERS',
+      text: `The <em>Merchants Guild</em> (Patreon Tier 2+) provides a stacking income bonus of <em>+1% per active member</em>. Player-created <strong>Hedge Funds</strong> allow capital pooling with proportional profit sharing. <strong>Lane Shares</strong> are permanent equity in trade lanes with 100 slots per lane on a bonding curve. Dividends flow every 30 minutes. <em>Wire Transfers</em> let you send credits to other players, but there is a <strong>12-hour cooldown</strong> between transfers and a 2% tax (plus 90% Guild surcharge on amounts over Ƒ10,000).`,
+      callout: 'The Presidency costs Ƒ1 billion and pays Ƒ15,000 per cycle. The ultimate flex.',
+      tab: 'guild',
     },
     {
       heading: 'ORIENTATION COMPLETE',
-      text: `All systems have been reviewed. The global chat panel is located on the right side of your terminal. The leaderboard updates at the end of each market cycle. All features covered in this orientation are accessible from your main terminal view. This tutorial can be replayed at any time using the <em>Tutorial</em> button in the top navigation bar.<span class="tut-cursor"></span>`,
+      text: `All systems have been reviewed. The global chat panel is on the right. The leaderboard updates each cycle. Remember: <em>holding pays dividends</em>, <em>shipping builds steady income</em>, <em>smuggling is a gamble</em>, and <em>scalping gets taxed</em>. This tutorial can be replayed at any time using the <em>? Tutorial</em> button in the top navigation bar.<span class="tut-cursor"></span>`,
       callout: 'UNIT-7: Orientation complete. Your terminal is fully operational. Begin when ready.',
+      tab: 'market',
     },
   ];
 
@@ -167,6 +181,23 @@
     document.getElementById('tut-heading').innerHTML = slide.heading;
     document.getElementById('tut-text').innerHTML = slide.text;
     document.getElementById('tut-callout').innerHTML = slide.callout;
+
+    // Navigate to the correct tab by clicking its button directly
+    if (slide.tab) {
+      try {
+        var tabBtn = document.querySelector('.tab[data-tab="' + slide.tab + '"]');
+        if (tabBtn) tabBtn.click();
+      } catch(e) {}
+    }
+    // Navigate to galaxy sub-tab if specified (after a short delay for lazy load)
+    if (slide.galaxySub) {
+      setTimeout(function() {
+        try {
+          var subBtn = document.querySelector('[data-gstab="' + slide.galaxySub + '"]');
+          if (subBtn) subBtn.click();
+        } catch(e) {}
+      }, 300);
+    }
 
     // Update dots
     const dots = document.querySelectorAll('.tut-dot');

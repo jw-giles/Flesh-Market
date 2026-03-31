@@ -2,16 +2,25 @@
 #tutorial-overlay {
   display: none;
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: 440px;
+  max-width: 95vw;
   z-index: 99999;
-  background: rgba(0,0,0,.92);
-  align-items: center;
-  justify-content: center;
-  animation: tutFadeIn .3s ease;
+  background: rgba(4,4,2,.96);
+  border-left: 1px solid #1a3a1a;
+  box-shadow: -4px 0 30px rgba(0,0,0,.7), 0 0 60px rgba(0,255,0,.03);
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-direction: column;
+  overflow-y: auto;
+  animation: tutSlideIn .3s ease;
 }
 #tutorial-overlay.active { display: flex; }
 
-@keyframes tutFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tutSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes tutSlideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes tutGlitch {
   0%, 100% { text-shadow: none; }
@@ -34,29 +43,32 @@
 
 #tutorial-modal {
   position: relative;
-  width: 600px;
-  max-width: 94vw;
-  max-height: 88vh;
-  background: #0a0a0a;
-  border: 1px solid #1a3a1a;
-  box-shadow: 0 0 40px rgba(0,255,0,.06), inset 0 0 80px rgba(0,0,0,.5);
-  overflow: hidden;
+  width: 100%;
+  max-height: none;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  overflow: visible;
   animation: tutSlideUp .4s ease;
 }
 
-/* Scanline effect over the whole modal */
+/* Scanline effect over the panel */
 #tutorial-modal::before {
   content: '';
-  position: absolute;
-  inset: 0;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 440px;
+  max-width: 95vw;
   pointer-events: none;
   z-index: 2;
   background: repeating-linear-gradient(
     0deg,
     transparent,
     transparent 2px,
-    rgba(0,255,0,.015) 2px,
-    rgba(0,255,0,.015) 4px
+    rgba(0,255,0,.012) 2px,
+    rgba(0,255,0,.012) 4px
   );
   animation: tutScanline 8s linear infinite;
 }
@@ -65,13 +77,13 @@
 .tut-portrait-row {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 20px 24px 0 24px;
+  gap: 12px;
+  padding: 16px 18px 0 18px;
 }
 
 .tut-portrait {
-  width: 90px;
-  height: 90px;
+  width: 70px;
+  height: 70px;
   border: 1px solid #1a3a1a;
   background: #050505;
   flex-shrink: 0;
@@ -105,7 +117,7 @@
 
 .tut-speaker-name {
   font-family: monospace;
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: .18em;
   color: #2a6a2a;
   text-transform: uppercase;
@@ -114,7 +126,7 @@
 
 .tut-speaker-title {
   font-family: monospace;
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: .12em;
   color: #1a3a1a;
   text-transform: uppercase;
@@ -122,14 +134,14 @@
 
 /* Content area */
 .tut-body {
-  padding: 16px 24px 12px 24px;
+  padding: 14px 18px 10px 18px;
   position: relative;
   z-index: 1;
 }
 
 .tut-heading {
+  font-size: 20px;
   font-family: monospace;
-  font-size: 17px;
   letter-spacing: .14em;
   color: #3a8a3a;
   text-transform: uppercase;
@@ -139,7 +151,7 @@
 
 .tut-text {
   font-family: monospace;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.7;
   color: #8a8a7a;
   margin: 0;
@@ -189,12 +201,12 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 24px 18px 24px;
+  padding: 10px 18px 16px 18px;
 }
 
 .tut-btn {
   font-family: monospace;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: .14em;
   text-transform: uppercase;
   padding: 8px 18px;
@@ -220,7 +232,7 @@
 
 .tut-skip {
   font-family: monospace;
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: .1em;
   color: #3a3a3a;
   text-transform: uppercase;
@@ -252,15 +264,15 @@
   border-left: 2px solid #2a5a2a;
   background: rgba(0,255,0,.02);
   font-family: monospace;
-  font-size: 12.5px;
+  font-size: 14px;
   color: #5a8a5a;
   letter-spacing: .06em;
 }
 
 /* Responsive */
 @media (max-width: 500px) {
-  #tutorial-modal { max-width: 98vw; }
+  #tutorial-overlay { width: 100vw; }
   .tut-portrait { width: 56px; height: 56px; }
-  .tut-text { font-size: 12.5px; }
-  .tut-heading { font-size: 14px; }
+  .tut-text { font-size: 14px; }
+  .tut-heading { font-size: 17px; }
 }
