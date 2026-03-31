@@ -168,8 +168,7 @@
       dotsEl.appendChild(dot);
     }
 
-    // Events
-    document.getElementById('tut-next').addEventListener('click', nextSlide);
+    // Events — skip/prev use addEventListener, next is set dynamically in renderSlide
     document.getElementById('tut-prev').addEventListener('click', prevSlide);
     document.getElementById('tut-skip').addEventListener('click', dismissTutorial);
   }
