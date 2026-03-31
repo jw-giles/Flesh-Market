@@ -629,7 +629,7 @@ function _drawDonut(posArr, cashNow, netWorth) {
   ctx.fillStyle = '#d4b87a'; ctx.font = 'bold 13px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('Ƒ'+fmtC(netWorth), cx, cy-7);
-  ctx.fillStyle = 'rgba(212,184,122,0.4)'; ctx.font = '8px monospace';
+  ctx.fillStyle = 'rgba(212,184,122,0.4)'; ctx.font = '12px monospace';
   ctx.fillText('NET WORTH', cx, cy+7);
 }
 
@@ -676,7 +676,7 @@ function _drawBars(posArr) {
   ctx.setLineDash([]);
 
   // Axis labels
-  ctx.fillStyle = 'rgba(212,184,122,0.28)'; ctx.font = '8px monospace'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(212,184,122,0.28)'; ctx.font = '12px monospace'; ctx.textBaseline = 'top';
   ctx.textAlign = 'left';  ctx.fillText('+'+maxAbs.toFixed(0)+'%', W-PAD_R+4, PAD_T);
   ctx.textAlign = 'right'; ctx.fillText('-'+maxAbs.toFixed(0)+'%', PAD_L-4,    PAD_T);
 
@@ -855,7 +855,7 @@ function drawChart() {
   const W = cssW, H = cssH;
   if (W < 10 || H < 10) { setTimeout(drawChart, 100); return; }
 
-  const MR = 56, MB = 18, MT = 24;
+  const MR = 64, MB = 18, MT = 24;
   const CW = W - MR, CH = H - MB - MT;
   const BUF_MAX = Math.max(200, CW); // one price per pixel
   const buf = _waveBuffer;
@@ -881,7 +881,7 @@ function drawChart() {
     ctx.textAlign = 'center';
     ctx.fillText('ACQUIRING SIGNAL…', W/2, H/2);
     // Draw border frame
-    ctx.strokeStyle = '#2a1a04';
+    ctx.strokeStyle = '#5a4018';
     ctx.lineWidth = 1;
     ctx.strokeRect(0.5, MT - 0.5, CW, CH + 1);
     return;
@@ -906,7 +906,7 @@ function drawChart() {
   // ── Grid: faint amber dots ──
   for (let gx = 0; gx <= 12; gx++) {
     for (let gy = 0; gy <= 8; gy++) {
-      ctx.fillStyle = 'rgba(180,120,40,0.06)';
+      ctx.fillStyle = 'rgba(210,160,60,0.20)';
       ctx.beginPath();
       ctx.arc(gx * (CW/12), MT + gy * (CH/8), 0.8, 0, Math.PI*2);
       ctx.fill();
@@ -914,7 +914,7 @@ function drawChart() {
   }
 
   // Grid lines
-  ctx.strokeStyle = 'rgba(180,120,40,0.04)';
+  ctx.strokeStyle = 'rgba(210,160,60,0.14)';
   ctx.lineWidth = 1;
   for (let gy = 0; gy <= 8; gy++) {
     const y = MT + gy * (CH / 8);
@@ -922,7 +922,7 @@ function drawChart() {
   }
 
   // ── Chart border frame ──
-  ctx.strokeStyle = '#2a1a04';
+  ctx.strokeStyle = '#5a4018';
   ctx.lineWidth = 1;
   ctx.strokeRect(0.5, MT - 0.5, CW, CH + 1);
 
@@ -954,7 +954,7 @@ function drawChart() {
   ctx.save();
   ctx.shadowColor = amber;
   ctx.shadowBlur = 10;
-  ctx.strokeStyle = amberDim + '0.25)';
+  ctx.strokeStyle = amberDim + '0.5)';
   ctx.lineWidth = 3.5;
   ctx.beginPath();
   for (let i = 0; i < n; i++) {
@@ -983,7 +983,7 @@ function drawChart() {
     ctx.shadowColor = amber;
     ctx.shadowBlur = 6;
     ctx.strokeStyle = amberDim + '0.5)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = fadeStart; i < n; i++) {
       const x = (i / (n - 1)) * CW;
@@ -1012,43 +1012,43 @@ function drawChart() {
   // ── Open price reference line ──
   if (openP > lo && openP < hi) {
     const oy = pY(openP);
-    ctx.strokeStyle = 'rgba(120,90,40,0.15)';
+    ctx.strokeStyle = 'rgba(120,90,40,0.4)';
     ctx.setLineDash([2, 6]);
     ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(CW, oy); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(120,90,40,0.3)';
-    ctx.font = '8px monospace';
+    ctx.fillStyle = 'rgba(120,90,40,0.4)';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'right';
     ctx.fillText('OPEN', CW - 4, oy - 3);
   }
 
   // ── Current price horizontal ──
-  ctx.strokeStyle = amberDim + '0.2)';
+  ctx.strokeStyle = amberDim + '0.35)';
   ctx.setLineDash([3, 4]);
   ctx.beginPath(); ctx.moveTo(0, ey); ctx.lineTo(CW, ey); ctx.stroke();
   ctx.setLineDash([]);
 
   // ── Price axis (right) ──
-  ctx.font = '9px monospace';
+  ctx.font = '11px monospace';
   ctx.textAlign = 'left';
   const pSteps = 6;
   for (let i = 0; i <= pSteps; i++) {
     const p = hi - (i / pSteps) * (hi - lo);
     const y = pY(p);
-    ctx.fillStyle = 'rgba(180,120,40,0.3)';
+    ctx.fillStyle = 'rgba(210,170,70,0.7)';
     ctx.fillText('Ƒ' + p.toFixed(2), CW + 3, y + 3);
   }
   // Current price highlight
   ctx.fillStyle = '#080500';
   ctx.fillRect(CW, ey - 7, MR, 14);
   ctx.fillStyle = amber;
-  ctx.font = 'bold 10px monospace';
+  ctx.font = 'bold 12px monospace';
   ctx.fillText('Ƒ' + lastP.toFixed(2), CW + 3, ey + 4);
 
   // ── Time axis (bottom) ──
-  ctx.font = '8px monospace';
+  ctx.font = '12px monospace';
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(180,120,40,0.25)';
+  ctx.fillStyle = 'rgba(210,170,70,0.6)';
   const secTotal = n * 0.5; // each point is 500ms
   const labels = 6;
   for (let i = 0; i <= labels; i++) {
@@ -1073,18 +1073,19 @@ function drawChart() {
   const hiLo = 'H:Ƒ' + max.toFixed(2) + ' L:Ƒ' + min.toFixed(2);
 
   // Symbol
-  ctx.font = 'bold 12px monospace';
+  ctx.font = 'bold 16px monospace';
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#e6a030';
-  ctx.fillText(CURRENT || '—', 6, 14);
+  ctx.fillStyle = '#f0b840';
+  ctx.fillText(CURRENT || '—', 6, 18);
 
   // Price + pct + hi/lo
-  const symW = (CURRENT || '—').length * 7.5 + 12;
-  ctx.font = '10px monospace';
+  const symW = (CURRENT || '—').length * 10 + 14;
+  ctx.font = 'bold 14px monospace';
   ctx.fillStyle = isUp ? '#00ff88' : '#ff5533';
-  ctx.fillText('Ƒ' + lastP.toFixed(2), symW, 14);
-  ctx.fillStyle = 'rgba(180,120,40,0.5)';
-  ctx.fillText(pctStr + '  ' + hiLo, symW + (lastP.toFixed(2).length + 1) * 6.5 + 6, 14);
+  ctx.fillText('Ƒ' + lastP.toFixed(2), symW, 18);
+  ctx.font = '13px monospace';
+  ctx.fillStyle = 'rgba(210,170,70,0.7)';
+  ctx.fillText(pctStr + '  ' + hiLo, symW + (lastP.toFixed(2).length + 1) * 8.5 + 8, 18);
 }
 
 // ── Rolling buffer: push price on each tick ──
