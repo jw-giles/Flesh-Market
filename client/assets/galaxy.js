@@ -1841,6 +1841,12 @@ function onGalaxyOpen(){
   // Request galaxy systems data (blockades, contracts, HQ map)
   _sendWSGalaxy({type:'galaxy_data_request'});
   _sendWSGalaxy({type:'trade_config_request'});
+  // Refresh lanes every 2s while an active run exists (animates the ship dot)
+  if(window._activeLaneRefreshIv) clearInterval(window._activeLaneRefreshIv);
+  window._activeLaneRefreshIv = setInterval(function(){
+    if(!gMapActive){ clearInterval(window._activeLaneRefreshIv); return; }
+    if(window._activeShipRun || window._activeSmugRun) renderLanes();
+  }, 2000);
 }
 
 function gRenderAll(){
@@ -1962,6 +1968,50 @@ function renderLanes(){
       cTxt.setAttribute('text-anchor','middle');cTxt.setAttribute('fill','#3498db');
       cTxt.setAttribute('font-size','9');cTxt.textContent=shData.supply;
       g.appendChild(cTxt);
+    }
+
+    // Active shipping/smuggling run: flash the lane + show animated ship
+    var activeRun=null;
+    if(window._activeShipRun && window._activeShipRun.from===l.from && window._activeShipRun.to===l.to) activeRun=window._activeShipRun;
+    if(window._activeShipRun && window._activeShipRun.from===l.to && window._activeShipRun.to===l.from) activeRun=window._activeShipRun;
+    if(window._activeSmugRun && window._activeSmugRun.from===l.from && window._activeSmugRun.to===l.to) activeRun=window._activeSmugRun;
+    if(window._activeSmugRun && window._activeSmugRun.from===l.to && window._activeSmugRun.to===l.from) activeRun=window._activeSmugRun;
+    if(activeRun){
+      var runCol=activeRun.type==='shipping'?'#3498db':'#e74c3c';
+      // Pulsing glow line over the lane
+      var glow=document.createElementNS('http://www.w3.org/2000/svg','line');
+      ['x1','y1','x2','y2'].forEach(function(a2,i){ glow.setAttribute(a2,[a.x,a.y,b.x,b.y][i]); });
+      glow.setAttribute('stroke',runCol);glow.setAttribute('stroke-width','4');
+      glow.setAttribute('opacity','0.5');glow.setAttribute('class','g-active-lane-pulse');
+      g.appendChild(glow);
+      // Animated ship dot: position based on elapsed time
+      var elapsed=Date.now()-(activeRun.resolveTs-(activeRun.durSec*1000));
+      var progress=Math.min(1,Math.max(0,elapsed/(activeRun.durSec*1000)));
+      var fromC=COLONY_META[activeRun.from], toC=COLONY_META[activeRun.to];
+      if(fromC&&toC){
+        var sx=fromC.x+(toC.x-fromC.x)*progress;
+        var sy=fromC.y+(toC.y-fromC.y)*progress;
+        // Ship dot
+        var ship=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        ship.setAttribute('cx',sx);ship.setAttribute('cy',sy);ship.setAttribute('r','5');
+        ship.setAttribute('fill',runCol);ship.setAttribute('class','g-ship-dot');
+        ship.setAttribute('cursor','pointer');
+        ship.addEventListener('click',function(){
+          var left=Math.max(0,Math.ceil((activeRun.resolveTs-Date.now())/1000));
+          var label=activeRun.type==='shipping'?'SHIPPING':'SMUGGLING';
+          var det=label+': '+activeRun.cargo+'\nStake: \u0192'+Number(activeRun.stake).toLocaleString()+'\nTime left: '+left+'s';
+          if(activeRun.insured) det+='\nInsured';
+          gToast(det,runCol);
+        });
+        g.appendChild(ship);
+        // Trail glow
+        var trail=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        trail.setAttribute('cx',sx);trail.setAttribute('cy',sy);trail.setAttribute('r','10');
+        trail.setAttribute('fill','none');trail.setAttribute('stroke',runCol);
+        trail.setAttribute('stroke-width','1.5');trail.setAttribute('opacity','0.3');
+        trail.setAttribute('class','g-ship-trail');
+        g.appendChild(trail);
+      }
     }
   });
 }
@@ -2579,6 +2629,9 @@ document.addEventListener('fm_ws_msg',function(e){
     } else {
       gToast('INTERCEPTED! Lost \u0192'+Number(d.stake).toLocaleString()+' — '+d.cargo+' cargo seized','#e74c3c');
     }
+    window._activeSmugRun=null;
+    if(gMapActive) renderLanes();
+    window._shippingAddLog(d);
     var ss=document.getElementById('gSmugStatus');
     if(ss) ss.innerHTML = d.success
       ? '<span style="color:#2ecc71">\u2713 Delivered '+d.cargo+' — \u0192'+Number(d.payout).toLocaleString()+' earned ('+d.interceptChance+'% risk)</span>'
@@ -2588,13 +2641,15 @@ document.addEventListener('fm_ws_msg',function(e){
     var d2=msg.data;
     _gSyncCash(d2.cash);
     gToast('Smuggling run launched — '+d2.cargo+' via '+d2.laneType+' lane','#e74c3c');
+    window._activeSmugRun={from:d2.from,to:d2.to,cargo:d2.cargo,stake:d2.stake,resolveTs:d2.resolveTs,durSec:d2.durSec,type:'smuggling'};
+    if(gMapActive) renderLanes();
     var ss2=document.getElementById('gSmugStatus');
     if(ss2){
       var secLeft=d2.durSec;
       ss2.innerHTML='<span style="color:#e74c3c">EN ROUTE — '+secLeft+'s remaining...</span>';
       var _smgIv=setInterval(function(){
         secLeft--;
-        if(secLeft<=0){ clearInterval(_smgIv); ss2.innerHTML='<span style="color:#555">Resolving...</span>'; return; }
+        if(secLeft<=0){ clearInterval(_smgIv); ss2.innerHTML='<span style="color:#555">Resolving...</span>'; window._activeSmugRun=null; if(gMapActive) renderLanes(); return; }
         ss2.innerHTML='<span style="color:#e74c3c">EN ROUTE — '+secLeft+'s remaining...</span>';
       },1000);
     }
@@ -2612,6 +2667,8 @@ document.addEventListener('fm_ws_msg',function(e){
     } else {
       gToast('CARGO LOST! \u0192'+Number(sd.stake).toLocaleString()+' gone — no insurance','#e74c3c');
     }
+    window._activeShipRun=null;
+    if(gMapActive) renderLanes();
     window._shippingAddLog(sd);
     try{ window.renderShippingTab(); }catch(_){}
   }
@@ -2620,7 +2677,17 @@ document.addEventListener('fm_ws_msg',function(e){
     _gSyncCash(sd2.cash);
     var insLabel=sd2.insured?' (insured)':'';
     gToast('Shipping run launched — '+sd2.cargo+insLabel,'#3498db');
-    window._activeShipRun=sd2;
+    window._activeShipRun={from:sd2.from,to:sd2.to,cargo:sd2.cargo,stake:sd2.stake,insured:sd2.insured,resolveTs:sd2.resolveTs,durSec:sd2.durSec,type:'shipping'};
+    if(gMapActive) renderLanes();
+    // Start countdown timer
+    window._shipCountdownIv && clearInterval(window._shipCountdownIv);
+    window._shipCountdownIv=setInterval(function(){
+      if(!window._activeShipRun) { clearInterval(window._shipCountdownIv); return; }
+      var left=Math.max(0,Math.ceil((window._activeShipRun.resolveTs-Date.now())/1000));
+      var el=document.getElementById('gShipCountdownTimer');
+      if(el) el.textContent=left>0?'EN ROUTE — '+left+'s remaining...':'Resolving...';
+      if(left<=0){ clearInterval(window._shipCountdownIv); window._activeShipRun=null; if(gMapActive) renderLanes(); }
+    },1000);
     try{ window.renderShippingTab(); }catch(_){}
   }
   if(msg.type==='shipping_error') gToast(msg.error||'Shipping error','#e74c3c');
@@ -3038,7 +3105,7 @@ function gToast(msg,color){
 }
 
 var gs=document.createElement('style');
-gs.textContent='@keyframes gTI{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}} @keyframes gBlkPulse{0%,100%{opacity:.6}50%{opacity:1}} .g-blk-pulse{animation:gBlkPulse 1.2s ease-in-out infinite}';
+gs.textContent='@keyframes gTI{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}} @keyframes gBlkPulse{0%,100%{opacity:.6}50%{opacity:1}} .g-blk-pulse{animation:gBlkPulse 1.2s ease-in-out infinite} @keyframes gLanePulse{0%,100%{opacity:.2;stroke-width:3}50%{opacity:.7;stroke-width:5}} .g-active-lane-pulse{animation:gLanePulse .8s ease-in-out infinite} @keyframes gShipPing{0%{r:5;opacity:.8}100%{r:16;opacity:0}} .g-ship-trail{animation:gShipPing 1.5s ease-out infinite} .g-ship-dot{filter:drop-shadow(0 0 4px currentColor)}';
 document.head.appendChild(gs);
 
 document.addEventListener('DOMContentLoaded',function(){
@@ -4063,6 +4130,22 @@ window.renderShippingTab = function(){
     });
   }
   h += '</div></div>';
+
+  // ── Active run countdown ──
+  if(window._activeShipRun || window._activeSmugRun){
+    var ar = window._activeShipRun || window._activeSmugRun;
+    var arLeft = Math.max(0, Math.ceil(((ar.resolveTs || 0) - Date.now()) / 1000));
+    var arColor = ar.type === 'shipping' ? '#3498db' : '#e74c3c';
+    var arLabel = ar.type === 'shipping' ? '🚢 SHIPPING' : '📦 SMUGGLING';
+    var arFrom = (window._galaxy.meta[ar.from]||{name:ar.from}).name;
+    var arTo = (window._galaxy.meta[ar.to]||{name:ar.to}).name;
+    h += '<div class="ship-section" style="border-color:'+arColor+';text-align:center;margin-bottom:10px">';
+    h += '<div style="color:'+arColor+';font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">'+arLabel+' RUN ACTIVE</div>';
+    h += '<div style="color:#ccc;font-size:.78rem;margin-bottom:4px">'+arFrom+' → '+arTo+' ('+ar.cargo+')</div>';
+    h += '<div style="color:#aaa;font-size:.76rem">Stake: \u0192'+Number(ar.stake).toLocaleString()+(ar.insured?' · Insured':'')+'</div>';
+    h += '<div id="gShipCountdownTimer" style="color:'+arColor+';font-size:.88rem;font-weight:bold;margin-top:8px">'+(arLeft>0?'EN ROUTE — '+arLeft+'s remaining...':'Resolving...')+'</div>';
+    h += '</div>';
+  }
 
   // ── Cooldown timer ──
   h += '<div style="text-align:center;margin-top:8px;font-size:.76rem;color:#666" id="gShipCooldown"></div>';

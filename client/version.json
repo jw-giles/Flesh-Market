@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0.8",
+  "version": "1.0.0.9",
   "built": "2026-03-31T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.0.8",
-  "notes": "Market volatility overhaul, scrolling waveform chart, shipping lanes, smuggling rebalance, faction trade bonuses, scalping penalty, all-sector dividends, blackjack shoe shuffle, day-trade lockout UI"
+  "patch": "1.0.0.9",
+  "notes": "Phantom tier items, shipping lane map flash, plinko overhaul, market volatility rebalance, scrolling waveform chart, tutorial rewrite, wire cooldown"
 }

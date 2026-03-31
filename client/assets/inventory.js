@@ -183,6 +183,11 @@ const ITEM_CATALOG_CLIENT = {
   penthouse:{id:'penthouse',slot:'property',name:'Spire Suite',rarity:'epic',passive:200},
   private_island:{id:'private_island',slot:'property',name:'Sovereign Atoll',rarity:'legendary',passive:500},
   flesh_suite:{id:'flesh_suite',slot:'property',name:'Flesh Station Suite',rarity:'legendary',passive:500},
+  planet_the_hollow:{id:'planet_the_hollow',slot:'property',name:'The Hollow',rarity:'phantom',passive:50000},
+  planet_supply_depot:{id:'planet_supply_depot',slot:'property',name:'Supply Depot',rarity:'phantom',passive:50000},
+  planet_the_escrow:{id:'planet_the_escrow',slot:'property',name:'The Escrow',rarity:'phantom',passive:50000},
+  planet_iron_shelf:{id:'planet_iron_shelf',slot:'property',name:'Iron Shelf',rarity:'phantom',passive:50000},
+  planet_catalyst_ii:{id:'planet_catalyst_ii',slot:'property',name:'Catalyst II',rarity:'phantom',passive:50000},
   // ── Watch (emoji only) ──
   casio:{id:'casio',slot:'watch',name:'Axiom Steel',rarity:'common',passive:10},
   seiko:{id:'seiko',slot:'watch',name:'Axiom Silver',rarity:'uncommon',passive:25},
@@ -378,7 +383,7 @@ const ITEM_CATALOG_CLIENT = {
 
 };
 
-const RARITY_COLORS = {common:'#888780',uncommon:'#1D9E75',rare:'#3B8BD4',epic:'#8B5CF6',legendary:'#ff6a00'};
+const RARITY_COLORS = {common:'#888780',uncommon:'#1D9E75',rare:'#3B8BD4',epic:'#8B5CF6',legendary:'#ff6a00',phantom:'#ff0055'};
 const SLOT_LABELS = {hat:'Hat',glasses:'Glasses',upperbody:'Upper Body',necklace:'Necklace',watch:'Watch',pants:'Pants',shoes:'Shoes',vehicle:'Vehicle',property:'Property',implant:'Implant',ring:'Ring',earring:'Earring',bracelet:'Bracelet'};
 const SLOT_ICONS  = {hat:'🎩',glasses:'👓',upperbody:'👕',necklace:'📿',watch:'⌚',pants:'👖',shoes:'👟',vehicle:'🚗',property:'🏠',implant:'❤️',ring:'💍',earring:'✨',bracelet:'📎'};
 const DROP_RATES  = {common:'55%',uncommon:'25%',rare:'12%',epic:'6%',legendary:'0.5%'};

@@ -1515,6 +1515,13 @@ export const ITEM_CATALOG = {
   lace_boots_b: {id:'lace_boots_b',slot:'shoes',name:'Lace-Up Boots',rarity:'rare',passive:85,img:'new_lace_boots_b.png'},
   wedge_trainers: {id:'wedge_trainers',slot:'shoes',name:'Wedge Trainers',rarity:'rare',passive:85,img:'new_wedge_trainers.png'},
 
+  // ── Phantom Tier: Colony Ownership (1:1 unique, 1 in 10M drop) ──
+  planet_the_hollow:    {id:'planet_the_hollow',   slot:'property',name:'The Hollow',     rarity:'phantom',passive:50000,img:'space/planets/static/tech/11.png'},
+  planet_supply_depot:  {id:'planet_supply_depot', slot:'property',name:'Supply Depot',   rarity:'phantom',passive:50000,img:'space/planets/icons/Ice.png'},
+  planet_the_escrow:    {id:'planet_the_escrow',   slot:'property',name:'The Escrow',     rarity:'phantom',passive:50000,img:'space/planets/icons/Ocean.png'},
+  planet_iron_shelf:    {id:'planet_iron_shelf',   slot:'property',name:'Iron Shelf',     rarity:'phantom',passive:50000,img:'space/planets/icons/Barren.png'},
+  planet_catalyst_ii:   {id:'planet_catalyst_ii',  slot:'property',name:'Catalyst II',    rarity:'phantom',passive:50000,img:'space/planets/icons/Plasma1.png'},
+
 };
 
 export const RARITY_CONFIG = {
@@ -1523,6 +1530,7 @@ export const RARITY_CONFIG = {
   rare:      { label:'Rare',      color:'#3B8BD4', dropWeight:120, passiveBonus:75  },
   epic:      { label:'Epic',      color:'#8B5CF6', dropWeight:75,  passiveBonus:200 },
   legendary: { label:'Legendary', color:'#ff6a00', dropWeight:5,   passiveBonus:500 },
+  phantom:   { label:'Phantom',   color:'#ff0055', dropWeight:0.0001, passiveBonus:50000 },
 };
 
 export const ITEM_SLOTS = ['hat','glasses','upperbody','necklace','watch','pants','shoes','vehicle','property','implant','ring','earring','bracelet'];
@@ -1546,6 +1554,24 @@ export function rollItemDrop(guaranteedRarity = null) {
     pool = catalog.filter(i => i.rarity === chosenRarity);
   }
   if (!pool.length) return null;
+
+  // Phantom items are 1:1 unique. Filter out any already owned by anyone.
+  if (pool[0] && pool[0].rarity === 'phantom') {
+    try {
+      const ownedIds = db.prepare('SELECT DISTINCT item_id FROM player_inventory WHERE item_id LIKE ?').all('planet_%').map(r => r.item_id);
+      pool = pool.filter(i => !ownedIds.includes(i.id));
+      if (!pool.length) {
+        // All phantoms owned. Fall back to legendary.
+        pool = catalog.filter(i => i.rarity === 'legendary');
+        if (!pool.length) return null;
+      }
+    } catch(_) {
+      // If DB query fails, fall back to legendary
+      pool = catalog.filter(i => i.rarity === 'legendary');
+      if (!pool.length) return null;
+    }
+  }
+
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
