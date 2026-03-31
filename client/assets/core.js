@@ -111,6 +111,8 @@ window.usernameHasBadWord = usernameHasBadWord;
 var TICKERS = [];   // var so window.TICKERS works across script blocks
 var CURRENT = null;
 let OHLC = [];
+let _waveBuffer = []; // rolling buffer of raw close prices (one per tick)
+let _waveOpenPrice = 0; // session open for %change
 
 function fmt(n){ return 'Ƒ' + (Math.round(n*100)/100).toLocaleString(); }
 
@@ -341,6 +343,7 @@ function renderTickers() {
         const prev = CURRENT;
         el('#sym').value = t.symbol;
         CURRENT = t.symbol;
+        _waveBuffer = []; _waveOpenPrice = 0; // reset buffer for new symbol
         sendWS({type:'chart', symbol:t.symbol});
         // Re-render to update active highlight and price badge
         renderTickers();
@@ -843,64 +846,268 @@ function liveUpdatePnL(tickData, portfolioSnap) {
 function drawChart() {
   const canvas = el('#chart');
   const ctx = canvas.getContext('2d');
-  const W = canvas.width = canvas.clientWidth || canvas.offsetWidth || 600;
-  const H = canvas.height = canvas.clientHeight || canvas.offsetHeight || 300;
-  // If canvas still has no size, schedule a retry and bail
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || canvas.offsetWidth || 600;
+  const cssH = canvas.clientHeight || canvas.offsetHeight || 300;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  ctx.scale(dpr, dpr);
+  const W = cssW, H = cssH;
   if (W < 10 || H < 10) { setTimeout(drawChart, 100); return; }
-  ctx.fillStyle = '#0a0804';
-  ctx.fillRect(0,0,W,H);
 
-  if (!OHLC.length) {
+  const MR = 56, MB = 18, MT = 24;
+  const CW = W - MR, CH = H - MB - MT;
+  const BUF_MAX = Math.max(200, CW); // one price per pixel
+  const buf = _waveBuffer;
+
+  // ── Background: deep void ──
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#0c0800');
+  bg.addColorStop(0.5, '#080500');
+  bg.addColorStop(1, '#0a0600');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Vignette
+  const vig = ctx.createRadialGradient(W*0.5, H*0.5, H*0.2, W*0.5, H*0.5, H*0.8);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+
+  if (buf.length < 2) {
     ctx.fillStyle = '#3a2a0a';
-    ctx.font = '13px monospace';
-    ctx.fillText('Loading chart…', W/2 - 50, H/2);
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('ACQUIRING SIGNAL…', W/2, H/2);
+    // Draw border frame
+    ctx.strokeStyle = '#2a1a04';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, MT - 0.5, CW, CH + 1);
     return;
   }
-  const min = Math.min(...OHLC.map(d=>d.l));
-  const max = Math.max(...OHLC.map(d=>d.h));
-  const pad = (max-min)*0.1 || 1;
-  const low = min - pad, high = max + pad;
 
-  const n = OHLC.length;
-  const cw = W / n;
+  // Use only as many points as we have pixels for
+  const n = Math.min(buf.length, CW);
+  const offset = buf.length - n;
+  const data = buf.slice(offset);
+  const openP = _waveOpenPrice || data[0];
+  const lastP = data[data.length - 1];
+  const isUp = lastP >= openP;
 
-  // grid
-  ctx.strokeStyle = '#2b200a';
+  const min = Math.min(...data) ;
+  const max = Math.max(...data);
+  const spread = max - min;
+  const pad = spread * 0.15 || 0.5;
+  const lo = min - pad, hi = max + pad;
+
+  function pY(p) { return MT + CH - ((p - lo) / (hi - lo)) * CH; }
+
+  // ── Grid: faint amber dots ──
+  for (let gx = 0; gx <= 12; gx++) {
+    for (let gy = 0; gy <= 8; gy++) {
+      ctx.fillStyle = 'rgba(180,120,40,0.06)';
+      ctx.beginPath();
+      ctx.arc(gx * (CW/12), MT + gy * (CH/8), 0.8, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(180,120,40,0.04)';
   ctx.lineWidth = 1;
-  for (let i=0;i<6;i++){
-    const y = i * (H/5);
-    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  for (let gy = 0; gy <= 8; gy++) {
+    const y = MT + gy * (CH / 8);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke();
   }
 
-  // candles
-  for (let i=0;i<n;i++){
-    const d = OHLC[i];
-    const x = i * cw + cw*0.5;
-    const yH = H - ( (d.h - low) / (high - low) ) * H;
-    const yL = H - ( (d.l - low) / (high - low) ) * H;
-    const yO = H - ( (d.o - low) / (high - low) ) * H;
-    const yC = H - ( (d.c - low) / (high - low) ) * H;
-    // wick
-    ctx.strokeStyle = '#d4a05e';
-    ctx.beginPath(); ctx.moveTo(x, yH); ctx.lineTo(x, yL); ctx.stroke();
-    // body
-    const up = d.c >= d.o;
-    ctx.fillStyle = up ? '#86ff6a' : '#ff6b6b';
-    const top = Math.min(yO, yC);
-    const h = Math.max(2, Math.abs(yC - yO));
-    ctx.fillRect(x - cw*0.35, top, cw*0.7, h);
+  // ── Chart border frame ──
+  ctx.strokeStyle = '#2a1a04';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, MT - 0.5, CW, CH + 1);
+
+  // ── Amber theme colors ──
+  const amber    = isUp ? '#00ff88' : '#ff5533';
+  const amberDim = isUp ? 'rgba(0,255,136,' : 'rgba(255,85,51,';
+  const amberBg  = isUp ? 'rgba(0,200,100,' : 'rgba(255,60,30,';
+
+  // ── Gradient fill under curve ──
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * CW;
+    const y = pY(data[i]);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.lineTo(CW, MT + CH);
+  ctx.lineTo(0, MT + CH);
+  ctx.closePath();
+  const gFill = ctx.createLinearGradient(0, MT, 0, MT + CH);
+  gFill.addColorStop(0, amberBg + '0.18)');
+  gFill.addColorStop(0.6, amberBg + '0.04)');
+  gFill.addColorStop(1, amberBg + '0.0)');
+  ctx.fillStyle = gFill;
+  ctx.fill();
+  ctx.restore();
+
+  // ── Outer glow (bloom) ──
+  ctx.save();
+  ctx.shadowColor = amber;
+  ctx.shadowBlur = 10;
+  ctx.strokeStyle = amberDim + '0.25)';
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * CW;
+    const y = pY(data[i]);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // ── Main trace ──
+  ctx.strokeStyle = amberDim + '0.85)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * CW;
+    const y = pY(data[i]);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // ── Phosphor intensity: brighten the last ~20% of the line ──
+  const fadeStart = Math.floor(n * 0.8);
+  if (fadeStart < n - 1) {
+    ctx.save();
+    ctx.shadowColor = amber;
+    ctx.shadowBlur = 6;
+    ctx.strokeStyle = amberDim + '0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = fadeStart; i < n; i++) {
+      const x = (i / (n - 1)) * CW;
+      const y = pY(data[i]);
+      if (i === fadeStart) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
-  // symbol label
-  ctx.fillStyle = '#ffd089';
-  ctx.fillText(CURRENT || '—', 8, 14);
+  // ── Pulsing endpoint ──
+  const pt = (Date.now() % 1200) / 1200;
+  const pr = 3.5 + Math.sin(pt * Math.PI * 2) * 1.5;
+  const pa = 0.7 + Math.sin(pt * Math.PI * 2) * 0.3;
+  const ex = CW, ey = pY(lastP);
+  ctx.save();
+  ctx.shadowColor = amber;
+  ctx.shadowBlur = 16;
+  ctx.fillStyle = amberDim + pa + ')';
+  ctx.beginPath(); ctx.arc(ex, ey, pr, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(ex, ey, 1.2, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  // ── Open price reference line ──
+  if (openP > lo && openP < hi) {
+    const oy = pY(openP);
+    ctx.strokeStyle = 'rgba(120,90,40,0.15)';
+    ctx.setLineDash([2, 6]);
+    ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(CW, oy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(120,90,40,0.3)';
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('OPEN', CW - 4, oy - 3);
+  }
+
+  // ── Current price horizontal ──
+  ctx.strokeStyle = amberDim + '0.2)';
+  ctx.setLineDash([3, 4]);
+  ctx.beginPath(); ctx.moveTo(0, ey); ctx.lineTo(CW, ey); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ── Price axis (right) ──
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'left';
+  const pSteps = 6;
+  for (let i = 0; i <= pSteps; i++) {
+    const p = hi - (i / pSteps) * (hi - lo);
+    const y = pY(p);
+    ctx.fillStyle = 'rgba(180,120,40,0.3)';
+    ctx.fillText('Ƒ' + p.toFixed(2), CW + 3, y + 3);
+  }
+  // Current price highlight
+  ctx.fillStyle = '#080500';
+  ctx.fillRect(CW, ey - 7, MR, 14);
+  ctx.fillStyle = amber;
+  ctx.font = 'bold 10px monospace';
+  ctx.fillText('Ƒ' + lastP.toFixed(2), CW + 3, ey + 4);
+
+  // ── Time axis (bottom) ──
+  ctx.font = '8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(180,120,40,0.25)';
+  const secTotal = n * 0.5; // each point is 500ms
+  const labels = 6;
+  for (let i = 0; i <= labels; i++) {
+    const frac = i / labels;
+    const secAgo = Math.round(secTotal * (1 - frac));
+    const x = frac * CW;
+    if (secAgo > 0) {
+      const lbl = secAgo >= 60 ? Math.floor(secAgo/60) + 'm' + (secAgo%60?String(secAgo%60).padStart(2,'0')+'s':'') : secAgo + 's';
+      ctx.fillText('-' + lbl, x, H - 3);
+    } else {
+      ctx.fillText('NOW', x, H - 3);
+    }
+  }
+
+  // ── CRT Scanlines ──
+  ctx.fillStyle = 'rgba(0,0,0,0.04)';
+  for (let y = 0; y < H; y += 2) ctx.fillRect(0, y, W, 1);
+
+  // ── Top-left HUD readout ──
+  const pctChg = openP ? ((lastP - openP) / openP * 100) : 0;
+  const pctStr = (pctChg >= 0 ? '+' : '') + pctChg.toFixed(2) + '%';
+  const hiLo = 'H:Ƒ' + max.toFixed(2) + ' L:Ƒ' + min.toFixed(2);
+
+  // Symbol
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#e6a030';
+  ctx.fillText(CURRENT || '—', 6, 14);
+
+  // Price + pct + hi/lo
+  const symW = (CURRENT || '—').length * 7.5 + 12;
+  ctx.font = '10px monospace';
+  ctx.fillStyle = isUp ? '#00ff88' : '#ff5533';
+  ctx.fillText('Ƒ' + lastP.toFixed(2), symW, 14);
+  ctx.fillStyle = 'rgba(180,120,40,0.5)';
+  ctx.fillText(pctStr + '  ' + hiLo, symW + (lastP.toFixed(2).length + 1) * 6.5 + 6, 14);
 }
 
-// Redraw chart on resize so it's never blank after layout changes
+// ── Rolling buffer: push price on each tick ──
+let _waveAnimFrame = null;
+function _wavePush(price) {
+  const maxBuf = 800; // enough for widest monitors
+  _waveBuffer.push(price);
+  if (_waveBuffer.length > maxBuf) _waveBuffer.shift();
+  if (!_waveOpenPrice) _waveOpenPrice = price;
+  // Throttle redraws to ~20fps (every 50ms) to save CPU
+  if (!_waveAnimFrame) {
+    _waveAnimFrame = requestAnimationFrame(() => {
+      _waveAnimFrame = null;
+      drawChart();
+    });
+  }
+}
+
+// Redraw chart on resize
 try {
   const _chartCanvas = document.getElementById('chart');
   if (_chartCanvas) {
-    new ResizeObserver(() => { if (OHLC.length) drawChart(); }).observe(_chartCanvas);
+    new ResizeObserver(() => { if (_waveBuffer.length) drawChart(); }).observe(_chartCanvas);
   }
 } catch(e) {}
 
@@ -1256,22 +1463,11 @@ ws.addEventListener('message', (ev)=>{
       try { updateBottomTicker(); } catch(e) {}
     }
     renderTickers();
-    // Append new candle to live chart instead of re-requesting full OHLC every tick
+    // Push raw tick price into wave buffer for scrolling chart
     if (CURRENT && Array.isArray(msg.data)) {
       const tick = msg.data.find(t => t && t.symbol === CURRENT);
-      if (tick && OHLC.length) {
-        const last = OHLC[OHLC.length - 1];
-        const now  = Date.now();
-        // Start a new candle every 30s, otherwise extend current
-        if (now - last.t > 30000) {
-          OHLC.push({ t: now, o: last.c, h: tick.price, l: tick.price, c: tick.price, v: 0 });
-          if (OHLC.length > 300) OHLC.shift();
-        } else {
-          last.h = Math.max(last.h, tick.price);
-          last.l = Math.min(last.l, tick.price);
-          last.c = tick.price;
-        }
-        drawChart();
+      if (tick) {
+        _wavePush(tick.price);
       }
     }
   }
@@ -1329,6 +1525,9 @@ ws.addEventListener('message', (ev)=>{
   if (msg.type === 'chart') {
     if (msg.data && msg.data.ohlc) {
       OHLC = msg.data.ohlc;
+      // Seed wave buffer from OHLC close prices
+      _waveBuffer = msg.data.ohlc.map(d => d.c);
+      _waveOpenPrice = msg.data.ohlc.length ? msg.data.ohlc[0].o : 0;
       drawChart();
     }
   }

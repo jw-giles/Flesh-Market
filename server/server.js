@@ -210,10 +210,10 @@ function resetDailyPrevClose() {
 const COMPANY_NAMES=["Anchor Biotech","Anchor International","Anchor Realty","Anchor Retail","ApexContraband","AshenTextiles","Aspen Automation","Aspen Energy","Aspen Financial","Atlas Consulting","Atlas Dynamics","Atlas Energy","Atlas Realty","Atlas Supplies","Atlas Textiles","Aurora Electric","Aurora Enterprises","Aurora Metals","Aurora Robotics","Beacon Consulting","Beacon Technologies","BlackCapital","BloodWorks","Blue Media","Blue Packaging","Blue Shipping","BoneMarkets","BoneYards","CarrionFarms","Cascade Minerals","Cascade Pharma","Catalyst Insurance","Catalyst Packaging","Catalyst Pharma","Cedar Dynamics","Cedar Insurance","Cedar Networks","CipherHoldings","CoalitionMetals","Comet Foods","Comet Packaging","Copper Dynamics","Copper Industries","Copper Insurance","Copper Marine","CorpseSystems","Crescent Robotics","Crescent Ventures","CrimsonChains","DarkRobotics","East Consulting","East Foods","East Retail","East Ventures","Evergreen Financial","First Minerals","First Networks","First Works","Frontier Supplies","GhostFoundry","Global Enterprises","Global Supplies","Golden Aerospace","Golden Insurance","Golden Packaging","GraftBiotech","Granite Aerospace","Granite Realty","GraveWorks","Green Shipping","GreyMining","GreywaterLabs","Grove Enterprises","Harbor Enterprises","Harbor Financial","Harbor Media","HollowLogistics","Horizon Automation","Horizon Retail","Liberty Packaging","Liberty Ventures","Lighthouse Logistics","Lumen Shipping","Maple Industries","MireInsurance","Momentum Logistics","National Foods","National Media","National Packaging","National Retail","Neon Retail","Neon Technologies","Nexus Aerospace","Nexus Financial","Nexus Supplies","NightFinance","Nimbus Biotech","Nimbus Realty","NoirTransport","North Biotech","North Consulting","North Industries","North Motors","Nova Biotech","NullSyndicate","Oak Capital","Oak Marine","Oak Ventures","ObsidianShipping","OccultMaterials","OrganCorp","Orion Foods","Orion Logistics","Orion Supplies","PhantomCourier","Pioneer Aerospace","Pioneer Realty","Pioneer Supplies","Pixel Biotech","Pixel Dynamics","Pixel Software","Prairie Financial","Prime Automation","Redwood Materials","Redwood Retail","River Aerospace","River Materials","RogueMinerals","SableSecurity","SeverShipping","ShadePharma","ShadowDynamics","Sierra Aerospace","Sierra Apparel","Sierra Consulting","Sierra Hospitality","Silver Holdings","Silver Motors","Silver Shipping","Silver Works","SinisterFoods","Skyline Packaging","SmugglerIndustries","SmugglerMedia","SmugglerNetworks","South Consulting","South Hardware","South Industries","South Minerals","SpecterIndustries","Summit Automation","Summit Logistics","Summit Retail","Sycamore Partners","Sycamore Software","TempestArms","ToxicChains","UnderNet","United Hospitality","United Insurance","United Technologies","Valley Realty","VeinConsortium","Vertex Aerospace","Vertex Dynamics","Vertex Foods","Vertex Logistics","Vertex Robotics","Vertex Shipping","Vertex Systems","Vertex Ventures","West Hospitality","West Works","Willow Aerospace","Willow Hardware","Willow Labs","WraithEnergy","Zenith Automation","Zenith Health","Zenith Insurance","Zenith Media"];
 const NAMES=Array.from(new Set(COMPANY_NAMES.map(n=>n.replace(/\d+$/,'').trim())));
 function symbolize(name){const words=String(name||'').replace(/[^A-Za-z ]/g,' ').trim().split(/\s+/).filter(Boolean);let t=words.map(w=>w[0]).join('').toUpperCase();if(t.length<3){const letters=words.join('').toUpperCase();for(let i=1;i<letters.length&&t.length<3;i++)t+=letters[i];}if(t.length<3)t=(t+'FMK').slice(0,3);if(t.length>4)t=t.slice(0,4);return t;}
-const companies=NAMES.map((n,i)=>({id:i,name:n,symbol:symbolize(n),price:rng(8,60),ohlc:[],lnP:0,sigma:0.022+seededRand()*0.012,mu:-0.0003+seededRand()*0.0003,kappa:0.015+seededRand()*0.015,sector:(i%8),offset:-0.3+seededRand()*0.6}));
+const companies=NAMES.map((n,i)=>({id:i,name:n,symbol:symbolize(n),price:rng(8,60),ohlc:[],lnP:0,sigma:0.00018+seededRand()*0.00012,mu:-0.000005+seededRand()*0.00001,kappa:0.0008+seededRand()*0.0012,sector:(i%8),offset:-0.3+seededRand()*0.6}));
 (()=>{const used=new Set(),letters='ABCDEFGHIJKLMNOPQRSTUVWXYZ';for(const c of companies){let sym=c.symbol.replace(/[^A-Z]/g,'').slice(0,4);if(sym.length<3)sym=(sym+'FMKT').slice(0,3);let k=0;while(used.has(sym)){sym=k<26?sym.slice(0,3)+letters[k]:sym.slice(0,2)+letters[Math.floor((k-26)/26)%26]+letters[(k-26)%26];sym=sym.slice(0,4);k++;}c.symbol=sym;used.add(sym);}})();
 const SECTOR_TARGETS = [15, 25, 35, 45, 20, 55, 30, 70]; // varied anchors per sector
-const SECTORS=new Array(8).fill(0).map((_,i)=>({lnIndex:Math.log(SECTOR_TARGETS[i]*(0.8+0.4*seededRand())),sigma:0.008+seededRand()*0.008,mu:-0.0001+seededRand()*0.0002,kappa:0.004+seededRand()*0.004,target:SECTOR_TARGETS[i]}));
+const SECTORS=new Array(8).fill(0).map((_,i)=>({lnIndex:Math.log(SECTOR_TARGETS[i]*(0.8+0.4*seededRand())),sigma:0.00010+seededRand()*0.00008,mu:-0.000002+seededRand()*0.000004,kappa:0.0003+seededRand()*0.0004,target:SECTOR_TARGETS[i]}));
 companies.forEach(c=>{c.lnP=Math.log(c.price); c._spawnLnP=c.lnP;});
 
 // ─── Hot Stocks Rotation ──────────────────────────────────────────────────────
@@ -302,7 +302,7 @@ function fireTensionEvent(colonyId, band, tension) {
   const targets = COLONY_COMPANIES[colonyId] || [];
   if (!targets.length) return;
   // Severity scales with band
-  const severity = band === 3 ? 0.06 : band === 2 ? 0.035 : 0.015;
+  const severity = band === 3 ? 0.010 : band === 2 ? 0.005 : 0.002;
   const COLONY_DISPLAY = {
     new_anchor:'New Anchor',cascade_station:'Cascade Station',frontier_outpost:'Frontier Outpost',
     the_hollow:'The Hollow',vein_cluster:'Vein Cluster',aurora_prime:'Aurora Prime',
@@ -328,8 +328,8 @@ function fireTensionEvent(colonyId, band, tension) {
 
 // ─── Smuggling Run System ─────────────────────────────────────────────────────
 const activeSmuggling = new Map();
-const SMUGGLE_COOLDOWN_MS = 15 * 60_000;
-const _lastSmuggle = new Map();
+const TRADE_RUN_COOLDOWN_MS = 15 * 60_000; // shared between shipping & smuggling
+const _lastTradeRun = new Map(); // shared cooldown: playerId → timestamp
 
 const CARGO_TYPES = [
   { id:'synth_organs',      name:'Synth Organs',          baseMult:1.8, riskMod:0.10 },
@@ -340,11 +340,37 @@ const CARGO_TYPES = [
   { id:'black_market_tech', name:'Black Market Tech',     baseMult:2.5, riskMod:0.18 },
 ];
 
+// Smuggling bet-size scaling: larger bets = more risk
+const SMUGGLE_BET_TIERS = [
+  { max: 5_000,   extra: 0.00 },
+  { max: 25_000,  extra: 0.10 },
+  { max: 100_000, extra: 0.20 },
+  { max: Infinity, extra: 0.28 },
+];
+function smuggleBetRisk(amt) {
+  for (const t of SMUGGLE_BET_TIERS) { if (amt <= t.max) return t.extra; }
+  return 0.28;
+}
+// Syndicate: no risk reduction — instead +15% payout multiplier, +5% risk on own turf
+const SYNDICATE_PAYOUT_BONUS = 0.15; // 15% extra payout on smuggling
+const SYNDICATE_OWN_TURF_RISK = 0.05; // +5% risk when smuggling through syndicate-controlled colonies
+
+// ─── Shipping Lane System (Legal Commerce) ───────────────────────────────────
+const activeShipping = new Map();
+const SHIPPING_CARGO = [
+  { id:'standard_freight', name:'Standard Freight',  mult:1.15, riskMod:0.00 },
+  { id:'premium_goods',    name:'Premium Goods',     mult:1.25, riskMod:0.05 },
+  { id:'luxury_supplies',  name:'Luxury Supplies',   mult:1.35, riskMod:0.12 },
+];
+const SHIPPING_BASE_RISK = 0.18;
+const SHIPPING_DUR_SEC = 30;
+const INSURANCE_PREMIUM = 0.05; // 5% of stake
+
 const LANE_RISK = {
-  corporate: { intercept:0.08, durSec:30,  payMult:1.0 },
-  grey:      { intercept:0.18, durSec:45,  payMult:1.5 },
-  contested: { intercept:0.30, durSec:60,  payMult:2.0 },
-  dark:      { intercept:0.40, durSec:90,  payMult:3.0 },
+  corporate: { intercept:0.15, durSec:30,  payMult:1.0 },
+  grey:      { intercept:0.28, durSec:45,  payMult:1.5 },
+  contested: { intercept:0.40, durSec:60,  payMult:2.0 },
+  dark:      { intercept:0.55, durSec:90,  payMult:3.0 },
 };
 
 // LANES_SERVER: mirror of the client LANES array for server-side lookups
@@ -405,36 +431,103 @@ function resolveSmuggling(playerId) {
   const laneRisk = LANE_RISK[run.laneType] || LANE_RISK.grey;
   const cargo = CARGO_TYPES.find(c => c.id === run.cargoId) || CARGO_TYPES[0];
 
-  const fromState = getColonyState(run.from) || { tension:0 };
-  const toState   = getColonyState(run.to)   || { tension:0 };
+  const fromState = getColonyState(run.from) || { tension:0, control_coalition:0, control_syndicate:0, control_void:0 };
+  const toState   = getColonyState(run.to)   || { tension:0, control_coalition:0, control_syndicate:0, control_void:0 };
   const avgTension = ((fromState.tension||0) + (toState.tension||0)) / 2;
-  const tensionBonus = avgTension / 500;
+
+  // INVERTED: High tension = LESS risk for smuggling (chaos helps smugglers)
+  const tensionMod = -(avgTension / 2000); // up to -5% at 100 tension
+
+  // Bet-size scaling: larger bets = more risk
+  const betRisk = smuggleBetRisk(run.stake);
+
+  // Faction bonus: player's faction controlling origin/dest reduces risk
+  let factionMod = 0;
+  let playerFaction = null;
+  try { playerFaction = getPlayerFaction(playerId); } catch(_){}
+  if (playerFaction && playerFaction !== 'guild') {
+    const ctrlKey = 'control_' + playerFaction;
+    const fromCtrl = fromState[ctrlKey] || 0;
+    const toCtrl   = toState[ctrlKey]   || 0;
+    // Each colony you control: -2% risk (your people look the other way)
+    if (fromCtrl >= 40) factionMod -= 0.02;
+    if (toCtrl >= 40)   factionMod -= 0.02;
+    // Enemy dominant colony: +3% risk
+    const fromLeading = ['coalition','syndicate','void'].reduce((b,f)=>(fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b,'coalition');
+    const toLeading   = ['coalition','syndicate','void'].reduce((b,f)=>(toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b,'coalition');
+    if (fromLeading !== playerFaction && avgTension < 30) factionMod += 0.03;
+    if (toLeading !== playerFaction && avgTension < 30)   factionMod += 0.03;
+  }
+
+  // Syndicate: no free rides — +5% risk on own turf (enforcers tax you), payout bonus applied later
+  let syndicateRisk = 0;
+  if (playerFaction === 'syndicate') {
+    const fromLeadS = ['coalition','syndicate','void'].reduce((b,f)=>(fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b,'coalition');
+    const toLeadS   = ['coalition','syndicate','void'].reduce((b,f)=>(toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b,'coalition');
+    if (fromLeadS === 'syndicate') syndicateRisk += SYNDICATE_OWN_TURF_RISK;
+    if (toLeadS === 'syndicate')   syndicateRisk += SYNDICATE_OWN_TURF_RISK;
+  }
 
   const laneKey = getLaneKey(run.from, run.to);
   const blockade = activeBlockades.get(laneKey);
-  const blockadeBonus = (blockade && blockade.active) ? 0.25 : 0;
+  // Smuggling still available during blockade but +10% risk
+  const blockadeMod = (blockade && blockade.active) ? 0.10 : 0;
 
-  const interceptChance = Math.min(0.85, laneRisk.intercept + cargo.riskMod + tensionBonus + blockadeBonus);
+  const interceptChance = Math.min(0.85, Math.max(0.05,
+    laneRisk.intercept + cargo.riskMod + betRisk + tensionMod + factionMod + syndicateRisk + blockadeMod
+  ));
   const intercepted = Math.random() < interceptChance;
 
   const sockets = playerSockets.get(playerId);
   if (intercepted) {
     const headline = `Smuggling run intercepted: ${cargo.name} cargo seized on ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')} lane`;
     pushHeadline(headline, 'bad', '🚨');
+
+    // Void raiding kickback: online Void players split 2% of the intercepted cargo
+    try {
+      const voidCut = Math.round(run.stake * 0.02 * 100) / 100;
+      if (voidCut > 0) {
+        const voidPlayers = [];
+        for (const [pid] of playerSockets) {
+          if (pid === playerId) continue;
+          try { if (getPlayerFaction(pid) === 'void') voidPlayers.push(pid); } catch(_){}
+        }
+        if (voidPlayers.length > 0) {
+          const perPlayer = Math.round(voidCut / voidPlayers.length * 100) / 100;
+          for (const vid of voidPlayers) {
+            const vp = getPlayer(vid);
+            if (vp) {
+              safeAddCash(vp, perPlayer);
+              savePlayer(vp);
+              const vs = playerSockets.get(vid);
+              if (vs) {
+                const vmsg = JSON.stringify({ type:'void_raid_income', data:{ amount: perPlayer, source:'smuggling_intercept', lane: run.from+'→'+run.to }});
+                for (const ws of vs) { try { if(ws.readyState===1) ws.send(vmsg); } catch(_){} }
+              }
+            }
+          }
+        }
+      }
+    } catch(_){}
+
     if (sockets) {
       const msg = JSON.stringify({ type:'smuggling_result', data:{
         success:false, stake:run.stake, cargo:cargo.name,
         from:run.from, to:run.to, interceptChance:Math.round(interceptChance*100),
         cash: p.cash,
       }});
-      // Also push portfolio so P&L updates immediately after interception
       const pfMsg = JSON.stringify({type:'portfolio',data:snapshotPortfolio(p)});
       for (const ws of sockets) { try { if(ws.readyState===1) { ws.send(msg); ws.send(pfMsg); } } catch(e){} }
     }
   } else {
-    const payout = Math.round(run.stake * cargo.baseMult * laneRisk.payMult * 100) / 100;
+    const syndicatePayMult = (playerFaction === 'syndicate') ? (1 + SYNDICATE_PAYOUT_BONUS) : 1;
+    const payout = Math.round(run.stake * cargo.baseMult * laneRisk.payMult * syndicatePayMult * 100) / 100;
     safeAddCash(p, payout);
     savePlayer(p);
+
+    // Lane share kickback: shareholders get 1% of profit
+    try { distributeLaneKickback(laneKey, payout - run.stake, 0.01, playerId); } catch(_){}
+
     const headline = `Smuggling run cleared: ${cargo.name} delivered via ${run.laneType} lane`;
     pushHeadline(headline, 'good', '📦');
     if (sockets) {
@@ -443,18 +536,166 @@ function resolveSmuggling(playerId) {
         from:run.from, to:run.to, interceptChance:Math.round(interceptChance*100),
         cash: p.cash,
       }});
-      // Also push portfolio so P&L updates immediately
       const pfMsg = JSON.stringify({type:'portfolio',data:snapshotPortfolio(p)});
       for (const ws of sockets) { try { if(ws.readyState===1) { ws.send(msg); ws.send(pfMsg); } } catch(e){} }
     }
   }
 }
 
+// ─── Shipping Lane Resolution ────────────────────────────────────────────────
+function resolveShipping(playerId) {
+  const run = activeShipping.get(playerId);
+  if (!run) return;
+  activeShipping.delete(playerId);
+
+  const p = getPlayer(playerId);
+  if (!p) return;
+
+  const cargo = SHIPPING_CARGO.find(c => c.id === run.cargoId) || SHIPPING_CARGO[0];
+
+  const fromState = getColonyState(run.from) || { tension:0, control_coalition:0, control_syndicate:0, control_void:0 };
+  const toState   = getColonyState(run.to)   || { tension:0, control_coalition:0, control_syndicate:0, control_void:0 };
+  const avgTension = ((fromState.tension||0) + (toState.tension||0)) / 2;
+
+  // Normal: High tension = MORE risk for shipping (war zones are dangerous)
+  const tensionMod = avgTension / 1500; // up to ~6.7% at 100 tension
+
+  // Faction bonus: your faction controlling origin/dest reduces risk
+  let factionMod = 0;
+  let playerFaction = null;
+  try { playerFaction = getPlayerFaction(playerId); } catch(_){}
+  if (playerFaction && playerFaction !== 'guild') {
+    const ctrlKey = 'control_' + playerFaction;
+    const fromCtrl = fromState[ctrlKey] || 0;
+    const toCtrl   = toState[ctrlKey]   || 0;
+    // Friendly territory: -2.5% risk per colony
+    if (fromCtrl >= 40) factionMod -= 0.025;
+    if (toCtrl >= 40)   factionMod -= 0.025;
+    // Enemy territory: +4% risk per colony
+    const fromLeading = ['coalition','syndicate','void'].reduce((b,f)=>(fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b,'coalition');
+    const toLeading   = ['coalition','syndicate','void'].reduce((b,f)=>(toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b,'coalition');
+    if (fromLeading !== playerFaction) factionMod += 0.04;
+    if (toLeading !== playerFaction)   factionMod += 0.04;
+  }
+
+  const interceptChance = Math.min(0.60, Math.max(0.02,
+    SHIPPING_BASE_RISK + cargo.riskMod + tensionMod + factionMod
+  ));
+  const intercepted = Math.random() < interceptChance;
+
+  const sockets = playerSockets.get(playerId);
+  if (intercepted) {
+    // If insured: player gets stake back, loses only the insurance premium
+    if (run.insured) {
+      safeAddCash(p, run.stake); // refund stake
+      savePlayer(p);
+      const headline = `Shipping loss insured: ${cargo.name} cargo on ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')} — claim paid`;
+      pushHeadline(headline, 'neutral', '🛡');
+      if (sockets) {
+        const msg = JSON.stringify({ type:'shipping_result', data:{
+          success:false, insured:true, stake:run.stake, insurancePaid:run.insurancePaid,
+          cargo:cargo.name, from:run.from, to:run.to, interceptChance:Math.round(interceptChance*100),
+          cash: p.cash, netLoss: run.insurancePaid,
+        }});
+        const pfMsg = JSON.stringify({type:'portfolio',data:snapshotPortfolio(p)});
+        for (const ws of sockets) { try { if(ws.readyState===1) { ws.send(msg); ws.send(pfMsg); } } catch(e){} }
+      }
+    } else {
+      // Total loss — no insurance
+      const headline = `Shipping cargo lost: ${cargo.name} seized on ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')} lane — no insurance`;
+      pushHeadline(headline, 'bad', '📦');
+
+      // Void raiding kickback: online Void players split 2% of intercepted shipping cargo
+      try {
+        const voidCut = Math.round(run.stake * 0.02 * 100) / 100;
+        if (voidCut > 0) {
+          const voidPlayers = [];
+          for (const [pid] of playerSockets) {
+            if (pid === playerId) continue;
+            try { if (getPlayerFaction(pid) === 'void') voidPlayers.push(pid); } catch(_){}
+          }
+          if (voidPlayers.length > 0) {
+            const perPlayer = Math.round(voidCut / voidPlayers.length * 100) / 100;
+            for (const vid of voidPlayers) {
+              const vp = getPlayer(vid);
+              if (vp) {
+                safeAddCash(vp, perPlayer);
+                savePlayer(vp);
+                const vs = playerSockets.get(vid);
+                if (vs) {
+                  const vmsg = JSON.stringify({ type:'void_raid_income', data:{ amount: perPlayer, source:'shipping_intercept', lane: run.from+'→'+run.to }});
+                  for (const ws of vs) { try { if(ws.readyState===1) ws.send(vmsg); } catch(_){} }
+                }
+              }
+            }
+          }
+        }
+      } catch(_){}
+
+      if (sockets) {
+        const msg = JSON.stringify({ type:'shipping_result', data:{
+          success:false, insured:false, stake:run.stake,
+          cargo:cargo.name, from:run.from, to:run.to, interceptChance:Math.round(interceptChance*100),
+          cash: p.cash,
+        }});
+        const pfMsg = JSON.stringify({type:'portfolio',data:snapshotPortfolio(p)});
+        for (const ws of sockets) { try { if(ws.readyState===1) { ws.send(msg); ws.send(pfMsg); } } catch(e){} }
+      }
+    }
+  } else {
+    // Success — pay profit
+    const payout = Math.round(run.stake * cargo.mult * 100) / 100;
+    safeAddCash(p, payout);
+    savePlayer(p);
+
+    // Lane share kickback: shareholders get 2% of shipping profit
+    const laneKey = getLaneKey(run.from, run.to);
+    try { distributeLaneKickback(laneKey, payout - run.stake, 0.02, playerId); } catch(_){}
+
+    const headline = `Shipping delivered: ${cargo.name} via ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')}`;
+    pushHeadline(headline, 'good', '🚢');
+    if (sockets) {
+      const msg = JSON.stringify({ type:'shipping_result', data:{
+        success:true, stake:run.stake, payout, cargo:cargo.name,
+        from:run.from, to:run.to, interceptChance:Math.round(interceptChance*100),
+        cash: p.cash,
+      }});
+      const pfMsg = JSON.stringify({type:'portfolio',data:snapshotPortfolio(p)});
+      for (const ws of sockets) { try { if(ws.readyState===1) { ws.send(msg); ws.send(pfMsg); } } catch(e){} }
+    }
+  }
+}
+
+// ─── Lane Share Kickback: distribute % of profit to lane shareholders ────────
+function distributeLaneKickback(laneKey, profit, rate, excludePlayerId) {
+  if (profit <= 0) return;
+  const kickback = Math.round(profit * rate * 100) / 100;
+  if (kickback < 0.01) return;
+  try {
+    const shares = getLaneShares(laneKey);
+    if (!shares || shares.length === 0) return;
+    const perShare = Math.round(kickback / shares.length * 100) / 100;
+    if (perShare < 0.01) return;
+    for (const sh of shares) {
+      if (sh.holder_id === excludePlayerId) continue;
+      const sp = getPlayer(sh.holder_id);
+      if (!sp) continue;
+      safeAddCash(sp, perShare);
+      savePlayer(sp);
+      const ss = playerSockets.get(sh.holder_id);
+      if (ss) {
+        const smsg = JSON.stringify({ type:'lane_kickback', data:{ amount: perShare, laneKey, source:'trade_volume' }});
+        for (const ws of ss) { try { if(ws.readyState===1) ws.send(smsg); } catch(_){} }
+      }
+    }
+  } catch(_){}
+}
+
 // ─── Blockade System ──────────────────────────────────────────────────────────
 const activeBlockades = new Map();
 const BLOCKADE_THRESHOLD   = 50000;
 const BLOCKADE_DURATION_MS = 2 * 60 * 60 * 1000;
-const BLOCKADE_STOCK_HIT   = 0.03;
+const BLOCKADE_STOCK_HIT   = 0.005;
 
 function getLaneKey(a, b) { return [a,b].sort().join('|'); }
 
@@ -471,7 +712,7 @@ function activateBlockade(laneKey) {
     for (const ci of targets) {
       const c = companies[ci];
       if (!c || c._special) continue;
-      c.lnP -= BLOCKADE_STOCK_HIT + Math.random() * 0.01;
+      c.lnP -= BLOCKADE_STOCK_HIT + Math.random() * 0.002;
       c.price = Math.max(0.5, Math.exp(c.lnP));
     }
   }
@@ -573,7 +814,11 @@ function saveGalaxySystems() {
       blockades.push({ laneKey: lk, pool: blk.pool, faction: blk.faction, active: blk.active, activatedAt: blk.activatedAt||null, expiresAt: blk.expiresAt||null, contributors: contribs });
     }
     // Lane shares are in SQLite — no need to save here
-    saveGalaxySystemsState({ smuggling, blockades, savedAt: Date.now() });
+    const shipping = [];
+    for (const [pid, run] of activeShipping) {
+      shipping.push({ playerId: pid, ...run });
+    }
+    saveGalaxySystemsState({ smuggling, blockades, shipping, savedAt: Date.now() });
   } catch(e) { console.error('[Galaxy save]', e); }
 }
 
@@ -593,7 +838,7 @@ function restoreGalaxySystems() {
           stake: run.stake, laneType: run.laneType,
           startTs: run.startTs, resolveTs: run.resolveTs,
         });
-        _lastSmuggle.set(run.playerId, run.startTs || now);
+        _lastTradeRun.set(run.playerId, run.startTs || now);
         const delay = Math.max(0, remaining);
         setTimeout(() => resolveSmuggling(run.playerId), delay);
       }
@@ -621,6 +866,23 @@ function restoreGalaxySystems() {
     const shareCount = getAllLaneShares().length;
     if (shareCount) console.log(`[Galaxy restore] ${shareCount} lane shares in DB`);
 
+    // Restore shipping runs
+    if (Array.isArray(data.shipping)) {
+      for (const run of data.shipping) {
+        if (!run.playerId) continue;
+        const remaining = (run.resolveTs || 0) - now;
+        activeShipping.set(run.playerId, {
+          from: run.from, to: run.to, cargoId: run.cargoId,
+          stake: run.stake, insured: run.insured, insurancePaid: run.insurancePaid || 0,
+          startTs: run.startTs, resolveTs: run.resolveTs,
+        });
+        _lastTradeRun.set(run.playerId, run.startTs || now);
+        const delay = Math.max(0, remaining);
+        setTimeout(() => resolveShipping(run.playerId), delay);
+      }
+      if (data.shipping.length) console.log(`[Galaxy restore] ${data.shipping.length} shipping runs restored`);
+    }
+
     console.log('[Galaxy] Systems state restored');
   } catch(e) { console.error('[Galaxy restore]', e); }
 }
@@ -630,7 +892,7 @@ function restoreGalaxySystems() {
 const FLSH_COMPANY = {
   id: 9999, name: 'FLSH Capital', symbol: 'FLSH',
   price: 1_000_000_000, lnP: Math.log(1_000_000_000),
-  sigma: 0.0008, mu: 0.00002,
+  sigma: 0.00005, mu: 0.000002,
   ohlc: [], _special: true
 };
 companies.push(FLSH_COMPANY);
@@ -640,7 +902,7 @@ companies.push(FLSH_COMPANY);
 const SWT_COMPANY = {
   id: 9998, name: "S'weet", symbol: 'SWT',
   price: 280, lnP: Math.log(280), _spawnLnP: Math.log(280),
-  sigma: 0.030, mu: 0.00002, kappa: 0.07,
+  sigma: 0.00035, mu: 0.00002, kappa: 0.002,
   offset: 2.23,
   ohlc: [], sector: 7,
 };
@@ -650,7 +912,7 @@ companies.push(SWT_COMPANY);
 const BRNC_COMPANY = {
   id: 9997, name: 'Baron Corps', symbol: 'BRNC',
   price: 65, lnP: Math.log(65), _spawnLnP: Math.log(65),
-  sigma: 0.025, mu: -0.00005, kappa: 0.07,
+  sigma: 0.00030, mu: -0.00001, kappa: 0.002,
   offset: 0.77,
   ohlc: [], sector: 3,
 };
@@ -662,20 +924,26 @@ function updateFLSHPrice() {
   const f = FLSH_COMPANY;
   const eps = randn() * f.sigma;           // normal daily micro-drift
   f.lnP += f.mu + eps;
-  if (Math.random() < 0.01) {              // rare ±1% shock
-    f.lnP += randn() * 0.01;
+  if (Math.random() < 0.01) {              // rare ±0.1% shock
+    f.lnP += randn() * 0.001;
   }
   // Hard floor at Ƒ500M — it will never crash to zero
   f.lnP = Math.max(Math.log(500_000_000), f.lnP);
   const prev = f.price;
   f.price = Math.exp(f.lnP);
   const now = Date.now();
-  const open=prev, close=f.price;
-  const high=Math.max(open,close)*(1+Math.abs(randn()*0.0002));
-  const low =Math.min(open,close)*(1-Math.abs(randn()*0.0002));
-  if (!Array.isArray(f.ohlc)) f.ohlc=[];
-  f.ohlc.push({t:now,o:open,h:high,l:low,c:close,v:0});
-  if (f.ohlc.length>400) f.ohlc.shift();
+  // FLSH bar aggregation
+  const BAR_MS_F = 5_000;
+  if (!f._bar) f._bar = { t: now, o: f.price, h: f.price, l: f.price, c: f.price, v: 0 };
+  f._bar.h = Math.max(f._bar.h, f.price);
+  f._bar.l = Math.min(f._bar.l, f.price);
+  f._bar.c = f.price;
+  if (now - f._bar.t >= BAR_MS_F) {
+    if (!Array.isArray(f.ohlc)) f.ohlc=[];
+    f.ohlc.push({ t: f._bar.t, o: f._bar.o, h: f._bar.h, l: f._bar.l, c: f._bar.c, v: 0 });
+    if (f.ohlc.length>400) f.ohlc.shift();
+    f._bar = { t: now, o: f.price, h: f.price, l: f.price, c: f.price, v: 0 };
+  }
 }
 
 // ─── Limit order restore from DB ──────────────────────────────────────────────
@@ -918,7 +1186,7 @@ function runEarningsEvent() {
   if (!eligible.length) return;
   const c = eligible[Math.floor(Math.random() * eligible.length)];
   const beat = Math.random() > 0.45;
-  const magnitude = 0.06 + Math.random() * 0.14; // 6–20%
+  const magnitude = 0.008 + Math.random() * 0.022; // 0.8–3%
   if (beat) {
     c.lnP += magnitude;
   } else {
@@ -1073,15 +1341,15 @@ function runDividends() {
       const c = companies.find(x => x.symbol === sym);
       if (!c) continue;
       const s = c.sector;
-      // Base dividend (Finance/Insurance/Energy/Tech)
+      // Dividend sectors (Finance/Insurance/Energy/Tech) get full rate
       if (DIVIDEND_SECTORS.has(s)) {
         const baseRate = DIVIDEND_RATE + (sectorBonus[s] || 0);
         dividend += c.price * qty * baseRate;
       }
-      // Faction-specific bonus sectors (Biotech=1, Manufacturing=3, Logistics=5, Misc=7)
-      // that aren't in DIVIDEND_SECTORS but have colony bonuses
-      else if (sectorBonus[s]) {
-        dividend += c.price * qty * sectorBonus[s];
+      // All other sectors get a base holding dividend (0.2% per 2h)
+      else {
+        const holdingRate = 0.002 + (sectorBonus[s] || 0);
+        dividend += c.price * qty * holdingRate;
       }
     }
     if (dividend < 0.01) continue;
@@ -2598,8 +2866,8 @@ function genHeadline(){
   const c=pick(companies),r=Math.random();
   const themes=r<0.45?THEMES_GOOD:(r<0.9?THEMES_BAD:THEMES_WEIRD);
   const tone=themes===THEMES_GOOD?'good':(themes===THEMES_BAD?'bad':'neutral');
-  if(themes===THEMES_GOOD){c.lnP+=0.015+Math.random()*0.045;c.price=Math.max(0.5,Math.exp(c.lnP));}
-  else if(themes===THEMES_BAD){c.lnP-=0.015+Math.random()*0.045;c.price=Math.max(0.5,Math.exp(c.lnP));}
+  if(themes===THEMES_GOOD){c.lnP+=0.001+Math.random()*0.003;c.price=Math.max(0.5,Math.exp(c.lnP));}
+  else if(themes===THEMES_BAD){c.lnP-=0.001+Math.random()*0.003;c.price=Math.max(0.5,Math.exp(c.lnP));}
   pushHeadline(`${c.name} (${c.symbol}): ${pick(themes)}`,tone,c.symbol);
 }
 
@@ -2613,16 +2881,16 @@ function stepMarket(){
   // ── Sector index step with GARCH-style vol clustering ────────────────────
   for(let s=0;s<SECTORS.length;s++){
     const S=SECTORS[s];
-    // Rare sector-wide shock — 0.1% chance per tick
-    const sectorShock = Math.random()<0.001 ? randn()*0.04 : 0;
+    // Rare sector-wide shock — 0.05% chance per tick, small magnitude
+    const sectorShock = Math.random()<0.0005 ? randn()*0.003 : 0;
     const eps = randn()*S.sigma + sectorShock;
     // Mean-reversion back toward per-sector target
     const sectorTarget = Math.log(S.target || 30);
     S.lnIndex += S.mu + S.kappa*(sectorTarget - S.lnIndex) + eps;
     // Ceiling: log(200) so sectors have room to move
     S.lnIndex = Math.max(Math.log(3), Math.min(Math.log(200), S.lnIndex));
-    // GARCH vol decay
-    S.sigma = Math.max(0.005, Math.min(0.07, 0.91*S.sigma + 0.09*Math.abs(eps)));
+    // GARCH vol decay — tight range
+    S.sigma = Math.max(0.00005, Math.min(0.0005, 0.93*S.sigma + 0.07*Math.abs(eps)));
   }
 
   companies.forEach(c=>{
@@ -2630,21 +2898,21 @@ function stepMarket(){
     const S    = SECTORS[c.sector||0];
     const base = S.lnIndex + (c.offset||0);
 
-    // Hot stocks get boosted volatility and directional drift
+    // Hot stocks get slight volatility boost and gentle directional drift
     const isHot = _hotStocks.has(c.id);
-    const hotSigma = isHot ? 1.4 : 1.0;
-    const hotBias = isHot ? (_hotBias[c.id] || 0) * 0.0006 : 0;
+    const hotSigma = isHot ? 1.15 : 1.0;
+    const hotBias = isHot ? (_hotBias[c.id] || 0) * 0.00003 : 0;
 
     // Idiosyncratic shock — moderate fat tails
     const u    = Math.random();
     const tail = u < 0.015 ? 2.0 : (u < 0.06 ? 1.3 : 1.0);
-    const eps  = randn() * (c.sigma||0.025) * tail * hotSigma;
+    const eps  = randn() * (c.sigma||0.00025) * tail * hotSigma;
 
     // If admin recently set price, use stronger mean-reversion toward admin target
-    const kappa = c._adminBias ? 0.002 : (c.kappa||0.025);
+    const kappa = c._adminBias ? 0.0005 : (c.kappa||0.001);
     const mu    = c._adminBias
-      ? (c._adminBias > 0 ? 0.0002 : -0.0002)
-      : Math.min(0.0003, (c.mu||0)) + hotBias;
+      ? (c._adminBias > 0 ? 0.00003 : -0.00003)
+      : Math.min(0.00003, (c.mu||0)) + hotBias;
 
     // Mean-reversion toward sector base
     const target = c._adminBias ? c._adminTargetLnP : base;
@@ -2653,18 +2921,18 @@ function stepMarket(){
     // ── ANTI-RUNAWAY GRAVITY ──────────────────────────────────────────────
     // Measure lifetime gain from spawn price
     const spawnLnP   = c._spawnLnP || c.lnP;
-    const lifetimeGain = c.lnP - spawnLnP; // in log-space; ln(10)≈2.3 = +900%
+    const lifetimeGain = c.lnP - spawnLnP;
 
     // Graduated gravity: kicks in at +400% (ln≈1.6), softer pull
     if (lifetimeGain > 1.6 && !c._adminBias) {
-      const gravityStrength = Math.min(0.08, (lifetimeGain - 1.6) * 0.025);
+      const gravityStrength = Math.min(0.002, (lifetimeGain - 1.6) * 0.0006);
       delta -= gravityStrength;
     }
 
     // Emergency brake: if up >1500% from spawn, mean-revert toward spawn+500%
-    if (lifetimeGain > 2.77 && !c._adminBias) { // ln(16) ≈ 2.77
-      const emergencyTarget = spawnLnP + 1.79; // spawn × 6 (+500%)
-      delta += 0.05 * (emergencyTarget - c.lnP);
+    if (lifetimeGain > 2.77 && !c._adminBias) {
+      const emergencyTarget = spawnLnP + 1.79;
+      delta += 0.001 * (emergencyTarget - c.lnP);
     }
 
     c.lnP += delta;
@@ -2683,18 +2951,18 @@ function stepMarket(){
     // Hard price floor/ceiling: Ƒ0.50 – Ƒ5000
     c.lnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.lnP));
 
-    // Vol clustering: moderate range, natural decay
+    // Vol clustering: very tight range for sane daily swings
     const absEps = Math.abs(eps);
-    c.sigma = Math.max(0.010, Math.min(0.11,
-      0.90*(c.sigma||0.025) + 0.07*absEps + 0.03*0.025
+    c.sigma = Math.max(0.00008, Math.min(0.0008,
+      0.92*(c.sigma||0.00025) + 0.06*absEps + 0.02*0.00025
     ));
 
-    // Rare idiosyncratic event (0.12%/tick), moderate magnitude
-    if(Math.random()<0.0012){
-      const eventMag = 0.04 + Math.random()*0.08;  // 4–12% move
+    // Rare idiosyncratic event (0.03%/tick), small magnitude
+    if(Math.random()<0.0003){
+      const eventMag = 0.002 + Math.random()*0.004;  // 0.2–0.6% move
       c.lnP += (Math.random()<0.5?1:-1) * eventMag;
       c.lnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.lnP));
-      c.sigma = Math.min(0.11, c.sigma * 2.0);     // vol spike on event
+      c.sigma = Math.min(0.0008, c.sigma * 1.5);
     }
 
     const prev=c.price;
@@ -2706,9 +2974,9 @@ function stepMarket(){
     if (c.lnP >= c._trendCheckLnP + 0.405) {  // +50% in log-space (ln(1.5)≈0.405)
       c._trendCheckLnP = c.lnP;
       if (Math.random() < 0.40) {
-        const pullback = 0.08 + Math.random() * 0.10; // 8–18% pullback
+        const pullback = 0.008 + Math.random() * 0.012; // 0.8–2% pullback
         c.lnP -= pullback;
-        c.sigma = Math.min(0.10, (c.sigma || 0.025) * 1.5);
+        c.sigma = Math.min(0.0008, (c.sigma || 0.00025) * 1.5);
         c.price = Math.max(0.50, Math.exp(c.lnP));
         console.log(`[GRAVITY] ${c.symbol} @ Ƒ${c.price.toFixed(0)} — +${((Math.exp(c.lnP - (c._spawnLnP||0))-1)*100).toFixed(0)}% pullback triggered`);
       }
@@ -2741,14 +3009,18 @@ function stepMarket(){
       setTimeout(() => { c._splitting = false; }, 10000);
     }
 
-    // OHLC with realistic intrabar range proportional to vol
-    const range = c.price * c.sigma * (0.5 + Math.random());
-    const open=prev, close=c.price;
-    const high=Math.max(open,close) + range*0.5;
-    const low =Math.max(0.10, Math.min(open,close) - range*0.5);
-    if(!Array.isArray(c.ohlc))c.ohlc=[];
-    c.ohlc.push({t:now,o:open,h:high,l:low,c:close,v:0});
-    if(c.ohlc.length>400)c.ohlc.shift();
+    // OHLC bar aggregation: accumulate ticks into 30-second bars
+    const BAR_MS = 5_000; // 5 seconds per candle
+    if (!c._bar) c._bar = { t: now, o: c.price, h: c.price, l: c.price, c: c.price, v: 0 };
+    c._bar.h = Math.max(c._bar.h, c.price);
+    c._bar.l = Math.min(c._bar.l, c.price);
+    c._bar.c = c.price;
+    if (now - c._bar.t >= BAR_MS) {
+      if(!Array.isArray(c.ohlc)) c.ohlc=[];
+      c.ohlc.push({ t: c._bar.t, o: c._bar.o, h: c._bar.h, l: c._bar.l, c: c._bar.c, v: c._bar.v });
+      if(c.ohlc.length>400) c.ohlc.shift();
+      c._bar = { t: now, o: c.price, h: c.price, l: c.price, c: c.price, v: 0 };
+    }
   });
 
   updateFLSHPrice();
@@ -2970,7 +3242,11 @@ wss.on('connection',(ws,req)=>{
         if(have>=qty){
           actor.holdings[s]=have-qty;
           if(actor.holdings[s]<=0)delete actor.holdings[s];
-          const grossC=toCents(c.price)*qty,taxC=Math.floor(grossC*TRADE_TAX_BPS/10000);
+          // Scalping penalty: if sell closes a same-cycle buy (round trip), 2x trade tax
+          const dt=_dtGet(actor.id);
+          const isScalp = dt.tickets[s] > 0;
+          const taxMult = isScalp ? 2 : 1;
+          const grossC=toCents(c.price)*qty,taxC=Math.floor(grossC*TRADE_TAX_BPS*taxMult/10000);
           safeAddCash(actor,fromCents(grossC-taxC));FMI.treasury+=(taxC/100);FMI.hourlyTaxAccrual+=(taxC/100);
           try{addFundCash('FLSH', fromCents(grossC)*FLSH_TRADE_PCT);}catch(_){}
           actor.basisC=actor.basisC||{};
@@ -2989,7 +3265,8 @@ wss.on('connection',(ws,req)=>{
             }
           } catch(_) {}
           // Day-trade: sell pairs with buy ticket → round trip
-          { const dt=_dtGet(actor.id); if(dt.tickets[s]>0){dt.tickets[s]--;dt.roundTrips=Math.min(DAY_TRADE_CAP,dt.roundTrips+1);} }
+          if(dt.tickets[s]>0){dt.tickets[s]--;dt.roundTrips=Math.min(DAY_TRADE_CAP,dt.roundTrips+1);}
+          if(isScalp){ try{ ws.send(JSON.stringify({type:'error',data:{msg:'⚠ Scalping penalty: 2× trade tax on same-cycle round trip'}})); }catch(_){} }
           broadcastTradeFeed({side:'sell',symbol:s,qty,price:c.price});
             } else if(qty>0) {
           // SHORT SELL — sell more than owned
@@ -3208,7 +3485,7 @@ wss.on('connection',(ws,req)=>{
       savePlayer(actor);
       // Bull rally — ~4% average surge
       for (const c of companies) {
-        if (!c._special) { c.lnP += 0.04 * (0.5 + Math.random()); c.price = Math.max(0.5, Math.exp(c.lnP)); }
+        if (!c._special) { c.lnP += 0.008 * (0.5 + Math.random()); c.price = Math.max(0.5, Math.exp(c.lnP)); }
       }
       pushHeadline(`⬡ ${actor.name} ELECTED PRESIDENT OF THE COALITION — MARKETS SURGE`, 'good', null);
       broadcast({ type: 'president_elected', data: { name: actor.name, id: actor.id } });
@@ -3276,7 +3553,7 @@ wss.on('connection',(ws,req)=>{
     }
 
     // ── Chart ────────────────────────────────────────────────────────────────
-    if(msg.type==='chart'){const s=String(msg.symbol||'').toUpperCase(),c=companies.find(x=>x.symbol===s);if(c)ws.send(JSON.stringify({type:'chart',data:{symbol:s,ohlc:c.ohlc.slice(-200)}}));}
+    if(msg.type==='chart'){const s=String(msg.symbol||'').toUpperCase(),c=companies.find(x=>x.symbol===s);if(c){const bars=c.ohlc.slice(-199);if(c._bar)bars.push({t:c._bar.t,o:c._bar.o,h:c._bar.h,l:c._bar.l,c:c._bar.c,v:0});ws.send(JSON.stringify({type:'chart',data:{symbol:s,ohlc:bars}}));}}
 
     // ── Request state ─────────────────────────────────────────────────────────
     if(msg.type==='request_state'){
@@ -3419,8 +3696,8 @@ wss.on('connection',(ws,req)=>{
         const c = sym ? companies.find(x => x.symbol === sym) : null;
         if (sym && !c) return err(`Ticker ${sym} not found.`);
         // Apply price effect if symbol specified
-        if (c && tone === 'good')    { c.lnP += 0.02 + Math.random() * 0.04; c.price = Math.max(0.5, Math.exp(c.lnP)); }
-        else if (c && tone === 'bad'){ c.lnP -= 0.02 + Math.random() * 0.04; c.price = Math.max(0.5, Math.exp(c.lnP)); }
+        if (c && tone === 'good')    { c.lnP += 0.003 + Math.random() * 0.005; c.price = Math.max(0.5, Math.exp(c.lnP)); }
+        else if (c && tone === 'bad'){ c.lnP -= 0.003 + Math.random() * 0.005; c.price = Math.max(0.5, Math.exp(c.lnP)); }
         pushHeadline(text, tone, sym || undefined);
         broadcastToAdmins({ type: 'admin_log', data: { action: 'god_inject_news', by: actor.name, text, tone, symbol: sym } });
         ack(`✓ News injected: "${text.slice(0, 60)}${text.length > 60 ? '…' : ''}"`);
@@ -3987,10 +4264,11 @@ wss.on('connection',(ws,req)=>{
     if (msg.type === 'smuggling_start') {
       const { from, to, cargoId, stake } = msg;
       if (!from || !to || !cargoId || !stake) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Missing fields' })); return; }
-      if (activeSmuggling.has(actor.id)) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Run already in progress' })); return; }
-      const lastRun = _lastSmuggle.get(actor.id) || 0;
-      if (Date.now() - lastRun < SMUGGLE_COOLDOWN_MS) {
-        const remaining = Math.ceil((SMUGGLE_COOLDOWN_MS - (Date.now() - lastRun)) / 1000);
+      if (activeSmuggling.has(actor.id)) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Smuggling run already in progress' })); return; }
+      if (activeShipping.has(actor.id)) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Shipping run in progress — shared cooldown' })); return; }
+      const lastRun = _lastTradeRun.get(actor.id) || 0;
+      if (Date.now() - lastRun < TRADE_RUN_COOLDOWN_MS) {
+        const remaining = Math.ceil((TRADE_RUN_COOLDOWN_MS - (Date.now() - lastRun)) / 1000);
         const mins = Math.floor(remaining / 60);
         const secs = remaining % 60;
         ws.send(JSON.stringify({ type:'smuggling_error', error:`Cooldown active — ${mins}m ${secs}s remaining` }));
@@ -4010,7 +4288,7 @@ wss.on('connection',(ws,req)=>{
       const durMs = laneRisk.durSec * 1000;
       const resolveTs = Date.now() + durMs;
       activeSmuggling.set(actor.id, { from, to, cargoId, stake: amt, laneType: lane.type, startTs: Date.now(), resolveTs });
-      _lastSmuggle.set(actor.id, Date.now());
+      _lastTradeRun.set(actor.id, Date.now());
       // Set timer
       setTimeout(() => resolveSmuggling(actor.id), durMs);
       ws.send(JSON.stringify({ type:'smuggling_started', data: { from, to, cargo: cargo.name, stake: amt, laneType: lane.type, resolveTs, durSec: laneRisk.durSec, cash: actor.cash } }));
@@ -4026,6 +4304,78 @@ wss.on('connection',(ws,req)=>{
       } else {
         ws.send(JSON.stringify({ type:'smuggling_status', data: null }));
       }
+    }
+
+    // ── Shipping: start a legal shipping run ─────────────────────────────────
+    if (msg.type === 'shipping_start') {
+      const { from, to, cargoId, stake, insured } = msg;
+      if (!from || !to || !cargoId || !stake) { ws.send(JSON.stringify({ type:'shipping_error', error:'Missing fields' })); return; }
+      if (activeShipping.has(actor.id)) { ws.send(JSON.stringify({ type:'shipping_error', error:'Shipping run already in progress' })); return; }
+      if (activeSmuggling.has(actor.id)) { ws.send(JSON.stringify({ type:'shipping_error', error:'Smuggling run in progress — shared cooldown' })); return; }
+      const lastRun = _lastTradeRun.get(actor.id) || 0;
+      if (Date.now() - lastRun < TRADE_RUN_COOLDOWN_MS) {
+        const remaining = Math.ceil((TRADE_RUN_COOLDOWN_MS - (Date.now() - lastRun)) / 1000);
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        ws.send(JSON.stringify({ type:'shipping_error', error:`Cooldown active — ${mins}m ${secs}s remaining` }));
+        return;
+      }
+      const lane = findLane(from, to);
+      if (!lane) { ws.send(JSON.stringify({ type:'shipping_error', error:'No lane exists' })); return; }
+
+      // Check blockade: shipping is BLOCKED during active blockade
+      const laneKey = getLaneKey(from, to);
+      const blockade = activeBlockades.get(laneKey);
+      if (blockade && blockade.active) {
+        ws.send(JSON.stringify({ type:'shipping_error', error:'⛔ Lane blockaded — shipping unavailable. Try smuggling instead.' }));
+        return;
+      }
+
+      const cargo = SHIPPING_CARGO.find(c => c.id === cargoId);
+      if (!cargo) { ws.send(JSON.stringify({ type:'shipping_error', error:'Unknown cargo type' })); return; }
+      const amt = Math.max(100, Math.min(10_000_000, Math.round(Number(stake) * 100) / 100));
+      if (!Number.isFinite(amt)) { ws.send(JSON.stringify({ type:'shipping_error', error:'Invalid stake amount' })); return; }
+
+      // Calculate total cost: stake + insurance premium if insured
+      const wantInsurance = !!insured;
+      const insuranceCost = wantInsurance ? Math.round(amt * INSURANCE_PREMIUM * 100) / 100 : 0;
+      const totalCost = amt + insuranceCost;
+      if (actor.cash < totalCost) { ws.send(JSON.stringify({ type:'shipping_error', error:`Insufficient funds. Need Ƒ${totalCost.toLocaleString()} (stake + insurance)` })); return; }
+
+      // Deduct total cost
+      actor.cash = Math.round((actor.cash - totalCost) * 100) / 100;
+      savePlayer(actor);
+
+      const durMs = SHIPPING_DUR_SEC * 1000;
+      const resolveTs = Date.now() + durMs;
+      activeShipping.set(actor.id, { from, to, cargoId, stake: amt, insured: wantInsurance, insurancePaid: insuranceCost, startTs: Date.now(), resolveTs });
+      _lastTradeRun.set(actor.id, Date.now());
+      setTimeout(() => resolveShipping(actor.id), durMs);
+      ws.send(JSON.stringify({ type:'shipping_started', data: { from, to, cargo: cargo.name, stake: amt, insured: wantInsurance, insurancePaid: insuranceCost, resolveTs, durSec: SHIPPING_DUR_SEC, cash: actor.cash } }));
+      ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
+    }
+
+    // ── Shipping: get active run state ────────────────────────────────────────
+    if (msg.type === 'shipping_status') {
+      const run = activeShipping.get(actor.id);
+      ws.send(JSON.stringify({ type:'shipping_status', data: run || null }));
+    }
+
+    // ── Trade run config: send game config data for client risk calculator ────
+    if (msg.type === 'trade_config_request') {
+      let playerFaction = null;
+      try { playerFaction = getPlayerFaction(actor.id); } catch(_){}
+      ws.send(JSON.stringify({ type:'trade_config', data:{
+        smuggleBetTiers: SMUGGLE_BET_TIERS,
+        syndicatePayoutBonus: SYNDICATE_PAYOUT_BONUS,
+        syndicateOwnTurfRisk: SYNDICATE_OWN_TURF_RISK,
+        shippingBaseRisk: SHIPPING_BASE_RISK,
+        shippingCargo: SHIPPING_CARGO,
+        insurancePremium: INSURANCE_PREMIUM,
+        cargoTypes: CARGO_TYPES,
+        laneRisk: LANE_RISK,
+        playerFaction,
+      }}));
     }
 
     // ── Blockade: fund a blockade on a lane ──────────────────────────────────

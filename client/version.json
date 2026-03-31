@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0.7",
+  "version": "1.0.0.8",
   "built": "2026-03-31T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.0.7",
-  "notes": "Blackjack shoe shuffle overlay + progress bar; Day-trade lockout UI with countdown timer; greyed-out trade buttons at limit"
+  "patch": "1.0.0.8",
+  "notes": "Market volatility overhaul, scrolling waveform chart, shipping lanes, smuggling rebalance, faction trade bonuses, scalping penalty, all-sector dividends, blackjack shoe shuffle, day-trade lockout UI"
 }

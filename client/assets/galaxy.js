@@ -1803,12 +1803,15 @@ function initSubTabs(){
       btn.style.borderBottomColor='#4ecdc4'; btn.style.color='#4ecdc4';
       var mp=document.getElementById('gMapPane');
       var fp=document.getElementById('gFactionsPane');
+      var sp=document.getElementById('gShippingPane');
       var cp=document.getElementById('gContractsPane');
       if(mp) mp.style.display=t==='map'?'flex':'none';
       if(fp) fp.style.display=t==='factions'?'block':'none';
+      if(sp) sp.style.display=t==='shipping'?'block':'none';
       if(cp) cp.style.display=t==='contracts'?'block':'none';
       if(t==='factions') renderFactionList();
       if(t==='contracts') renderContractsTable();
+      if(t==='shipping') window.renderShippingTab();
     });
   });
 }
@@ -1837,6 +1840,7 @@ function onGalaxyOpen(){
   if(window.gShipTrafficStart) setTimeout(window.gShipTrafficStart, 400);
   // Request galaxy systems data (blockades, contracts, HQ map)
   _sendWSGalaxy({type:'galaxy_data_request'});
+  _sendWSGalaxy({type:'trade_config_request'});
 }
 
 function gRenderAll(){
@@ -2328,31 +2332,10 @@ function renderDetail(id){
     }
 
     var sh = '';
-    // ── SMUGGLING PANEL ──
+    // ── SHIPPING/SMUGGLING — moved to Shipping tab ──
     sh += '<div style="margin-bottom:14px">';
-    sh += '<div style="font-size:.68rem;color:#e74c3c;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\uD83D\uDCE6 SMUGGLING RUNS</div>';
-    sh += '<div id="gSmugStatus" style="font-size:.66rem;color:#555;margin-bottom:6px"></div>';
-    if (connLanes.length > 0) {
-      sh += '<select id="gSmugLane" style="width:100%;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px;font-size:.64rem;font-family:inherit;margin-bottom:4px">';
-      connLanes.forEach(function(l) {
-        var dest = l.from===id ? l.to : l.from;
-        var dn = (COLONY_META[dest]||{name:dest}).name;
-        sh += '<option value="'+id+'|'+dest+'|'+l.type+'">'+dn+' ('+l.type+')</option>';
-      });
-      sh += '</select>';
-      sh += '<select id="gSmugCargo" style="width:100%;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px;font-size:.64rem;font-family:inherit;margin-bottom:4px">'
-        +'<option value="synth_organs">Synth Organs (\u00d71.8 / +10% risk)</option>'
-        +'<option value="contraband_arms">Contraband Arms (\u00d72.2 / +15% risk)</option>'
-        +'<option value="data_cores">Data Cores (\u00d71.5 / +5% risk)</option>'
-        +'<option value="rare_minerals">Rare Minerals (\u00d71.6 / +8% risk)</option>'
-        +'<option value="sweet_wine">S\'weet Wine (\u00d73.0 / +20% risk)</option>'
-        +'<option value="black_market_tech">Black Market Tech (\u00d72.5 / +18% risk)</option>'
-        +'</select>';
-      sh += '<div style="display:flex;gap:4px">'
-        +'<input id="gSmugStake" type="number" placeholder="Stake (\u0192)" style="flex:1;background:#0a0a14;border:1px solid #e74c3c44;color:#ccc;padding:4px;font-size:.64rem;font-family:inherit;outline:none">'
-        +'<button onclick="window._gStartSmuggle()" style="background:#2d0a0a;border:1px solid #e74c3c;color:#e74c3c;padding:4px 10px;cursor:pointer;font-size:.60rem;font-family:inherit;letter-spacing:.06em">RUN</button>'
-        +'</div>';
-    }
+    sh += '<div style="font-size:.66rem;color:#3498db;padding:8px;border:1px solid #1a1a2e;border-radius:3px;text-align:center;cursor:pointer" onclick="document.querySelector(\'[data-gstab=shipping]\').click()">📦 Open Shipping &amp; Smuggling Tab →</div>';
+    sh += '<div id="gSmugStatus" style="font-size:.66rem;color:#555;margin-top:6px"></div>';
     sh += '</div>';
 
     // ── BLOCKADE PANEL ──
@@ -2379,7 +2362,7 @@ function renderDetail(id){
 
     // ── LANE SHARES PANEL ──
     sh += '<div style="margin-bottom:14px">'
-      +'<div style="font-size:.68rem;color:#3498db;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\uD83D\uDCCB LANE SHARES</div>';
+      +'<div style="font-size:.82rem;color:#3498db;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\uD83D\uDCCB LANE SHARES</div>';
     if (connLanes.length > 0) {
       connLanes.forEach(function(l) {
         var dest = l.from===id ? l.to : l.from;
@@ -2617,6 +2600,50 @@ document.addEventListener('fm_ws_msg',function(e){
     }
   }
   if(msg.type==='smuggling_error') gToast(msg.error||'Smuggling error','#e74c3c');
+
+  // ── Shipping WS handlers ──
+  if(msg.type==='shipping_result'&&msg.data){
+    var sd=msg.data;
+    _gSyncCash(sd.cash);
+    if(sd.success){
+      gToast('Shipping delivered! +\u0192'+Number(sd.payout).toLocaleString()+' ('+sd.cargo+')','#2ecc71');
+    } else if(sd.insured){
+      gToast('Cargo lost but INSURED — only lost \u0192'+Number(sd.insurancePaid||sd.netLoss||0).toLocaleString()+' premium','#f39c12');
+    } else {
+      gToast('CARGO LOST! \u0192'+Number(sd.stake).toLocaleString()+' gone — no insurance','#e74c3c');
+    }
+    window._shippingAddLog(sd);
+    try{ window.renderShippingTab(); }catch(_){}
+  }
+  if(msg.type==='shipping_started'&&msg.data){
+    var sd2=msg.data;
+    _gSyncCash(sd2.cash);
+    var insLabel=sd2.insured?' (insured)':'';
+    gToast('Shipping run launched — '+sd2.cargo+insLabel,'#3498db');
+    window._activeShipRun=sd2;
+    try{ window.renderShippingTab(); }catch(_){}
+  }
+  if(msg.type==='shipping_error') gToast(msg.error||'Shipping error','#e74c3c');
+  if(msg.type==='shipping_status'){
+    window._activeShipRun=msg.data||null;
+    try{ window.renderShippingTab(); }catch(_){}
+  }
+
+  // ── Void raid income ──
+  if(msg.type==='void_raid_income'&&msg.data){
+    gToast('\u2620 Void raid: +\u0192'+Number(msg.data.amount).toLocaleString()+' from intercepted cargo on '+msg.data.lane.replace(/_/g,' '),'#9b59b6');
+    _gSyncCash(undefined); // trigger portfolio refresh
+  }
+  // ── Lane share kickback ──
+  if(msg.type==='lane_kickback'&&msg.data){
+    gToast('\uD83D\uDCB0 Lane kickback: +\u0192'+Number(msg.data.amount).toLocaleString()+' from trade volume','#3498db');
+    _gSyncCash(undefined);
+  }
+  // ── Trade config (risk calculator data) ──
+  if(msg.type==='trade_config'&&msg.data){
+    window._FM_TRADE_CONFIG=msg.data;
+    try{ window.renderShippingTab(); }catch(_){}
+  }
   if(msg.type==='blockade_update'&&msg.data){
     var bd=msg.data;
     window._FM_BLOCKADES = window._FM_BLOCKADES||{};
@@ -2693,7 +2720,7 @@ document.addEventListener('fm_ws_msg',function(e){
 
 // ── Lane Shares Market Table ──────────────────────────────────────────────────
 var LANE_TYPE_COLOR = {corporate:'#4ecdc4',grey:'#999',dark:'#9b59b6',contested:'#f39c12'};
-var LANE_RISK = {corporate:{intercept:0.08},grey:{intercept:0.18},contested:{intercept:0.30},dark:{intercept:0.40}};
+var LANE_RISK = {corporate:{intercept:0.15},grey:{intercept:0.28},contested:{intercept:0.40},dark:{intercept:0.55}};
 var VOL_LABEL = {high:'HIGH',medium:'MED',low:'LOW'};
 var SHARE_DIVIDEND_CLIENT = {high:50,medium:20,low:8};
 
@@ -2889,8 +2916,8 @@ window._gSelectLane = function(from, to){
   h += '<div><div style="font-size:.66rem;color:#555">DIVIDEND</div><div style="font-size:.84rem;color:#2ecc71">\u0192'+div+'/tick</div></div>';
   h += '<div><div style="font-size:.66rem;color:#555">BASE RISK</div><div style="font-size:.84rem;color:#e74c3c">'+Math.round(risk.intercept*100)+'%</div></div>';
   h += '</div>';
-  if(blk && blk.active) h += '<div style="border:1px solid #e74c3c;color:#e74c3c;font-size:.72rem;padding:6px 8px;margin-bottom:10px">\u26D4 BLOCKADE ACTIVE \u2014 dividends halved, smuggling +25%</div>';
-  h += '<div style="font-size:.68rem;color:#3498db;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\uD83D\uDCCB LANE SHARES</div>';
+  if(blk && blk.active) h += '<div style="border:1px solid #e74c3c;color:#e74c3c;font-size:.72rem;padding:6px 8px;margin-bottom:10px">\u26D4 BLOCKADE ACTIVE \u2014 shipping blocked, smuggling +10% risk, dividends halved</div>';
+  h += '<div style="font-size:.82rem;color:#3498db;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\uD83D\uDCCB LANE SHARES</div>';
   var pctFull = Math.round(supply/100*100);
   var barCol = pctFull>80?'#e74c3c':pctFull>50?'#f39c12':'#2ecc71';
   h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:.78rem;color:#aaa">'+supply+'/100 slots</span>';
@@ -2912,13 +2939,7 @@ window._gSelectLane = function(from, to){
   } else {
     h += '<button onclick="window._gBuyShare(\''+from+'\',\''+to+'\')" style="width:100%;margin-bottom:10px;background:#0a1020;border:1px solid #3498db;color:#3498db;padding:6px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">BUY SHARE (\u0192'+Number(buyP).toLocaleString()+')</button>';
   }
-  h += '<div style="margin-top:10px;font-size:.68rem;color:#e74c3c;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\uD83D\uDCE6 SMUGGLE THIS LANE</div>';
-  h += '<select id="gLaneSmugCargo" style="width:100%;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px;font-size:.64rem;font-family:inherit;margin-bottom:4px;border-radius:2px">'
-    +'<option value="synth_organs">Synth Organs (\u00d71.8 / +10%)</option><option value="contraband_arms">Contraband Arms (\u00d72.2 / +15%)</option>'
-    +'<option value="data_cores">Data Cores (\u00d71.5 / +5%)</option><option value="rare_minerals">Rare Minerals (\u00d71.6 / +8%)</option>'
-    +'<option value="sweet_wine">S\'weet Wine (\u00d73.0 / +20%)</option><option value="black_market_tech">Black Market Tech (\u00d72.5 / +18%)</option></select>';
-  h += '<div style="display:flex;gap:4px"><input id="gLaneSmugStake" type="number" placeholder="Stake (\u0192)" style="flex:1;background:#0a0a14;border:1px solid #e74c3c44;color:#ccc;padding:4px;font-size:.64rem;font-family:inherit;outline:none;border-radius:2px">'
-    +'<button onclick="window._gLaneSmugRun(\''+from+'\',\''+to+'\')" style="background:#2d0a0a;border:1px solid #e74c3c;color:#e74c3c;padding:4px 10px;cursor:pointer;font-size:.62rem;font-family:inherit;border-radius:2px">RUN</button></div>';
+  h += '<div style="margin-top:10px;font-size:.66rem;color:#3498db;padding:8px;border:1px solid #1a1a2e;border-radius:3px;text-align:center;cursor:pointer;margin-bottom:10px" onclick="document.querySelector(\'[data-gstab=shipping]\').click()">📦 Ship / Smuggle this lane →</div>';
   h += '<div style="margin-top:10px;font-size:.68rem;color:#f39c12;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\u26D4 BLOCKADE</div>';
   h += '<div style="display:flex;gap:4px"><input id="gLaneBlkAmt" type="number" placeholder="Fund (\u0192)" style="flex:1;background:#0a0a14;border:1px solid #f39c1244;color:#ccc;padding:4px;font-size:.64rem;font-family:inherit;outline:none;border-radius:2px">'
     +'<button onclick="window._gLaneBlkFund(\''+from+'\',\''+to+'\')" style="background:#2d1a00;border:1px solid #f39c12;color:#f39c12;padding:4px 8px;cursor:pointer;font-size:.58rem;font-family:inherit;border-radius:2px">FUND</button>'
@@ -3039,6 +3060,16 @@ if(document.readyState !== 'loading'){
   initSubTabs();
   setTimeout(hookShowTab, 0);
 }
+
+// Bridge: expose galaxy internals for shipping tab (lives in a separate IIFE)
+window._galaxy = {
+  get state(){ return gState; },
+  get faction(){ return gPlayerFaction; },
+  get token(){ return gToken; },
+  toast: function(m,c){ gToast(m,c); },
+  send: function(p){ _sendWSGalaxy(p); },
+  meta: COLONY_META,
+};
 
 })();
 
@@ -3817,6 +3848,476 @@ window.openShipManifest = function(ship) {
   // Ship animation
   var shipCanvas = document.getElementById('smm-ship-canvas');
   startShipAnim(shipCanvas, typeKey);
+};
+
+// ─── SHIPPING TAB ────────────────────────────────────────────────────────────
+window._shippingLog = window._shippingLog || [];
+window._shippingAddLog = function(d){
+  window._shippingLog.unshift({ts:Date.now(),success:d.success,insured:d.insured,stake:d.stake,payout:d.payout,cargo:d.cargo,from:d.from,to:d.to,risk:d.interceptChance,type:d.payout?'shipping':'shipping'});
+  if(window._shippingLog.length>30) window._shippingLog.length=30;
+};
+
+window.renderShippingTab = function(){
+  var el=document.getElementById('gShippingInner');
+  if(!el) return;
+
+  // Request config if we don't have it yet
+  if(!window._FM_TRADE_CONFIG){
+    window._galaxy.send({type:'trade_config_request'});
+  }
+
+  var LANES = window._FM_LANES || [];
+  var cfg = window._FM_TRADE_CONFIG || {};
+  var pFac = cfg.playerFaction || window._galaxy.faction || '';
+  var isSynd = pFac === 'syndicate';
+  var isVoid = pFac === 'void';
+
+  // Build unique route list
+  var routes = [];
+  var seen = {};
+  LANES.forEach(function(l){
+    var key = l.from+'|'+l.to;
+    if(!seen[key]){ seen[key]=1; routes.push(l); }
+  });
+
+  // Active run status
+  var activeSmug = null;
+  var activeShip = window._activeShipRun || null;
+  // Check smuggling status
+  var smugStatus = document.getElementById('gSmugStatus');
+
+  var h = '';
+
+  // ── CSS ──
+  h += '<style>';
+  h += '#gShipTab{font-family:"Courier New","Lucida Console",monospace;font-size:.82rem}';
+  h += '.ship-mode-btn{padding:10px 22px;font-size:.82rem;letter-spacing:.1em;cursor:pointer;border:1px solid #333;background:#0a0a14;color:#555;text-transform:uppercase;font-family:inherit;transition:all .15s}';
+  h += '.ship-mode-btn.active-ship{border-color:#3498db;color:#3498db;background:#0a1a2d}';
+  h += '.ship-mode-btn.active-smug{border-color:#e74c3c;color:#e74c3c;background:#2d0a0a}';
+  h += '.ship-section{margin-top:14px;padding:14px;border:1px solid #1a1a2e;border-radius:4px;background:#07070e}';
+  h += '.ship-label{font-size:.74rem;letter-spacing:.12em;color:#888;text-transform:uppercase;margin-bottom:6px}';
+  h += '.ship-select,.ship-input{width:100%;background:#0a0a14;border:1px solid #333;color:#ccc;padding:8px 10px;font-size:.82rem;font-family:inherit;margin-bottom:8px;border-radius:2px}';
+  h += '.ship-risk-bar{height:8px;background:#1a1a2e;border-radius:4px;overflow:hidden;margin:6px 0 10px}';
+  h += '.ship-risk-fill{height:100%;border-radius:4px;transition:width .3s}';
+  h += '.ship-run-btn{width:100%;padding:12px;font-size:.88rem;letter-spacing:.1em;cursor:pointer;font-family:inherit;border-radius:3px;text-transform:uppercase;transition:all .15s;margin-top:10px}';
+  h += '.ship-run-btn:hover{filter:brightness(1.2)}';
+  h += '.ship-run-btn:disabled{opacity:.3;cursor:not-allowed}';
+  h += '.ship-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.78rem;margin-top:10px}';
+  h += '.ship-info-cell{padding:8px 10px;background:#0a0a14;border:1px solid #1a1a2e;border-radius:2px}';
+  h += '.ship-info-cell .lbl{color:#888;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase}';
+  h += '.ship-info-cell .val{color:#e6c27a;font-size:.88rem;font-weight:bold;margin-top:3px}';
+  h += '.ship-log-entry{padding:6px 8px;border-bottom:1px solid #0f0f1a;font-size:.76rem;display:flex;justify-content:space-between}';
+  h += '.ship-faction-tip{padding:12px;border:1px solid #1a1a2e;border-radius:3px;font-size:.74rem;color:#888;line-height:1.8;margin-top:12px}';
+  h += '.ship-active-run{padding:14px;border:2px solid;border-radius:6px;text-align:center;margin-bottom:12px}';
+  h += '.ins-checkbox{margin-right:8px;accent-color:#3498db;width:16px;height:16px}';
+  h += '</style>';
+
+  h += '<div id="gShipTab">';
+
+  // ── Mode toggle ──
+  h += '<div style="display:flex;gap:0;margin-bottom:4px">';
+  h += '<button class="ship-mode-btn active-ship" id="gShipModeShip" onclick="window._gShipMode(\'ship\')">🚢 Shipping Lanes</button>';
+  h += '<button class="ship-mode-btn" id="gShipModeSmug" onclick="window._gShipMode(\'smug\')">📦 Smuggling Runs</button>';
+  h += '</div>';
+
+  // ── Active run display ──
+  if(activeShip){
+    var secLeft = Math.max(0,Math.ceil((activeShip.resolveTs - Date.now())/1000));
+    h += '<div class="ship-active-run" style="border-color:#3498db;background:#0a1a2d">';
+    h += '<div style="font-size:.82rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">SHIPPING IN TRANSIT</div>';
+    h += '<div style="color:#aaa;font-size:.78rem">'+activeShip.cargo+(activeShip.insured?' 🛡 Insured':' ⚠ Uninsured')+'</div>';
+    h += '<div style="color:#e6c27a;font-size:.9rem;font-weight:bold;margin-top:4px" id="gShipTimer">'+secLeft+'s</div>';
+    h += '</div>';
+  }
+
+  // ── SHIPPING MODE PANE ──
+  h += '<div id="gShipPane">';
+
+  // Route selector
+  h += '<div class="ship-section">';
+  h += '<div class="ship-label">Select Route</div>';
+  h += '<select class="ship-select" id="gShipRoute" onchange="window._gShipCalcRisk()">';
+  routes.forEach(function(l){
+    var fn=(window._galaxy.meta[l.from]||{name:l.from}).name;
+    var tn=(window._galaxy.meta[l.to]||{name:l.to}).name;
+    var lk=[l.from,l.to].sort().join('|');
+    var blk=(window._FM_BLOCKADES||{})[lk];
+    var blkLabel=blk&&blk.active?' ⛔ BLOCKADED':'';
+    h += '<option value="'+l.from+'|'+l.to+'|'+l.type+'">'+fn+' → '+tn+' ('+l.type+')'+blkLabel+'</option>';
+  });
+  h += '</select>';
+
+  // Cargo selector
+  h += '<div class="ship-label">Cargo Type</div>';
+  h += '<select class="ship-select" id="gShipCargo" onchange="window._gShipCalcRisk()">';
+  h += '<option value="standard_freight">Standard Freight (×1.15 / +0% risk)</option>';
+  h += '<option value="premium_goods">Premium Goods (×1.25 / +5% risk)</option>';
+  h += '<option value="luxury_supplies">Luxury Supplies (×1.35 / +12% risk)</option>';
+  h += '</select>';
+
+  // Stake + Insurance
+  h += '<div class="ship-label">Cargo Value (Stake)</div>';
+  h += '<input class="ship-input" type="number" id="gShipStake" placeholder="Ƒ amount" min="100" onchange="window._gShipCalcRisk()" oninput="window._gShipCalcRisk()"/>';
+  h += '<div style="display:flex;align-items:center;margin-bottom:8px">';
+  h += '<input type="checkbox" class="ins-checkbox" id="gShipInsure" onchange="window._gShipCalcRisk()"/>';
+  h += '<label for="gShipInsure" style="font-size:.78rem;color:#3498db;cursor:pointer">🛡 Insure cargo (5% premium — refunds stake if lost)</label>';
+  h += '</div>';
+
+  // Risk display
+  h += '<div class="ship-label">Estimated Risk</div>';
+  h += '<div class="ship-risk-bar"><div class="ship-risk-fill" id="gShipRiskFill" style="width:8%;background:#2ecc71"></div></div>';
+  h += '<div style="display:flex;justify-content:space-between;font-size:.76rem">';
+  h += '<span style="color:#555" id="gShipRiskPct">~8%</span>';
+  h += '<span style="color:#555" id="gShipRiskDetail">base rate</span>';
+  h += '</div>';
+
+  // Info grid
+  h += '<div class="ship-info-grid" id="gShipInfoGrid">';
+  h += '<div class="ship-info-cell"><div class="lbl">Potential Profit</div><div class="val" id="gShipProfit">—</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">Insurance Cost</div><div class="val" id="gShipInsCost">—</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">Total Cost</div><div class="val" id="gShipTotalCost">—</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">EV / Run</div><div class="val" id="gShipEV">—</div></div>';
+  h += '</div>';
+
+  // RUN button
+  h += '<button class="ship-run-btn" id="gShipRunBtn" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db" onclick="window._gStartShipping()">🚢 Launch Shipping Run</button>';
+  h += '</div>'; // close ship-section
+  h += '</div>'; // close gShipPane
+
+  // ── SMUGGLING MODE PANE ──
+  h += '<div id="gSmugPane" style="display:none">';
+  h += '<div class="ship-section">';
+  h += '<div class="ship-label">Select Route</div>';
+  h += '<select class="ship-select" id="gSmugRoute" onchange="window._gSmugCalcRisk()">';
+  routes.forEach(function(l){
+    var fn=(window._galaxy.meta[l.from]||{name:l.from}).name;
+    var tn=(window._galaxy.meta[l.to]||{name:l.to}).name;
+    h += '<option value="'+l.from+'|'+l.to+'|'+l.type+'">'+fn+' → '+tn+' ('+l.type+')</option>';
+  });
+  h += '</select>';
+
+  // Contraband selector
+  h += '<div class="ship-label">Contraband</div>';
+  h += '<select class="ship-select" id="gSmugCargo2" onchange="window._gSmugCalcRisk()">';
+  h += '<option value="data_cores">Data Cores (×1.5 / +5% risk)</option>';
+  h += '<option value="rare_minerals">Rare Minerals (×1.6 / +8% risk)</option>';
+  h += '<option value="synth_organs">Synth Organs (×1.8 / +10% risk)</option>';
+  h += '<option value="contraband_arms">Contraband Arms (×2.2 / +15% risk)</option>';
+  h += '<option value="black_market_tech">Black Market Tech (×2.5 / +18% risk)</option>';
+  h += '<option value="sweet_wine">S\'weet Wine (×3.0 / +20% risk)</option>';
+  h += '</select>';
+
+  // Stake
+  h += '<div class="ship-label">Stake</div>';
+  h += '<input class="ship-input" type="number" id="gSmugStake2" placeholder="Ƒ amount" min="100" onchange="window._gSmugCalcRisk()" oninput="window._gSmugCalcRisk()"/>';
+
+  if(isSynd){
+    h += '<div style="font-size:.74rem;color:#e74c3c;margin-bottom:6px">💀 Syndicate: +15% payout bonus · +5% risk on own turf · No free rides</div>';
+  }
+
+  // Risk display
+  h += '<div class="ship-label">Estimated Risk</div>';
+  h += '<div class="ship-risk-bar"><div class="ship-risk-fill" id="gSmugRiskFill" style="width:18%;background:#e74c3c"></div></div>';
+  h += '<div style="display:flex;justify-content:space-between;font-size:.76rem">';
+  h += '<span style="color:#555" id="gSmugRiskPct">~18%</span>';
+  h += '<span style="color:#555" id="gSmugRiskDetail">base + cargo</span>';
+  h += '</div>';
+
+  // Info grid
+  h += '<div class="ship-info-grid" id="gSmugInfoGrid">';
+  h += '<div class="ship-info-cell"><div class="lbl">Potential Payout</div><div class="val" id="gSmugPayout">—</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">Bet-Size Penalty</div><div class="val" id="gSmugBetPenalty">+0%</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">Faction Mod</div><div class="val" id="gSmugFacMod">—</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">EV / Run</div><div class="val" id="gSmugEV">—</div></div>';
+  h += '</div>';
+
+  // RUN button
+  h += '<button class="ship-run-btn" id="gSmugRunBtn" style="background:#2d0a0a;border:1px solid #e74c3c;color:#e74c3c" onclick="window._gStartSmuggling2()">📦 Launch Smuggling Run</button>';
+  h += '</div>'; // close ship-section
+  h += '</div>'; // close gSmugPane
+
+  // ── Faction tips ──
+  h += '<div class="ship-faction-tip">';
+  h += '<div style="color:#4ecdc4;margin-bottom:6px;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase">How Factions Affect Trade</div>';
+  h += '<div><span style="color:#4ecdc4">Coalition</span> — Stable colonies reduce shipping risk. Control both endpoints for -5% risk.</div>';
+  h += '<div><span style="color:#e74c3c">Syndicate</span> — +15% payout on smuggling, but +5% risk on own turf. No free rides.</div>';
+  h += '<div><span style="color:#9b59b6">Void</span> — Earn 2% of all intercepted cargo (shipping & smuggling) as raid income.</div>';
+  h += '<div style="margin-top:4px"><span style="color:#f39c12">Tension</span> — High tension helps smugglers, hurts shippers. Low tension is the opposite.</div>';
+  h += '<div><span style="color:#e74c3c">Blockades</span> — Block shipping entirely. Smuggling still works at +10% risk.</div>';
+  h += '<div><span style="color:#3498db">Lane Shares</span> — Shareholders earn 1-2% of all trade profit on their lane.</div>';
+  h += '</div>';
+
+  // ── Run History ──
+  h += '<div class="ship-section" style="margin-top:10px">';
+  h += '<div class="ship-label">Run History</div>';
+  h += '<div id="gShipLog" style="max-height:120px;overflow-y:auto">';
+  if(window._shippingLog.length===0){
+    h += '<div style="font-size:.74rem;color:#444;text-align:center;padding:12px">No runs yet</div>';
+  } else {
+    window._shippingLog.forEach(function(entry){
+      var col = entry.success?'#2ecc71':(entry.insured?'#f39c12':'#e74c3c');
+      var label = entry.success?'DELIVERED':(entry.insured?'INSURED LOSS':'LOST');
+      h += '<div class="ship-log-entry"><span style="color:'+col+'">'+label+'</span><span style="color:#555">'+entry.cargo+'</span>';
+      h += '<span style="color:#aaa">\u0192'+(entry.success?Number(entry.payout||0).toLocaleString():'-'+Number(entry.stake).toLocaleString())+'</span>';
+      h += '<span style="color:#444">'+entry.risk+'%</span></div>';
+    });
+  }
+  h += '</div></div>';
+
+  // ── Cooldown timer ──
+  h += '<div style="text-align:center;margin-top:8px;font-size:.76rem;color:#666" id="gShipCooldown"></div>';
+
+  h += '</div>'; // close gShipTab
+  el.innerHTML = h;
+
+  // Start timer for active run
+  if(activeShip){
+    var tmEl=document.getElementById('gShipTimer');
+    if(tmEl){
+      var _stIv=setInterval(function(){
+        var sl=Math.max(0,Math.ceil((activeShip.resolveTs-Date.now())/1000));
+        if(sl<=0){ clearInterval(_stIv); tmEl.textContent='Resolving...'; window._activeShipRun=null; return; }
+        tmEl.textContent=sl+'s';
+      },500);
+    }
+  }
+
+  // Initial risk calc
+  try{ window._gShipCalcRisk(); }catch(_){}
+  try{ window._gSmugCalcRisk(); }catch(_){}
+};
+
+// ── Mode toggle ──
+window._gShipMode = function(mode){
+  var sp=document.getElementById('gShipPane');
+  var sm=document.getElementById('gSmugPane');
+  var bs=document.getElementById('gShipModeShip');
+  var bm=document.getElementById('gShipModeSmug');
+  if(mode==='ship'){
+    if(sp) sp.style.display='block'; if(sm) sm.style.display='none';
+    if(bs){ bs.className='ship-mode-btn active-ship'; }
+    if(bm){ bm.className='ship-mode-btn'; }
+  } else {
+    if(sp) sp.style.display='none'; if(sm) sm.style.display='block';
+    if(bs){ bs.className='ship-mode-btn'; }
+    if(bm){ bm.className='ship-mode-btn active-smug'; }
+  }
+};
+
+// ── Shipping risk calculator ──
+window._gShipCalcRisk = function(){
+  var routeSel=document.getElementById('gShipRoute');
+  var cargoSel=document.getElementById('gShipCargo');
+  var stakeInp=document.getElementById('gShipStake');
+  var insChk=document.getElementById('gShipInsure');
+  if(!routeSel||!cargoSel||!stakeInp) return;
+
+  var parts=routeSel.value.split('|');
+  var from=parts[0],to=parts[1],ltype=parts[2];
+  var cargoId=cargoSel.value;
+  var stake=Number(stakeInp.value)||0;
+  var insured=insChk&&insChk.checked;
+
+  // Cargo risk
+  var cargoRisks={standard_freight:0,premium_goods:0.05,luxury_supplies:0.12};
+  var cargoMults={standard_freight:1.15,premium_goods:1.25,luxury_supplies:1.35};
+  var cRisk=cargoRisks[cargoId]||0;
+  var cMult=cargoMults[cargoId]||1.15;
+
+  // Tension mod
+  var fromState=window._galaxy.state[from]||{tension:0};
+  var toState=window._galaxy.state[to]||{tension:0};
+  var avgT=((fromState.tension||0)+(toState.tension||0))/2;
+  var tensionMod=avgT/1500;
+
+  // Faction mod
+  var fMod=0;
+  var pFac=window._galaxy.faction||'';
+  if(pFac&&pFac!=='guild'){
+    var ck='control_'+pFac;
+    if((fromState[ck]||0)>=40) fMod-=0.025;
+    if((toState[ck]||0)>=40) fMod-=0.025;
+    var facs=['coalition','syndicate','void'];
+    var fromLead=facs.reduce(function(b,f){return (fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b;},'coalition');
+    var toLead=facs.reduce(function(b,f){return (toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b;},'coalition');
+    if(fromLead!==pFac) fMod+=0.04;
+    if(toLead!==pFac) fMod+=0.04;
+  }
+
+  // Blockade check
+  var lk=[from,to].sort().join('|');
+  var blk=(window._FM_BLOCKADES||{})[lk];
+  var blocked=blk&&blk.active;
+
+  var totalRisk=Math.min(0.60,Math.max(0.02, 0.18+cRisk+tensionMod+fMod));
+  var riskPct=Math.round(totalRisk*100);
+
+  // Display
+  var rFill=document.getElementById('gShipRiskFill');
+  var rPct=document.getElementById('gShipRiskPct');
+  var rDetail=document.getElementById('gShipRiskDetail');
+  if(rFill){
+    rFill.style.width=riskPct+'%';
+    rFill.style.background=riskPct>25?'#e74c3c':riskPct>15?'#f39c12':'#2ecc71';
+  }
+  if(rPct) rPct.textContent=riskPct+'%'+(blocked?' ⛔ BLOCKED':'');
+  var details=[];
+  if(tensionMod>0.005) details.push('tension +'+Math.round(tensionMod*100)+'%');
+  if(fMod<0) details.push('faction '+Math.round(fMod*100)+'%');
+  if(fMod>0) details.push('enemy +'+Math.round(fMod*100)+'%');
+  if(rDetail) rDetail.textContent=details.length?details.join(', '):'base rate';
+
+  // Info grid
+  var profit=stake>0?Math.round(stake*cMult-stake):0;
+  var insCost=insured?Math.round(stake*0.05):0;
+  var totalCost=stake+insCost;
+  var ev=stake>0?Math.round(((1-totalRisk)*profit - totalRisk*(insured?insCost:stake))):0;
+  var profitEl=document.getElementById('gShipProfit');
+  var insEl=document.getElementById('gShipInsCost');
+  var totalEl=document.getElementById('gShipTotalCost');
+  var evEl=document.getElementById('gShipEV');
+  if(profitEl) profitEl.textContent='\u0192'+profit.toLocaleString();
+  if(insEl) insEl.textContent=insured?'\u0192'+insCost.toLocaleString():'none';
+  if(totalEl) totalEl.textContent='\u0192'+totalCost.toLocaleString();
+  if(evEl){ evEl.textContent=(ev>=0?'+':'')+'\u0192'+ev.toLocaleString(); evEl.style.color=ev>=0?'#2ecc71':'#e74c3c'; }
+
+  // Disable run if blocked
+  var runBtn=document.getElementById('gShipRunBtn');
+  if(runBtn){
+    if(blocked){ runBtn.disabled=true; runBtn.textContent='⛔ Lane Blockaded'; }
+    else { runBtn.disabled=false; runBtn.textContent='🚢 Launch Shipping Run'; }
+  }
+};
+
+// ── Smuggling risk calculator ──
+window._gSmugCalcRisk = function(){
+  var routeSel=document.getElementById('gSmugRoute');
+  var cargoSel=document.getElementById('gSmugCargo2');
+  var stakeInp=document.getElementById('gSmugStake2');
+  if(!routeSel||!cargoSel||!stakeInp) return;
+
+  var parts=routeSel.value.split('|');
+  var from=parts[0],to=parts[1],ltype=parts[2];
+  var cargoId=cargoSel.value;
+  var stake=Number(stakeInp.value)||0;
+
+  // Lane base risk
+  var laneRisks={corporate:0.15,grey:0.28,contested:0.40,dark:0.55};
+  var lanePayMults={corporate:1.0,grey:1.5,contested:2.0,dark:3.0};
+  var baseRisk=laneRisks[ltype]||0.28;
+  var payMult=lanePayMults[ltype]||1.5;
+
+  // Cargo risk+mult
+  var cargoData={synth_organs:{r:0.10,m:1.8},contraband_arms:{r:0.15,m:2.2},data_cores:{r:0.05,m:1.5},rare_minerals:{r:0.08,m:1.6},sweet_wine:{r:0.20,m:3.0},black_market_tech:{r:0.18,m:2.5}};
+  var cd=cargoData[cargoId]||{r:0.05,m:1.5};
+
+  // Bet-size scaling
+  var betExtra=0;
+  if(stake<=5000) betExtra=0;
+  else if(stake<=25000) betExtra=0.10;
+  else if(stake<=100000) betExtra=0.20;
+  else betExtra=0.28;
+
+  // Tension (inverted for smuggling)
+  var fromState=window._galaxy.state[from]||{tension:0};
+  var toState=window._galaxy.state[to]||{tension:0};
+  var avgT=((fromState.tension||0)+(toState.tension||0))/2;
+  var tensionMod=-(avgT/2000);
+
+  // Faction mod
+  var fMod=0;
+  var pFac=window._galaxy.faction||'';
+  var isSynd=pFac==='syndicate';
+  if(pFac&&pFac!=='guild'){
+    var ck='control_'+pFac;
+    if((fromState[ck]||0)>=40) fMod-=0.02;
+    if((toState[ck]||0)>=40) fMod-=0.02;
+    var facs=['coalition','syndicate','void'];
+    var fromLead=facs.reduce(function(b,f){return (fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b;},'coalition');
+    var toLead=facs.reduce(function(b,f){return (toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b;},'coalition');
+    if(fromLead!==pFac&&avgT<30) fMod+=0.03;
+    if(toLead!==pFac&&avgT<30) fMod+=0.03;
+  }
+  // Syndicate: +5% risk on own turf, no risk reduction
+  var syndRisk=0;
+  if(isSynd){
+    var facs2=['coalition','syndicate','void'];
+    var fL=facs2.reduce(function(b,f){return (fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b;},'coalition');
+    var tL=facs2.reduce(function(b,f){return (toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b;},'coalition');
+    if(fL==='syndicate') syndRisk+=0.05;
+    if(tL==='syndicate') syndRisk+=0.05;
+  }
+
+  // Blockade
+  var lk=[from,to].sort().join('|');
+  var blk=(window._FM_BLOCKADES||{})[lk];
+  var blockadeMod=(blk&&blk.active)?0.10:0;
+
+  var totalRisk=Math.min(0.85,Math.max(0.05, baseRisk+cd.r+betExtra+tensionMod+fMod+syndRisk+blockadeMod));
+  var riskPct=Math.round(totalRisk*100);
+  var syndPayMult=isSynd?1.15:1;
+  var payout=stake>0?Math.round(stake*cd.m*payMult*syndPayMult):0;
+
+  // Display
+  var rFill=document.getElementById('gSmugRiskFill');
+  var rPctEl=document.getElementById('gSmugRiskPct');
+  var rDetail=document.getElementById('gSmugRiskDetail');
+  if(rFill){
+    rFill.style.width=Math.min(100,riskPct)+'%';
+    rFill.style.background=riskPct>40?'#e74c3c':riskPct>25?'#f39c12':'#2ecc71';
+  }
+  if(rPctEl) rPctEl.textContent=riskPct+'%'+(blockadeMod?' +10% blockade':'');
+  var details=[];
+  if(betExtra>0) details.push('bet-size +'+Math.round(betExtra*100)+'%');
+  if(tensionMod<-0.005) details.push('tension '+Math.round(tensionMod*100)+'%');
+  if(fMod!==0) details.push('faction '+(fMod>0?'+':'')+Math.round(fMod*100)+'%');
+  if(syndRisk>0) details.push('synd turf +'+Math.round(syndRisk*100)+'%');
+  if(isSynd) details.push('+15% payout');
+  if(rDetail) rDetail.textContent=details.length?details.join(', '):'base + cargo';
+
+  var payEl=document.getElementById('gSmugPayout');
+  var betPen=document.getElementById('gSmugBetPenalty');
+  var facMod=document.getElementById('gSmugFacMod');
+  var evEl=document.getElementById('gSmugEV');
+  if(payEl) payEl.textContent='\u0192'+payout.toLocaleString()+(isSynd?' (+15%)':'');
+  if(betPen) betPen.textContent='+'+(Math.round(betExtra*100))+'%';
+  if(facMod){
+    var fm=Math.round((fMod+syndRisk)*100);
+    facMod.textContent=(fm>0?'+':'')+fm+'%';
+    facMod.style.color=fm<0?'#2ecc71':fm>0?'#e74c3c':'#555';
+  }
+  if(evEl){
+    var ev=stake>0?Math.round((1-totalRisk)*(payout-stake)-totalRisk*stake):0;
+    evEl.textContent=(ev>=0?'+':'')+'\u0192'+ev.toLocaleString();
+    evEl.style.color=ev>=0?'#2ecc71':'#e74c3c';
+  }
+};
+
+// ── Launch shipping ──
+window._gStartShipping = function(){
+  if(!window._galaxy.token){ window._galaxy.toast('Log in first','#e74c3c'); return; }
+  var routeSel=document.getElementById('gShipRoute');
+  var cargoSel=document.getElementById('gShipCargo');
+  var stakeInp=document.getElementById('gShipStake');
+  var insChk=document.getElementById('gShipInsure');
+  if(!routeSel||!stakeInp) return;
+  var parts=routeSel.value.split('|');
+  var stake=Number(stakeInp.value)||0;
+  if(!stake||stake<100){ window._galaxy.toast('Min stake: \u0192100','#e74c3c'); return; }
+  window._galaxy.send({type:'shipping_start',from:parts[0],to:parts[1],cargoId:cargoSel?cargoSel.value:'standard_freight',stake:stake,insured:!!(insChk&&insChk.checked)});
+};
+
+// ── Launch smuggling from shipping tab ──
+window._gStartSmuggling2 = function(){
+  if(!window._galaxy.token){ window._galaxy.toast('Log in first','#e74c3c'); return; }
+  var routeSel=document.getElementById('gSmugRoute');
+  var cargoSel=document.getElementById('gSmugCargo2');
+  var stakeInp=document.getElementById('gSmugStake2');
+  if(!routeSel||!stakeInp) return;
+  var parts=routeSel.value.split('|');
+  var stake=Number(stakeInp.value)||0;
+  if(!stake||stake<100){ window._galaxy.toast('Min stake: \u0192100','#e74c3c'); return; }
+  window._galaxy.send({type:'smuggling_start',from:parts[0],to:parts[1],cargoId:cargoSel?cargoSel.value:'synth_organs',stake:stake});
 };
 
 })();
