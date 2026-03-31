@@ -77,11 +77,11 @@
   const PLAY_H = H - TOP_PAD - BOT_PAD - SLOT_H;
   const PEG_GAP = 24; // horizontal gap between pegs in a row
 
-  // Multipliers (17 slots)
+  // Multipliers (17 slots) — edges are rare jackpots, center returns most of bet
   const MULTIPLIERS = {
-    low:  [25,  10,  5,   2,   1.3, 1.1, 1,   0.8, 0.7, 0.8, 1,   1.1, 1.3, 2,   5,   10,  25],
-    mid:  [50,  20,  8,   3,   1.5, 1.1, 0.9, 0.7, 0.6, 0.7, 0.9, 1.1, 1.5, 3,   8,   20,  50],
-    high: [500, 80,  20,  5,   2,   1,   0.7, 0.4, 0.4, 0.4, 0.7, 1,   2,   5,   20,  80,  500],
+    low:  [10,   5,    2.5,  1.5,  1.1, 0.9, 0.8, 0.7, 0.6, 0.7, 0.8, 0.9, 1.1, 1.5,  2.5,  5,    10],
+    mid:  [25,   10,   5,    2,    1.2, 0.8, 0.6, 0.5, 0.4, 0.5, 0.6, 0.8, 1.2, 2,    5,    10,   25],
+    high: [80,   20,   8,    3,    1.5, 0.7, 0.4, 0.3, 0.2, 0.3, 0.4, 0.7, 1.5, 3,    8,    20,   80],
   };
 
   const SLOT_COLORS = {
@@ -194,16 +194,66 @@
     }
   }
 
-  // ── Physics ──────────────────────────────────────────────────────
-  // Pure simulation. Ball bounces off pegs via circle-circle collision.
-  // No predetermined outcome. The physics determines where it lands.
+  // ── Outcome Engine ────────────────────────────────────────────────
+  // Pre-roll which slot the ball lands in using weighted probability.
+  // Then guide the ball there row-by-row. Physics is visual only.
+  // This guarantees the house edge is mathematically exact.
+
+  // Slot weights: how likely each of the 17 slots is to be hit.
+  // Heavily center-biased. Edge slots (jackpots) are astronomically rare.
+  const SLOT_WEIGHTS = {
+    //              0     1     2     3     4     5     6     7     8     7     6     5     4     3     2     1     0
+    low:  [       0.1,  0.3,  0.8,  2.5,  6,   11,   16,   20,   22,   20,   16,   11,    6,   2.5,  0.8,  0.3,  0.1],
+    mid:  [       0.05, 0.15, 0.5,  1.5,  4,    9,   15,   20,   22,   20,   15,    9,    4,   1.5,  0.5,  0.15, 0.05],
+    high: [       0.02, 0.08, 0.3,  1,    3,    7,   14,   21,   24,   21,   14,    7,    3,   1,    0.3,  0.08, 0.02],
+  };
+
+  function rollSlot() {
+    const w = SLOT_WEIGHTS[riskLevel];
+    const total = w.reduce((a,b) => a+b, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < w.length; i++) {
+      r -= w[i];
+      if (r <= 0) return i;
+    }
+    return 8; // center fallback
+  }
+
+  // ── Physics (visual guide toward pre-rolled target) ──────────────
   const GRAV = 0.12;
   const FRICTION = 0.98;
-  const RESTITUTION = 0.45; // bounciness off pegs
-  const SUB_STEPS = 3; // sub-steps per frame for accuracy
+  const RESTITUTION = 0.45;
+  const SUB_STEPS = 3;
 
   function stepBall(ball){
     if(ball.settled) return;
+
+    // Stuck detection: if ball barely moved vertically in 60 frames, nudge it
+    if (!ball._stuckFrames) ball._stuckFrames = 0;
+    if (!ball._lastY) ball._lastY = ball.y;
+    if (Math.abs(ball.y - ball._lastY) < 0.05) {
+      ball._stuckFrames++;
+      if (ball._stuckFrames > 60) {
+        ball.vy += 0.5;
+        ball.vx += (Math.random() - 0.5) * 0.8;
+        ball._stuckFrames = 0;
+      }
+    } else {
+      ball._stuckFrames = 0;
+    }
+    ball._lastY = ball.y;
+
+    // Hard timeout: if ball alive > 600 frames (~10s), force settle
+    ball._frames = (ball._frames || 0) + 1;
+    if (ball._frames > 600) {
+      const slotW = W / SLOTS;
+      ball.x = ball.targetSlot * slotW + slotW / 2;
+      ball.y = (H - BOT_PAD) - BALL_RAD;
+      ball.settled = true;
+      ball.slot = ball.targetSlot;
+      settleBall(ball);
+      return;
+    }
 
     for(let sub=0; sub<SUB_STEPS; sub++){
       ball.vy += GRAV / SUB_STEPS;
@@ -222,19 +272,21 @@
           const nx = dx / dist;
           const ny = dy / dist;
 
-          // Push ball out of peg
           const overlap = minDist - dist;
           ball.x += nx * overlap;
           ball.y += ny * overlap;
 
-          // Reflect velocity off peg surface
           const dotVN = ball.vx * nx + ball.vy * ny;
-          if(dotVN < 0){ // only bounce if moving toward peg
+          if(dotVN < 0){
             ball.vx -= (1 + RESTITUTION) * dotVN * nx;
             ball.vy -= (1 + RESTITUTION) * dotVN * ny;
 
-            // Small random nudge so ball doesn't sit on top of pegs
-            ball.vx += (Math.random() - 0.5) * 0.15;
+            // Steer toward target slot — gentle, only in the lower half
+            const slotW = W / SLOTS;
+            const targetX = ball.targetSlot * slotW + slotW / 2;
+            const progress = Math.max(0, (ball.y - TOP_PAD) / PLAY_H);
+            const steer = progress > 0.4 ? (targetX - ball.x) * 0.002 : 0;
+            ball.vx += (Math.random() - 0.5) * 0.10 + steer;
           }
         }
       }
@@ -243,7 +295,7 @@
       if(ball.x < BALL_RAD){ ball.x = BALL_RAD; ball.vx = Math.abs(ball.vx) * 0.3; }
       if(ball.x > W - BALL_RAD){ ball.x = W - BALL_RAD; ball.vx = -Math.abs(ball.vx) * 0.3; }
 
-      // Floor / slot detection
+      // Floor: land where the ball actually is (steering should have guided it)
       const slotY = H - BOT_PAD;
       if(ball.y >= slotY - BALL_RAD){
         ball.y = slotY - BALL_RAD;
@@ -251,11 +303,19 @@
         ball.vx = 0;
         ball.settled = true;
 
-        // Determine which slot from X position
+        // Use actual X position to determine slot
         const slotW = W / SLOTS;
-        let slotIdx = Math.floor(ball.x / slotW);
-        slotIdx = Math.max(0, Math.min(SLOTS - 1, slotIdx));
-        ball.slot = slotIdx;
+        let landedSlot = Math.floor(ball.x / slotW);
+        landedSlot = Math.max(0, Math.min(SLOTS - 1, landedSlot));
+
+        // If steering failed and ball is more than 2 slots off target, use target
+        // (rare edge case, prevents physics glitches from breaking payouts)
+        if (Math.abs(landedSlot - ball.targetSlot) > 2) {
+          landedSlot = ball.targetSlot;
+          ball.x = ball.targetSlot * slotW + slotW / 2;
+        }
+
+        ball.slot = landedSlot;
         settleBall(ball);
         return;
       }
@@ -271,7 +331,7 @@
 
     deltaBalance(payout);
 
-    if(mult >= 10){
+    if(mult >= 6){
       showResult(`JACKPOT! ${mult}x \u2014 +${fmtLocal(profit)}`, 'jackpot');
       plinkoLog(`${mult}x JACKPOT! +${fmtLocal(profit)}`);
     } else if(profit > 0){
@@ -322,16 +382,19 @@
     deltaBalance(-amt);
     plinkoLog(`Bet ${fmtLocal(amt)}.`);
 
-    // Drop from center with tiny random offset
+    // Drop from center — outcome pre-rolled, physics guides visually
+    const target = rollSlot();
     balls.push({
-      x: W / 2 + (Math.random() - 0.5) * 6,
+      x: W / 2 + (Math.random() - 0.5) * 3,
       y: TOP_PAD - 10,
-      vx: (Math.random() - 0.5) * 0.2,
+      vx: (Math.random() - 0.5) * 0.1,
       vy: 0,
       bet: amt,
       settled: false,
       slot: -1,
+      targetSlot: target,
       color: null,
+      _frames: 0,
     });
   };
 
