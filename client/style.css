@@ -25,6 +25,17 @@ hr{border:0;border-top:1px dashed var(--dim);margin:8px 0}
 .chatlog{max-height:400px;overflow:auto;background:#000;border:1px solid var(--dim);padding:6px;border-radius:8px}
 .news{max-height:340px;overflow:auto}
 .green{color:var(--good)} .red{color:var(--bad)}
+.news-line{padding:3px 6px;border-bottom:1px solid #ffffff06;font-size:13px;line-height:1.5;transition:background .15s}
+.news-line:hover{background:#ffffff0a}
+.news-line[style*="cursor"]:hover{background:#ffffff12}
+.n-time{color:#d4a05e88;font-size:11px;margin-right:6px;font-variant-numeric:tabular-nums}
+.n-good{color:var(--good)} .n-bad{color:var(--bad)} .n-neutral{color:#d4a05ecc}
+.n-badge{font-size:9px;font-weight:700;letter-spacing:.08em;padding:1px 4px;border-radius:3px;vertical-align:middle;margin-right:4px}
+.n-badge-market{background:#ffb54722;color:var(--amber)}
+.n-badge-colony{background:#ff6b6b22;color:#ff6b6b}
+.n-badge-system{background:#ffffff11;color:#888}
+.n-badge-trade{background:#86ff6a22;color:var(--good)}
+.n-ticker{color:var(--amber);font-weight:700;text-decoration:underline;text-decoration-color:#ffb54755;text-underline-offset:2px}
 .tabs{display:flex;gap:8px;margin-bottom:6px;flex-shrink:0}
 /* Center panel tab content: fill available space */
 #marketTab,#pnlTab,#heatTab,#casinoTab,#storeTab,#guildTab,#bugsTab{flex:1;min-height:0;overflow-y:auto}

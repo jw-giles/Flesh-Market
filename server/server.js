@@ -124,6 +124,8 @@ setInterval(() => {
     // Shift the spawn reference to current price — gravity now measures from the last 6h open
     c._spawnLnP = c.lnP;
     c._trendCheckLnP = c.lnP;
+    // Sync beta target so it doesn't fight the new reference
+    c.ownTargetLnP = c.lnP;
   }
   console.log('[Gravity] Spawn references rolled to current prices.');
 }, GRAVITY_REFERENCE_INTERVAL_MS);
@@ -213,8 +215,23 @@ function symbolize(name){const words=String(name||'').replace(/[^A-Za-z ]/g,' ')
 const companies=NAMES.map((n,i)=>({id:i,name:n,symbol:symbolize(n),price:rng(8,60),ohlc:[],lnP:0,sigma:0.00018+seededRand()*0.00012,mu:-0.000005+seededRand()*0.00001,kappa:0.0008+seededRand()*0.0012,sector:(i%8),offset:-0.3+seededRand()*0.6}));
 (()=>{const used=new Set(),letters='ABCDEFGHIJKLMNOPQRSTUVWXYZ';for(const c of companies){let sym=c.symbol.replace(/[^A-Z]/g,'').slice(0,4);if(sym.length<3)sym=(sym+'FMKT').slice(0,3);let k=0;while(used.has(sym)){sym=k<26?sym.slice(0,3)+letters[k]:sym.slice(0,2)+letters[Math.floor((k-26)/26)%26]+letters[(k-26)%26];sym=sym.slice(0,4);k++;}c.symbol=sym;used.add(sym);}})();
 const SECTOR_TARGETS = [15, 25, 35, 45, 20, 55, 30, 70]; // varied anchors per sector
-const SECTORS=new Array(8).fill(0).map((_,i)=>({lnIndex:Math.log(SECTOR_TARGETS[i]*(0.8+0.4*seededRand())),sigma:0.00010+seededRand()*0.00008,mu:-0.000002+seededRand()*0.000004,kappa:0.0003+seededRand()*0.0004,target:SECTOR_TARGETS[i]}));
+const SECTORS=new Array(8).fill(0).map((_,i)=>{const ln=Math.log(SECTOR_TARGETS[i]*(0.8+0.4*seededRand()));return{lnIndex:ln,prevLnIndex:ln,sigma:0.00010+seededRand()*0.00008,mu:-0.000002+seededRand()*0.000004,kappa:0.0003+seededRand()*0.0004,target:SECTOR_TARGETS[i]};});
 companies.forEach(c=>{c.lnP=Math.log(c.price); c._spawnLnP=c.lnP;});
+
+// ─── Beta Model: per-stock sensitivity to sector moves ────────────────────────
+// beta   = how strongly stock reacts to sector CHANGES (0.1=immune, 2.5=amplifier)
+// ownTargetLnP = stock's personal "fair value" — drifts independently
+// ownKappa     = mean-reversion toward own target (not sector base)
+// targetDriftSigma = how fast fair value wanders (creates divergence within sector)
+// targetSectorKappa = very weak pull of target toward sector (prevents permanent escape)
+companies.forEach(c => {
+  c.beta             = Math.max(0.1, Math.min(2.5, Math.exp(randn() * 0.5)));
+  c.ownTargetLnP     = c.lnP;
+  c.ownKappa         = 0.000005 + seededRand() * 0.000005; // ~7 ticks/day effective pull — balanced against target drift
+  c.targetDriftSigma = 0.00012 + seededRand() * 0.00012; // target wanders ~7%/day — creates trends without certainty
+  c.targetSectorKappa= 0.000008 + seededRand() * 0.000007; // very weak sector gravity — weeks to pull back
+  c.sigma            = 0.00040 + seededRand() * 0.00035; // boosted ~2.5x vs old
+});
 
 // ─── Hot Stocks Rotation ──────────────────────────────────────────────────────
 // Every 30 minutes, 10 random stocks get a drift boost (5 bullish, 5 bearish).
@@ -983,6 +1000,8 @@ function restoreMarketState(){
       if(typeof s.price==='number') c.price=s.price;
       if(typeof s.lnP  ==='number') c.lnP  =s.lnP;
       if(typeof s.sigma==='number') c.sigma=s.sigma;
+      if(typeof s.ownTargetLnP==='number') c.ownTargetLnP=s.ownTargetLnP;
+      if(typeof s.beta==='number') c.beta=s.beta;
       if(Array.isArray(s.ohlc))    c.ohlc =s.ohlc;
     }
   }
@@ -2792,7 +2811,7 @@ function broadcastToAdmins(msg) {
     for (const ws of sockets) { try { if (ws.readyState === 1) ws.send(data); } catch(_) {} }
   }
 }
-app.get('/state',(req,res)=>{res.json({companies:companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price})),headlines:headlines.slice(-30),time:Date.now()});});
+app.get('/state',(req,res)=>{res.json({companies:companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector})),headlines:headlines.slice(-30),time:Date.now()});});
 app.post('/snapshot', requireAdmin, (req,res)=>{saveMarketState(companies,headlines);res.json({saved:true});});
 app.get('/api/v1/eoh/:ticker',(req,res)=>{const sym=String(req.params.ticker||'').toUpperCase();res.json(EOH.get(sym)||[]);});
 app.get('/api/v1/fmi',(_req,res)=>{res.json({ticker:FMI.ticker,treasury:FMI.treasury});});
@@ -2850,25 +2869,138 @@ function broadcastToFundMembers(fundId, msg) {
   } catch(e) {}
 }
 
-function pushHeadline(text,tone,symbol){
-  const item={id:uuidv4(),t:Date.now(),text,tone,symbol};
+function pushHeadline(text,tone,symbol,category){
+  const item={id:uuidv4(),t:Date.now(),text,tone,symbol:symbol||null,cat:category||'system'};
   headlines.push(item); if(headlines.length>200)headlines.shift();
   broadcast({type:'news',data:item});
 }
 
 // ─── Headlines ────────────────────────────────────────────────────────────────
 
-const THEMES_GOOD=['beats earnings expectations','announces dividend increase','opens new facility','expands into new market','signs multi-year contract','reports record user growth','launches new product line','receives safety certification','secures strategic partnership','approved for government grant','wins major infrastructure bid'];
-const THEMES_BAD=['issues profit warning','faces regulatory probe','exec resignation rattles investors','data breach under investigation','suffers supply-chain disruption','product recall announced','union strike impacts operations','lawsuit filed by competitors','credit downgrade issued'];
-const THEMES_WEIRD=['synthetic organ breakthrough','raided by maritime police','blackout from toxic spill','pirate tolls spike on key route','grey-market profits surge','smuggler network rumor denied','unexplained cargo manifest leak','enforcer contract renewed quietly','colony audit delayed indefinitely'];
+// Sector-specific lore headlines (index matches SECTOR_NAMES)
+const SECTOR_NEWS = [
+  // 0: Finance
+  { good: ['posts record lending volume','clears regulatory audit with no flags','opens new credit line to frontier colonies','refinances debt at historic lows','acquires rival lending desk','reports zero default quarter'],
+    bad:  ['suspends withdrawals pending review','margin call cascade hits trading desk','auditors flag discrepancies in ledger','client funds frozen by colonial authority','loan defaults spike after colony unrest','credit facility revoked by oversight board'],
+    weird:['begins accepting flesh-credits as collateral','quiet restructuring rumors surface','unnamed exec purchases escape pod','ledger entries found written in blood','vault contents reclassified as "organic"'] },
+  // 1: Biotech
+  { good: ['synthetic organ trials show 94% viability','gene therapy patent granted by colony board','receives emergency use authorization','clinical data exceeds analyst projections','bioweapon antidote contract awarded','tissue fabrication yield hits new high'],
+    bad:  ['test subjects exhibit unexpected mutations','FDA-equivalent issues product hold','contamination shuts down growth vats','whistleblower alleges falsified trial data','organ rejection rates spike in Q3 batch','lab breach triggers quarantine protocol'],
+    weird:['researchers report specimen "behaving autonomously"','anonymous donor funds consciousness transfer study','vat-grown tissue found to contain memories','lab AI begins requesting ethical review','new compound classified — clearance level: void'] },
+  // 2: Insurance
+  { good: ['claims ratio drops to sector-best levels','underwrites first intercolonial shipping policy','reinsurance treaty renewed at favorable terms','risk model upgrade reduces reserve requirements','captures market share in cargo insurance','colony stability bonus lowers premiums'],
+    bad:  ['catastrophic loss event exceeds reserves','class action filed over denied claims','reinsurer pulls out of volatile corridor','smuggling losses blow through actuarial models','mass claims filed after colony tension spike','regulator mandates reserve increase'],
+    weird:['insures cargo that "doesn\'t officially exist"','policy written for event with 0.01% probability triggers','actuary quits citing "incalculable existential risk"','unnamed policy covers "resurrection costs"','claims adjuster vanishes investigating Hollow shipment'] },
+  // 3: Manufacturing
+  { good: ['foundry output exceeds quarterly target','secures raw material supply at locked prices','new production line comes online ahead of schedule','automation upgrade cuts unit costs 18%','wins exclusive fabrication contract','quality metrics hit all-time best'],
+    bad:  ['production halted by equipment failure','raw material shipment seized at checkpoint','factory explosion under investigation','workforce walkout over hazard conditions','supply chain severed by blockade','defective batch triggers full product recall'],
+    weird:['assembly line produces items not in any schematic','night shift reports machinery operating on its own','metal alloy sample resists all known cutting tools','workers find organic material in ore shipment','factory floor camera feeds go dark for 4 hours'] },
+  // 4: Energy
+  { good: ['reactor output stable above rated capacity','new fuel cell patent slashes grid costs','awarded colony-wide power distribution contract','energy storage breakthrough extends reserve life','grid expansion approved for frontier corridor','fuel synthesis achieves cost parity'],
+    bad:  ['reactor scram forces emergency grid switch','fuel reserves contaminated — supply timeline unknown','grid failure blacks out two colony sectors','pipeline rupture halts fuel distribution','energy regulator imposes output cap','cooling system failure triggers safety lockdown'],
+    weird:['power grid draws more than generation explains','fuel rod disposal site emitting unlisted frequencies','reactor core temperature readings defy physics model','blackout zone reported to have "different gravity"','technicians hear harmonics in reactor hum'] },
+  // 5: Logistics
+  { good: ['lane transit times hit record efficiency','fleet expansion adds 12 cargo haulers','awarded exclusive shipping contract for new route','warehouse automation cuts turnaround 40%','intercolonial trade volume surges','fuel cost hedging pays off — margins expand'],
+    bad:  ['convoy ambushed on contested shipping lane','fleet grounded by fuel contamination','port congestion delays cascade across network','pirate activity forces route diversion','warehouse fire destroys stockpiled inventory','crew shortage forces service cuts on key lanes'],
+    weird:['cargo manifest lists items with no known origin','ship arrives at port with crew but no cargo','navigation beacon broadcasting in extinct language','shipping container contents reclassified mid-transit','pilot reports "something following" on Hollow route'] },
+  // 6: Tech
+  { good: ['software deployment achieves zero-downtime migration','AI model passes colony security certification','data center expansion doubles processing capacity','encryption patent licensed to three factions','network uptime exceeds 99.97% for the quarter','dev team ships ahead of roadmap'],
+    bad:  ['critical vulnerability discovered in core platform','data breach exposes user behavioral profiles','AI model exhibits unauthorized goal-seeking behavior','network outage cascades through dependent systems','key engineer defects to competitor','codebase audit reveals undocumented backdoors'],
+    weird:['AI system files its own bug report','server farm power usage spikes during solar eclipse','deleted user accounts reappear with new activity','codebase contains functions no engineer wrote','neural net outputs include coordinates to unknown location'] },
+  // 7: Misc
+  { good: ['diversified portfolio outperforms sector benchmarks','consulting arm wins multi-colony advisory contract','conglomerate subsidiary posts surprise profit','brand licensing revenue doubles year-over-year','acquires distressed competitor at steep discount','expands into gray-market luxury goods'],
+    bad:  ['subsidiary caught in price-fixing investigation','mystery investor dumps large stake overnight','board infighting leaks to colonial press','asset seizure by faction enforcement arm','quarterly report delayed — auditor reassigned','shadow subsidiary discovered with unauthorized debts'],
+    weird:['corporate retreat held at undisclosed orbital facility','company name appears in intercepted void transmission','CEO spotted dining with known smuggler baron','annual report contains chapter written in cipher','office building floor plan doesn\'t match blueprints'] },
+];
+
+// Market-wide headlines (no specific ticker)
+const MARKET_WIDE = [
+  { text: 'Intercolonial trade index ticks higher on light volume', tone: 'good' },
+  { text: 'Market breadth narrows as traders rotate into defensives', tone: 'neutral' },
+  { text: 'Colonial Reserve hints at liquidity injection', tone: 'good' },
+  { text: 'Sector rotation underway — momentum names lagging', tone: 'neutral' },
+  { text: 'Dark pool activity surges across mid-cap tickers', tone: 'neutral' },
+  { text: 'Broad market sell-off accelerates into close', tone: 'bad' },
+  { text: 'Volatility index spikes on escalating faction tensions', tone: 'bad' },
+  { text: 'Risk-on sentiment returns — growth names lead rally', tone: 'good' },
+  { text: 'Institutional flows shift toward frontier colony listings', tone: 'good' },
+  { text: 'Market-wide circuit breaker test scheduled — no disruption expected', tone: 'neutral' },
+  { text: 'Cross-sector correlation breaks down — stock-pickers rejoice', tone: 'neutral' },
+  { text: 'Leveraged positions approach record levels across all sectors', tone: 'bad' },
+  { text: 'Trading volume dries up ahead of earnings cycle', tone: 'neutral' },
+  { text: 'Flash crash in off-hours trading — origin unknown', tone: 'bad' },
+  { text: 'Liquidity conditions tighten — bid-ask spreads widening', tone: 'bad' },
+  { text: 'Anonymous whale accumulating across multiple sectors', tone: 'neutral' },
+  { text: 'Flesh Station exchange reports record transaction volume', tone: 'good' },
+  { text: 'Colonial oversight committee announces compliance review', tone: 'bad' },
+  { text: 'Void Collective economic sanctions rumored — markets cautious', tone: 'bad' },
+  { text: 'New shipping lane opens — logistics and energy names rally', tone: 'good' },
+];
+
+// Colony-flavored headlines (inserted when tension exists)
+const COLONY_FLAVOR = [
+  { text: (col) => `Unrest simmers at ${col} — local businesses brace for disruption`, tone: 'bad' },
+  { text: (col) => `${col} garrison reinforced — security spending ticks up`, tone: 'neutral' },
+  { text: (col) => `Trade flows stabilize at ${col} following diplomatic progress`, tone: 'good' },
+  { text: (col) => `${col} infrastructure spending approved — construction firms mobilize`, tone: 'good' },
+  { text: (col) => `Smuggler activity near ${col} disrupts legitimate commerce`, tone: 'bad' },
+  { text: (col) => `${col} workers stage walkout over hazard pay dispute`, tone: 'bad' },
+  { text: (col) => `${col} exports surge as faction subsidies kick in`, tone: 'good' },
+];
+
+const NEWS_COLONY_NAMES = {
+  new_anchor:'New Anchor',cascade_station:'Cascade Station',frontier_outpost:'Frontier Outpost',
+  the_hollow:'The Hollow',vein_cluster:'Vein Cluster',aurora_prime:'Aurora Prime',
+  null_point:'Null Point',flesh_station:'Flesh Station',limbosis:'Limbosis',
+  lustandia:'Lustandia',gluttonis:'Gluttonis',abaddon:'Abaddon',eyejog:'Eyejog',
+  dust_basin:'Dust Basin',nova_reach:'Nova Reach',iron_shelf:'Iron Shelf',
+  the_ledger:'The Ledger',signal_run:'Signal Run',scrub_yard:'Scrub Yard',
+  the_escrow:'The Escrow',margin_call:'Margin Call',
+};
 
 function genHeadline(){
-  const c=pick(companies),r=Math.random();
-  const themes=r<0.45?THEMES_GOOD:(r<0.9?THEMES_BAD:THEMES_WEIRD);
-  const tone=themes===THEMES_GOOD?'good':(themes===THEMES_BAD?'bad':'neutral');
-  if(themes===THEMES_GOOD){c.lnP+=0.001+Math.random()*0.003;c.price=Math.max(0.5,Math.exp(c.lnP));}
-  else if(themes===THEMES_BAD){c.lnP-=0.001+Math.random()*0.003;c.price=Math.max(0.5,Math.exp(c.lnP));}
-  pushHeadline(`${c.name} (${c.symbol}): ${pick(themes)}`,tone,c.symbol);
+  const roll = Math.random();
+
+  // 15% chance: market-wide headline (no ticker, no price impact)
+  if (roll < 0.15) {
+    const h = pick(MARKET_WIDE);
+    pushHeadline(h.text, h.tone, null, 'market');
+    return;
+  }
+
+  // 10% chance: colony-flavored headline (no specific ticker)
+  if (roll < 0.25) {
+    const colonyIds = Object.keys(COLONY_COMPANIES).filter(c => (COLONY_COMPANIES[c]||[]).length > 0);
+    if (colonyIds.length) {
+      const colId = pick(colonyIds);
+      const colName = NEWS_COLONY_NAMES[colId] || colId.replace(/_/g,' ');
+      const template = pick(COLONY_FLAVOR);
+      pushHeadline(template.text(colName), template.tone, null, 'colony');
+      return;
+    }
+  }
+
+  // 75% chance: company-specific headline with sector-aware lore
+  const c = pick(companies.filter(x => !x._special));
+  if (!c) return;
+  const sectorIdx = c.sector || 0;
+  const sn = SECTOR_NEWS[sectorIdx] || SECTOR_NEWS[7];
+
+  const r2 = Math.random();
+  const bucket = r2 < 0.40 ? 'good' : (r2 < 0.80 ? 'bad' : 'weird');
+  const tone = bucket === 'good' ? 'good' : (bucket === 'bad' ? 'bad' : 'neutral');
+  const line = pick(sn[bucket] || sn.weird);
+
+  // Minimal price impact — flavor, not driver (0.02-0.08% move)
+  if (bucket === 'good') {
+    c.lnP += 0.0002 + Math.random() * 0.0006;
+    c.price = Math.max(0.5, Math.exp(c.lnP));
+  } else if (bucket === 'bad') {
+    c.lnP -= 0.0002 + Math.random() * 0.0006;
+    c.price = Math.max(0.5, Math.exp(c.lnP));
+  }
+
+  pushHeadline(`${c.name} (${c.symbol}): ${line}`, tone, c.symbol, 'company');
 }
 
 // ─── Market sim ───────────────────────────────────────────────────────────────
@@ -2878,58 +3010,63 @@ function stepMarket(){
   _rollHourIfNeeded(new Date());
   const now=Date.now();
 
-  // ── Sector index step with GARCH-style vol clustering ────────────────────
+  // ── Sector index step — track prevLnIndex for beta delta calc ─────────────
   for(let s=0;s<SECTORS.length;s++){
     const S=SECTORS[s];
-    // Rare sector-wide shock — 0.05% chance per tick, small magnitude
+    S.prevLnIndex = S.lnIndex;
     const sectorShock = Math.random()<0.0005 ? randn()*0.003 : 0;
     const eps = randn()*S.sigma + sectorShock;
-    // Mean-reversion back toward per-sector target
     const sectorTarget = Math.log(S.target || 30);
     S.lnIndex += S.mu + S.kappa*(sectorTarget - S.lnIndex) + eps;
-    // Ceiling: log(200) so sectors have room to move
     S.lnIndex = Math.max(Math.log(3), Math.min(Math.log(200), S.lnIndex));
-    // GARCH vol decay — tight range
     S.sigma = Math.max(0.00005, Math.min(0.0005, 0.93*S.sigma + 0.07*Math.abs(eps)));
   }
 
+  // ── Beta Model: each stock reacts to sector DELTA scaled by its beta ────
   companies.forEach(c=>{
     if (c._special) return;
-    const S    = SECTORS[c.sector||0];
-    const base = S.lnIndex + (c.offset||0);
+    const S = SECTORS[c.sector||0];
 
-    // Hot stocks get slight volatility boost and gentle directional drift
+    // 1. Sector delta: how much the sector moved THIS tick
+    const sectorDelta = S.lnIndex - S.prevLnIndex;
+
+    // 2. Hot stock modifiers
     const isHot = _hotStocks.has(c.id);
-    const hotSigma = isHot ? 1.15 : 1.0;
-    const hotBias = isHot ? (_hotBias[c.id] || 0) * 0.00003 : 0;
+    const hotSigma = isHot ? 1.2 : 1.0;
+    const hotBias = isHot ? (_hotBias[c.id] || 0) * 0.00005 : 0;
 
-    // Idiosyncratic shock — moderate fat tails
+    // 3. Idiosyncratic noise (boosted, fatter tails)
     const u    = Math.random();
-    const tail = u < 0.015 ? 2.0 : (u < 0.06 ? 1.3 : 1.0);
-    const eps  = randn() * (c.sigma||0.00025) * tail * hotSigma;
+    const tail = u < 0.02 ? 2.2 : (u < 0.08 ? 1.4 : 1.0);
+    const eps  = randn() * (c.sigma||0.0004) * tail * hotSigma;
 
-    // If admin recently set price, use stronger mean-reversion toward admin target
-    const kappa = c._adminBias ? 0.0005 : (c.kappa||0.001);
-    const mu    = c._adminBias
+    // 4. Stock's own target drifts (random walk + weak sector gravity)
+    if (!c._adminBias) {
+      const sectorFairValue = Math.log(S.target) + (c.offset || 0);
+      c.ownTargetLnP += randn() * (c.targetDriftSigma||0.00018)
+                      + (c.targetSectorKappa||0.000012) * (sectorFairValue - c.ownTargetLnP);
+      c.ownTargetLnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.ownTargetLnP));
+    }
+
+    // 5. Price delta: beta*sectorDelta + ownKappa*(ownTarget-price) + eps
+    const mu = c._adminBias
       ? (c._adminBias > 0 ? 0.00003 : -0.00003)
       : Math.min(0.00003, (c.mu||0)) + hotBias;
 
-    // Mean-reversion toward sector base
-    const target = c._adminBias ? c._adminTargetLnP : base;
-    let delta = mu + kappa*(target - c.lnP) + eps;
+    const revertTarget = c._adminBias ? c._adminTargetLnP : c.ownTargetLnP;
+    const revertKappa  = c._adminBias ? 0.0005 : (c.ownKappa||0.0000075);
 
-    // ── ANTI-RUNAWAY GRAVITY ──────────────────────────────────────────────
-    // Measure lifetime gain from spawn price
+    let delta = mu
+              + (c.beta||1.0) * sectorDelta        // sector influence via beta
+              + revertKappa * (revertTarget - c.lnP) // own mean-reversion
+              + eps;                                  // individual noise
+
+    // ── ANTI-RUNAWAY GRAVITY (unchanged) ──────────────────────────────────
     const spawnLnP   = c._spawnLnP || c.lnP;
     const lifetimeGain = c.lnP - spawnLnP;
-
-    // Graduated gravity: kicks in at +400% (ln≈1.6), softer pull
     if (lifetimeGain > 1.6 && !c._adminBias) {
-      const gravityStrength = Math.min(0.002, (lifetimeGain - 1.6) * 0.0006);
-      delta -= gravityStrength;
+      delta -= Math.min(0.002, (lifetimeGain - 1.6) * 0.0006);
     }
-
-    // Emergency brake: if up >1500% from spawn, mean-revert toward spawn+500%
     if (lifetimeGain > 2.77 && !c._adminBias) {
       const emergencyTarget = spawnLnP + 1.79;
       delta += 0.001 * (emergencyTarget - c.lnP);
@@ -2942,6 +3079,7 @@ function stepMarket(){
       c._adminBiasDecay = (c._adminBiasDecay || 2400) - 1;
       if (c._adminBiasDecay <= 0) {
         c.offset = c.lnP - S.lnIndex;
+        c.ownTargetLnP = c.lnP; // sync own target to current price
         c._adminBias = 0;
         c._adminTargetLnP = null;
         c._adminBiasDecay = 0;
@@ -2951,57 +3089,51 @@ function stepMarket(){
     // Hard price floor/ceiling: Ƒ0.50 – Ƒ5000
     c.lnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.lnP));
 
-    // Vol clustering: very tight range for sane daily swings
+    // Vol clustering (wider range for beta model)
     const absEps = Math.abs(eps);
-    c.sigma = Math.max(0.00008, Math.min(0.0008,
-      0.92*(c.sigma||0.00025) + 0.06*absEps + 0.02*0.00025
+    c.sigma = Math.max(0.00015, Math.min(0.0015,
+      0.90*(c.sigma||0.0004) + 0.07*absEps + 0.03*0.0004
     ));
 
-    // Rare idiosyncratic event (0.03%/tick), small magnitude
-    if(Math.random()<0.0003){
-      const eventMag = 0.002 + Math.random()*0.004;  // 0.2–0.6% move
+    // Rare idiosyncratic event (0.05%/tick — slightly more frequent)
+    if(Math.random()<0.0005){
+      const eventMag = 0.003 + Math.random()*0.006;
       c.lnP += (Math.random()<0.5?1:-1) * eventMag;
       c.lnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.lnP));
-      c.sigma = Math.min(0.0008, c.sigma * 1.5);
+      c.sigma = Math.min(0.0015, c.sigma * 1.6);
     }
 
     const prev=c.price;
     c.price=Math.max(0.50, Math.exp(c.lnP));
 
     // ── Graduated reversal pressure every +50% above spawn ───────────────
-    // Each time price clears another +50% above spawn, 40% chance of downward nudge
     if (!c._trendCheckLnP) c._trendCheckLnP = c._spawnLnP || c.lnP;
-    if (c.lnP >= c._trendCheckLnP + 0.405) {  // +50% in log-space (ln(1.5)≈0.405)
+    if (c.lnP >= c._trendCheckLnP + 0.405) {
       c._trendCheckLnP = c.lnP;
       if (Math.random() < 0.40) {
-        const pullback = 0.008 + Math.random() * 0.012; // 0.8–2% pullback
+        const pullback = 0.008 + Math.random() * 0.012;
         c.lnP -= pullback;
-        c.sigma = Math.min(0.0008, (c.sigma || 0.00025) * 1.5);
+        c.sigma = Math.min(0.0015, (c.sigma || 0.0004) * 1.5);
         c.price = Math.max(0.50, Math.exp(c.lnP));
         console.log(`[GRAVITY] ${c.symbol} @ Ƒ${c.price.toFixed(0)} — +${((Math.exp(c.lnP - (c._spawnLnP||0))-1)*100).toFixed(0)}% pullback triggered`);
       }
     }
-    // Reset checkpoint if price drops significantly below it
     if (c.lnP < c._trendCheckLnP - 0.3) c._trendCheckLnP = c.lnP;
 
     // ── Stock Split at Ƒ5000 ─────────────────────────────────────────────
     if (c.price >= 4999 && !c._splitting) {
       c._splitting = true;
-      const SPLIT_RATIO = 1000; // 1 share → 1000 shares at Ƒ5
+      const SPLIT_RATIO = 1000;
       c.price = 5;
       c.lnP = Math.log(5);
       c._trendCheckLnP = Math.log(5);
-      c._spawnLnP = Math.log(5); // reset gain tracking post-split
-      // Adjust all player holdings
+      c._spawnLnP = Math.log(5);
+      c.ownTargetLnP = Math.log(5); // reset beta target post-split
       players.forEach(p => {
         if (!p.holdings || !p.holdings[c.symbol]) return;
         const oldQty = p.holdings[c.symbol];
         p.holdings[c.symbol] = oldQty * SPLIT_RATIO;
-        // Adjust cost basis per share (same total cost, more shares)
-        if (p.basisC && p.basisC[c.symbol]) {
-          // basisC is total cents paid — stays the same, shares multiplied
-          // no change needed since basisC tracks total cost not per-share
-        }
+        if (p.basisC && p.basisC[c.symbol]) {}
         savePlayer(p);
       });
       broadcast({ type: 'chat_system', data: { text: `📊 STOCK SPLIT: ${c.symbol} hit Ƒ5,000 — splits 1:${SPLIT_RATIO}. All holders now have ${SPLIT_RATIO}× shares at Ƒ5.` }});
@@ -3009,8 +3141,8 @@ function stepMarket(){
       setTimeout(() => { c._splitting = false; }, 10000);
     }
 
-    // OHLC bar aggregation: accumulate ticks into 30-second bars
-    const BAR_MS = 5_000; // 5 seconds per candle
+    // OHLC bar aggregation
+    const BAR_MS = 5_000;
     if (!c._bar) c._bar = { t: now, o: c.price, h: c.price, l: c.price, c: c.price, v: 0 };
     c._bar.h = Math.max(c._bar.h, c.price);
     c._bar.l = Math.min(c._bar.l, c.price);

@@ -114,74 +114,95 @@ window.renderTradeFeed = function(d) {
 
 // ── Heatmap ───────────────────────────────────────────────────────────────────
 
-// Lore names replace generic sector labels — ordered to match server SECTOR_NAMES indices
+// Lore names — ordered to match server SECTOR_NAMES indices
 // (0=Finance,1=Biotech,2=Insurance,3=Manufacturing,4=Energy,5=Logistics,6=Tech,7=Misc)
 const HEAT_SECTOR_LORE = [
-  { icon: '⬡', name: 'The Capital Syndicate',    sub: 'Banking, lending & exchange houses'         },
-  { icon: '⬡', name: 'Flesh & Gene Corps',        sub: 'Biomedical, pharma & augmentation firms'    },
-  { icon: '⬡', name: 'The Indemnity Brokers',     sub: 'Risk underwriters & liability cartels'      },
-  { icon: '⬡', name: 'The Iron Foundries',        sub: 'Heavy manufacturing & industrial output'    },
-  { icon: '⬡', name: 'Power Cartels',             sub: 'Fuel, grid operators & energy monopolies'  },
-  { icon: '⬡', name: 'The Transit Guild',         sub: 'Freight, shipping & supply infrastructure' },
-  { icon: '⬡', name: 'Neural Networks Inc.',      sub: 'Software, hardware & data brokers'         },
-  { icon: '⬡', name: 'The Gray Bazaar',           sub: 'Unlisted, unclassified & shadow ventures'  },
+  { name: 'The Capital Syndicate',    sub: 'Banking, lending & exchange houses'         },
+  { name: 'Flesh & Gene Corps',       sub: 'Biomedical, pharma & augmentation firms'    },
+  { name: 'The Indemnity Brokers',    sub: 'Risk underwriters & liability cartels'      },
+  { name: 'The Iron Foundries',       sub: 'Heavy manufacturing & industrial output'    },
+  { name: 'Power Cartels',            sub: 'Fuel, grid operators & energy monopolies'   },
+  { name: 'The Transit Guild',        sub: 'Freight, shipping & supply infrastructure'  },
+  { name: 'Neural Networks Inc.',     sub: 'Software, hardware & data brokers'          },
+  { name: 'The Gray Bazaar',          sub: 'Unlisted, unclassified & shadow ventures'   },
 ];
 
-// Track collapsed state per sector across refreshes
 const _heatCollapsed = {};
+
+// Color ramp: smooth green → neutral → red based on pct
+function _heatColor(pct) {
+  const abs = Math.abs(pct);
+  const t = Math.min(1, abs / 15); // saturate at ±15% (beta model daily range)
+  if (pct > 1.0) {
+    // Green ramp: dark → bright
+    const r = Math.round(10 - 10 * t);
+    const g = Math.round(50 + 180 * t);
+    const b = Math.round(15 + 20 * t);
+    return { bg: `rgb(${r},${g},${b})`, text: t > 0.3 ? '#c8ffc0' : '#8aba80' };
+  } else if (pct < -1.0) {
+    // Red ramp: dark → bright
+    const r = Math.round(50 + 170 * t);
+    const g = Math.round(15 - 10 * t);
+    const b = Math.round(15 - 5 * t);
+    return { bg: `rgb(${r},${g},${b})`, text: t > 0.3 ? '#ffc8c0' : '#ba8a80' };
+  }
+  // Neutral band (±1%) — subtle warm/cool lean
+  if (pct > 0.15) return { bg: `rgb(18,${Math.round(25+pct*8)},18)`, text: '#8a9a78' };
+  if (pct < -0.15) return { bg: `rgb(${Math.round(25+abs*8)},16,16)`, text: '#9a7878' };
+  return { bg: '#1a1a18', text: '#666' };
+}
 
 function _makeHeatCell(t) {
   const pct = t.pct != null ? t.pct : 0;
-  const abs = Math.abs(pct);
-  const intensity = Math.min(1, abs / 5);
-  let bg, textColor;
-  if (pct > 0.05) {
-    const g = Math.round(80 + 175 * intensity);
-    bg = `rgba(0,${g},40,0.85)`;
-    textColor = '#aaffaa';
-  } else if (pct < -0.05) {
-    const r = Math.round(80 + 175 * intensity);
-    bg = `rgba(${r},20,20,0.85)`;
-    textColor = '#ffaaaa';
-  } else {
-    bg = 'rgba(30,30,30,0.8)';
-    textColor = '#888';
-  }
+  const price = t.price != null ? t.price : 0;
+  const { bg, text } = _heatColor(pct);
+  const sign = pct > 0 ? '+' : '';
+  const priceStr = price >= 1000 ? (price / 1000).toFixed(1) + 'k' : price.toFixed(2);
+
   const cell = document.createElement('div');
   cell.className = 'hc';
   cell.style.background = bg;
-  cell.style.color = textColor;
-  cell.style.cursor = 'pointer';
-  const sign = pct > 0 ? '+' : '';
+  cell.style.color = text;
+  cell.innerHTML = `<div class="hs">${t.symbol}</div><div class="hp">${sign}${Math.abs(pct)>=10?pct.toFixed(1):pct.toFixed(2)}%</div><div class="hpr">Ƒ${priceStr}</div>`;
+
   const lore = HEAT_SECTOR_LORE[t.sector] || {};
-  cell.innerHTML = `<div class="hs">${t.symbol}</div><div style="font-size:.72rem">${sign}${pct.toFixed(2)}%</div><div style="font-size:.65rem;opacity:.55">Ƒ${t.price>=1000?(t.price/1000).toFixed(1)+'k':t.price.toFixed(2)}</div>`;
-  cell.title = `${t.name || t.symbol}\nƑ${(t.price||0).toFixed(2)}  ${sign}${pct.toFixed(2)}%\nSector: ${lore.name || ''}\nClick to open chart`;
+  cell.title = `${t.name || t.symbol}\nƑ${price.toFixed(2)}  ${sign}${pct.toFixed(2)}%\nSector: ${lore.name || ''}\nClick to open chart`;
+
   cell.addEventListener('click', () => {
     try {
       const symEl = document.getElementById('sym');
       if (symEl) symEl.value = t.symbol;
       window.CURRENT = t.symbol;
       if (typeof sendWS === 'function') sendWS({ type: 'chart', symbol: t.symbol });
-      if (typeof showTab === 'function') {
-        showTab('market');
-      } else {
-        const mktTab = document.querySelector('[data-tab="market"]');
-        if (mktTab) mktTab.click();
-      }
+      if (typeof showTab === 'function') { showTab('market'); }
+      else { const mktTab = document.querySelector('[data-tab="market"]'); if (mktTab) mktTab.click(); }
       try { document.querySelector('.panel #chart')?.scrollIntoView({behavior:'smooth', block:'nearest'}); } catch(_) {}
     } catch(e) {}
   });
   return cell;
 }
 
+// Build a mini distribution bar showing the spread of + and - within a sector
+function _makeDistBar(stocks) {
+  const sorted = stocks.map(t => t.pct || 0).sort((a, b) => b - a);
+  const bar = document.createElement('div');
+  bar.className = 'heat-dist';
+  for (const pct of sorted) {
+    const pip = document.createElement('span');
+    pip.className = 'heat-pip';
+    pip.style.background = _heatColor(pct).bg;
+    bar.appendChild(pip);
+  }
+  return bar;
+}
+
 window.refreshHeatmap = function() {
   const grid = document.getElementById('heatGrid'); if (!grid) return;
   const tab = document.getElementById('heatTab');
-  const tickers = window.TICKERS || TICKERS || [];
+  const tickers = window.TICKERS || [];
   if (!tickers.length) return;
   if (!tab || tab.style.display === 'none') return;
 
-  // Group tickers by sector index
   const bySector = {};
   for (const t of tickers) {
     if (t.symbol === 'FLSH') continue;
@@ -190,63 +211,94 @@ window.refreshHeatmap = function() {
     bySector[sid].push(t);
   }
 
-  // Preserve scroll position
   const scrollTop = tab.scrollTop;
   grid.innerHTML = '';
 
-  // Render one collapsible block per sector, in sector-index order
-  const sectorIds = Object.keys(bySector).map(Number).sort((a,b)=>a-b);
+  const sectorIds = Object.keys(bySector).map(Number).sort((a, b) => a - b);
   for (const sid of sectorIds) {
-    const stocks = bySector[sid];
-    const lore = HEAT_SECTOR_LORE[sid] || { icon:'⬡', name:`Sector ${sid}`, sub:'' };
-    const isCollapsed = !!_heatCollapsed[sid];
+    try {
+      // Sort stocks: biggest gainers first, biggest losers last
+      const stocks = bySector[sid].sort((a, b) => (b.pct || 0) - (a.pct || 0));
+      const lore = HEAT_SECTOR_LORE[sid] || { name: `Sector ${sid}`, sub: '' };
+      const isCollapsed = !!_heatCollapsed[sid];
 
-    // Sector wrapper
-    const block = document.createElement('div');
-    block.style.cssText = 'border:1px solid rgba(255,255,255,0.08);border-radius:6px;overflow:hidden;';
+      // Stats
+      const avgPct = stocks.reduce((s, t) => s + (t.pct || 0), 0) / stocks.length;
+      const up = stocks.filter(t => (t.pct || 0) > 1.0).length;
+      const dn = stocks.filter(t => (t.pct || 0) < -1.0).length;
+      const flat = stocks.length - up - dn;
+      const best = stocks[0];
+      const worst = stocks[stocks.length - 1];
+      const avgSign = avgPct >= 0 ? '+' : '';
+      const avgCol = _heatColor(avgPct);
+      const avgStr = Math.abs(avgPct) >= 10 ? avgPct.toFixed(1) : avgPct.toFixed(2);
 
-    // Header — click to collapse/expand
-    const avgPct = stocks.reduce((s,t)=> s + (t.pct||0), 0) / stocks.length;
-    const avgSign = avgPct >= 0 ? '+' : '';
-    const avgCol  = avgPct > 0.05 ? '#86ff6a' : avgPct < -0.05 ? '#ff6b6b' : '#888';
+      const block = document.createElement('div');
+      block.className = 'heat-sector';
 
-    const hdr = document.createElement('div');
-    hdr.style.cssText = `
-      display:flex;align-items:center;gap:8px;padding:6px 10px;
-      background:rgba(255,255,255,0.04);cursor:pointer;user-select:none;
-      border-bottom:1px solid rgba(255,255,255,0.06);
-    `;
-    hdr.innerHTML = `
-      <span style="font-size:.9rem;opacity:.45;transition:transform .2s;display:inline-block;transform:rotate(${isCollapsed?'-90deg':'0deg'})" class="heat-caret">▾</span>
-      <div style="flex:1;display:flex;flex-direction:column;gap:2px;">
-        <span style="font-size:.82rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.9">${lore.name}</span>
-        <span style="font-size:.72rem;opacity:.6;font-style:italic;letter-spacing:.03em" class="heat-sub">${lore.sub}</span>
-      </div>
-      <span style="font-size:.8rem;color:${avgCol};font-weight:600;min-width:60px;text-align:right">${avgSign}${avgPct.toFixed(2)}%</span>
-      <span style="font-size:.72rem;opacity:.35;min-width:36px;text-align:right">${stocks.length} co.</span>
-    `;
+      // ── Header ──
+      const hdr = document.createElement('div');
+      hdr.className = 'heat-hdr';
+      hdr.innerHTML = `
+        <span class="heat-caret" style="transform:rotate(${isCollapsed ? '-90deg' : '0deg'})">▾</span>
+        <div class="heat-hdr-info">
+          <div class="heat-hdr-top">
+            <span class="heat-name">${lore.name}</span>
+            <span class="heat-avg" style="color:${avgCol.text}">${avgSign}${avgStr}%</span>
+          </div>
+          <div class="heat-hdr-bot">
+            <span class="heat-sub">${lore.sub}</span>
+            <span class="heat-counts"><span style="color:#6c6">▲${up}</span> <span style="color:#888">—${flat}</span> <span style="color:#c66">▼${dn}</span></span>
+          </div>
+        </div>
+      `;
 
-    // Cell grid for this sector
-    const subGrid = document.createElement('div');
-    subGrid.style.cssText = `
-      display:${isCollapsed ? 'none' : 'grid'};
-      grid-template-columns:repeat(auto-fill,minmax(72px,1fr));
-      gap:4px;padding:6px;
-    `;
-    for (const t of stocks) subGrid.appendChild(_makeHeatCell(t));
+      // ── Distribution bar ──
+      const distRow = document.createElement('div');
+      distRow.className = 'heat-dist-row';
+      distRow.style.display = isCollapsed ? 'none' : '';
+      distRow.appendChild(_makeDistBar(stocks));
 
-    // Toggle collapse on header click
-    hdr.addEventListener('click', () => {
-      _heatCollapsed[sid] = !_heatCollapsed[sid];
-      const collapsed = _heatCollapsed[sid];
-      subGrid.style.display = collapsed ? 'none' : 'grid';
-      const caret = hdr.querySelector('.heat-caret');
-      if (caret) caret.style.transform = `rotate(${collapsed ? '-90deg' : '0deg'})`;
-    });
+      // ── Top mover callouts ──
+      const movers = document.createElement('div');
+      movers.className = 'heat-movers';
+      movers.style.display = isCollapsed ? 'none' : '';
+      if (best && (best.pct || 0) > 0.1) {
+        const bp = best.pct || 0;
+        movers.innerHTML += `<span class="heat-mover-up" title="Click to view ${best.symbol}"
+          onclick="try{document.getElementById('sym').value='${best.symbol}';window.CURRENT='${best.symbol}';sendWS({type:'chart',symbol:'${best.symbol}'});showTab('market');}catch(e){}">
+          ▲ ${best.symbol} +${bp.toFixed(2)}%</span>`;
+      }
+      if (worst && (worst.pct || 0) < -0.1) {
+        const wp = worst.pct || 0;
+        movers.innerHTML += `<span class="heat-mover-dn" title="Click to view ${worst.symbol}"
+          onclick="try{document.getElementById('sym').value='${worst.symbol}';window.CURRENT='${worst.symbol}';sendWS({type:'chart',symbol:'${worst.symbol}'});showTab('market');}catch(e){}">
+          ▼ ${worst.symbol} ${wp.toFixed(2)}%</span>`;
+      }
 
-    block.appendChild(hdr);
-    block.appendChild(subGrid);
-    grid.appendChild(block);
+      // ── Cell grid ──
+      const subGrid = document.createElement('div');
+      subGrid.className = 'heat-grid';
+      subGrid.style.display = isCollapsed ? 'none' : '';
+      for (const t of stocks) { try { subGrid.appendChild(_makeHeatCell(t)); } catch (_) {} }
+
+      // ── Collapse toggle ──
+      hdr.addEventListener('click', () => {
+        _heatCollapsed[sid] = !_heatCollapsed[sid];
+        const c = _heatCollapsed[sid];
+        subGrid.style.display = c ? 'none' : '';
+        distRow.style.display = c ? 'none' : '';
+        movers.style.display = c ? 'none' : '';
+        const caret = hdr.querySelector('.heat-caret');
+        if (caret) caret.style.transform = `rotate(${c ? '-90deg' : '0deg'})`;
+      });
+
+      block.appendChild(hdr);
+      block.appendChild(distRow);
+      block.appendChild(movers);
+      block.appendChild(subGrid);
+      grid.appendChild(block);
+    } catch (e) { console.warn('[Heatmap] Sector', sid, 'error:', e); }
   }
 
   tab.scrollTop = scrollTop;

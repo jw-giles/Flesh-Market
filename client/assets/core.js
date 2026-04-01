@@ -356,8 +356,54 @@ function renderNews(item) {
   const box = el('#news');
   if (!box) { console.warn('renderNews: #news not mounted'); return; }
   const div = document.createElement('div');
-  const tone = item.tone === 'good' ? 'green' : (item.tone === 'bad' ? 'red' : '');
-  div.innerHTML = `<div class="${tone}">${new Date(item.t).toLocaleTimeString()} — ${item.text}</div>`;
+  div.className = 'news-line';
+
+  // Tone color
+  const toneClass = item.tone === 'good' ? 'n-good' : (item.tone === 'bad' ? 'n-bad' : 'n-neutral');
+
+  // Category badge
+  const catBadges = { market:'MKT', sector:'SEC', company:'', colony:'COL', system:'SYS', trade:'TRD' };
+  const cat = item.cat || (item.symbol ? 'company' : 'system');
+  const badge = catBadges[cat] || '';
+  const badgeHtml = badge ? `<span class="n-badge n-badge-${cat}">${badge}</span> ` : '';
+
+  // Time
+  const time = new Date(item.t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+
+  // If headline has a symbol, make the ticker clickable
+  let text = item.text;
+  if (item.symbol && typeof item.symbol === 'string' && item.symbol.length >= 2) {
+    // Highlight the ticker symbol in the text and make clickable
+    const sym = item.symbol;
+    const symRegex = new RegExp(`\\(${sym}\\)`, 'g');
+    if (symRegex.test(text)) {
+      text = text.replace(symRegex, `(<span class="n-ticker" data-sym="${sym}">${sym}</span>)`);
+    }
+  }
+
+  div.innerHTML = `<span class="n-time">${time}</span>${badgeHtml}<span class="${toneClass}">${text}</span>`;
+
+  // Click handler: click anywhere on the line to navigate to ticker (if available)
+  const clickSym = item.symbol;
+  if (clickSym && typeof clickSym === 'string' && clickSym.length >= 2) {
+    div.style.cursor = 'pointer';
+    div.addEventListener('click', (e) => {
+      try {
+        const symEl = document.getElementById('sym');
+        if (symEl) symEl.value = clickSym;
+        window.CURRENT = clickSym;
+        if (typeof sendWS === 'function') sendWS({ type: 'chart', symbol: clickSym });
+        if (typeof showTab === 'function') {
+          showTab('market');
+        } else {
+          const mktTab = document.querySelector('[data-tab="market"]');
+          if (mktTab) mktTab.click();
+        }
+        try { document.querySelector('.panel #chart')?.scrollIntoView({behavior:'smooth', block:'nearest'}); } catch(_) {}
+      } catch(err) {}
+    });
+  }
+
   box.prepend(div);
   while (box.children.length > 100) box.removeChild(box.lastChild);
 }

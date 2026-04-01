@@ -4,6 +4,42 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.1.0 (2026-04-01)
+
+**Beta market model, news feed rewrite, heatmap fix.**
+
+### Market Simulation — Beta Model
+- Replaced sector-lockstep model with per-stock beta sensitivity system
+- Each stock gets a `beta` (0.1–2.5) controlling reaction to sector *changes* (delta per tick), not absolute sector level
+- Each stock has an independent `ownTargetLnP` (personal fair value) that drifts via random walk with very weak pull toward sector
+- `ownKappa` tuned to 0.000005 (80× weaker than old model) — prevents both momentum and mean-reversion exploits
+- Parameters validated through 5-iteration simulation sweep across 30 simulated days (5.1M ticks):
+  - Lag-1 autocorrelation: -0.007 (essentially zero)
+  - Momentum strategy Sharpe: 0.051 (not exploitable)
+  - Mean-reversion strategy Sharpe: 0.051 (not exploitable)
+  - 3-day streak persistence: 48% (coin-flip)
+- Individual stock sigma boosted ~2.5× (0.0004–0.00075), fat tail probability widened (2% at 2.5×, 8% at 1.5×)
+- Vol clustering range widened (0.00015–0.0015 vs old 0.00008–0.0008)
+- Beta and ownTargetLnP persist through market state save/restore (db.js updated)
+- Gravity, stock splits, admin bias, god panel, earnings all unchanged
+
+### News Feed — Full Rewrite
+- 56 sector-specific lore headlines across 8 sectors (good/bad/weird per sector)
+- 20 market-wide headlines (no specific ticker — "dark pool activity surges", "flash crash in off-hours trading")
+- 7 colony-flavored headlines referencing colony names ("Unrest simmers at Cascade Station")
+- Price impact reduced ~10× (0.02–0.08% vs old 0.1–0.4%) — news is flavor, not market driver
+- Clicking any company headline navigates to that ticker's chart (same behavior as heatmap cells)
+- Category badges in feed: MKT (market-wide), COL (colony), SYS (system events)
+- Tone coloring: green/red/amber with hover highlights and timestamps
+
+### Heatmap Bug Fix
+- Fixed: `_makeHeatCell` crashed on `t.price.toFixed(2)` when price was null, killing entire `refreshHeatmap` — only 3 of 8 sectors rendered
+- Added null guard for price, wrapped each sector block and cell in try/catch
+- Added `sector` to `/state` endpoint so heatmap groups correctly on first load before any tick
+- Fixed: duplicate `COLONY_DISPLAY` const (function-scoped in fireTensionEvent vs module-level in news) — renamed news copy to `NEWS_COLONY_NAMES`
+
+---
+
 ## v1.0.0.4 (2026-03-28)
 
 **Faction persistence, server-authoritative day-trade enforcement.**
