@@ -935,6 +935,16 @@ const BRNC_COMPANY = {
 };
 companies.push(BRNC_COMPANY);
 
+// Beta model init for SWT/BRNC (pushed after the main forEach loop)
+for (const sc of [SWT_COMPANY, BRNC_COMPANY]) {
+  sc.beta             = Math.max(0.1, Math.min(2.5, Math.exp(randn() * 0.5)));
+  sc.ownTargetLnP     = sc.lnP;
+  sc.ownKappa         = 0.000005 + seededRand() * 0.000005;
+  sc.targetDriftSigma = 0.00012 + seededRand() * 0.00012;
+  sc.targetSectorKappa= 0.000008 + seededRand() * 0.000007;
+  sc.sigma            = 0.00040 + seededRand() * 0.00035;
+}
+
 function updateFLSHPrice() {
   // FLSH runs its own slow random walk, completely decoupled from sector mean-reversion.
   // Volatility: tiny per-tick drift (±0.08% 1σ) + rare 1% shock (1% chance/tick)
@@ -1011,11 +1021,12 @@ function restoreMarketState(){
 restoreMarketState();
 // One-time fixup: if SWT/BRNC have exploded prices from the old special-ticker bug, reset them
 for (const sc of [SWT_COMPANY, BRNC_COMPANY]) {
-  if (sc.price > 5000) {
-    console.log(`[FIXUP] ${sc.symbol} price was Ƒ${sc.price.toFixed(2)} — resetting to compiled default`);
+  if (sc.price > 5000 || !isFinite(sc.price) || sc.price <= 0) {
+    console.log(`[FIXUP] ${sc.symbol} price was Ƒ${sc.price} — resetting to compiled default`);
     sc.price = sc === SWT_COMPANY ? 280 : 65;
     sc.lnP = Math.log(sc.price);
     sc._spawnLnP = sc.lnP;
+    sc.ownTargetLnP = sc.lnP;
   }
 }
 restoreGalaxySystems();
