@@ -279,14 +279,16 @@ window.refreshHeatmap = function() {
       // ── Cell grid ──
       const subGrid = document.createElement('div');
       subGrid.className = 'heat-grid';
-      subGrid.style.display = isCollapsed ? 'none' : '';
+      subGrid.style.cssText = isCollapsed
+        ? 'display:none;'
+        : 'display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:3px;padding:5px 6px 6px;';
       for (const t of stocks) { try { subGrid.appendChild(_makeHeatCell(t)); } catch (_) {} }
 
       // ── Collapse toggle ──
       hdr.addEventListener('click', () => {
         _heatCollapsed[sid] = !_heatCollapsed[sid];
         const c = _heatCollapsed[sid];
-        subGrid.style.display = c ? 'none' : '';
+        subGrid.style.display = c ? 'none' : 'grid';
         distRow.style.display = c ? 'none' : '';
         movers.style.display = c ? 'none' : '';
         const caret = hdr.querySelector('.heat-caret');
