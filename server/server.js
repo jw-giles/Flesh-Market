@@ -74,6 +74,10 @@ import {
   getSlotRecord, addSpins, recordMilestoneTrade, useSpinAndDrop, grantMonthlySpins,
   listItemOnMarket, getMarketListings, buyMarketItem, cancelMarketListing, getPatreonSubscribers,
   getTutorialSeen,
+  // Dev Communications (DB-persisted)
+  addBugReport, getBugReports, toggleBugUpvote, toggleBugResolved, getBugUpvoters,
+  addPlayerReport, getPlayerReports,
+  addDevRequest, getDevRequests, handleDevRequest,
 } from './db.js';
 
 initDB();
@@ -2506,46 +2510,50 @@ app.post('/api/dunce/redeem', (req, res) => {
 });
 
 
-// ─── Dev Communications ───────────────────────────────────────────────────────
-// In-memory store for reports (persisted to DB would be ideal but MVP in-mem)
-const bugReports   = []; // { id, text, reporter, ts, upvotes: Set, resolved }
-const playerReports= []; // { id, target, reason, reporter, ts, reviewed }
-const devRequests  = []; // { id, player, message, ts, handled }
-let   devCommsIdSeq = 1;
+// ─── Dev Communications (DB-persisted) ────────────────────────────────────────
 
 app.get('/api/comms/bugs', (req, res) => {
-  res.json({ ok: true, bugs: bugReports.map(b => ({
-    ...b, upvotes: b.upvotes.size, canUpvote: true
-  })).sort((a,b) => b.upvotes - a.upvotes) });
+  try {
+    const bugs = getBugReports();
+    res.json({ ok: true, bugs });
+  } catch(e) { res.json({ ok: false, bugs: [] }); }
 });
 
 app.post('/api/comms/bugs/report', requirePlayer, (req, res) => {
   const p = getPlayer(tokenFrom(req));
   const text = String(req.body?.text || '').slice(0, 500);
   if (!text) return res.status(400).json({ ok: false, error: 'text_required' });
-  const bug = { id: devCommsIdSeq++, text, reporter: p.name, ts: Date.now(), upvotes: new Set([p.id]), resolved: false };
-  bugReports.unshift(bug);
-  if (bugReports.length > 200) bugReports.pop();
-  res.json({ ok: true, id: bug.id });
+  try {
+    const bug = addBugReport(text, p.name);
+    // Auto-upvote by reporter
+    toggleBugUpvote(bug.id, p.id);
+    res.json({ ok: true, id: bug.id });
+  } catch(e) { res.status(500).json({ ok: false, error: 'db_error' }); }
 });
 
 app.post('/api/comms/bugs/upvote', requirePlayer, (req, res) => {
   const p = getPlayer(tokenFrom(req));
-  const bug = bugReports.find(b => b.id === Number(req.body?.id));
-  if (!bug) return res.status(404).json({ ok: false, error: 'not_found' });
-  bug.upvotes.has(p.id) ? bug.upvotes.delete(p.id) : bug.upvotes.add(p.id);
-  res.json({ ok: true, upvotes: bug.upvotes.size });
+  const id = Number(req.body?.id);
+  if (!id) return res.status(400).json({ ok: false, error: 'invalid_id' });
+  try {
+    const upvotes = toggleBugUpvote(id, p.id);
+    res.json({ ok: true, upvotes });
+  } catch(e) { res.status(500).json({ ok: false, error: 'db_error' }); }
 });
 
 app.post('/api/comms/bugs/resolve', requireAdmin, (req, res) => {
-  const bug = bugReports.find(b => b.id === Number(req.body?.id));
-  if (!bug) return res.status(404).json({ ok: false, error: 'not_found' });
-  bug.resolved = !bug.resolved;
-  res.json({ ok: true, resolved: bug.resolved });
+  const id = Number(req.body?.id);
+  if (!id) return res.status(400).json({ ok: false, error: 'invalid_id' });
+  try {
+    const resolved = toggleBugResolved(id);
+    if (resolved === null) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json({ ok: true, resolved });
+  } catch(e) { res.status(500).json({ ok: false, error: 'db_error' }); }
 });
 
 app.get('/api/comms/reports', requireAdmin, (req, res) => {
-  res.json({ ok: true, reports: playerReports });
+  try { res.json({ ok: true, reports: getPlayerReports() }); }
+  catch(e) { res.json({ ok: true, reports: [] }); }
 });
 
 app.post('/api/comms/reports/file', requirePlayer, (req, res) => {
@@ -2553,33 +2561,36 @@ app.post('/api/comms/reports/file', requirePlayer, (req, res) => {
   const target = String(req.body?.target || '').slice(0, 60);
   const reason = String(req.body?.reason || '').slice(0, 400);
   if (!target || !reason) return res.status(400).json({ ok: false, error: 'missing_fields' });
-  const report = { id: devCommsIdSeq++, target, reason, reporter: p.name, ts: Date.now(), reviewed: false };
-  playerReports.unshift(report);
-  if (playerReports.length > 500) playerReports.pop();
-  broadcastToAdmins({ type: 'player_report', data: { target, reporter: p.name, reason } });
-  res.json({ ok: true });
+  try {
+    addPlayerReport(target, reason, p.name);
+    broadcastToAdmins({ type: 'player_report', data: { target, reporter: p.name, reason } });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: 'db_error' }); }
 });
 
 app.get('/api/comms/requests', requireAdmin, (req, res) => {
-  res.json({ ok: true, requests: devRequests });
+  try { res.json({ ok: true, requests: getDevRequests() }); }
+  catch(e) { res.json({ ok: true, requests: [] }); }
 });
 
 app.post('/api/comms/requests/submit', requirePlayer, (req, res) => {
   const p = getPlayer(tokenFrom(req));
   const message = String(req.body?.message || '').slice(0, 400);
   if (!message) return res.status(400).json({ ok: false, error: 'message_required' });
-  const req2 = { id: devCommsIdSeq++, player: p.name, message, ts: Date.now(), handled: false };
-  devRequests.unshift(req2);
-  if (devRequests.length > 200) devRequests.pop();
-  broadcastToAdmins({ type: 'dev_request', data: { player: p.name, message } });
-  res.json({ ok: true });
+  try {
+    addDevRequest(p.name, message);
+    broadcastToAdmins({ type: 'dev_request', data: { player: p.name, message } });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: 'db_error' }); }
 });
 
 app.post('/api/comms/requests/handle', requireAdmin, (req, res) => {
-  const r = devRequests.find(x => x.id === Number(req.body?.id));
-  if (!r) return res.status(404).json({ ok: false, error: 'not_found' });
-  r.handled = true;
-  res.json({ ok: true });
+  const id = Number(req.body?.id);
+  if (!id) return res.status(400).json({ ok: false, error: 'invalid_id' });
+  try {
+    handleDevRequest(id);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: 'db_error' }); }
 });
 
 app.get('/health',(req,res)=>{res.json({status:'ok',uptime:process.uptime(),companies:companies.length,time:Date.now()});});

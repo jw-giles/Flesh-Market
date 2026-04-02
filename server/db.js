@@ -1621,6 +1621,35 @@ export function initItemTables() {
     ts            INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_lo_player ON limit_orders(player_id);
+
+  -- Dev Communications (bug reports, player reports, dev requests)
+  CREATE TABLE IF NOT EXISTS comms_bugs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    text        TEXT NOT NULL,
+    reporter    TEXT NOT NULL,
+    ts          INTEGER NOT NULL,
+    resolved    INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS comms_bug_upvotes (
+    bug_id      INTEGER NOT NULL,
+    player_id   TEXT NOT NULL,
+    PRIMARY KEY (bug_id, player_id)
+  );
+  CREATE TABLE IF NOT EXISTS comms_reports (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    target      TEXT NOT NULL,
+    reason      TEXT NOT NULL,
+    reporter    TEXT NOT NULL,
+    ts          INTEGER NOT NULL,
+    reviewed    INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS comms_requests (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    player      TEXT NOT NULL,
+    message     TEXT NOT NULL,
+    ts          INTEGER NOT NULL,
+    handled     INTEGER NOT NULL DEFAULT 0
+  );
   `);
 }
 
@@ -1827,3 +1856,67 @@ export function getTutorialSeen(playerId) {
   } catch(_) { return false; }
 }
 // markTutorialSeen is defined near line 269 alongside other player helpers
+
+// ─── Dev Communications (DB-persisted) ────────────────────────────────────────
+
+export function addBugReport(text, reporter) {
+  const ts = Date.now();
+  const info = stmt('INSERT INTO comms_bugs(text, reporter, ts) VALUES(?,?,?)').run(text, reporter, ts);
+  return { id: Number(info.lastInsertRowid), text, reporter, ts, resolved: false, upvotes: 0 };
+}
+
+export function getBugReports() {
+  const bugs = stmt(`
+    SELECT b.id, b.text, b.reporter, b.ts, b.resolved,
+           (SELECT COUNT(*) FROM comms_bug_upvotes WHERE bug_id=b.id) AS upvotes
+    FROM comms_bugs b ORDER BY upvotes DESC, b.ts DESC LIMIT 200
+  `).all();
+  return bugs.map(b => ({ ...b, resolved: !!b.resolved }));
+}
+
+export function getBugUpvoters(bugId) {
+  return stmt('SELECT player_id FROM comms_bug_upvotes WHERE bug_id=?').all(bugId).map(r => r.player_id);
+}
+
+export function toggleBugUpvote(bugId, playerId) {
+  const existing = stmt('SELECT 1 FROM comms_bug_upvotes WHERE bug_id=? AND player_id=?').get(bugId, playerId);
+  if (existing) {
+    stmt('DELETE FROM comms_bug_upvotes WHERE bug_id=? AND player_id=?').run(bugId, playerId);
+  } else {
+    stmt('INSERT OR IGNORE INTO comms_bug_upvotes(bug_id, player_id) VALUES(?,?)').run(bugId, playerId);
+  }
+  const count = stmt('SELECT COUNT(*) AS c FROM comms_bug_upvotes WHERE bug_id=?').get(bugId);
+  return count?.c || 0;
+}
+
+export function toggleBugResolved(bugId) {
+  const bug = stmt('SELECT resolved FROM comms_bugs WHERE id=?').get(bugId);
+  if (!bug) return null;
+  const newVal = bug.resolved ? 0 : 1;
+  stmt('UPDATE comms_bugs SET resolved=? WHERE id=?').run(newVal, bugId);
+  return !!newVal;
+}
+
+export function addPlayerReport(target, reason, reporter) {
+  const ts = Date.now();
+  stmt('INSERT INTO comms_reports(target, reason, reporter, ts) VALUES(?,?,?,?)').run(target, reason, reporter, ts);
+  return { ok: true };
+}
+
+export function getPlayerReports() {
+  return stmt('SELECT * FROM comms_reports ORDER BY ts DESC LIMIT 500').all().map(r => ({ ...r, reviewed: !!r.reviewed }));
+}
+
+export function addDevRequest(player, message) {
+  const ts = Date.now();
+  stmt('INSERT INTO comms_requests(player, message, ts) VALUES(?,?,?)').run(player, message, ts);
+  return { ok: true };
+}
+
+export function getDevRequests() {
+  return stmt('SELECT * FROM comms_requests ORDER BY ts DESC LIMIT 200').all().map(r => ({ ...r, handled: !!r.handled }));
+}
+
+export function handleDevRequest(id) {
+  stmt('UPDATE comms_requests SET handled=1 WHERE id=?').run(id);
+}
