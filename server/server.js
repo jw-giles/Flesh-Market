@@ -3541,9 +3541,9 @@ wss.on('connection',(ws,req)=>{
       }
       // Patreon-gated titles
       const TIER_TITLES = {
-        1: ['Marked Subscriber','Premium Wage Slave'],
-        2: ['Officer of the Guild','Merchant of the 7th Ward'],
-        3: ['Corporate Apex Predator','Sovereign of the Ledger'],
+        1: ['Tithe Payer','Branded Debtor'],
+        2: ['Guild Enforcer','Seventh Ward Broker'],
+        3: ['The Tenth Seat','Apex Creditor'],
       };
       const pt = player.patreon_tier || 0;
       for (let t = 1; t <= 3; t++) {

@@ -34,17 +34,9 @@
 <span id="fm-header-user" style="display:none;align-items:center;gap:6px;font-size:.85rem">
   <span id="fm-header-name" style="color:#ffb547;opacity:.85"></span>
   <span id="fm-tier-badge-hdr" style="font-size:.95rem"></span>
-  <button id="invNavBtn" onclick="if(window.toggleInvPanel){toggleInvPanel();}else if(window.lazyLoad){lazyLoad('assets/inventory.js',function(){if(window.toggleInvPanel)toggleInvPanel();})}" style="
-    background:transparent;border:1px solid #3a1a0a;border-radius:5px;
-    color:#884444;font-size:.72rem;padding:3px 9px;cursor:pointer;
-    font-family:inherit;letter-spacing:.05em;transition:all .15s;
-  " title="Inventory">👜 Inventory</button>
-  <button id="slotNavBtn" onclick="if(window.toggleSlotModal){toggleSlotModal();}else if(window.lazyLoad){lazyLoad('assets/inventory.js',function(){if(window.toggleSlotModal)toggleSlotModal();})}" style="
-    background:transparent;border:1px solid #3a1a0a;border-radius:5px;
-    color:#ff9900;font-size:.72rem;padding:3px 9px;cursor:pointer;
-    font-family:inherit;letter-spacing:.05em;transition:all .15s;
-  " title="Slot Machine">🎰 Slots <span id="slotNavSpinCount" style="color:#ff6a00;font-weight:500"></span></button>
-  <a href="https://www.patreon.com/FLSH" target="_blank" class="btn" style="padding:3px 10px;font-size:.78rem;border-color:#4a3510;color:#ffb547;text-decoration:none">Patreon</a>
+  <span id="invNavBtn" style="display:none"></span><span id="slotNavBtn" style="display:none"><span id="slotNavSpinCount"></span></span>
+  <a href="https://www.patreon.com/FLSH" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#6a4a10;color:#ffb547;text-decoration:none;animation:patreonPulse 2.5s ease-in-out infinite;font-weight:500">☆ Patreon</a>
+  <style>@keyframes patreonPulse{0%,100%{box-shadow:0 0 4px #ffb54722;border-color:#6a4a10}50%{box-shadow:0 0 8px #ffb54744,0 0 12px #ffb54722;border-color:#8a6a20}}</style>
   <button class="btn" onclick="window.showTutorial&&window.showTutorial()" style="padding:3px 10px;font-size:.78rem;border-color:#1a3a1a;color:#4a8a4a" title="Replay Tutorial">? Tutorial</button>
   <button class="btn" onclick="window.FM_Auth&&window.FM_Auth.logout()" style="padding:3px 10px;font-size:.78rem;border-color:#4a3510;color:#888">Logout</button>
 </span>
@@ -222,6 +214,15 @@
     <a href="https://www.patreon.com/FLSH" target="_blank" style="color:#ffb547;opacity:.8">patreon.com/FLSH</a>
   </div>
 </div>
+<div style="display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid #2a1010;padding-bottom:0">
+  <button class="store-stab active" data-stab="titles" onclick="storeSubTab('titles')" style="background:none;border:none;border-bottom:2px solid #884444;color:#c8a86a;font-size:.72rem;padding:6px 14px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Titles</button>
+  <button class="store-stab" data-stab="inventory" onclick="storeSubTab('inventory')" style="background:none;border:none;border-bottom:2px solid transparent;color:#553333;font-size:.72rem;padding:6px 14px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Inventory</button>
+  <button class="store-stab" data-stab="fbay" onclick="storeSubTab('fbay')" style="background:none;border:none;border-bottom:2px solid transparent;color:#553333;font-size:.72rem;padding:6px 14px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Ƒbay</button>
+  <button class="store-stab" data-stab="slots" onclick="storeSubTab('slots')" style="background:none;border:none;border-bottom:2px solid transparent;color:#553333;font-size:.72rem;padding:6px 14px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">🎰 Slots</button>
+</div>
+
+<!-- ── TITLES PANE ── -->
+<div id="store-pane-titles" class="store-pane">
 <div id="storeContainer">
   <div id="store-equipped-bar" style="display:none;align-items:center;gap:8px;padding:7px 10px;margin-bottom:12px;border-radius:7px;background:#0f0f0f;border:1px solid #2a2a2a;font-size:.78rem">
     <span style="opacity:.45;letter-spacing:.08em;text-transform:uppercase;font-size:.68rem">Equipped</span>
@@ -285,7 +286,135 @@
     <div id="legendary-titles-list" style="display:block"></div>
   </div>
 
-</div></div>
+</div>
+</div>
+
+<!-- ── INVENTORY PANE ── -->
+<div id="store-pane-inventory" class="store-pane" style="display:none">
+  <div id="invTab-inventory" class="inv-tab-content">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <div style="font-size:.65rem;letter-spacing:.12em;color:#884444;text-transform:uppercase;margin-bottom:10px">Equipped</div>
+        <div id="equippedGrid"></div>
+        <div style="font-size:.68rem;color:#553333;margin-top:8px">Item passive: <span id="invPassiveTotal" style="color:#ff9900">+0 Ƒ/30min</span></div>
+        <div id="invSetBonuses" style="display:none;margin-top:8px"></div>
+      </div>
+      <div>
+        <div style="font-size:.65rem;letter-spacing:.12em;color:#884444;text-transform:uppercase;margin-bottom:10px">Bag <span id="invBagCount" style="color:#553333"></span></div>
+        <div id="bagGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-height:320px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ƑBAY PANE ── -->
+<div id="store-pane-fbay" class="store-pane" style="display:none">
+  <div id="invTab-market" class="inv-tab-content">
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:.7rem;color:#ff9900;letter-spacing:.1em;text-transform:uppercase;font-weight:500">Ƒbay</span>
+      <select id="mktFilterSlot" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
+        <option value="">All Slots</option>
+        <option value="hat">Hat</option>
+        <option value="glasses">Glasses</option>
+        <option value="upperbody">Upper Body</option>
+        <option value="necklace">Necklace</option>
+        <option value="watch">Watch</option>
+        <option value="pants">Pants</option>
+        <option value="shoes">Shoes</option>
+        <option value="vehicle">Vehicle</option>
+        <option value="property">Property</option>
+        <option value="implant">Implant</option>
+        <option value="ring">Ring</option>
+        <option value="earring">Earring</option>
+        <option value="bracelet">Bracelet</option>
+      </select>
+      <select id="mktFilterRarity" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
+        <option value="">All Rarities</option>
+        <option value="common">Common</option>
+        <option value="uncommon">Uncommon</option>
+        <option value="rare">Rare</option>
+        <option value="epic">Epic</option>
+        <option value="legendary">Legendary</option>
+      </select>
+      <select id="mktSortBy" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
+        <option value="newest">Newest</option>
+        <option value="price_asc">Price ↑</option>
+        <option value="price_desc">Price ↓</option>
+        <option value="rarity">Rarity</option>
+      </select>
+      <div style="flex:1"></div>
+      <button onclick="loadMarket()" style="background:#0d0505;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">↻</button>
+      <button onclick="showListForm()" style="background:#0d0505;border:1px solid #ff6a0044;color:#ff9900;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">+ List</button>
+    </div>
+    <div id="listForm" style="display:none;background:#0a0303;border:1px solid #2a1010;border-radius:6px;padding:10px;margin-bottom:10px">
+      <div style="font-size:.68rem;color:#884444;margin-bottom:8px">List an item for sale</div>
+      <select id="listInvSelect" style="width:100%;background:#060303;border:1px solid #2a1010;color:#c8a86a;padding:5px;font-family:inherit;font-size:.75rem;margin-bottom:6px;border-radius:4px"></select>
+      <div style="display:flex;gap:6px">
+        <input id="listPrice" type="number" min="1" placeholder="Price in Ƒ" style="flex:1;background:#060303;border:1px solid #2a1010;color:#c8a86a;padding:5px 8px;font-family:inherit;font-size:.75rem;border-radius:4px">
+        <button onclick="submitListing()" style="background:#0d0505;border:1px solid #ff6a0055;color:#ff9900;font-size:.75rem;padding:5px 14px;border-radius:4px;cursor:pointer;font-family:inherit">List</button>
+        <button onclick="document.getElementById('listForm').style.display='none'" style="background:none;border:1px solid #2a1010;color:#553333;font-size:.75rem;padding:5px 10px;border-radius:4px;cursor:pointer;font-family:inherit">✕</button>
+      </div>
+    </div>
+    <div id="marketListings"></div>
+  </div>
+</div>
+
+<!-- ── SLOTS PANE ── -->
+<div id="store-pane-slots" class="store-pane" style="display:none">
+  <div style="max-width:420px;margin:0 auto;text-align:center">
+    <div style="font-size:.65rem;color:#553333;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px">Spins Available</div>
+    <div id="slotModalSpinCount" style="font-size:3rem;font-weight:500;color:#ff9900;line-height:1;margin-bottom:4px">0</div>
+    <div style="font-size:.68rem;color:#443333;margin-bottom:20px">
+      <div style="margin-bottom:6px">Every 9 day trades earns a free spin</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+        <span style="color:#ff9900;font-size:.75rem;font-weight:600" id="slotMilestoneCount">0</span>
+        <div style="flex:0 0 140px;height:6px;background:#1a0800;border:1px solid #331500;border-radius:3px;overflow:hidden">
+          <div id="slotMilestoneBar" style="height:100%;width:0%;background:linear-gradient(90deg,#ff6a00,#ff9900);border-radius:3px;transition:width .3s"></div>
+        </div>
+        <span style="color:#553333;font-size:.7rem">/ 9</span>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:center;gap:10px;margin-bottom:16px">
+      <div class="slot-reel" id="slotReel1"><span>🎰</span></div>
+      <div class="slot-reel" id="slotReel2"><span>🎰</span></div>
+      <div class="slot-reel" id="slotReel3"><span>🎰</span></div>
+    </div>
+    <div id="slotModalResult" style="min-height:80px;margin-bottom:16px;display:flex;align-items:center;justify-content:center"></div>
+    <button id="slotModalBtn" onclick="doSlotSpin()" style="
+      background:linear-gradient(135deg,#2a0800,#180400);
+      border:1px solid #ff6a00;color:#ff9900;
+      font-size:.9rem;padding:11px 40px;border-radius:6px;
+      cursor:pointer;font-family:inherit;letter-spacing:.12em;text-transform:uppercase;
+      width:100%;transition:all .15s;margin-bottom:16px;
+    ">Spin</button>
+    <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:.62rem;color:#888780;border:1px solid #88878033;padding:1px 7px;border-radius:3px">Common 55%</span>
+      <span style="font-size:.62rem;color:#1D9E75;border:1px solid #1D9E7533;padding:1px 7px;border-radius:3px">Uncommon 25%</span>
+      <span style="font-size:.62rem;color:#3B8BD4;border:1px solid #3B8BD433;padding:1px 7px;border-radius:3px">Rare 12%</span>
+      <span style="font-size:.62rem;color:#8B5CF6;border:1px solid #8B5CF633;padding:1px 7px;border-radius:3px">Epic 6%</span>
+      <span style="font-size:.62rem;color:#ff6a00;border:1px solid #ff6a0033;padding:1px 7px;border-radius:3px">Legendary 0.5%</span>
+      <span style="font-size:.62rem;color:#ff0055;border:1px solid #ff005533;padding:1px 7px;border-radius:3px">Phantom 0.00001%</span>
+    </div>
+  </div>
+</div>
+
+<script>
+function storeSubTab(tab){
+  document.querySelectorAll('.store-stab').forEach(function(b){
+    b.classList.toggle('active',b.dataset.stab===tab);
+    b.style.borderBottomColor=b.dataset.stab===tab?'#884444':'transparent';
+    b.style.color=b.dataset.stab===tab?'#c8a86a':'#553333';
+  });
+  document.querySelectorAll('.store-pane').forEach(function(d){d.style.display='none';});
+  var el=document.getElementById('store-pane-'+tab);
+  if(el) el.style.display='block';
+  if(tab==='fbay'&&window.loadMarket) window.loadMarket();
+  if((tab==='inventory'||tab==='slots')&&window._loadInv) window._loadInv();
+}
+window.storeSubTab=storeSubTab;
+</script>
+
+</div>
 <!-- Guild Tab -->
 <div id="guildTab" style="display:none;padding:4px;overflow:auto">
 
@@ -1873,159 +2002,9 @@ ws.addEventListener('message', function(ev){
 <script src="assets/god-panel.js"></script>
 <script src="assets/dev-comms.js"></script>
 
-<!-- ===== INVENTORY / SLOT / MARKET SYSTEM ===== -->
-<div id="invPanel" style="
-  display:none;position:fixed;z-index:9500;top:60px;left:50%;transform:translateX(-50%);
-  background:#060303;border:1px solid #2a1010;border-radius:12px;
-  width:820px;max-width:96vw;max-height:88vh;overflow:hidden;
-  flex-direction:column;
-  box-shadow:0 8px 40px #000c;font-family:inherit;
-">
-  <!-- Header -->
-  <div style="background:linear-gradient(135deg,#0d0303,#060303);padding:10px 16px;border-bottom:1px solid #2a1010;display:flex;align-items:center;justify-content:space-between;cursor:move;user-select:none" id="invPanelHeader">
-    <div style="display:flex;gap:0">
-      <button class="inv-tab active" data-tab="inventory" onclick="invTab('inventory')">👜 Inventory</button>
-      <button class="inv-tab" data-tab="market" onclick="invTab('market')">🏪 Market</button>
-    </div>
-    <button onclick="if(window.toggleInvPanel){toggleInvPanel();}else if(window.lazyLoad){lazyLoad('assets/inventory.js',function(){if(window.toggleInvPanel)toggleInvPanel();})}" style="background:none;border:none;color:#884444;font-size:1rem;cursor:pointer;padding:0 4px">✕</button>
-  </div>
-
-  <!-- Content -->
-  <div style="overflow-y:auto;flex:1;padding:14px">
-
-    <!-- INVENTORY TAB -->
-    <div id="invTab-inventory" class="inv-tab-content">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-        <!-- Equipped slots -->
-        <div>
-          <div style="font-size:.65rem;letter-spacing:.12em;color:#884444;text-transform:uppercase;margin-bottom:10px">Equipped</div>
-          <div id="equippedGrid"></div>
-          <div style="font-size:.68rem;color:#553333;margin-top:8px">Item passive: <span id="invPassiveTotal" style="color:#ff9900">+0 Ƒ/30min</span></div>
-          <div id="invSetBonuses" style="display:none;margin-top:8px"></div>
-        </div>
-        <!-- Bag -->
-        <div>
-          <div style="font-size:.65rem;letter-spacing:.12em;color:#884444;text-transform:uppercase;margin-bottom:10px">Bag <span id="invBagCount" style="color:#553333"></span></div>
-          <div id="bagGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-height:320px;overflow-y:auto"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MARKET TAB -->
-    <div id="invTab-market" class="inv-tab-content" style="display:none">
-      <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:.65rem;color:#884444;letter-spacing:.1em;text-transform:uppercase">Market</span>
-        <select id="mktFilterSlot" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
-          <option value="">All Slots</option>
-          <option value="hat">Hat</option>
-          <option value="glasses">Glasses</option>
-          <option value="upperbody">Upper Body</option>
-          <option value="necklace">Necklace</option>
-          <option value="watch">Watch</option>
-          <option value="pants">Pants</option>
-          <option value="shoes">Shoes</option>
-          <option value="vehicle">Vehicle</option>
-          <option value="property">Property</option>
-          <option value="implant">Implant</option>
-          <option value="ring">Ring</option>
-          <option value="earring">Earring</option>
-          <option value="bracelet">Bracelet</option>
-        </select>
-        <select id="mktFilterRarity" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
-          <option value="">All Rarities</option>
-          <option value="common">Common</option>
-          <option value="uncommon">Uncommon</option>
-          <option value="rare">Rare</option>
-          <option value="epic">Epic</option>
-          <option value="legendary">Legendary</option>
-        </select>
-        <select id="mktSortBy" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
-          <option value="newest">Newest</option>
-          <option value="price_asc">Price ↑</option>
-          <option value="price_desc">Price ↓</option>
-          <option value="rarity">Rarity</option>
-        </select>
-        <div style="flex:1"></div>
-        <button onclick="loadMarket()" style="background:#0d0505;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">↻</button>
-        <button onclick="showListForm()" style="background:#0d0505;border:1px solid #ff6a0044;color:#ff9900;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">+ List</button>
-      </div>
-      <div id="listForm" style="display:none;background:#0a0303;border:1px solid #2a1010;border-radius:6px;padding:10px;margin-bottom:10px">
-        <div style="font-size:.68rem;color:#884444;margin-bottom:8px">List an item for sale</div>
-        <select id="listInvSelect" style="width:100%;background:#060303;border:1px solid #2a1010;color:#c8a86a;padding:5px;font-family:inherit;font-size:.75rem;margin-bottom:6px;border-radius:4px"></select>
-        <div style="display:flex;gap:6px">
-          <input id="listPrice" type="number" min="1" placeholder="Price in Ƒ" style="flex:1;background:#060303;border:1px solid #2a1010;color:#c8a86a;padding:5px 8px;font-family:inherit;font-size:.75rem;border-radius:4px">
-          <button onclick="submitListing()" style="background:#0d0505;border:1px solid #ff6a0055;color:#ff9900;font-size:.75rem;padding:5px 14px;border-radius:4px;cursor:pointer;font-family:inherit">List</button>
-          <button onclick="document.getElementById('listForm').style.display='none'" style="background:none;border:1px solid #2a1010;color:#553333;font-size:.75rem;padding:5px 10px;border-radius:4px;cursor:pointer;font-family:inherit">✕</button>
-        </div>
-      </div>
-      <div id="marketListings"></div>
-    </div>
-
-  </div>
-</div>
-
-<!-- ===== STANDALONE SLOT MACHINE MODAL ===== -->
-<div id="slotModal" style="
-  display:none;position:fixed;z-index:9600;top:0;left:0;width:100%;height:100%;
-  background:rgba(0,0,0,.85);align-items:center;justify-content:center;
-">
-  <div style="
-    background:#060303;border:1px solid #3a1010;border-radius:14px;
-    width:420px;max-width:94vw;padding:0;overflow:hidden;
-    box-shadow:0 12px 60px #000e;font-family:inherit;
-  ">
-    <!-- Header -->
-    <div style="background:linear-gradient(135deg,#120303,#060303);padding:12px 16px;border-bottom:1px solid #2a1010;display:flex;align-items:center;justify-content:space-between">
-      <span style="color:#ff9900;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;font-weight:500">🎰 Slot Machine</span>
-      <button onclick="if(window.toggleSlotModal){toggleSlotModal();}else if(window.lazyLoad){lazyLoad('assets/inventory.js',function(){if(window.toggleSlotModal)toggleSlotModal();})}" style="background:none;border:none;color:#664444;font-size:1rem;cursor:pointer;padding:0 4px;line-height:1">✕</button>
-    </div>
-
-    <div style="padding:20px 24px;text-align:center">
-      <!-- Spin count -->
-      <div style="font-size:.65rem;color:#553333;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px">Spins Available</div>
-      <div id="slotModalSpinCount" style="font-size:3rem;font-weight:500;color:#ff9900;line-height:1;margin-bottom:4px">0</div>
-      <div style="font-size:.68rem;color:#443333;margin-bottom:20px">
-        <div style="margin-bottom:6px">Every 9 day trades earns a free spin</div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px">
-          <span style="color:#ff9900;font-size:.75rem;font-weight:600" id="slotMilestoneCount">0</span>
-          <div style="flex:0 0 140px;height:6px;background:#1a0800;border:1px solid #331500;border-radius:3px;overflow:hidden">
-            <div id="slotMilestoneBar" style="height:100%;width:0%;background:linear-gradient(90deg,#ff6a00,#ff9900);border-radius:3px;transition:width .3s"></div>
-          </div>
-          <span style="color:#553333;font-size:.7rem">/ 9</span>
-        </div>
-      </div>
-
-      <!-- Reels -->
-      <div style="display:flex;justify-content:center;gap:10px;margin-bottom:16px">
-        <div class="slot-reel" id="slotReel1"><span>🎰</span></div>
-        <div class="slot-reel" id="slotReel2"><span>🎰</span></div>
-        <div class="slot-reel" id="slotReel3"><span>🎰</span></div>
-      </div>
-
-      <!-- Result -->
-      <div id="slotModalResult" style="min-height:80px;margin-bottom:16px;display:flex;align-items:center;justify-content:center"></div>
-
-      <!-- Spin button -->
-      <button id="slotModalBtn" onclick="doSlotSpin()" style="
-        background:linear-gradient(135deg,#2a0800,#180400);
-        border:1px solid #ff6a00;color:#ff9900;
-        font-size:.9rem;padding:11px 40px;border-radius:6px;
-        cursor:pointer;font-family:inherit;letter-spacing:.12em;text-transform:uppercase;
-        width:100%;transition:all .15s;margin-bottom:16px;
-      ">Spin</button>
-
-      <!-- Drop rates -->
-      <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
-        <span style="font-size:.62rem;color:#888780;border:1px solid #88878033;padding:1px 7px;border-radius:3px">Common 55%</span>
-        <span style="font-size:.62rem;color:#1D9E75;border:1px solid #1D9E7533;padding:1px 7px;border-radius:3px">Uncommon 25%</span>
-        <span style="font-size:.62rem;color:#3B8BD4;border:1px solid #3B8BD433;padding:1px 7px;border-radius:3px">Rare 12%</span>
-        <span style="font-size:.62rem;color:#8B5CF6;border:1px solid #8B5CF633;padding:1px 7px;border-radius:3px">Epic 6%</span>
-        <span style="font-size:.62rem;color:#ff6a00;border:1px solid #ff6a0033;padding:1px 7px;border-radius:3px">Legendary 0.5%</span>
-        <span style="font-size:.62rem;color:#ff0055;border:1px solid #ff005533;padding:1px 7px;border-radius:3px">Phantom 0.00001%</span>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- invPanel + slotModal content moved into Store tab -->
+<div id="invPanel" style="display:none"></div>
+<div id="slotModal" style="display:none"></div>
 
 <link rel="stylesheet" href="assets/inventory.css">
 

@@ -4,6 +4,30 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.1.1 (2026-04-03)
+
+**Title rework, store tab restructure, Patreon button glow.**
+
+### Titles
+- Renamed all 20 purchasable titles and 6 Patreon-exclusive titles
+- Rewrote all title descriptions to read as colony dispatch notes rather than taglines
+- DB migration on startup: renames equipped titles and owned_titles for existing players
+- President of The Coalition description updated
+
+### Store Tab Restructure
+- Store tab now contains four sub-tabs: Titles, Inventory, Ƒbay, Slots
+- Inventory panel (equipped gear + bag grid) moved from floating modal into Store
+- Item market renamed to Ƒbay, moved from floating modal into Store
+- Slot machine moved from standalone modal into Store
+- Floating invPanel and slotModal removed
+- Inventory and Slots buttons removed from top bar
+
+### Top Bar
+- Patreon button enlarged with amber pulse glow animation
+- Cleaner layout with fewer buttons
+
+---
+
 ## v1.0.1.0 (2026-04-01)
 
 **Beta market model, news feed rewrite, heatmap fix.**

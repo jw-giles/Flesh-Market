@@ -160,6 +160,43 @@ export function initDB() {
     }
   }
 
+  // Migration: rename titles (v1.0.1.1)
+  const _titleRenames = [
+    ['Intern of GDP Growth',              'Bag Holder'],
+    ['Toxic Spill Janitor',               'Offal Accountant'],
+    ['Casino Archivist',                   'Floor Rat'],
+    ['Utopian Clerk',                      'Stamp Licker'],
+    ['Ruins Gambler',                      'Carcass Speculator'],
+    ['Colonial Auditor',                   'Tariff Butcher'],
+    ['Subprime Executor',                  'Foreclosure Priest'],
+    ['Blood Dividend Officer',             'Famine Trader'],
+    ['Vice Minister of GDP Expansion',     'Extraction Overseer'],
+    ['Ashen Textile Broker',               'Sanctions Profiteer'],
+    ['Director of the Fifteenth Corporate War', 'War Premium Underwriter'],
+    ["Mr. Flesh's Favored Proxy",          "Mr. Flesh's Auctioneer"],
+    ['Inter-Colony GDP Prophet',           'Sovereign Debt Parasite'],
+    ['Social Credit Syndicator',           'Cartel Notary'],
+    ['Warlord Accountant',                 'Extinction Auditor'],
+    ['Eternal Chairman of Flesh',          'The Last Entry'],
+    ['Lore Master',                        'He Who Holds The Pen'],
+    ['Corporate War Survivor [I\u2013XV]', 'Scar of the Fifteenth War'],
+    ['Bearer of the Flesh Dividend',       'The Yield'],
+    ['Reserve Currency Sovereign',         'The Central Banker'],
+    ['Marked Subscriber',                  'Tithe Payer'],
+    ['Premium Wage Slave',                 'Branded Debtor'],
+    ['Officer of the Guild',               'Guild Enforcer'],
+    ['Merchant of the 7th Ward',           'Seventh Ward Broker'],
+    ['Corporate Apex Predator',            'The Tenth Seat'],
+    ['Sovereign of the Ledger',            'Apex Creditor'],
+  ];
+  const _renameTitle = stmt('UPDATE players SET title = ? WHERE title = ?');
+  const _renameOwned = stmt('UPDATE players SET owned_titles = REPLACE(owned_titles, ?, ?) WHERE owned_titles LIKE ?');
+  for (const [oldT, newT] of _titleRenames) {
+    _renameTitle.run(newT, oldT);
+    _renameOwned.run('"' + oldT + '"', '"' + newT + '"', '%' + oldT + '%');
+  }
+  console.log('[DB] Title rename migration applied');
+
   console.log(`[DB] SQLite ready: ${DB_PATH}`);
   return db;
 }

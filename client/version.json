@@ -1,7 +1,7 @@
 {
-  "version": "1.0.1.0",
-  "built": "2026-04-01T00:00:00Z",
+  "version": "1.0.1.1",
+  "built": "2026-04-03T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.1.0",
-  "notes": "Beta market model (per-stock sector sensitivity), news feed rewrite (56 sector-specific lore headlines, clickable tickers, category badges), heatmap null-safety fix, predictability tuning (5-iteration parameter sweep)"
+  "patch": "1.0.1.1",
+  "notes": "Title rework (26 renamed titles + DB migration), title blurb rewrite, Patreon title rework, store tab restructure (inventory + Fbay + slots as sub-tabs), Patreon button glow, top bar cleanup"
 }

@@ -386,11 +386,6 @@
 
   // ── Show button + panel only for dev/owner accounts ──────────────────
   document.addEventListener('fm:authed', e => {
-    // Show nav inventory + slot buttons for all logged-in players
-    ['invNavBtn','slotNavBtn'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'inline-block';
-    });
     document.dispatchEvent(new CustomEvent('fm_login', { detail: e.detail }));
 
     if (e.detail?.is_dev || e.detail?.is_prime) {

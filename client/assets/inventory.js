@@ -458,20 +458,28 @@ function getToken(){ return window.FM_TOKEN || window.ME?.token || window.ME?.id
 
 // ── Panel Toggle ──────────────────────────────────────────────────────────────
 window.toggleInvPanel = function(){
-  const panel = document.getElementById('invPanel');
-  invState.visible = !invState.visible;
-  panel.style.display = invState.visible ? 'flex' : 'none';
-  if(invState.visible){ loadInventory(); }
+  // Navigate to Store tab → Inventory sub-tab
+  var storeBtn = document.querySelector('.tab[data-tab="store"]');
+  if(storeBtn) storeBtn.click();
+  if(window.storeSubTab) window.storeSubTab('inventory');
+  loadInventory();
+};
+
+window.toggleSlotModal = function(){
+  // Navigate to Store tab → Slots sub-tab
+  var storeBtn = document.querySelector('.tab[data-tab="store"]');
+  if(storeBtn) storeBtn.click();
+  if(window.storeSubTab) window.storeSubTab('slots');
+  loadInventory().catch(function(){});
 };
 
 window.invTab = function(tab){
   invState.activeTab = tab;
-  document.querySelectorAll('.inv-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
-  document.querySelectorAll('.inv-tab-content').forEach(d=>d.style.display='none');
-  const el = document.getElementById('invTab-'+tab);
-  if(el) el.style.display='block';
-  if(tab==='market') loadMarket();
+  if(tab==='inventory' && window.storeSubTab) window.storeSubTab('inventory');
+  if(tab==='market' && window.storeSubTab) window.storeSubTab('fbay');
 };
+
+window._loadInv = loadInventory;
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
 async function loadInventory(){
@@ -600,22 +608,7 @@ window.openEquipMenu = function(slot){
 // ── Slot Machine Modal ────────────────────────────────────────────────────────
 const SLOT_ICONS_LIST = ['🎩','👓','👕','⌚','👖','👟','🚗','🏠','📿','💎','⭐','🔥','💰','🃏','❤️'];
 
-window.toggleSlotModal = function(){
-  const modal = document.getElementById('slotModal');
-  if(!modal) return;
-  const isOpen = modal.style.display === 'flex';
-  modal.style.display = isOpen ? 'none' : 'flex';
-  if(!isOpen){
-    // Always fetch fresh spin count from server so god-granted tiers show immediately
-    loadInventory().catch(()=>{});
-  }
-};
-
-// Click outside to close slot modal
-document.addEventListener('click', function(e){
-  const modal = document.getElementById('slotModal');
-  if(modal && modal.style.display==='flex' && e.target===modal) modal.style.display='none';
-});
+// toggleSlotModal defined above — navigates to store tab slots pane
 
 function updateSlotModalCount(){
   const el = document.getElementById('slotModalSpinCount');
@@ -830,32 +823,19 @@ document.addEventListener('fm_ws_msg', e=>{
   }
 });
 
-// Show nav buttons when logged in
+// Load inventory data when logged in
 document.addEventListener('fm_login', ()=>{
-  ['invNavBtn','slotNavBtn'].forEach(id=>{
-    const btn = document.getElementById(id);
-    if(btn) btn.style.display='inline-block';
-  });
   loadInventory();
 });
 
-// Also show nav buttons if already logged in when script runs
+// Also load if already logged in when script runs
 if(window.ME && (window.ME.id || window.FM_TOKEN)){
-  ['invNavBtn','slotNavBtn'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.style.display = 'inline-block';
-  });
+  loadInventory();
 }
 
 // Make panel draggable
 (function(){
-  const panel  = document.getElementById('invPanel');
-  const header = document.getElementById('invPanelHeader');
-  let dragging=false,ox=0,oy=0;
-  if(!header||!panel) return;
-  header.addEventListener('mousedown',e=>{ dragging=true; const r=panel.getBoundingClientRect(); ox=e.clientX-r.left; oy=e.clientY-r.top; e.preventDefault(); });
-  document.addEventListener('mousemove',e=>{ if(!dragging) return; panel.style.left=Math.max(0,e.clientX-ox)+'px'; panel.style.top=Math.max(0,e.clientY-oy)+'px'; panel.style.transform='none'; });
-  document.addEventListener('mouseup',()=>dragging=false);
+// Panel drag logic removed — inventory now in store tab
 })();
 
 })();

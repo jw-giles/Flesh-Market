@@ -79,41 +79,41 @@
   // --- Titles catalogue ---
   const TITLES = [
     // Common (1k–5k)
-    {tier:'Common', price:'Ƒ1k', name:'Intern of GDP Growth', blurb:'Unpaid, overworked, and already in debt to the Union.'},
-    {tier:'Common', price:'Ƒ2k', name:'Toxic Spill Janitor', blurb:'Someone has to mop the glow off the trading floor.'},
-    {tier:'Common', price:'Ƒ3k', name:'Casino Archivist', blurb:'Keeps the old rule-books that Mr. Flesh never read.'},
-    {tier:'Common', price:'Ƒ4k', name:'Utopian Clerk', blurb:'Stamping forms while colonies burn.'},
-    {tier:'Common', price:'Ƒ5k', name:'Ruins Gambler', blurb:'Dice still roll the same, even in ash.'},
+    {tier:'Common', price:'Ƒ1k', name:'Bag Holder', blurb:'Still averaging down.'},
+    {tier:'Common', price:'Ƒ2k', name:'Offal Accountant', blurb:'Tallies the biological remainder after each quarterly liquidation.'},
+    {tier:'Common', price:'Ƒ3k', name:'Floor Rat', blurb:'Subsists entirely on dropped decimal points.'},
+    {tier:'Common', price:'Ƒ4k', name:'Stamp Licker', blurb:'Colony permit office, third window on the left.'},
+    {tier:'Common', price:'Ƒ5k', name:'Carcass Speculator', blurb:'Buys delisted tickers at bulk rates.'},
     // Mid (10k–50k)
-    {tier:'Mid', price:'Ƒ10k', name:'Colonial Auditor', blurb:'Audits colonies until they collapse under fees.'},
-    {tier:'Mid', price:'Ƒ20k', name:'Subprime Executor', blurb:'Writes contracts in blood and foreclosures.'},
-    {tier:'Mid', price:'Ƒ30k', name:'Blood Dividend Officer', blurb:'Every war casualty increases quarterly yield.'},
-    {tier:'Mid', price:'Ƒ40k', name:'Vice Minister of GDP Expansion', blurb:"Appointed by nobody, revered by everybody's debt."},
-    {tier:'Mid', price:'Ƒ50k', name:'Ashen Textile Broker', blurb:'Clothing the colonies in carcinogens since [REDACTED].'},
+    {tier:'Mid', price:'Ƒ10k', name:'Tariff Butcher', blurb:'Responsible for 14 collapsed trade agreements this quarter.'},
+    {tier:'Mid', price:'Ƒ20k', name:'Foreclosure Priest', blurb:'Administers last rites to underwater portfolios.'},
+    {tier:'Mid', price:'Ƒ30k', name:'Famine Trader', blurb:'Grain futures desk, Abaddon branch office.'},
+    {tier:'Mid', price:'Ƒ40k', name:'Extraction Overseer', blurb:'Average deployment: nine days. Average colony survival post-visit: three.'},
+    {tier:'Mid', price:'Ƒ50k', name:'Sanctions Profiteer', blurb:'Licensed to trade in restricted goods during active blockades.'},
     // High (100k–500k)
-    {tier:'High', price:'Ƒ100k', name:'Director of the Fifteenth Corporate War', blurb:'Signed the declaration. Did not sign the peace.'},
-    {tier:'High', price:'Ƒ200k', name:"Mr. Flesh's Favored Proxy", blurb:'Signs contracts in His name, burns them in His furnace.'},
-    {tier:'High', price:'Ƒ300k', name:'Inter-Colony GDP Prophet', blurb:'Predicts growth even as planets starve.'},
-    {tier:'High', price:'Ƒ400k', name:'Social Credit Syndicator', blurb:'Packages your worth into a single tradable bond.'},
-    {tier:'High', price:'Ƒ500k', name:'Warlord Accountant', blurb:'Adds corpses and columns with the same pen.'},
+    {tier:'High', price:'Ƒ100k', name:'War Premium Underwriter', blurb:'Writes coverage for active war zones at a 340% markup.'},
+    {tier:'High', price:'Ƒ200k', name:"Mr. Flesh's Auctioneer", blurb:'Runs the floor when Mr. Flesh is otherwise occupied.'},
+    {tier:'High', price:'Ƒ300k', name:'Sovereign Debt Parasite', blurb:'Extends credit to insolvent colonies at terms they cannot read.'},
+    {tier:'High', price:'Ƒ400k', name:'Cartel Notary', blurb:'Notarizes documents that technically do not exist.'},
+    {tier:'High', price:'Ƒ500k', name:'Extinction Auditor', blurb:'Performs final accounting for colonies declared non-viable.'},
     // Mythic (1M–50M)
-    {tier:'Mythic', price:'Ƒ1M', name:'Eternal Chairman of Flesh', blurb:'A title that outlives your body, binding you to the ledger forever.'},
-    {tier:'Mythic', price:'Ƒ2M', name:'Lore Master', blurb:'Holds the only copy of the record that should not exist.'},
-    {tier:'Mythic', price:'Ƒ5M', name:'Corporate War Survivor [I–XV]', blurb:'Your badge of survival, forged in collapsing balance sheets.'},
-    {tier:'Mythic', price:'Ƒ10M', name:'Bearer of the Flesh Dividend', blurb:'Every scream adds a decimal to your yield.'},
-    {tier:'Mythic', price:'Ƒ50M', name:'Reserve Currency Sovereign', blurb:'Controls the inter-colony reserve—until the next collapse.'},
+    {tier:'Mythic', price:'Ƒ1M', name:'The Last Entry', blurb:'Your name is recorded after the word TOTAL.'},
+    {tier:'Mythic', price:'Ƒ2M', name:'He Who Holds The Pen', blurb:'Authors the opening prices each trading day.'},
+    {tier:'Mythic', price:'Ƒ5M', name:'Scar of the Fifteenth War', blurb:"The war ended. You didn't."},
+    {tier:'Mythic', price:'Ƒ10M', name:'The Yield', blurb:'Passive income on capital older than most colonies.'},
+    {tier:'Mythic', price:'Ƒ50M', name:'The Central Banker', blurb:'Controls the inter-colony money supply from an undisclosed location.'},
     // Legendary (1B) — singular, contested
-    {tier:'Legendary', price:'Ƒ1B', name:'President of The Coalition', blurb:'There is only one seat. Someone is already in it.', singular:true},
+    {tier:'Legendary', price:'Ƒ1B', name:'President of The Coalition', blurb:'Elected by capital weight, not headcount. One seat.', singular:true},
   ];
 
   // --- Patreon-exclusive titles (locked unless tier matches) ---
   const PATREON_TITLES = [
-    {patreonTier:1, name:'Marked Subscriber',       blurb:'Paid your dues to the flesh economy.'},
-    {patreonTier:1, name:'Premium Wage Slave',       blurb:'Upgraded chains, same ledger.'},
-    {patreonTier:2, name:'Officer of the Guild',     blurb:'The coalition recognizes your balance sheet.'},
-    {patreonTier:2, name:'Merchant of the 7th Ward', blurb:'Known in all seven inter-colony districts.'},
-    {patreonTier:3, name:'Corporate Apex Predator',  blurb:'The boardroom clears when you walk in.'},
-    {patreonTier:3, name:'Sovereign of the Ledger',  blurb:'You wrote the rules. The others learned them.'},
+    {patreonTier:1, name:'Tithe Payer',              blurb:'Registered contributor to the Flesh Market operating fund.'},
+    {patreonTier:1, name:'Branded Debtor',            blurb:'Carries a visible credit marker issued at time of payment.'},
+    {patreonTier:2, name:'Guild Enforcer',             blurb:'Handles collections and contract disputes for the Merchants Guild.'},
+    {patreonTier:2, name:'Seventh Ward Broker',        blurb:'Holds active trading licenses across all seven wards.'},
+    {patreonTier:3, name:'The Tenth Seat',             blurb:'One of ten permanent board positions. Non-transferable.'},
+    {patreonTier:3, name:'Apex Creditor',              blurb:'Senior creditor class. All outstanding debts settle to you first.'},
   ];
 
   // --- Money helpers ---
