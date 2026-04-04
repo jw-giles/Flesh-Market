@@ -4027,7 +4027,7 @@ window.renderShippingTab = function(){
   h += '<input class="ship-input" type="number" id="gShipStake" placeholder="Ƒ amount" min="100" onchange="window._gShipCalcRisk()" oninput="window._gShipCalcRisk()"/>';
   h += '<div style="display:flex;align-items:center;margin-bottom:8px">';
   h += '<input type="checkbox" class="ins-checkbox" id="gShipInsure" onchange="window._gShipCalcRisk()"/>';
-  h += '<label for="gShipInsure" style="font-size:.78rem;color:#3498db;cursor:pointer">🛡 Insure cargo (5% premium — refunds stake if lost)</label>';
+  h += '<label for="gShipInsure" style="font-size:.78rem;color:#3498db;cursor:pointer">🛡 Insure cargo (5–12% premium — refunds stake if lost)</label>';
   h += '</div>';
 
   // Risk display
@@ -4232,7 +4232,14 @@ window._gShipCalcRisk = function(){
   var blk=(window._FM_BLOCKADES||{})[lk];
   var blocked=blk&&blk.active;
 
-  var totalRisk=Math.min(0.60,Math.max(0.02, 0.18+cRisk+tensionMod+fMod));
+  // Bet-size scaling: larger shipments = more risk
+  var betRisk=0;
+  if(stake<=5000) betRisk=0;
+  else if(stake<=25000) betRisk=0.05;
+  else if(stake<=100000) betRisk=0.10;
+  else betRisk=0.15;
+
+  var totalRisk=Math.min(0.60,Math.max(0.02, 0.18+cRisk+tensionMod+fMod+betRisk));
   var riskPct=Math.round(totalRisk*100);
 
   // Display
@@ -4248,11 +4255,18 @@ window._gShipCalcRisk = function(){
   if(tensionMod>0.005) details.push('tension +'+Math.round(tensionMod*100)+'%');
   if(fMod<0) details.push('faction '+Math.round(fMod*100)+'%');
   if(fMod>0) details.push('enemy +'+Math.round(fMod*100)+'%');
+  if(betRisk>0) details.push('size +'+Math.round(betRisk*100)+'%');
   if(rDetail) rDetail.textContent=details.length?details.join(', '):'base rate';
+
+  // Insurance premium scales with shipment size
+  var insRate=0.05;
+  if(stake>500000) insRate=0.12;
+  else if(stake>100000) insRate=0.10;
+  else if(stake>10000) insRate=0.07;
 
   // Info grid
   var profit=stake>0?Math.round(stake*cMult-stake):0;
-  var insCost=insured?Math.round(stake*0.05):0;
+  var insCost=insured?Math.round(stake*insRate):0;
   var totalCost=stake+insCost;
   var ev=stake>0?Math.round(((1-totalRisk)*profit - totalRisk*(insured?insCost:stake))):0;
   var profitEl=document.getElementById('gShipProfit');

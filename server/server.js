@@ -385,7 +385,30 @@ const SHIPPING_CARGO = [
 ];
 const SHIPPING_BASE_RISK = 0.18;
 const SHIPPING_DUR_SEC = 30;
-const INSURANCE_PREMIUM = 0.05; // 5% of stake
+
+// Shipping bet-size scaling: larger shipments = more risk (lighter than smuggling)
+const SHIPPING_BET_TIERS = [
+  { max: 5_000,    extra: 0.00 },
+  { max: 25_000,   extra: 0.05 },
+  { max: 100_000,  extra: 0.10 },
+  { max: Infinity,  extra: 0.15 },
+];
+function shippingBetRisk(amt) {
+  for (const t of SHIPPING_BET_TIERS) { if (amt <= t.max) return t.extra; }
+  return 0.15;
+}
+
+// Insurance premium scales with shipment size
+const INSURANCE_TIERS = [
+  { max: 10_000,   rate: 0.05 },
+  { max: 100_000,  rate: 0.07 },
+  { max: 500_000,  rate: 0.10 },
+  { max: Infinity,  rate: 0.12 },
+];
+function insurancePremiumRate(amt) {
+  for (const t of INSURANCE_TIERS) { if (amt <= t.max) return t.rate; }
+  return 0.12;
+}
 
 const LANE_RISK = {
   corporate: { intercept:0.15, durSec:30,  payMult:1.0 },
@@ -599,8 +622,11 @@ function resolveShipping(playerId) {
     if (toLeading !== playerFaction)   factionMod += 0.04;
   }
 
+  // Bet-size scaling: larger shipments = more risk
+  const betRisk = shippingBetRisk(run.stake);
+
   const interceptChance = Math.min(0.60, Math.max(0.02,
-    SHIPPING_BASE_RISK + cargo.riskMod + tensionMod + factionMod
+    SHIPPING_BASE_RISK + cargo.riskMod + tensionMod + factionMod + betRisk
   ));
   const intercepted = Math.random() < interceptChance;
 
@@ -4501,9 +4527,10 @@ wss.on('connection',(ws,req)=>{
       const amt = Math.max(100, Math.min(10_000_000, Math.round(Number(stake) * 100) / 100));
       if (!Number.isFinite(amt)) { ws.send(JSON.stringify({ type:'shipping_error', error:'Invalid stake amount' })); return; }
 
-      // Calculate total cost: stake + insurance premium if insured
+      // Calculate total cost: stake + insurance premium if insured (premium scales with amount)
       const wantInsurance = !!insured;
-      const insuranceCost = wantInsurance ? Math.round(amt * INSURANCE_PREMIUM * 100) / 100 : 0;
+      const insRate = insurancePremiumRate(amt);
+      const insuranceCost = wantInsurance ? Math.round(amt * insRate * 100) / 100 : 0;
       const totalCost = amt + insuranceCost;
       if (actor.cash < totalCost) { ws.send(JSON.stringify({ type:'shipping_error', error:`Insufficient funds. Need Ƒ${totalCost.toLocaleString()} (stake + insurance)` })); return; }
 
@@ -4535,8 +4562,9 @@ wss.on('connection',(ws,req)=>{
         syndicatePayoutBonus: SYNDICATE_PAYOUT_BONUS,
         syndicateOwnTurfRisk: SYNDICATE_OWN_TURF_RISK,
         shippingBaseRisk: SHIPPING_BASE_RISK,
+        shippingBetTiers: SHIPPING_BET_TIERS,
         shippingCargo: SHIPPING_CARGO,
-        insurancePremium: INSURANCE_PREMIUM,
+        insuranceTiers: INSURANCE_TIERS,
         cargoTypes: CARGO_TYPES,
         laneRisk: LANE_RISK,
         playerFaction,
