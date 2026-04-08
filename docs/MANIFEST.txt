@@ -1,4 +1,4 @@
-# FleshMarket v1.0.0.4 — MANIFEST
+# FleshMarket v1.0.1.2 — MANIFEST
 
 ## Structure
 
@@ -16,6 +16,9 @@ game/
       core.js               WebSocket, market engine, tab routing, leaderboard
       market-orders.js      buy/sell modal controllers
       market-state.js       persistence helpers, full tab switcher
+      market-tools.js       watchlist, price alerts, portfolio metrics, company detail, news filter
+      mobile.css            mobile responsive breakpoints, bottom nav, collapsibles
+      mobile.js             collapsible sections, mobile bottom nav, touch fixes
       shorts.js             short position UI
       funds.js              guild and hedge fund UI
       chat-ui.js            chat tab switching
@@ -54,6 +57,8 @@ game/
       casino-mathgame.css   math game styles
       casino-minesweeper.css minesweeper styles
       galaxy.js             galaxy map, factions, colony UI (lazy-loaded)
+      tutorial.js           UNIT-7 onboarding tutorial (12 slides)
+      tutorial.css          tutorial modal styles
       pnl_stream/
         pnl-boot.js
         pnl-bridge.js
@@ -105,6 +110,9 @@ See `CHANGELOG.md` for full details.
 
 | Version | Key Change |
 |---|---|
+| v1.0.1.2 | Watchlist, price alerts, portfolio metrics, company detail, news filter, mobile responsive, tutorial rewrite |
+| v1.0.1.1 | Title rework, store tab restructure, Patreon button glow |
+| v1.0.1.0 | Beta market model, news feed rewrite, heatmap fix |
 | v1.0.0.4 | Faction persistence fix, server-authoritative day-trade enforcement |
 | v1.0.0.2 | Market stabilization, Wire Credits, leaderboard EOD freeze, SWT/BRNC normalized, smuggling 15min cooldown |
 | v0.9.0 | Client modularised — 18 JS modules, 13 CSS files, lazy loading |

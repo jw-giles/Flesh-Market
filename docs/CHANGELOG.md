@@ -4,6 +4,86 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.1.2 (2026-04-08)
+
+**Market tools, mobile responsiveness, tutorial rewrite.**
+
+### Watchlist
+- ★ toggle on every ticker row — click to add/remove from watchlist
+- "★ Watchlist" filter button above search — shows only starred tickers when active
+- Count badge updates live
+- Persists in localStorage across sessions
+
+### Price Alerts
+- Alert panel below Limit Orders: set symbol / above or below / target price
+- Alerts checked on every 500ms price tick via `fm_ws_msg` listener
+- Fires toast notification + sound when triggered (one-shot, then removed)
+- Active alert list with ✕ remove buttons
+- Auto-fills current symbol on focus
+- Fired alerts cleaned from localStorage on page load
+
+### Portfolio Performance Metrics
+- 6-card grid added to P&L tab: max drawdown, best period, worst period, volatility, win rate, total return
+- Fetches from `/api/pnl/:token` on first P&L tab click
+- Computed from `net_worth_history`: std dev of returns, peak-to-trough drawdown, % positive periods
+- Color-coded: green for positive, red for negative, amber for volatility
+- Manual refresh button
+
+### Company Detail Panel
+- Expanded info panel below chart canvas, updates on every tick and symbol change
+- Shows: symbol, name, sector (color-coded badge), HQ colony, dividend eligibility
+- Shows: current position size and unrealized P&L, short position info, open limit order count
+- Symbol change detected via `Object.defineProperty` on `window.CURRENT` with polling fallback
+
+### News Filter
+- Search input + tone dropdown (Good/Bad/Neutral/All) between News heading and feed
+- Non-matching headlines dimmed to 15% opacity with collapsed height
+- ✕ clear button resets all filters
+- Incoming headlines respect active filter state
+
+### Mobile Responsiveness
+- `mobile.css` — 5 breakpoint tiers: 1100px (shrink grid), 900px (stack to 1-column), 640px (phone), 400px (extreme compact), landscape short-height
+- `mobile.js` — collapsible Companies/News/Wire Credits sections, mobile bottom nav bar, touch optimizations
+- Custom cursor PNGs disabled on touch devices via `@media (pointer: coarse)`
+- Bottom nav bar with 6 tabs (Market/Heat/Casino/Galaxy/Store/P&L) at ≤900px, syncs with desktop tab clicks
+- Galaxy map colony sidebar stacks below map instead of beside it on narrow screens
+- Safari `100dvh` viewport height fix
+- Touch target minimum sizes: 36px tickers, 32px buttons, 28px tabs
+- All modals/popups go full-width on phone
+- God panel, mod panel, player profile adapt to small screens
+- Original `<h2>` headings hidden when collapsible replacements active (no duplicates)
+
+### Tutorial Rewrite
+- Expanded from 9 slides to 12 slides covering all current features
+- New slides: Market Tools (alerts, news filter), Short Selling (margin, borrow fees), The Store (titles, inventory, ƒbay, slots)
+- Fixed: Casino slide listed Plinko (disabled) and Slot Machine (moved to Store), missed Roulette/Sudoku/Math Quiz
+- Fixed: Blackjack described as "5 AI opponents" (removed in prior rewrite, now "6-deck shoe with card tracking")
+- Fixed: Guild tab navigation (hidden for non-Patreon users, caused empty panel)
+- Updated: Dividends slide now covers Heatmap + P&L + metrics
+- Updated: Shipping slide now mentions Lane Shares inline
+- Updated: Summary slide references all new features including bug reports tab
+- Guild slide replaced with Social & Economy slide (navigates to Market tab, not hidden Guild tab)
+
+### UI Polish
+- Ticker/news divider: `<hr/>` changed from 1px dashed to 2px solid with amber glow
+- Store sub-tabs (Titles/Inventory/Ƒbay/Slots): inactive color `#553333` → `#997755`, active `#c8a86a` → `#e6c27a`, underline brightened, font bumped, dark background added
+
+### New Files
+- `client/assets/market-tools.js` (620 lines) — watchlist, alerts, metrics, company detail, news filter
+- `client/assets/mobile.css` (354 lines) — responsive breakpoints, bottom nav, collapsibles
+- `client/assets/mobile.js` (244 lines) — collapsible sections, bottom nav behavior, touch fixes
+
+### Files Modified
+- `client/index.html` — 3 new references (mobile.css, market-tools.js, mobile.js), inline CSS for new features, store sub-tab color fix
+- `client/style.css` — hr divider style updated
+- `client/assets/tutorial.js` — full SLIDES array rewrite (9 → 12 slides)
+- `client/version.json` — version bump to 1.0.1.2
+
+### Server
+- Zero changes. All features are pure client-side.
+
+---
+
 ## v1.0.1.1 (2026-04-03)
 
 **Title rework, store tab restructure, Patreon button glow.**

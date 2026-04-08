@@ -1,0 +1,354 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * mobile.css — FleshMarket Mobile Responsiveness
+ * Progressive enhancement: desktop layout unchanged, mobile overrides below
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Touch device: disable custom cursor PNGs ─────────────────────────────── */
+@media (pointer: coarse) {
+  *, *::before, *::after { cursor: auto !important; }
+  button:active, a:active, [onclick]:active { cursor: auto !important; }
+}
+
+/* ── Small desktop / tablet (≤1100px) ─────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: minmax(220px,1fr) 2fr minmax(220px,1fr) !important;
+    gap: 8px;
+  }
+  #chart { height: 280px; }
+  #chatBox { height: 360px; }
+  .tab { padding: 3px 6px; font-size: .78rem; }
+  .subtab { padding: 4px 10px; font-size: .78rem; }
+}
+
+/* ── Tablet portrait / large phone (≤900px) — 2-column then stack ─────────── */
+@media (max-width: 900px) {
+  html, body { overflow: auto; height: auto; }
+  .wrap {
+    height: auto !important;
+    min-height: 100vh;
+    min-height: 100dvh; /* dynamic viewport height — fixes Safari */
+    overflow: visible !important;
+    padding: 8px;
+  }
+  .grid {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto !important;
+    overflow: visible !important;
+    gap: 8px;
+  }
+  .grid > .panel {
+    max-height: none !important;
+    overflow: visible !important;
+    display: flex;
+    flex-direction: column;
+  }
+  /* Left panel: tickers + news — collapsible on mobile */
+  .grid > .panel:first-child {
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column;
+  }
+  .grid > .panel:first-child .list { max-height: 200px; overflow-y: auto; }
+  .grid > .panel:first-child .news { max-height: 150px; overflow-y: auto; }
+
+  /* Center panel: chart + trade */
+  #chart { height: 260px; }
+  #marketTab .row { flex-wrap: wrap; }
+  #marketTab .row .input { max-width: none !important; flex: 1 1 60px; min-width: 60px; }
+  #marketTab .row .btn { flex-shrink: 0; }
+  #limitPanel { font-size: .72rem; }
+  #limitPanel .input { max-width: none !important; flex: 1 1 60px; min-width: 60px; }
+
+  /* Right panel: chat */
+  #chatBox { height: 320px; }
+
+  /* Tabs: horizontal scroll if they overflow */
+  .tabs { flex-wrap: wrap; gap: 4px; }
+  .tab { font-size: .72rem; padding: 3px 6px; white-space: nowrap; }
+
+  /* Casino subtabs wrap */
+  #casinoTabs { gap: 4px; }
+  .subtab { font-size: .75rem; padding: 4px 8px; }
+
+  /* Galaxy map: prevent clipping */
+  #galacticTab { overflow: auto !important; min-height: 500px; }
+  #gMapPane { flex-direction: column !important; }
+  #gColonyDetail { width: 100% !important; border-left: none !important; border-top: 1px solid #1a1a2e; max-height: 300px; }
+  #galaxySVG { min-height: 400px; }
+
+  /* Guild: stack grid */
+  #guildTab { overflow: auto !important; max-height: none !important; }
+
+  /* Store: full width sub-panes */
+  #storeTab { overflow: auto !important; }
+
+  /* Leaderboard: compact */
+  #leaderboardCompact { padding-top: 4px; margin-top: 4px; }
+  #bottomRow { display: none; } /* hide bottom ticker strip on mobile — too wide */
+
+  /* Header: wrap controls */
+  .wrap > .row:first-child { flex-wrap: wrap; gap: 4px; }
+  #fm-header-user { flex-wrap: wrap; gap: 4px !important; }
+  #eod-timer-wrap { margin-left: auto; }
+}
+
+/* ── Phone (≤640px) — single column, everything stacked ──────────────────── */
+@media (max-width: 640px) {
+  body { font-size: 13px; }
+  .wrap { padding: 4px; }
+
+  /* Header: stack vertically */
+  .wrap > .row:first-child {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 4px;
+  }
+  .wrap > .row:first-child > .row {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  #eod-timer-wrap { margin-left: 0; }
+  h1 { font-size: 14px !important; letter-spacing: .08em !important; }
+
+  /* Panels: minimal padding */
+  .panel { padding: 6px; border-radius: 6px; }
+  h2 { font-size: 13px; margin: .1rem 0 .4rem 0; }
+
+  /* Tickers: shorter list */
+  .grid > .panel:first-child .list { max-height: 160px; }
+  .grid > .panel:first-child .news { max-height: 120px; }
+  .news-line { font-size: 11px; padding: 2px 4px; }
+
+  /* Chart: smaller */
+  #chart { height: 200px; }
+
+  /* Trade controls: stack */
+  #marketTab > .row { flex-direction: row; flex-wrap: wrap; }
+  #marketTab > .row .input { font-size: .75rem; }
+  #shortBtn { font-size: .72rem; padding: 4px 6px; }
+
+  /* Limit orders: tighter */
+  #limitPanel > div { flex-direction: row; flex-wrap: wrap; }
+
+  /* Alert panel */
+  #alertPanel > div { flex-direction: row; flex-wrap: wrap; }
+
+  /* Chat: shorter */
+  #chatBox { height: 280px; }
+  #chatTabs { flex-wrap: wrap; }
+  .chat-tab { font-size: .65rem; padding: 4px 5px; letter-spacing: .04em; }
+  .chat-channel .cm { font-size: .75rem; }
+  #chatInput { font-size: .75rem; }
+  #chatSend { padding: 3px 8px; font-size: .75rem; }
+  #chatInputRow { gap: 4px; padding: 4px; }
+  /* Hide font size buttons on phone — too small to be useful */
+  #chatFontDec, #chatFontInc { display: none !important; }
+
+  /* Transfer: compact */
+  #transferSection .row { flex-wrap: wrap; }
+  #transferSection .input { max-width: none !important; flex: 1 1 80px; }
+
+  /* Tabs: smaller */
+  .tabs { gap: 3px; margin-bottom: 4px; }
+  .tab { font-size: .65rem; padding: 3px 5px; border-radius: 6px; }
+
+  /* Casino: tighter */
+  .subtab { font-size: .68rem; padding: 3px 6px; }
+  #casinoContent { min-height: 360px; }
+
+  /* PnL tab */
+  #pnlTab > div:first-child { flex-direction: column; }
+  #pnl-donut { width: 140px !important; height: 140px !important; flex: 0 0 140px !important; }
+
+  /* Metrics grid: 2 cols on phone */
+  #metricsGrid { grid-template-columns: repeat(2, 1fr) !important; }
+  .metric-card { padding: 4px !important; }
+  .metric-card div:last-child { font-size: .85rem !important; }
+
+  /* Company detail: stack */
+  #companyDetail > div:first-child { flex-direction: column; }
+
+  /* Galaxy */
+  #galacticTab { min-height: 400px; }
+  #galaxySubTabs { flex-wrap: wrap; }
+  .galaxy-stab { font-size: .62rem !important; padding: 5px 10px !important; }
+  #gColonyDetail { max-height: 250px; }
+  #gMapPane { min-height: 350px; }
+  #galaxySVG { min-height: 300px; }
+  /* Galaxy sub-panes */
+  #gFactionsPane, #gShippingPane, #gContractsPane { padding: 10px 8px !important; }
+
+  /* Store tab */
+  .store-stab { font-size: .62rem !important; padding: 5px 8px !important; }
+
+  /* Guild tab */
+  #guild-detail > div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+
+  /* Sell/Short modals: full width */
+  #sell-modal .card, #short-modal .card {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    margin: 10px auto;
+  }
+
+  /* Player profile popup: full width bottom sheet style */
+  #playerProfilePopup {
+    width: 100% !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    top: auto !important;
+    border-radius: 10px 10px 0 0 !important;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+
+  /* God panel: full width */
+  #godPanel {
+    left: 4px !important;
+    right: 4px !important;
+    top: 40px !important;
+    min-width: auto !important;
+    max-width: none !important;
+    width: auto !important;
+  }
+  .god-tab { font-size: .6rem !important; padding: 4px 6px !important; }
+  .god-input { font-size: .72rem !important; }
+
+  /* Mod panel: center on screen */
+  #modPanel {
+    left: 10px !important;
+    right: 10px !important;
+    min-width: auto !important;
+    width: auto !important;
+  }
+
+  /* Bugs tab */
+  #bugsTab > div:last-child { padding: 12px !important; }
+
+  /* Hide Patreon button text, keep icon */
+  #fm-header-user a[href*="patreon"] { font-size: .72rem !important; padding: 3px 8px !important; }
+
+  /* Watchlist bar */
+  #watchlist-bar { margin-bottom: 4px; }
+  #watchlist-bar button { font-size: .65rem !important; padding: 2px 8px !important; }
+
+  /* Tutorial/logout buttons smaller */
+  #fm-header-user button { font-size: .68rem !important; padding: 2px 6px !important; }
+
+  /* Sound toggle */
+  #soundToggle { font-size: .7rem; padding: 3px 6px; bottom: 8px; left: 8px; }
+
+  /* Dunce banner */
+  #dunce-banner { padding: 8px 10px; }
+
+  /* Toast area: full width */
+  #toastArea { left: 4px !important; right: 4px !important; max-width: none !important; }
+}
+
+/* ── Tiny phone (≤400px) — extreme compaction ────────────────────────────── */
+@media (max-width: 400px) {
+  body { font-size: 12px; }
+  h1 { font-size: 12px !important; }
+  .panel { padding: 4px; }
+  #chart { height: 180px; }
+  #chatBox { height: 240px; }
+  .grid > .panel:first-child .list { max-height: 120px; }
+  .grid > .panel:first-child .news { max-height: 100px; }
+  .tab { font-size: .6rem; padding: 2px 4px; }
+  .chat-tab { font-size: .58rem; padding: 3px 4px; }
+  #metricsGrid { grid-template-columns: 1fr 1fr !important; gap: 4px !important; }
+  #pnl-donut { width: 120px !important; height: 120px !important; flex: 0 0 120px !important; }
+
+  /* Hide less critical header elements */
+  #fm-header-user button[onclick*="showTutorial"] { display: none !important; }
+}
+
+/* ── Landscape phone (short height) ───────────────────────────────────────── */
+@media (max-height: 500px) and (max-width: 900px) {
+  #chart { height: 150px; }
+  #chatBox { height: 200px; }
+  .grid > .panel:first-child .list { max-height: 100px; }
+  .grid > .panel:first-child .news { max-height: 80px; }
+}
+
+/* ── Mobile collapsible sections (toggled by mobile.js) ───────────────────── */
+.fm-collapse-head {
+  display: none; /* only show on mobile */
+  cursor: pointer;
+  padding: 6px 8px;
+  background: #0a0804;
+  border: 1px solid #2a1a04;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #c8a86a;
+  user-select: none;
+}
+.fm-collapse-head::after {
+  content: ' ▼';
+  font-size: .6rem;
+  opacity: .5;
+}
+.fm-collapse-head.collapsed::after { content: ' ▶'; }
+
+@media (max-width: 900px) {
+  .fm-collapse-head { display: flex; align-items: center; justify-content: space-between; }
+  .fm-collapse-body.collapsed { display: none !important; }
+}
+
+/* ── Mobile bottom nav bar ────────────────────────────────────────────────── */
+#mobileNav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9990;
+  background: #0a0804;
+  border-top: 1px solid #2a1a04;
+  padding: 0;
+  box-shadow: 0 -4px 16px rgba(0,0,0,.6);
+}
+#mobileNav .mnav-items {
+  display: flex;
+  justify-content: space-around;
+  align-items: stretch;
+}
+#mobileNav .mnav-btn {
+  flex: 1;
+  text-align: center;
+  padding: 8px 2px 6px;
+  font-size: .58rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #665533;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+  border-top: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+#mobileNav .mnav-btn.active {
+  color: #ffb547;
+  border-top-color: #ffb547;
+}
+#mobileNav .mnav-btn .mnav-icon {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 1px;
+}
+
+@media (max-width: 900px) {
+  #mobileNav { display: block; }
+  /* Pad bottom of page so content doesn't hide behind nav */
+  .wrap { padding-bottom: 60px !important; }
+  /* Hide desktop bottom row */
+  #bottomRow { display: none !important; }
+}

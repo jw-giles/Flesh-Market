@@ -9,6 +9,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport">
 <title>Flesh Market — Local</title>
 <link href="style.css" rel="stylesheet"/>
+<link href="assets/mobile.css" rel="stylesheet"/>
 
 
 <body>
@@ -214,11 +215,11 @@
     <a href="https://www.patreon.com/FLSH" target="_blank" style="color:#ffb547;opacity:.8">patreon.com/FLSH</a>
   </div>
 </div>
-<div style="display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid #2a1010;padding-bottom:0">
-  <button class="store-stab active" data-stab="titles" onclick="storeSubTab('titles')" style="background:none;border:none;border-bottom:2px solid #884444;color:#c8a86a;font-size:.72rem;padding:6px 14px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Titles</button>
-  <button class="store-stab" data-stab="inventory" onclick="storeSubTab('inventory')" style="background:none;border:none;border-bottom:2px solid transparent;color:#553333;font-size:.72rem;padding:6px 14px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Inventory</button>
-  <button class="store-stab" data-stab="fbay" onclick="storeSubTab('fbay')" style="background:none;border:none;border-bottom:2px solid transparent;color:#553333;font-size:.72rem;padding:6px 14px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Ƒbay</button>
-  <button class="store-stab" data-stab="slots" onclick="storeSubTab('slots')" style="background:none;border:none;border-bottom:2px solid transparent;color:#553333;font-size:.72rem;padding:6px 14px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">🎰 Slots</button>
+<div style="display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid #3a1a08;padding-bottom:0;background:#0a0604;border-radius:4px 4px 0 0">
+  <button class="store-stab active" data-stab="titles" onclick="storeSubTab('titles')" style="background:none;border:none;border-bottom:2px solid #cc6644;color:#e6c27a;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Titles</button>
+  <button class="store-stab" data-stab="inventory" onclick="storeSubTab('inventory')" style="background:none;border:none;border-bottom:2px solid transparent;color:#997755;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Inventory</button>
+  <button class="store-stab" data-stab="fbay" onclick="storeSubTab('fbay')" style="background:none;border:none;border-bottom:2px solid transparent;color:#997755;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Ƒbay</button>
+  <button class="store-stab" data-stab="slots" onclick="storeSubTab('slots')" style="background:none;border:none;border-bottom:2px solid transparent;color:#997755;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">🎰 Slots</button>
 </div>
 
 <!-- ── TITLES PANE ── -->
@@ -402,8 +403,8 @@
 function storeSubTab(tab){
   document.querySelectorAll('.store-stab').forEach(function(b){
     b.classList.toggle('active',b.dataset.stab===tab);
-    b.style.borderBottomColor=b.dataset.stab===tab?'#884444':'transparent';
-    b.style.color=b.dataset.stab===tab?'#c8a86a':'#553333';
+    b.style.borderBottomColor=b.dataset.stab===tab?'#cc6644':'transparent';
+    b.style.color=b.dataset.stab===tab?'#e6c27a':'#997755';
   });
   document.querySelectorAll('.store-pane').forEach(function(d){d.style.display='none';});
   var el=document.getElementById('store-pane-'+tab);
@@ -1264,6 +1265,8 @@ ws.addEventListener('message', function(ev){
 <script src="assets/funds.js"></script>
 
 <script src="assets/market-state.js"></script>
+<script src="assets/market-tools.js"></script>
+<script src="assets/mobile.js"></script>
 
     <script>
         function updateCountdown() {
@@ -1300,6 +1303,18 @@ ws.addEventListener('message', function(ev){
 <!-- FleshMarket Features: Sound, Heatmap, XP/Levels, etc -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <link rel="stylesheet" href="assets/toast.css">
+<style>
+/* Market Tools — Watchlist, Alerts, Metrics, Detail, News Filter */
+#watchlist-bar button:hover{border-color:#ffb547!important;color:#ffb547!important}
+.wl-star:hover{color:#ffb547!important;transform:scale(1.2)}
+#alertPanel .btn:hover{border-color:#ffb547;color:#ffb547}
+#companyDetail{animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.metric-card{background:#080604;transition:border-color .2s}
+.metric-card:hover{border-color:#2a1a04!important}
+#newsFilter:focus{border-color:#884444;outline:none}
+#newsFilter::placeholder{color:#442222}
+</style>
 
 <!-- Toast Area -->
 <div id="toastArea"></div>
