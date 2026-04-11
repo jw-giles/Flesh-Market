@@ -222,11 +222,11 @@ export function setupTransactions() {
       );
     stmt('DELETE FROM holdings WHERE player_id=?').run(player.id);
     for (const [sym, qty] of Object.entries(player.holdings||{})) {
-      if (qty>0) stmt('INSERT OR REPLACE INTO holdings VALUES(?,?,?)').run(player.id,sym,qty);
+      if (qty !== 0) stmt('INSERT OR REPLACE INTO holdings VALUES(?,?,?)').run(player.id,sym,qty);
     }
     stmt('DELETE FROM basis WHERE player_id=?').run(player.id);
     for (const [sym, bc] of Object.entries(player.basisC||{})) {
-      if (bc>0) stmt('INSERT OR REPLACE INTO basis VALUES(?,?,?)').run(player.id,sym,Math.floor(bc));
+      if (bc !== 0) stmt('INSERT OR REPLACE INTO basis VALUES(?,?,?)').run(player.id,sym,Math.floor(bc));
     }
   });
 
@@ -264,9 +264,9 @@ function hydratePlayer(row) {
   if (!row) return null;
   const holdings={}, basisC={};
   stmt('SELECT symbol,qty FROM holdings WHERE player_id=?').all(row.id)
-    .forEach(h=>{ if(h.qty>0) holdings[h.symbol]=h.qty; });
+    .forEach(h=>{ if(h.qty !== 0) holdings[h.symbol]=h.qty; });
   stmt('SELECT symbol,basis_c FROM basis WHERE player_id=?').all(row.id)
-    .forEach(b=>{ if(b.basis_c>0) basisC[b.symbol]=b.basis_c; });
+    .forEach(b=>{ if(b.basis_c !== 0) basisC[b.symbol]=b.basis_c; });
   return {
     id:row.id, name:row.name,
     password_hash:row.password_hash, password_salt:row.password_salt,
@@ -1956,4 +1956,16 @@ export function getDevRequests() {
 
 export function handleDevRequest(id) {
   stmt('UPDATE comms_requests SET handled=1 WHERE id=?').run(id);
+}
+
+// ─── Stock Split Helper ─────────────────────────────────────────────────────
+// Multiplies all holdings of a symbol by a ratio and adjusts basis per-share.
+// Used when FLSH crosses the split threshold.
+export function executeStockSplit(symbol, ratio) {
+  // Multiply qty for all holders
+  stmt('UPDATE holdings SET qty = qty * ? WHERE symbol = ?').run(ratio, symbol);
+  // Basis stays the same total — cost basis doesn't change in a split.
+  // But per-share basis = old basis / ratio. Since we store total basis (not per-share),
+  // the total basis is unchanged. No basis update needed.
+  return stmt('SELECT COUNT(*) as cnt FROM holdings WHERE symbol = ?').get(symbol)?.cnt || 0;
 }

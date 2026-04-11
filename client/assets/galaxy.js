@@ -2411,6 +2411,7 @@ function renderDetail(id){
         +'<button onclick="window._gFundBlockade()" style="background:#2d1a00;border:1px solid #f39c12;color:#f39c12;padding:4px 8px;cursor:pointer;font-size:.58rem;font-family:inherit;letter-spacing:.06em">FUND</button>'
         +'<button onclick="window._gCounterBlk()" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:4px 8px;cursor:pointer;font-size:.56rem;font-family:inherit;letter-spacing:.04em">COUNTER</button>'
         +'</div>'
+        +'<button onclick="window._gPrivateArmy()" style="width:100%;margin-bottom:4px;background:linear-gradient(135deg,#1a0a00,#0d0400);border:1px solid #e74c3c;color:#ff6b6b;padding:5px 8px;cursor:pointer;font-size:.64rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">\u2694 PRIVATE ARMY \u2014 Break Blockade (\u019250,000)</button>'
         +'<div style="font-size:.60rem;color:#444">\u01925\u0030k activates a 2-hour blockade</div>';
     }
     sh += '</div>';
@@ -2734,6 +2735,10 @@ document.addEventListener('fm_ws_msg',function(e){
     _gSyncCash(msg.data.cash);
     gToast(msg.data.broken?'Blockade broken!':'Counter-funded \u0192'+Number(msg.data.contributed).toLocaleString(),msg.data.broken?'#2ecc71':'#3498db');
   }
+  if(msg.type==='private_army_result'&&msg.data){
+    _gSyncCash(msg.data.cash);
+    gToast('\u2694 Private army deployed! Blockade destroyed. Cost: \u0192'+Number(msg.data.cost).toLocaleString(),'#ff6b6b');
+  }
   // ── Lane Shares WS handlers ──
   if(msg.type==='share_update'&&msg.data){
     var sd=msg.data;
@@ -3016,6 +3021,8 @@ window._gSelectLane = function(from, to){
   h += '<div style="display:flex;gap:4px"><input id="gLaneBlkAmt" type="number" placeholder="Fund (\u0192)" style="flex:1;background:#0a0a14;border:1px solid #f39c1244;color:#ccc;padding:4px;font-size:.64rem;font-family:inherit;outline:none;border-radius:2px">'
     +'<button onclick="window._gLaneBlkFund(\''+from+'\',\''+to+'\')" style="background:#2d1a00;border:1px solid #f39c12;color:#f39c12;padding:4px 8px;cursor:pointer;font-size:.58rem;font-family:inherit;border-radius:2px">FUND</button>'
     +'<button onclick="window._gLaneBlkCounter(\''+from+'\',\''+to+'\')" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:4px 8px;cursor:pointer;font-size:.56rem;font-family:inherit;border-radius:2px">COUNTER</button></div>';
+  // Private Army: instant blockade break
+  h += '<button onclick="window._gLanePrivateArmy(\''+from+'\',\''+to+'\')" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#1a0a00,#0d0400);border:1px solid #e74c3c;color:#ff6b6b;padding:6px 8px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">\u2694 PRIVATE ARMY \u2014 Break Blockade (\u019250,000)</button>';
   el.innerHTML = h;
 };
 
@@ -3040,6 +3047,11 @@ window._gLaneBlkCounter = function(from, to){
   var amt = inp ? Number(inp.value) : 0;
   if(!amt || amt < 100){ gToast('Min: \u0192100','#e74c3c'); return; }
   _sendWSGalaxy({type:'counter_blockade',from:from,to:to,amount:amt});
+};
+window._gLanePrivateArmy = function(from, to){
+  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!confirm('Deploy a private army to break this blockade? Cost: \u019250,000')) return;
+  _sendWSGalaxy({type:'private_army',from:from,to:to});
 };
 
 // ── Galaxy Systems: cash sync helper ──
@@ -3094,6 +3106,14 @@ window._gCounterBlk = function(){
   var amt=aInp?Number(aInp.value):0;
   if(!amt||amt<100){ gToast('Min: \u0192100','#e74c3c'); return; }
   _sendWSGalaxy({type:'counter_blockade',from:parts[0],to:parts[1],amount:amt});
+};
+
+window._gPrivateArmy = function(){
+  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  var lnSel=document.getElementById('gBlkLane'); if(!lnSel) return;
+  var parts=lnSel.value.split('|');
+  if(!confirm('Deploy a private army to break this blockade? Cost: \u019250,000')) return;
+  _sendWSGalaxy({type:'private_army',from:parts[0],to:parts[1]});
 };
 
 document.addEventListener('fm:authed',function(e){

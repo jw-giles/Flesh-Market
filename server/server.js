@@ -78,6 +78,7 @@ import {
   addBugReport, getBugReports, toggleBugUpvote, toggleBugResolved, getBugUpvoters,
   addPlayerReport, getPlayerReports,
   addDevRequest, getDevRequests, handleDevRequest,
+  executeStockSplit,
 } from './db.js';
 
 initDB();
@@ -988,6 +989,39 @@ function updateFLSHPrice() {
   f.lnP = Math.max(Math.log(500_000_000), f.lnP);
   const prev = f.price;
   f.price = Math.exp(f.lnP);
+
+  // ── Stock split at Ƒ5B: 5:1 ratio → reset to Ƒ1B ──────────────────────────
+  // All holders get 5× shares, price resets to 1/5th. Net position value unchanged.
+  if (f.price >= 5_000_000_000) {
+    const SPLIT_RATIO = 5;
+    console.log(`[FLSH] Stock split triggered at Ƒ${f.price.toLocaleString()} — ${SPLIT_RATIO}:1`);
+    // Reset price to 1B
+    f.price = 1_000_000_000;
+    f.lnP = Math.log(f.price);
+    // Multiply all DB holdings by split ratio
+    try {
+      const affected = executeStockSplit('FLSH', SPLIT_RATIO);
+      console.log(`[FLSH] Split applied to ${affected} holders in DB`);
+    } catch(e) { console.error('[FLSH] DB split error:', e); }
+    // Update online players' in-memory holdings
+    for (const [pid, sockets] of playerSockets) {
+      try {
+        const p = getPlayer(pid);
+        if (p && p.holdings && p.holdings['FLSH']) {
+          p.holdings['FLSH'] *= SPLIT_RATIO;
+          // basisC total stays the same — cost basis doesn't change in a split
+          savePlayer(p);
+          // Push updated portfolio to the player
+          const msg = JSON.stringify({type:'portfolio', data:snapshotPortfolio(p)});
+          for (const ws of sockets) { try { if(ws.readyState===1) ws.send(msg); } catch(_) {} }
+        }
+      } catch(_) {}
+    }
+    // Announce
+    pushHeadline(`📊 FLSH Capital executes ${SPLIT_RATIO}:1 stock split — share price resets to Ƒ1,000,000,000. All holders receive ${SPLIT_RATIO}× shares.`, 'neutral', '📊');
+    broadcast({type:'chat_system', data:{text:`📊 FLSH Capital ${SPLIT_RATIO}:1 stock split executed. Price reset to Ƒ1B. All holders received ${SPLIT_RATIO}× shares.`}});
+  }
+
   const now = Date.now();
   // FLSH bar aggregation
   const BAR_MS_F = 5_000;
@@ -1049,6 +1083,9 @@ function restoreMarketState(){
   console.log('[Market] State restored');
 }
 restoreMarketState();
+// Force FLSH back to Ƒ1B on startup — it should always start at the post-split base price
+FLSH_COMPANY.price = 1_000_000_000;
+FLSH_COMPANY.lnP = Math.log(1_000_000_000);
 // One-time fixup: if SWT/BRNC have exploded prices from the old special-ticker bug, reset them
 for (const sc of [SWT_COMPANY, BRNC_COMPANY]) {
   if (sc.price > 5000 || !isFinite(sc.price) || sc.price <= 0) {
@@ -3405,18 +3442,69 @@ wss.on('connection',(ws,req)=>{
       }
 
       if(side==='buy'){
-        const costC=toCents(c.price)*qty,taxC=Math.floor(costC*TRADE_TAX_BPS/10000),totalC=costC+taxC,total=fromCents(totalC);
-        if(actor.cash>=total){
-          safeAddCash(actor,-total);FMI.treasury+=(taxC/100);FMI.hourlyTaxAccrual+=(taxC/100);
-          actor.holdings=actor.holdings||{};
-          actor.holdings[s]=(actor.holdings[s]||0)+qty;
-          actor.basisC=actor.basisC||{};actor.basisC[s]=(actor.basisC[s]||0)+costC;
-          actor.xp += Math.max(3, Math.min(50, Math.floor(fromCents(costC) / 20)));
-          try{addFundCash('FLSH', fromCents(costC)*FLSH_TRADE_PCT);}catch(_){}
-          // Day-trade: issue buy ticket (covering a short = round trip)
-          { const dt=_dtGet(actor.id); if(dt.shortTickets[s]>0){dt.shortTickets[s]--;dt.roundTrips=Math.min(DAY_TRADE_CAP,dt.roundTrips+1);} else {dt.tickets[s]=(dt.tickets[s]||0)+1;} }
-          broadcastTradeFeed({side:'buy',symbol:s,qty,price:c.price});
-                }
+        actor.holdings=actor.holdings||{};
+        actor.basisC=actor.basisC||{};
+        const have = actor.holdings[s] || 0;
+
+        // ── SHORT COVER: if player is short, buy covers the short position ──
+        if (have < 0) {
+          const shortQty = Math.abs(have);
+          const coverQty = Math.min(qty, shortQty);  // can't cover more than you're short
+          const coverCostC = toCents(c.price) * coverQty;
+          const taxC = Math.floor(coverCostC * TRADE_TAX_BPS / 10000);
+          const totalC = coverCostC + taxC;
+          const total = fromCents(totalC);
+          if (actor.cash < total) {
+            ws.send(JSON.stringify({type:'error',data:{msg:`Insufficient funds to cover. Need Ƒ${total.toFixed(2)}`}}));
+            return;
+          }
+          // Calculate realized P&L from the short
+          const avgEntryC = Math.abs(actor.basisC[s] || 0) / shortQty; // per-share entry in cents
+          const pnlC = (avgEntryC - toCents(c.price)) * coverQty; // positive = profit (price dropped)
+          const pnl = fromCents(pnlC);
+
+          safeAddCash(actor, -total);
+          FMI.treasury += (taxC / 100);
+          FMI.hourlyTaxAccrual += (taxC / 100);
+
+          // Close the short (move toward 0)
+          actor.holdings[s] = have + coverQty; // e.g. -100 + 100 = 0
+          if (actor.holdings[s] === 0) { delete actor.holdings[s]; delete actor.basisC[s]; }
+          else {
+            // Partial cover — adjust basis proportionally
+            const remainingRatio = Math.abs(actor.holdings[s]) / shortQty;
+            actor.basisC[s] = Math.round((actor.basisC[s] || 0) * remainingRatio);
+          }
+
+          actor.xp += 3 + (pnl > 0 ? Math.min(100, Math.floor(pnl / 10)) : 0);
+          try { addFundCash('FLSH', fromCents(coverCostC) * FLSH_TRADE_PCT); } catch(_) {}
+          // Day-trade: covering a short = round trip
+          { const dt=_dtGet(actor.id); if(dt.shortTickets[s]>0){dt.shortTickets[s]--;dt.roundTrips=Math.min(DAY_TRADE_CAP,dt.roundTrips+1);} }
+          broadcastTradeFeed({side:'buy',symbol:s,qty:coverQty,price:c.price});
+
+          // Notify player of cover result
+          const pnlSign = pnl >= 0 ? '+' : '';
+          try { ws.send(JSON.stringify({type:'chat_system',data:{text:`✅ Covered ${coverQty}× ${s} short @ Ƒ${c.price.toFixed(2)} — P&L: ${pnlSign}Ƒ${pnl.toFixed(2)}`}})); } catch(_) {}
+
+          // If player tried to buy more than their short, reject the excess (no long allocation through cover)
+          if (qty > coverQty) {
+            try { ws.send(JSON.stringify({type:'error',data:{msg:`Covered ${coverQty} short shares. Remaining ${qty - coverQty} shares not purchased — close your short first before going long.`}})); } catch(_) {}
+          }
+
+        // ── NORMAL LONG BUY ──────────────────────────────────────────────────
+        } else {
+          const costC=toCents(c.price)*qty,taxC=Math.floor(costC*TRADE_TAX_BPS/10000),totalC=costC+taxC,total=fromCents(totalC);
+          if(actor.cash>=total){
+            safeAddCash(actor,-total);FMI.treasury+=(taxC/100);FMI.hourlyTaxAccrual+=(taxC/100);
+            actor.holdings[s]=(actor.holdings[s]||0)+qty;
+            actor.basisC[s]=(actor.basisC[s]||0)+costC;
+            actor.xp += Math.max(3, Math.min(50, Math.floor(fromCents(costC) / 20)));
+            try{addFundCash('FLSH', fromCents(costC)*FLSH_TRADE_PCT);}catch(_){}
+            // Day-trade: issue buy ticket
+            { const dt=_dtGet(actor.id); dt.tickets[s]=(dt.tickets[s]||0)+1; }
+            broadcastTradeFeed({side:'buy',symbol:s,qty,price:c.price});
+          }
+        }
       } else if(side==='sell'){
         const have=actor.holdings?.[s]||0;
         if(have>=qty){
@@ -4626,6 +4714,30 @@ wss.on('connection',(ws,req)=>{
       savePlayer(actor);
       const broken = fundCounterBlockade(laneKey, amt);
       ws.send(JSON.stringify({ type:'counter_blockade_result', data:{ laneKey, contributed:amt, broken, cash:actor.cash } }));
+    }
+
+    // ── Private Army: instantly break an active blockade for Ƒ50,000 ─────────
+    if (msg.type === 'private_army') {
+      const { from, to } = msg;
+      if (!from || !to) { ws.send(JSON.stringify({ type:'blockade_error', error:'Missing lane endpoints' })); return; }
+      const laneKey = getLaneKey(from, to);
+      const blk = activeBlockades.get(laneKey);
+      if (!blk || !blk.active) { ws.send(JSON.stringify({ type:'blockade_error', error:'No active blockade on this lane' })); return; }
+      const cost = BLOCKADE_THRESHOLD; // same price as activating a blockade: Ƒ50,000
+      if (actor.cash < cost) {
+        ws.send(JSON.stringify({ type:'blockade_error', error:`Insufficient funds. Private army costs Ƒ${cost.toLocaleString()}` }));
+        return;
+      }
+      actor.cash = Math.round((actor.cash - cost) * 100) / 100;
+      savePlayer(actor);
+      // Instantly break the blockade
+      if (blk.timer) clearTimeout(blk.timer);
+      activeBlockades.delete(laneKey);
+      const [colA, colB] = laneKey.split('|');
+      pushHeadline(`⚔ Private army breaks the ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} blockade — ${actor.name} deploys mercenaries to restore trade`, 'good', '⚔');
+      broadcast({ type:'blockade_update', data:{ laneKey, active:false, broken:true } });
+      ws.send(JSON.stringify({ type:'private_army_result', data:{ laneKey, cost, cash:actor.cash } }));
+      broadcastTradeFeed({side:'buy', symbol:'ARMY', qty:1, price:cost});
     }
 
     // ── Lane Shares: buy a share ──────────────────────────────────────────────
