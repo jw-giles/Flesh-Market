@@ -3471,6 +3471,12 @@ wss.on('connection',(ws,req)=>{
             const grossC=toCents(c.price)*have,taxC=Math.floor(grossC*TRADE_TAX_BPS/10000);
             safeAddCash(actor,fromCents(grossC-taxC));FMI.treasury+=(taxC/100);
             actor.basisC=actor.basisC||{};delete actor.basisC[s];
+            // CRITICAL: zero the long holdings before applying short delta
+            // Without this, holdings[s] still contains the long qty, and the
+            // subsequent `- shortQty` leaves a net of 0 instead of -shortQty,
+            // causing the short proceeds to be credited without any position recorded.
+            actor.holdings=actor.holdings||{};
+            actor.holdings[s]=0;
           }
           // Enter short position
           actor.holdings=actor.holdings||{};

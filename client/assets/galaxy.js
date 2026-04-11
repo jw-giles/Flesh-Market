@@ -2269,7 +2269,6 @@ function renderDetail(id){
    +'</div>';
   h+='<div style="font-size:.76rem;color:#555;letter-spacing:.1em;margin-bottom:10px">'+(isFlesh?'MEGASTRUCTURE':'')+'</div>';
 
-  var isEyejog=(id==='eyejog');
   if(contested) h+='<div style="border:1px solid #f39c12;color:#f39c12;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9888; CONTESTED — Faction war active</div>';
   if(isFlesh)   h+='<div style="border:1px solid #ffd70066;color:#ffd700;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9889; HOME OF MR. FLESH — Cannot be contested or funded</div>';
   if(isEyejog)  h+='<div style="border:1px solid #2ecc7166;color:#2ecc71;font-size:.72rem;padding:4px 8px;margin-bottom:10px">⬢ MERCHANT GUILD SOVEREIGN — <a href="https://www.patreon.com" target="_blank" style="color:#2ecc71">PATREON ONLY</a></div>';
@@ -2295,17 +2294,23 @@ function renderDetail(id){
   // Planets grid
   h+='<div style="margin-bottom:14px"><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+(SP_STATION_ORBIT[id]?'Station Modules':'Planets ('+m.planets.length+')')+'</div>';
   h+='<div style="display:grid;grid-template-columns:1fr;gap:5px">';
+  var _isSingleBody = SP_SINGLE_BODY[id];
   m.planets.forEach(function(p, pidx){
     var pCol = FACTIONS[fac] ? f.color : '#888';
-    h+='<div onclick="spOpenSystem(\''+id+'\');setTimeout(function(){spOpenSurface(\''+id+'\','+pidx+')},400);" '
-      +'style="background:#0a0a12;border:1px solid '+f.dim+';border-radius:2px;padding:6px 8px;cursor:pointer;transition:border-color .15s" '
-      +'onmouseover="this.style.borderColor=\''+f.color+'\';this.style.background=\'#0d0d18\'" '
-      +'onmouseout="this.style.borderColor=\''+f.dim+'\';this.style.background=\'#0a0a12\'">';
+    // Single-body colonies (Eyejog, Lustandia, etc) have no system view — render as static info cards
+    if(_isSingleBody){
+      h+='<div style="background:#0a0a12;border:1px solid '+f.dim+';border-radius:2px;padding:6px 8px">';
+    } else {
+      h+='<div onclick="spOpenSystem(\''+id+'\');setTimeout(function(){spOpenSurface(\''+id+'\','+pidx+')},400);" '
+        +'style="background:#0a0a12;border:1px solid '+f.dim+';border-radius:2px;padding:6px 8px;cursor:pointer;transition:border-color .15s" '
+        +'onmouseover="this.style.borderColor=\''+f.color+'\';this.style.background=\'#0d0d18\'" '
+        +'onmouseout="this.style.borderColor=\''+f.dim+'\';this.style.background=\'#0a0a12\'">';
+    }
     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">';
     var pIcon16 = (p.isStation || _spIconForZoneName(p.name)) ? 'Tech2' : SECTOR_PLANET_ICON[p.sector];
     var pIconHtml = pIcon16 ? '<img src="assets/space/planets/icons/'+pIcon16+'.png" class="space-picon">' : (p.icon+' ');
     h+='<span style="display:flex;align-items:center;gap:3px;font-size:.76rem;color:'+pCol+';letter-spacing:.06em">'+pIconHtml+p.name+'</span>';
-    h+='<span style="font-size:.68rem;color:#444;letter-spacing:.06em">ENTER ›</span>';
+    if(!_isSingleBody) h+='<span style="font-size:.68rem;color:#444;letter-spacing:.06em">ENTER ›</span>';
     h+='</div>';
     h+='<div style="font-size:.70rem;color:#888;line-height:1.5">'+p.bonus+'</div>';
     if(contested) h+='<div style="font-size:.68rem;color:#f39c12;margin-top:2px">'+p.contestBonus+'</div>';
