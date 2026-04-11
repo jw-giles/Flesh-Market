@@ -1,7 +1,7 @@
 {
-  "version": "1.0.1.2",
-  "built": "2026-04-08T00:00:00Z",
+  "version": "1.0.1.5",
+  "built": "2026-04-11T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.1.2",
-  "notes": "Watchlist, Price Alerts, Portfolio Metrics, Company Detail Panel, News Filter, Mobile Responsiveness"
+  "patch": "1.0.1.5",
+  "notes": "Short-sell exploit fix, Eyejog detail panel, wall-clock day-trade reset, Eyejog system view"
 }

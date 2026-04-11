@@ -2262,7 +2262,7 @@ function renderDetail(id){
   var h='';
   h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px">'
    +'<span style="font-size:.92rem;letter-spacing:.16em;color:'+f.color+';font-weight:bold">'+m.name.toUpperCase()+'</span>'
-   +(isFlesh||isEyejog?'':'<button onclick="spOpenSystem(\''+id+'\');" '
+   +(isFlesh?'':'<button onclick="spOpenSystem(\''+id+'\');" '
    +'style="background:transparent;border:1px solid #2a2a3e;color:#8888aa;padding:3px 8px;cursor:pointer;font-size:.65rem;font-family:inherit;letter-spacing:.08em;border-radius:2px;white-space:nowrap;flex-shrink:0" '
    +'onmouseover="this.style.borderColor=\'#4ecdc4\';this.style.color=\'#4ecdc4\'" '
    +'onmouseout="this.style.borderColor=\'#2a2a3e\';this.style.color=\'#8888aa\'">&#x2B22; SYSTEM</button>')

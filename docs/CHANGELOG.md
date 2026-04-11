@@ -4,6 +4,82 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.1.5 (2026-04-11)
+
+**Eyejog system view re-enabled.**
+
+### Eyejog
+- Removed `isEyejog` from the System button exclusion list in the colony detail panel
+- Eyejog now opens the standard single-body system view (same render path as Lustandia, Gluttonis, Abaddon)
+- Only Flesh Station remains non-visitable
+- Planet cards in the detail panel remain non-clickable (Eyejog is still flagged `SP_SINGLE_BODY`) — consistent with the lore of Eyejog as a single celestial body
+
+### Files Modified
+- `client/assets/galaxy.js` — one-line change to System button exclusion condition
+
+---
+
+## v1.0.1.4 (2026-04-10)
+
+**Wall-clock aligned passive income and day-trade reset.**
+
+### The Bug
+- The passive income `setInterval` drifted from wall-clock because it started counting from server boot time, not from the next `:00` or `:30` boundary
+- If the server started at 14:07, resets happened at 14:37 / 15:07 / 15:37, etc.
+- Client countdown + EOD timer used wall-clock `:00` / `:30`, so players trading at 14:29 saw "resets in 1 minute" but actually had to wait 8 more minutes
+- Player reported day trades not refilling at the expected EOD boundary
+
+### The Fix
+- Converted the passive income `setInterval` to a wall-clock aligned scheduler
+- At server startup, `scheduleAlignedPassiveIncome()` calculates `msUntilNext` to hit the next `:00` or `:30` boundary exactly, fires the first tick there, then `setInterval` every 30 minutes from that point
+- All subsequent ticks land on wall-clock `:00` / `:30` — matching what the client shows
+- Startup log now reports: `[PassiveIncome] First tick in Xs (aligned to :00)` or `:30`
+
+### Side Benefits
+All 30-minute cycle events now align to wall-clock `:00` / `:30`:
+- Day-trade counter reset
+- Passive income payouts
+- Leaderboard snapshot
+- Hot stocks rotation
+- President passive income
+- Guild fund distributions
+- Void Collective raid income
+
+### Files Modified
+- `server/server.js` — passive income loop refactored into named `_passiveIncomeTick` function invoked by a wall-clock aligned scheduler
+
+---
+
+## v1.0.1.3 (2026-04-10)
+
+**Critical short-sell exploit fix, Eyejog detail panel fix.**
+
+### Short-Sell Money Duplication Exploit [CRITICAL]
+- Player reported duplicating ~Ƒ50,000 by shorting while holding long positions
+- Root cause: in the short-sell branch of the order handler, the long-clear block credited cash for the existing long position but **never zeroed `actor.holdings[s]`**
+- Subsequent `holdings[s] = (have) - shortQty` line then did `100 - 100 = 0`, leaving no short position recorded
+- The short proceeds credit still fired, so the player received cash for both the long sale AND the "short" (which was never actually opened)
+- Example: Own 100 shares at Ƒ50, short 200 at Ƒ60 → received Ƒ6,000 (long sale) + Ƒ6,000 (phantom short proceeds) = Ƒ12,000 cash with no holdings, no basis, no owed shares. Pure profit of Ƒ6,000 per occurrence.
+
+### Fix
+- Added `actor.holdings[s] = 0;` inside the long-clear block before the short delta is applied
+- Traced all three scenarios to verify fix:
+  - **Pure short (have=0)**: unchanged — long-clear block skipped, holdings goes from 0 to -qty
+  - **Short through long (have>0)**: long cleared, cash credited, holdings zeroed, then shorted properly
+  - **Add to existing short (have<0)**: unchanged — long-clear skipped, holdings goes more negative
+
+### Eyejog Detail Panel
+- Eyejog was flagged as `SP_SINGLE_BODY` (no star + orbiting planets) but its `COLONY_META` config still listed 2 planets (Guild Market, Sand Exchange) with clickable `spOpenSystem` handlers
+- Clicking a planet card would call `spOpenSystem('eyejog')` which was also explicitly blocked, creating a dead-end interaction
+- Fix: Added `SP_SINGLE_BODY[id]` check in the planet grid renderer — single-body colonies now render planet cards as static info cards (no onclick, no "ENTER ›" arrow)
+- Also removed a duplicate `var isEyejog` declaration
+
+### Files Modified
+- `server/server.js` — short-sell handler, long-clear block
+- `client/assets/galaxy.js` — detail panel planet grid, duplicate variable removal
+
+---
+
 ## v1.0.1.2 (2026-04-08)
 
 **Market tools, mobile responsiveness, tutorial rewrite.**
