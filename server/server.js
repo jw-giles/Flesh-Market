@@ -4804,8 +4804,9 @@ setInterval(() => {
   if (now.getHours() === 0 && now.getMinutes() === 0) resetDailyPrevClose();
 }, 60_000);
 
-// Passive income every 30 minutes
-setInterval(()=>{
+// Passive income every 30 minutes — aligned to wall-clock :00 and :30
+// (client countdown + EOD timer use wall-clock, so server must match or day trades drift)
+const _passiveIncomeTick = () => {
   try{
     // Reset day-trade counters for all players at each 30-min cycle
     _dtResetAll();
@@ -4994,7 +4995,32 @@ setInterval(()=>{
   }catch(e){console.error('[Income error]',e);}
   // Snapshot leaderboard after all income is credited
   try { snapshotLeaderboard(); broadcastLeaderboard(); } catch(e) { console.error('[Leaderboard snapshot]', e); }
-}, INCOME_INTERVAL_MS);
+};
+
+// Schedule the first passive income tick at the next wall-clock :00 or :30,
+// then every 30 minutes after that. This keeps day trade resets in sync with
+// the client's EOD countdown (which uses wall-clock), so players who trade
+// just before EOD still get their reset at the boundary they see on-screen.
+(function scheduleAlignedPassiveIncome(){
+  const now = new Date();
+  const m = now.getMinutes();
+  const target = new Date(now);
+  target.setSeconds(0);
+  target.setMilliseconds(0);
+  if (m < 30) {
+    target.setMinutes(30);
+  } else {
+    target.setHours(target.getHours() + 1);
+    target.setMinutes(0);
+  }
+  const msUntilNext = target.getTime() - now.getTime();
+  const mm = target.getMinutes().toString().padStart(2,'0');
+  console.log(`[PassiveIncome] First tick in ${Math.round(msUntilNext/1000)}s (aligned to :${mm})`);
+  setTimeout(() => {
+    _passiveIncomeTick();
+    setInterval(_passiveIncomeTick, INCOME_INTERVAL_MS);
+  }, msUntilNext);
+})();
 
 // ── Scheduled daily tasks (midnight PST = 08:00 UTC) ─────────────────────────
 function msUntilNextMidnightPST() {
