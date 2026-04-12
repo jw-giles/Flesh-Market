@@ -1,7 +1,7 @@
 {
-  "version": "1.0.1.7",
+  "version": "1.0.1.8",
   "built": "2026-04-12T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.1.7",
-  "notes": "SWT anchored at Ƒ4500, BRNC normal ticker, fix sawtooth from anti-runaway gravity"
+  "patch": "1.0.1.8",
+  "notes": "FLSH permanently pinned at Ƒ1B, removed stock split + chat broadcast"
 }

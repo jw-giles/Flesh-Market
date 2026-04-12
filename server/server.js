@@ -986,50 +986,11 @@ BRNC_COMPANY.targetSectorKappa= 0.000008 + seededRand() * 0.000007;
 BRNC_COMPANY.sigma            = 0.00040 + seededRand() * 0.00035;
 
 function updateFLSHPrice() {
-  // FLSH runs its own slow random walk, completely decoupled from sector mean-reversion.
-  // Volatility: tiny per-tick drift (±0.08% 1σ) + rare 1% shock (1% chance/tick)
+  // FLSH is permanently pinned at Ƒ1,000,000,000. No drift, no shocks, no splits.
+  // It exists as a stable reference asset and dev valuation marker.
   const f = FLSH_COMPANY;
-  const eps = randn() * f.sigma;           // normal daily micro-drift
-  f.lnP += f.mu + eps;
-  if (Math.random() < 0.01) {              // rare ±0.1% shock
-    f.lnP += randn() * 0.001;
-  }
-  // Hard floor at Ƒ500M — it will never crash to zero
-  f.lnP = Math.max(Math.log(500_000_000), f.lnP);
-  const prev = f.price;
-  f.price = Math.exp(f.lnP);
-
-  // ── Stock split at Ƒ5B: 5:1 ratio → reset to Ƒ1B ──────────────────────────
-  // All holders get 5× shares, price resets to 1/5th. Net position value unchanged.
-  if (f.price >= 5_000_000_000) {
-    const SPLIT_RATIO = 5;
-    console.log(`[FLSH] Stock split triggered at Ƒ${f.price.toLocaleString()} — ${SPLIT_RATIO}:1`);
-    // Reset price to 1B
-    f.price = 1_000_000_000;
-    f.lnP = Math.log(f.price);
-    // Multiply all DB holdings by split ratio
-    try {
-      const affected = executeStockSplit('FLSH', SPLIT_RATIO);
-      console.log(`[FLSH] Split applied to ${affected} holders in DB`);
-    } catch(e) { console.error('[FLSH] DB split error:', e); }
-    // Update online players' in-memory holdings
-    for (const [pid, sockets] of playerSockets) {
-      try {
-        const p = getPlayer(pid);
-        if (p && p.holdings && p.holdings['FLSH']) {
-          p.holdings['FLSH'] *= SPLIT_RATIO;
-          // basisC total stays the same — cost basis doesn't change in a split
-          savePlayer(p);
-          // Push updated portfolio to the player
-          const msg = JSON.stringify({type:'portfolio', data:snapshotPortfolio(p)});
-          for (const ws of sockets) { try { if(ws.readyState===1) ws.send(msg); } catch(_) {} }
-        }
-      } catch(_) {}
-    }
-    // Announce
-    pushHeadline(`📊 FLSH Capital executes ${SPLIT_RATIO}:1 stock split — share price resets to Ƒ1,000,000,000. All holders receive ${SPLIT_RATIO}× shares.`, 'neutral', '📊');
-    broadcast({type:'chat_system', data:{text:`📊 FLSH Capital ${SPLIT_RATIO}:1 stock split executed. Price reset to Ƒ1B. All holders received ${SPLIT_RATIO}× shares.`}});
-  }
+  f.price = 1_000_000_000;
+  f.lnP = Math.log(1_000_000_000);
 
   const now = Date.now();
   // FLSH bar aggregation

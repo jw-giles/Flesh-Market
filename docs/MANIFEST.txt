@@ -1,4 +1,4 @@
-# FleshMarket v1.0.1.7 — MANIFEST
+# FleshMarket v1.0.1.8 — MANIFEST
 
 ## Structure
 
@@ -110,6 +110,7 @@ See `CHANGELOG.md` for full details.
 
 | Version | Key Change |
 |---|---|
+| v1.0.1.8 | FLSH permanently pinned at Ƒ1B, removed stock split + chat broadcast |
 | v1.0.1.7 | SWT anchored at Ƒ4500, BRNC normal ticker, fix sawtooth from anti-runaway gravity |
 | v1.0.1.6 | FLSH 5:1 stock split at Ƒ5B, short cover P&L only (no share allocation), Private Army blockade break, short DB persistence fix |
 | v1.0.1.5 | Eyejog system view re-enabled |

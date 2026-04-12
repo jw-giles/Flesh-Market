@@ -4,6 +4,23 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.1.8 (2026-04-12)
+
+**FLSH permanently pinned at Ƒ1B.**
+
+### Changes
+- `updateFLSHPrice()` stripped of all drift, shocks, and stock split logic
+- FLSH price now hardcoded at Ƒ1,000,000,000 every tick — no random walk, no GBM, no shocks
+- Removed the 5:1 stock split mechanic (no longer reachable since price never moves)
+- Removed the `chat_system` broadcast and headline announcement that fired on splits
+- OHLC bar aggregation kept so the chart still renders flat at Ƒ1B
+- FLSH continues to function as a stable reference asset and dev valuation marker
+
+### Files Modified
+- `server/server.js` — `updateFLSHPrice()` rewritten to pin price, no drift/split logic
+
+---
+
 ## v1.0.1.7 (2026-04-12)
 
 **SWT anchored at Ƒ4500, BRNC normal ticker, sawtooth fix.**
