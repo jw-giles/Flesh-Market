@@ -4,6 +4,86 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.1.7 (2026-04-12)
+
+**SWT anchored at Ƒ4500, BRNC normal ticker, sawtooth fix.**
+
+### The Bug
+- SWT was cycling predictably between Ƒ4000 → Ƒ1500 → Ƒ4000 every couple days
+- BRNC was stuck low with no recovery mechanism
+- Root cause: SWT spawned at Ƒ280 with `offset 2.23` had a soft drag at Ƒ1387 and an emergency reversion target of Ƒ1675 from the anti-runaway gravity system. When SWT hit Ƒ4467 (lifetime gain > 2.77), the emergency reversion fired hard and yanked the price toward Ƒ1675. As it fell past the threshold, the trap released and natural drift pushed it back up. Predictable sawtooth.
+- BRNC was running through the regular beta model but with very weak `ownKappa` (0.000005) — its `ownTargetLnP` drifted essentially randomly with no real pull toward any center. Combined with blockade hits, it had no recovery mechanism.
+
+### SWT Fix — Anchored at Ƒ4500
+- Spawn price + natural center both set to Ƒ4500
+- `ownKappa = 0.00015` (~30x stronger than regular tickers — pulls hard toward Ƒ4500)
+- `targetDriftSigma = 0.00006` (half regular drift — more stable target)
+- New `_isAnchored = true` flag exempts SWT from the anti-runaway gravity that was causing the sawtooth
+- Hard ceiling raised to Ƒ10,000 for anchored stocks (was Ƒ5,000) so SWT doesn't constantly bump the cap
+- Startup forces `lnP`, `_spawnLnP`, `ownTargetLnP`, `_naturalCenter` to Ƒ4500 — overwrites any restored DB state
+- Will oscillate naturally around Ƒ4500 with normal market noise but always pulled back
+
+### BRNC Fix — Normal Beta-Model Ticker
+- All special anchoring removed
+- Uses regular `ownKappa`, `targetDriftSigma`, `targetSectorKappa` (manually applied since the main `companies.forEach` ran before BRNC was pushed)
+- Anti-runaway gravity applies normally
+- One-time fixup only triggers if price is broken (NaN, zero, > Ƒ5000)
+- Will drift around its sector 3 fair value with normal volatility
+
+### Files Modified
+- `server/server.js` — SWT/BRNC config, beta-model init, anchored stock support in `stepMarket`, raised hard ceiling for anchored tickers, startup fixup
+
+---
+
+## v1.0.1.6 (2026-04-12)
+
+**FLSH stock split, short cover rework, Private Army, short persistence fix.**
+
+### FLSH Stock Split
+- FLSH price forced to Ƒ1B on startup regardless of saved state
+- When price crosses Ƒ5B during runtime, executes a 5:1 split
+- All holders get 5× shares via `UPDATE holdings SET qty = qty * 5 WHERE symbol = 'FLSH'`
+- Online players get in-memory update + portfolio push
+- Price resets to Ƒ1B
+- Headline + chat system message broadcast
+- Cost basis total unchanged (per-share basis halves but total preserved)
+
+### Short Cover Rework
+- Buy handler now splits into two paths based on `have < 0`
+- **Cover path**: caps qty at the short position size, charges cover cost + tax, calculates realized P&L from average entry price vs current price, closes the position, cleans up `basisC` proportionally on partial covers, sends P&L result to chat
+- **Blocks buying through**: if a player tries to buy more than their short size, the excess is rejected with "close your short first before going long"
+- **Normal long buy**: unchanged path when `have >= 0`
+- Limit order fills still use the old blind-add pattern — known limitation, lower priority since covers go through market orders
+
+### Short DB Persistence Fix [CRITICAL]
+- Root cause of the cover-allocates-shares bug from earlier reports
+- `db.js` had four filters that dropped all short positions on every save/load cycle:
+  - Save filter at line 225: `if (qty>0)` — negative holdings (shorts) were never written to the `holdings` table
+  - Save filter at line 229: `if (bc>0)` — negative basis (short entry tracking) was never saved
+  - Hydration filter at line 267: `if (h.qty>0)` — negative holdings were never loaded from the `holdings` table
+  - Hydration filter at line 269: `if (b.basis_c>0)` — negative basis was never loaded
+- After any `pm2 restart` or `savePlayer()` call, all short positions silently vanished from the DB. When the player tried to cover, `have = 0`, so the cover path never triggered and the normal buy path ran — allocating shares instead of settling P&L.
+- Fixed all four filters from `> 0` to `!== 0`
+- SQLite INTEGER column accepts negatives natively — no schema change needed
+- `snapshotPortfolio` already handled negative holdings correctly (line 3260 filters `qty !== 0`, lines 3263-3266 calculate avg/isShort properly) — only the persistence layer was broken
+
+### Private Army (Blockade Break)
+- New `private_army` WebSocket handler in server
+- Costs Ƒ50,000 (same as `BLOCKADE_THRESHOLD`)
+- Instantly breaks an active blockade — clears the timer, deletes the blockade entry, broadcasts a headline with the player's name, pushes `blockade_update` with `broken:true`
+- Red "⚔ PRIVATE ARMY — Break Blockade (Ƒ50,000)" button added in two places:
+  - Lane detail panel (always visible — server rejects with "No active blockade on this lane" if not active)
+  - Main shipping tab blockade panel
+- Confirmation dialog before sending
+- Toast on success: "⚔ Private army deployed! Blockade destroyed."
+
+### Files Modified
+- `server/server.js` — FLSH split logic in `updateFLSHPrice`, buy handler split into cover vs long paths, `private_army` WS handler
+- `server/db.js` — `executeStockSplit()` function added, holdings/basis save+hydrate filters changed `> 0` → `!== 0`
+- `client/assets/galaxy.js` — Private Army button (lane detail + main shipping panel), `_gLanePrivateArmy` and `_gPrivateArmy` handlers, `private_army_result` WS handler
+
+---
+
 ## v1.0.1.5 (2026-04-11)
 
 **Eyejog system view re-enabled.**

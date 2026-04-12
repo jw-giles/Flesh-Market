@@ -946,17 +946,17 @@ const FLSH_COMPANY = {
 companies.push(FLSH_COMPANY);
 
 // ─── Abaddon cluster special companies ────────────────────────────────────────
-// SWT — S'weet (Lustandia wine). Trades like a normal ticker but at higher price levels.
+// SWT — S'weet (Lustandia wine). Anchored at Ƒ4500 with stronger mean-reversion.
 const SWT_COMPANY = {
   id: 9998, name: "S'weet", symbol: 'SWT',
-  price: 280, lnP: Math.log(280), _spawnLnP: Math.log(280),
+  price: 4500, lnP: Math.log(4500), _spawnLnP: Math.log(4500),
   sigma: 0.00035, mu: 0.00002, kappa: 0.002,
   offset: 2.23,
   ohlc: [], sector: 7,
 };
 companies.push(SWT_COMPANY);
 
-// BRNC — Baron Corps (Gluttonis material refining). Trades like a normal ticker.
+// BRNC — Baron Corps (Gluttonis material refining). Normal beta-model ticker.
 const BRNC_COMPANY = {
   id: 9997, name: 'Baron Corps', symbol: 'BRNC',
   price: 65, lnP: Math.log(65), _spawnLnP: Math.log(65),
@@ -966,15 +966,24 @@ const BRNC_COMPANY = {
 };
 companies.push(BRNC_COMPANY);
 
-// Beta model init for SWT/BRNC (pushed after the main forEach loop)
-for (const sc of [SWT_COMPANY, BRNC_COMPANY]) {
-  sc.beta             = Math.max(0.1, Math.min(2.5, Math.exp(randn() * 0.5)));
-  sc.ownTargetLnP     = sc.lnP;
-  sc.ownKappa         = 0.000005 + seededRand() * 0.000005;
-  sc.targetDriftSigma = 0.00012 + seededRand() * 0.00012;
-  sc.targetSectorKappa= 0.000008 + seededRand() * 0.000007;
-  sc.sigma            = 0.00040 + seededRand() * 0.00035;
-}
+// SWT anchored mean-reversion init — BRNC uses default beta model from main loop
+SWT_COMPANY.beta             = Math.max(0.1, Math.min(2.5, Math.exp(randn() * 0.5)));
+SWT_COMPANY.ownTargetLnP     = SWT_COMPANY.lnP;
+SWT_COMPANY.ownKappa         = 0.00015;       // ~30x stronger pull toward own target
+SWT_COMPANY.targetDriftSigma = 0.00006;       // half the regular drift
+SWT_COMPANY.targetSectorKappa= 0.000004;      // half the regular sector pull
+SWT_COMPANY.sigma            = 0.00040 + seededRand() * 0.00035;
+SWT_COMPANY._naturalCenter   = Math.log(4500); // permanent anchor at Ƒ4500
+SWT_COMPANY._isAnchored      = true;           // skip anti-runaway gravity
+
+// BRNC: assign the same beta-model fields the main forEach loop assigned to other tickers
+// (it ran before BRNC was pushed, so we apply them manually here)
+BRNC_COMPANY.beta             = Math.max(0.1, Math.min(2.5, Math.exp(randn() * 0.5)));
+BRNC_COMPANY.ownTargetLnP     = BRNC_COMPANY.lnP;
+BRNC_COMPANY.ownKappa         = 0.000005 + seededRand() * 0.000005;
+BRNC_COMPANY.targetDriftSigma = 0.00012 + seededRand() * 0.00012;
+BRNC_COMPANY.targetSectorKappa= 0.000008 + seededRand() * 0.000007;
+BRNC_COMPANY.sigma            = 0.00040 + seededRand() * 0.00035;
 
 function updateFLSHPrice() {
   // FLSH runs its own slow random walk, completely decoupled from sector mean-reversion.
@@ -1086,15 +1095,21 @@ restoreMarketState();
 // Force FLSH back to Ƒ1B on startup — it should always start at the post-split base price
 FLSH_COMPANY.price = 1_000_000_000;
 FLSH_COMPANY.lnP = Math.log(1_000_000_000);
-// One-time fixup: if SWT/BRNC have exploded prices from the old special-ticker bug, reset them
-for (const sc of [SWT_COMPANY, BRNC_COMPANY]) {
-  if (sc.price > 5000 || !isFinite(sc.price) || sc.price <= 0) {
-    console.log(`[FIXUP] ${sc.symbol} price was Ƒ${sc.price} — resetting to compiled default`);
-    sc.price = sc === SWT_COMPANY ? 280 : 65;
-    sc.lnP = Math.log(sc.price);
-    sc._spawnLnP = sc.lnP;
-    sc.ownTargetLnP = sc.lnP;
-  }
+// SWT: force anchor at Ƒ4500 on startup (overwrites any restored DB state)
+SWT_COMPANY.price = 4500;
+SWT_COMPANY.lnP = Math.log(4500);
+SWT_COMPANY._spawnLnP = SWT_COMPANY.lnP;
+SWT_COMPANY.ownTargetLnP = SWT_COMPANY.lnP;
+SWT_COMPANY._naturalCenter = SWT_COMPANY.lnP;
+console.log(`[SWT] Anchored at Ƒ${SWT_COMPANY.price} on startup`);
+
+// BRNC: one-time fixup if price is broken (negative, NaN, zero, or absurdly high)
+if (BRNC_COMPANY.price > 5000 || !isFinite(BRNC_COMPANY.price) || BRNC_COMPANY.price <= 0) {
+  console.log(`[FIXUP] BRNC price was Ƒ${BRNC_COMPANY.price} — resetting to compiled default Ƒ65`);
+  BRNC_COMPANY.price = 65;
+  BRNC_COMPANY.lnP = Math.log(65);
+  BRNC_COMPANY._spawnLnP = BRNC_COMPANY.lnP;
+  BRNC_COMPANY.ownTargetLnP = BRNC_COMPANY.lnP;
 }
 restoreGalaxySystems();
 resetDailyPrevClose();
@@ -3130,7 +3145,8 @@ function stepMarket(){
       const sectorFairValue = Math.log(S.target) + (c.offset || 0);
       c.ownTargetLnP += randn() * (c.targetDriftSigma||0.00018)
                       + (c.targetSectorKappa||0.000012) * (sectorFairValue - c.ownTargetLnP);
-      c.ownTargetLnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.ownTargetLnP));
+      const targetCeilingLnP = c._isAnchored ? Math.log(10000) : Math.log(5000);
+      c.ownTargetLnP = Math.max(Math.log(0.50), Math.min(targetCeilingLnP, c.ownTargetLnP));
     }
 
     // 5. Price delta: beta*sectorDelta + ownKappa*(ownTarget-price) + eps
@@ -3146,15 +3162,22 @@ function stepMarket(){
               + revertKappa * (revertTarget - c.lnP) // own mean-reversion
               + eps;                                  // individual noise
 
-    // ── ANTI-RUNAWAY GRAVITY (unchanged) ──────────────────────────────────
-    const spawnLnP   = c._spawnLnP || c.lnP;
-    const lifetimeGain = c.lnP - spawnLnP;
-    if (lifetimeGain > 1.6 && !c._adminBias) {
-      delta -= Math.min(0.002, (lifetimeGain - 1.6) * 0.0006);
-    }
-    if (lifetimeGain > 2.77 && !c._adminBias) {
-      const emergencyTarget = spawnLnP + 1.79;
-      delta += 0.001 * (emergencyTarget - c.lnP);
+    // ── ANTI-RUNAWAY GRAVITY (skipped for anchored stocks like SWT/BRNC) ─────
+    if (c._isAnchored) {
+      // Anchored stocks use a stronger pull toward their natural center
+      // to keep them oscillating around their intended price level
+      const anchorPull = 0.0008 * ((c._naturalCenter || c.lnP) - c.lnP);
+      delta += anchorPull;
+    } else {
+      const spawnLnP   = c._spawnLnP || c.lnP;
+      const lifetimeGain = c.lnP - spawnLnP;
+      if (lifetimeGain > 1.6 && !c._adminBias) {
+        delta -= Math.min(0.002, (lifetimeGain - 1.6) * 0.0006);
+      }
+      if (lifetimeGain > 2.77 && !c._adminBias) {
+        const emergencyTarget = spawnLnP + 1.79;
+        delta += 0.001 * (emergencyTarget - c.lnP);
+      }
     }
 
     c.lnP += delta;
@@ -3171,8 +3194,9 @@ function stepMarket(){
       }
     }
 
-    // Hard price floor/ceiling: Ƒ0.50 – Ƒ5000
-    c.lnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.lnP));
+    // Hard price floor/ceiling: Ƒ0.50 – Ƒ5000 (Ƒ10,000 for anchored stocks like SWT)
+    const ceilingLnP = c._isAnchored ? Math.log(10000) : Math.log(5000);
+    c.lnP = Math.max(Math.log(0.50), Math.min(ceilingLnP, c.lnP));
 
     // Vol clustering (wider range for beta model)
     const absEps = Math.abs(eps);
