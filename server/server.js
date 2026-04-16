@@ -79,6 +79,8 @@ import {
   addPlayerReport, getPlayerReports,
   addDevRequest, getDevRequests, handleDevRequest,
   executeStockSplit,
+  // Dividend eligibility (7-trading-day holding requirement)
+  snapshotAllHoldings, getEligibleDividendQtyBulk, DIVIDEND_HOLD_CYCLES,
 } from './db.js';
 
 initDB();
@@ -1409,20 +1411,27 @@ function runDividends() {
       ? buildFactionSectorBonus(faction, colonyStates)
       : {};
 
+    // Eligibility: only shares held through at least DIVIDEND_HOLD_CYCLES (7)
+    // trading-day snapshots count. New buys are excluded until they've aged in.
+    let eligibleMap = {};
+    try { eligibleMap = getEligibleDividendQtyBulk(playerId, actor.holdings || {}); } catch(_) {}
+
     for (const [sym, qty] of Object.entries(actor.holdings || {})) {
       if (!qty || qty <= 0) continue;
+      const eligibleQty = eligibleMap[sym] || 0;
+      if (eligibleQty <= 0) continue;
       const c = companies.find(x => x.symbol === sym);
       if (!c) continue;
       const s = c.sector;
       // Dividend sectors (Finance/Insurance/Energy/Tech) get full rate
       if (DIVIDEND_SECTORS.has(s)) {
         const baseRate = DIVIDEND_RATE + (sectorBonus[s] || 0);
-        dividend += c.price * qty * baseRate;
+        dividend += c.price * eligibleQty * baseRate;
       }
       // All other sectors get a base holding dividend (0.2% per 2h)
       else {
         const holdingRate = 0.002 + (sectorBonus[s] || 0);
-        dividend += c.price * qty * holdingRate;
+        dividend += c.price * eligibleQty * holdingRate;
       }
     }
     if (dividend < 0.01) continue;
@@ -4908,6 +4917,13 @@ const _passiveIncomeTick = () => {
     // Reset day-trade counters for all players at each 30-min cycle
     _dtResetAll();
     broadcast({type:'dt_update',data:{dayTradesRemaining:DAY_TRADE_CAP}});
+
+    // Snapshot all stock holdings at each EOD cycle. Used by runDividends() to
+    // enforce the 7-trading-day holding requirement for dividend eligibility.
+    try {
+      const snap = snapshotAllHoldings();
+      console.log(`[HoldingSnapshot] cycle=${snap.cycle} rows=${snap.snapshotted}`);
+    } catch(e) { console.error('[HoldingSnapshot]', e); }
 
     // Rotate hot stocks — 10 new movers each cycle
     try { rotateHotStocks(); } catch(e) { console.error('[Hot Stocks]', e); }

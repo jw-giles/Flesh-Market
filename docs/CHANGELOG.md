@@ -4,6 +4,33 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.1.9 (2026-04-16)
+
+**Discord button + dividend hold-time exploit fix.**
+
+### Changes
+- Added Discord button to header bar, right of Patreon — links to https://discord.gg/H47DnbY33t
+- Discord button uses Discord brand blue (#5865F2) muted toward game palette, with matching pulse animation
+- **Dividend exploit fix:** stocks must now be held through at least 7 trading-day snapshots (7 × 30-min EOD cycles = 3.5 hours) to be eligible for dividend payouts
+- Prevents the "buy right before dividend, collect, sell" exploit
+- New `holding_snapshots` table records each player's stock positions at every 30-min EOD cycle
+- `runDividends()` now computes eligible qty as `min(current_qty, min(qty) across last 7 snapshots)`; new purchases pay zero until they age in
+- Selling immediately reduces eligibility — you cannot receive dividends on shares you no longer hold
+- Snapshot cycles older than the 7-cycle window are automatically pruned
+
+### Files Modified
+- `client/index.html` — Discord button + pulse animation
+- `client/version.json` — version bump
+- `server/db.js` — added `holding_snapshots` table, `snapshotAllHoldings()`, `getEligibleDividendQtyBulk()`, `DIVIDEND_HOLD_CYCLES` constant
+- `server/server.js` — `runDividends()` uses eligible qty; `_passiveIncomeTick` calls `snapshotAllHoldings()` each 30-min cycle
+
+### Deploy Notes
+- No `npm install` required
+- New SQLite table created automatically on first `initDB()` call (idempotent `CREATE TABLE IF NOT EXISTS`)
+- Migration behavior: dividend payouts pause for the first 7 EOD cycles (3.5 hours) after deploy, then resume normally — no grandfathering of existing positions (closes the exploit window)
+
+---
+
 ## v1.0.1.8 (2026-04-12)
 
 **FLSH permanently pinned at Ƒ1B.**
