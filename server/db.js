@@ -2174,7 +2174,7 @@ export const MINING_UPGRADE_CATALOG = {
     name: 'Rescue Beacon',
     price: 500000,
     kind: 'perk',
-    desc: 'If your drone is destroyed, your current cargo is recovered at the mothership instead of lost. Once per run.',
+    desc: 'If your drone is destroyed, your current cargo is recovered at the mothership instead of lost.',
   },
 };
 
