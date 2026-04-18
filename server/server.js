@@ -3846,6 +3846,13 @@ wss.on('connection',(ws,req)=>{
         if (!actor.ownedTitles.includes(def.title)) actor.ownedTitles.push(def.title);
       }
       savePlayer(actor);
+      // If title, notify the client's title UI so Store tab sees it right away
+      if (def.kind === 'title' && def.title) {
+        ws.send(JSON.stringify({
+          type: 'title_updated',
+          data: { title: actor.title, owned: actor.ownedTitles }
+        }));
+      }
       // Respond with updated state
       const owned = getMiningUpgrades(actor.id);
       ws.send(JSON.stringify({
