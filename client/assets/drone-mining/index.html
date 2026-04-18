@@ -3424,7 +3424,7 @@ function refreshMenu() {
 }
 
 document.getElementById('drones-plus').addEventListener('click', () => {
-  if (state.dronesBought < 10) { state.dronesBought++; refreshMenu(); }
+  if (state.dronesBought < 5) { state.dronesBought++; refreshMenu(); }
 });
 document.getElementById('drones-minus').addEventListener('click', () => {
   if (state.dronesBought > 1) { state.dronesBought--; refreshMenu(); }
