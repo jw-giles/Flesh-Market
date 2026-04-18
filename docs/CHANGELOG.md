@@ -6,40 +6,67 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ## v1.0.2.0 (2026-04-18)
 
-**Drone Mining minigame + tutorial accuracy pass.**
+**Drone Mining minigame with sprite-based visuals, faction-specific ships, separated mining/combat, tiered salvage, and tutorial accuracy pass.**
 
 ### Drone Mining — new Mining tab
 - New **⛏ Mining tab** added to the main tab bar between Galaxy and Bugs.
 - **Brief screen** inside the tab shows a tutorial covering movement, mining, combat, heat, factions, depth bands, docking, death, refineries, and escorts. High-contrast body text (`#c8b088` on dark) at 16px.
 - Clicking **⛏ LAUNCH EXPEDITION** opens the drone mining game in a fullscreen iframe overlay. An in-game "BACK TO FLESHMARKET" button tears down the iframe and returns to the brief screen.
-- Bank is shared with the FleshMarket account via the `casino` WS sync pattern (same as Plinko). Run-start loadout cost is deducted, run-end banked cargo is credited; changes propagate through `ME.cash` and the standard portfolio sync.
-- Game lives at `assets/drone-mining/index.html` as a standalone HTML file that communicates with FM via `window.postMessage`. Runs isolated in an iframe, no CSS/DOM collisions. Still playable standalone (file://) with an internal Ƒ25,000 bank; detected via `window.parent !== window`.
+- Bank is shared with the FleshMarket account via the `casino` WS sync pattern. Run-start loadout cost is deducted, run-end banked cargo is credited.
+- Game lives at `assets/drone-mining/index.html` as a standalone HTML file that communicates with FM via `window.postMessage`. Runs isolated in an iframe, no CSS/DOM collisions. Still playable standalone (file://) with an internal Ƒ25,000 bank.
+- **Cache-buster** on iframe src so updates propagate without manual browser refresh.
 
 ### Drone Mining — gameplay
 - Single-drone expeditions into an infinite chunked asteroid belt. Depth bands NEAR / MID / DEEP / VOID with escalating mineral richness and hostile density.
 - Minerals: Iron Ƒ5, Cobalt Ƒ12, Gold Ƒ25, Painite Ƒ60, Void Opal Ƒ120, Musgravite Ƒ250. Distribution weighted by depth.
-- **Faction alignment auto-read from FleshMarket.** The mining game reads the player's `ME.faction` via the iframe bridge; no faction picker in the loadout. A non-editable faction readout displays the alignment. Drones matching the player's faction patrol neutrally, do not aggro, do not shoot, and are skipped by laser auto-lock and escort targeting. Rival-faction drones engage normally.
-- **Player drone and escorts render in the player's faction color** (teal / red / purple). Mothership stays faction-neutral blue-grey as a home-base visual. Heat lockout still flashes the drone red as a hazard override.
-- **Drone refund on safe return.** Docking at the mothership refunds the drone's Ƒ1,000 base cost in addition to banking cargo. The refund is added to the run's banked total. Dead drones do not refund. Loadout upgrades (fuel, cargo, heat, escorts, refineries) are not refunded.
-- **Open Range framing.** Game text reframed as unregulated asteroid extraction zones where every faction has agreed that mining is where conflict happens. Colony tag reads "Open Range · Unregulated Extraction Zone".
+- **Mining controls — LMB fires the mining laser beam.** The beam is a thin precision cutting tool that damages asteroids only. Hold to drill a rock; when the bar fills, the mineral and ore count are revealed. Empty rocks still require a full drill cycle and then explode with an 8-frame animation.
+- **Combat controls — RMB fires the auto-cannon.** Projectile weapon independent of the mining beam. Bullets travel straight-forward from the ship's nose. Within a 140-unit proximity and a ±60° forward cone, the cannon snaps its aim to the nearest rival enemy with 4-frame lead prediction. Beyond that, manual aim by rotating the ship.
+- **Hostile identification.** Every rival enemy shows a pulsing red **HOSTILE** tag above its sprite. Same-faction allies render without tags.
+- **Faction-specific ship sprites.** Coalition players fly the Nairan fighter (teal). Syndicate players fly the Kla'ed fighter (red). Void players fly the Nautolan fighter (purple). Factionless players fly the neutral Main Ship. Escorts match player faction. Enemies render with their faction's fighter sprite. All ships render at 48px on-screen regardless of source sprite size.
+- **Per-faction combat stats.** Coalition baseline; Syndicate +15% speed / +20% fire rate / +10% bullet speed (fast aggressive); Void -15% speed / -20% fire rate / +30% bullet speed (slow heavy).
+- **Factionless = hostile to all.** Players with no FM faction set are treated as rival by every enemy patrol. Lone-wolf mode.
+- **Tiered scrap drops.** Enemy salvage value scales by faction difficulty (Void 1.45×, Syndicate 1.10×, Coalition 1.00×), run threat (+15% per extra drone bought), and chase state (+20% if actively hunting you). Tougher fights pay better.
+- **Asteroid hit-boxes match visible sprite**, not the full bounding box. Collision radius is 44% of render radius to match the 40% opacity coverage of the voidpack sprite.
+- **Drone refund on safe return.** Docking at the mothership refunds the drone's Ƒ1,000 base cost in addition to banking cargo. Dead drones do not refund.
+- **Open Range framing.** Game text reframed as unregulated asteroid extraction zones where every faction has agreed that mining is where conflict happens.
 - One-shot death model, laser overheat with heat lockout (weapon + thrust both locked at 100% heat until cooling to 40%).
 - **Mobile refineries** (Ƒ400) deployable with R — stationary fuel generators, 3 HP, destructible by enemies.
 - **Escort drones** (Ƒ1,500 per drone) orbit and shoot automatically, 2 HP each, lost with the drone they escort.
-- Auto-lock laser targeting with gold reticle when locked on a rival-faction enemy.
 - Enemies collide with asteroids and require line-of-sight to shoot through rocks; bullets are absorbed on asteroid hit.
 - Em dashes scrubbed from player-visible UI strings per style rule.
 
+### Drone Mining — permanent upgrade store
+- **Mining Store** accessible from the brief-screen menu (STORE button). Server-persisted upgrades purchased with Social Credits.
+- **Cosmetic titles:** Drone Pilot (Ƒ25k), Belt Runner (Ƒ250k, requires 25 runs), Void Diver (Ƒ1M, requires reaching VOID band), Scrap Baron (Ƒ5M, requires Ƒ10M lifetime profit). Granted titles also add to the main FleshMarket ownedTitles collection via `title_updated` WS broadcast.
+- **Gameplay perks:** Guard Drone (Ƒ150k, free extra escort each run), Ion Engines (Ƒ1M, passive fuel regen), Salvage Magnet (Ƒ250k, pull radius 90→150), Improved Scanner (Ƒ400k, asteroids pre-revealed), Cargo Optimizer (Ƒ750k, +10 cargo cap), Rescue Beacon (Ƒ500k, one-per-run cargo recovery on death).
+- Server-side validation prevents duplicate purchases, enforces gates, and atomically deducts cash.
+- `LEADERS` button on the brief screen shows top 10 by best_run_profit with faction-color names and band badges.
+
+### Drone Mining — sprite assets (all CC0 / permissive)
+- Asteroid base + 8-frame explosion animation: **Foozle Void Environment Pack** (CC0)
+- Player Main Ship: **Foozle Void Main Ship** (CC0)
+- Kla'ed fighter (Syndicate), Nairan fighter (Coalition), Nautolan fighter (Void): **Foozle Void Fleet Packs 1/2/3** (CC0)
+- Auto-cannon projectile: Main Ship weapons pack
+
 ### Onboarding tutorial
-- **New DRONE MINING slide** (10th of 13) between Casino and Social/Economy. Switches to the Mining tab when viewed.
-- **SHORT SELLING slide rewritten** for accuracy against current server code: 50% cash collateral locked while open, 0.1% borrow fee on position value every 30 minutes, 500-share cap per symbol, covering counts as a day trade, buying more than your short position auto-covers first and rejects excess. Clarified that losses are uncapped.
-- **DIVIDENDS AND ANALYSIS slide rewritten** for accuracy: Finance/Insurance/Energy/Tech pay 0.6% every 2 hours, all other sectors pay 0.2% holding dividend, colony/faction bonuses stack on top, Merchants Guild members receive +1% per MG member. Added the v1.0.1.9 seven-cycle continuous-hold requirement — new buys pay zero until they have aged through 7 × 30-min snapshots (3.5 hours), and any drop in position during the window reduces eligibility to that minimum.
-- Manifest updated to reflect 13 tutorial slides (up from 12).
+- **DRONE MINING slide** (10th of 13) between Casino and Social/Economy. Switches to the Mining tab when viewed.
+- **Main tutorial "How Mining Works" slide** rewritten: LMB mining (not SPACE), RMB auto-cannon combat with proximity snap, HOSTILE tag explanation, new Scrap section explaining tiered salvage, factions section notes factionless = hostile to all.
+- **SHORT SELLING slide rewritten** for accuracy: 50% cash collateral locked, 0.1% borrow fee per 30 minutes, 500-share cap per symbol, covering counts as a day trade.
+- **DIVIDENDS AND ANALYSIS slide rewritten** for accuracy: Finance/Insurance/Energy/Tech pay 0.6% every 2 hours, all other sectors pay 0.2%, colony/faction bonuses stack, Merchants Guild members +1% per MG member. Seven-cycle (3.5 hour) continuous-hold requirement.
 
 ### Integration details
-- `client/assets/core.js` — tab switcher wired for `mining` pane; `pushBankToIframe()` and `pushFactionToIframe()` helpers push `ME.cash` and `ME.faction` to the iframe on `ready` and on `fm_ws_msg` `me`/`portfolio`/`income` events; `closeMining()` tears down the iframe.
+- `client/assets/core.js` — tab switcher wired for `mining` pane; `pushBankToIframe()`, `pushFactionToIframe()`, `pushUpgradesToIframe()`, `pushLeaderboardToIframe()` helpers; cache-buster on iframe src; faction defaults to `'none'` when `ME.faction` is not one of the three valid factions.
 - `client/assets/tutorial.js` — DRONE MINING slide added; SHORT SELLING and DIVIDENDS AND ANALYSIS slides rewritten for accuracy.
-- `client/index.html` — Mining tab button added; brief screen pane and fullscreen iframe host `<div>` inserted before the Bugs tab.
-- `client/assets/drone-mining/index.html` — standalone game with FM-bridge postMessage hooks, faction-read from parent, drone/escort faction coloring, drone refund on dock, Open Range framing.
+- `client/index.html` — Mining tab button added; brief screen pane and fullscreen iframe host; main tutorial mining slide rewritten for current controls.
+- `client/assets/drone-mining/index.html` — standalone game with FM-bridge postMessage hooks, sprite-based rendering with offscreen tint canvas, faction-specific ship selection, LMB/RMB split controls, tiered salvage drops, HOSTILE tags, proximity aim-snap, 8-frame explosion animations, scanner perk pre-reveal.
+- `client/assets/drone-mining/sprites/` — 7 PNG sprites: asteroid, asteroid_explode (8-frame strip), main_ship, nairan_fighter, klaed_fighter, nautolan_fighter, player_bullet (4-frame strip).
+- `server/db.js` — `mining_upgrades` and `mining_stats` tables; `MINING_UPGRADE_CATALOG`; `getMiningUpgrades`, `hasMiningUpgrade`, `getMiningStats`, `canBuyMiningUpgrade`, `grantMiningUpgrade`, `recordMiningRun`, `getMiningLeaderboard` helpers.
+- `server/server.js` — `mining_upgrades_list`, `mining_upgrade_buy`, `mining_run_complete`, `mining_leaderboard` WS handlers.
+
+### Deploy Notes
+- Client-only changes for most of the mining surface, plus server.js + db.js for the upgrade store
+- DB migrates automatically via `CREATE TABLE IF NOT EXISTS`
+- No `npm install` required
 
 ---
 

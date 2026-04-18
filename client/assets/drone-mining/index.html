@@ -7,7 +7,7 @@
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:100%; height:100%; background:#030208; color:#c8a050;
     font-family:'Courier New',monospace; overflow:hidden; user-select:none; }
-  canvas { display:block; position:fixed; top:0; left:0; }
+  canvas { display:block; position:fixed; top:0; left:0; image-rendering:pixelated; image-rendering:crisp-edges; }
 
   .lbl { color:#5a4a28; letter-spacing:.1em; font-size:12px; text-transform:uppercase; }
   .val { color:#e6c27a; font-weight:bold; font-size:14px; }
@@ -447,6 +447,10 @@
     <span class="tag">Zone</span>
     <span class="num" id="h-zone" style="font-size:16px; color:#86ff6a">NEAR</span>
   </div>
+  <div class="row">
+    <span class="tag">Weapon</span>
+    <span class="num" id="h-weapon" style="font-size:12px; color:#86ff6a">AUTO-CANNON READY</span>
+  </div>
   <div class="row" id="h-assets-row" style="display:none">
     <span class="tag">Assets</span>
     <span class="num" id="h-refineries" style="font-size:16px; color:#60c8ff">0</span>
@@ -504,7 +508,8 @@
 <!-- Bottom-center control hints -->
 <div id="hud-controls">
   <span class="key">WASD</span> FLY &nbsp;&nbsp;
-  <span class="key">SPACE</span> LASER &nbsp;&nbsp;
+  <span class="key">LMB</span> MINE &nbsp;&nbsp;
+  <span class="key">RMB</span> FIRE &nbsp;&nbsp;
   <span class="key">R</span> REFINERY &nbsp;&nbsp;
   <span class="key">Q</span> DOCK &nbsp;&nbsp;
   <span class="key">ESC</span> ABORT
@@ -555,9 +560,10 @@ function fmBridgeOnMessage(e) {
     window.__pendingBankSet = e.data.amount;
   }
   if (e.data.type === 'faction_set' && typeof e.data.faction === 'string') {
-    // Normalize — FM sends 'coalition'/'syndicate'/'void'; unknown values default to coalition
-    const valid = ['coalition','syndicate','void'];
-    window.__pendingFactionSet = valid.includes(e.data.faction) ? e.data.faction : 'coalition';
+    // Normalize — FM sends 'coalition'/'syndicate'/'void' or 'none' for factionless.
+    // Unknown values default to 'none' (hostile to all).
+    const valid = ['coalition','syndicate','void','none'];
+    window.__pendingFactionSet = valid.includes(e.data.faction) ? e.data.faction : 'none';
   }
   if (e.data.type === 'upgrades_state') {
     // Server pushed the catalog + owned + stats
@@ -598,10 +604,120 @@ function hasUpgrade(id) {
 // ═══════════════════════════════════════════════════════════════════
 const C = document.getElementById('c');
 const X = C.getContext('2d');
-function resize(){ C.width = window.innerWidth; C.height = window.innerHeight; }
+// Disable image smoothing so pixel art stays crisp at any scale
+X.imageSmoothingEnabled = false;
+function resize(){ C.width = window.innerWidth; C.height = window.innerHeight; X.imageSmoothingEnabled = false; }
 resize(); window.addEventListener('resize', resize);
 
+// ═══════════════════════════════════════════════════════════════════
+// SPRITES — preloaded on init, drawn via canvas drawImage.
+// If a sprite fails to load, the game falls back to vector drawing
+// gracefully (see drawAsteroid / drawDrone below).
+// ═══════════════════════════════════════════════════════════════════
+const SPRITES = {
+  asteroid:        { img: new Image(), loaded: false, w: 96, h: 96 },
+  asteroidExplode: { img: new Image(), loaded: false, w: 96, h: 96, frames: 8 },
+  playerShip:      { img: new Image(), loaded: false, w: 48, h: 48 },
+  // Enemy ships: one 64x64 static sprite per faction
+  shipCoalition:   { img: new Image(), loaded: false, w: 64, h: 64 },
+  shipSyndicate:   { img: new Image(), loaded: false, w: 64, h: 64 },
+  shipVoid:        { img: new Image(), loaded: false, w: 64, h: 64 },
+  // Player combat projectile — 4-frame animation, each frame 32x32
+  playerBullet:    { img: new Image(), loaded: false, w: 32, h: 32, frames: 4 },
+};
+// Build absolute URL to the sprites directory. Works with cache-busted iframe src,
+// dev-server, production deploy, and file:// testing. Uses the HTML's own location
+// instead of relative resolution so there's no ambiguity.
+const SPRITE_BASE = (function() {
+  // Drop query/hash, drop trailing filename, append 'sprites/'
+  const here = window.location.href.split('?')[0].split('#')[0];
+  const dir = here.substring(0, here.lastIndexOf('/') + 1);
+  return dir + 'sprites/';
+})();
+
+// Sprite load status log, visible on HUD
+const SPRITE_LOG = [];
+
+function loadSprite(key, path, attempt) {
+  attempt = attempt || 1;
+  return new Promise((resolve) => {
+    const s = SPRITES[key];
+    const url = SPRITE_BASE + path;
+    s.img.onload = () => {
+      s.loaded = true;
+      SPRITE_LOG.push(key + '✓');
+      resolve(true);
+    };
+    s.img.onerror = () => {
+      s.loaded = false;
+      SPRITE_LOG.push(key + '✗(try' + attempt + ')');
+      console.error('[mining] sprite failed:', url);
+      if (attempt < 3) {
+        // Retry after a delay — transient fetch errors get a second chance
+        setTimeout(() => {
+          loadSprite(key, path, attempt + 1).then(resolve);
+        }, 600 * attempt);
+      } else {
+        resolve(false);
+      }
+    };
+    // Cache-buster on sprites too, to force fresh fetch if the HTML was
+    // reloaded but the browser held the old PNG
+    s.img.src = url + '?v=' + Date.now();
+  });
+}
+// Kick off loading immediately; game can render before sprites are ready,
+// and fall back to vector art for anything not yet loaded.
+Promise.all([
+  loadSprite('asteroid',        'asteroid.png'),
+  loadSprite('asteroidExplode', 'asteroid_explode.png'),
+  loadSprite('playerShip',      'main_ship.png'),
+  loadSprite('shipCoalition',   'nairan_fighter.png'),
+  loadSprite('shipSyndicate',   'klaed_fighter.png'),
+  loadSprite('shipVoid',        'nautolan_fighter.png'),
+  loadSprite('playerBullet',    'player_bullet.png'),
+]).then(results => {
+  const loadedCount = results.filter(Boolean).length;
+  console.log('[mining] sprites loaded:', loadedCount, '/', results.length, '@', SPRITE_BASE);
+});
+
+// Offscreen canvas used to pre-tint sprites without affecting main canvas pixels.
+// Draw sprite there, apply source-atop tint, then blit the result to main canvas.
+const _tintCanvas = document.createElement('canvas');
+_tintCanvas.width = 128; _tintCanvas.height = 128;
+const _tintCtx = _tintCanvas.getContext('2d');
+_tintCtx.imageSmoothingEnabled = false;
+
+// Draw sprite into main canvas X at current transform, with an optional
+// tint color applied to the sprite's opaque pixels only.
+// img: HTMLImageElement (loaded). sw, sh: source sub-rect size.
+// sx, sy: source sub-rect offset. dw, dh: destination size (centered at 0,0).
+// tint: CSS color string (e.g. 'rgba(78,205,196,0.4)') or null for no tint.
+function drawSpriteTinted(img, sx, sy, sw, sh, dw, dh, tint) {
+  if (!tint) {
+    // No tint — direct blit
+    X.drawImage(img, sx, sy, sw, sh, -dw/2, -dh/2, dw, dh);
+    return;
+  }
+  // Ensure offscreen is large enough
+  if (_tintCanvas.width < dw || _tintCanvas.height < dh) {
+    _tintCanvas.width  = Math.max(_tintCanvas.width,  dw);
+    _tintCanvas.height = Math.max(_tintCanvas.height, dh);
+    _tintCtx.imageSmoothingEnabled = false;
+  }
+  _tintCtx.clearRect(0, 0, _tintCanvas.width, _tintCanvas.height);
+  _tintCtx.globalCompositeOperation = 'source-over';
+  _tintCtx.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
+  _tintCtx.globalCompositeOperation = 'source-atop';
+  _tintCtx.fillStyle = tint;
+  _tintCtx.fillRect(0, 0, dw, dh);
+  _tintCtx.globalCompositeOperation = 'source-over';
+  X.drawImage(_tintCanvas, 0, 0, dw, dh, -dw/2, -dh/2, dw, dh);
+}
+
 const keys = {};
+// Mouse button state: mouse.left (beam), mouse.right (gun)
+const mouse = { left: false, right: false };
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   keys[k] = true;
@@ -611,6 +727,21 @@ window.addEventListener('keydown', e => {
   if (k === ' ') e.preventDefault();
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+// Mouse input — left click = mining beam, right click = auto-cannon
+window.addEventListener('mousedown', e => {
+  if (e.button === 0) mouse.left = true;
+  else if (e.button === 2) { mouse.right = true; e.preventDefault(); }
+});
+window.addEventListener('mouseup', e => {
+  if (e.button === 0) mouse.left = false;
+  else if (e.button === 2) { mouse.right = false; e.preventDefault(); }
+});
+// Suppress right-click context menu over the game canvas
+window.addEventListener('contextmenu', e => { e.preventDefault(); });
+// Track mouse position (canvas-local) for cursor-based aiming later if needed
+const mousePos = { x: 0, y: 0 };
+window.addEventListener('mousemove', e => { mousePos.x = e.clientX; mousePos.y = e.clientY; });
 
 // ═══════════════════════════════════════════════════════════════════
 // HASHING (deterministic chunk gen)
@@ -658,8 +789,7 @@ const DRAG = 0.985;
 const TURN = 0.052;
 
 const LASER_RANGE = 280;
-const LASER_WIDTH = 2.2;
-const LASER_DPS = 0.12;                  // damage per frame to enemies (doubled from 0.06)
+const LASER_WIDTH = 0.8;             // thin precision cutting beam
 const LASER_MINE_RATE = 1.6;
 const LASER_LOCK_CONE = 0.35;            // radians — enemies within this cone from aim angle get locked
 const LASER_LOCK_RANGE = LASER_RANGE;    // same as laser range
@@ -672,6 +802,12 @@ const ENEMY_BULLET_SPD = 5.2;
 const ENEMY_SHOOT_CD_MIN = 55;
 const ENEMY_SHOOT_CD_MAX = 110;
 const ENEMY_AGGRO_BASE = 380;
+
+// Player auto-cannon (fires at locked enemy while beam is active)
+const PLAYER_BULLET_SPD = 7.5;
+const PLAYER_SHOOT_CD  = 14;       // frames between shots — ~4.3 shots/sec at 60fps
+const PLAYER_BULLET_DMG = 1.0;     // 2 HP enemies die in 2 hits
+const PLAYER_BULLET_LIFE = 70;     // max frames before bullet expires
 
 const DOCK_RADIUS = 120;
 
@@ -744,6 +880,15 @@ const FACTIONS = {
 };
 const FACTION_KEYS = ['coalition','syndicate','void'];
 
+// Per-faction combat stats. Multipliers applied on top of the per-run
+// difficulty scaling (dronesBought boost) already in enemy spawn.
+// Coalition is the baseline; Syndicate rushes, Void hits hard but slow.
+const FACTION_STATS = {
+  coalition: { speedMul: 1.00, fireRateMul: 1.00, bulletSpdMul: 1.00, sprite: 'shipCoalition' },
+  syndicate: { speedMul: 1.15, fireRateMul: 1.20, bulletSpdMul: 1.10, sprite: 'shipSyndicate' },
+  void:      { speedMul: 0.85, fireRateMul: 0.80, bulletSpdMul: 1.30, sprite: 'shipVoid'      },
+};
+
 // Deterministic faction per chunk based on seed + coords.
 // Weighted toward Syndicate as depth increases — void chunks lean toward Void Collective.
 function factionForSector(cx, cy) {
@@ -814,6 +959,25 @@ function salvageValueForBand(band) {
   return SALVAGE_VALUE[DEPTH_BANDS.indexOf(band)];
 }
 
+// Tiered scrap drops — tougher fights drop more valuable salvage.
+// Multipliers stack on top of the base band value:
+//   - Faction toughness: Void (slow, hard bullets) drops the most, Coalition baseline, Syndicate fast but fragile
+//   - Run threat scaling: each extra drone bought makes enemies tougher (existing) and scrap richer
+//   - Chase state: enemies that were actively engaging you drop +20% — they earned it
+function salvageValueForEnemy(e) {
+  const base = SALVAGE_VALUE[DEPTH_BANDS.indexOf(e.band)] || SALVAGE_VALUE[0];
+  // Faction difficulty — inverse of how easy they are to kill
+  let facMul = 1.0;
+  if (e.faction === 'void')      facMul = 1.45;  // slow but hits hard = heavy ships = best scrap
+  else if (e.faction === 'syndicate') facMul = 1.10;  // fast swarm = slight bump
+  // coalition stays 1.0 baseline
+  // Run threat scaling from dronesBought: +15% per extra drone
+  const threatMul = 1 + Math.max(0, (state.dronesBought - 1)) * 0.15;
+  // Chase bonus
+  const chaseMul = e.state === 'chase' ? 1.20 : 1.0;
+  return Math.round(base * facMul * threatMul * chaseMul);
+}
+
 const ASTEROID_DENSITY = 12;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -835,7 +999,7 @@ const state = {
   escortsBought: 0,
 
   // Player faction — drones of this faction do not aggro or shoot at you
-  playerFaction: 'coalition',
+  playerFaction: 'none',
 
   seed: 0,
   seedStr: 'OPENRANGE-001',
@@ -848,6 +1012,10 @@ const state = {
   bullets: [],              // enemy bullets
   salvage: [],              // floating salvage pickups { x, y, value, life, color, band }
   particles: [],
+  asteroidExplosions: [],   // { x, y, size, frame, frameTimer } — sprite explosion animation
+  playerBullets: [],        // auto-cannon projectiles (player-fired)
+  playerShootCD: 0,
+  playerBulletAnimT: 0,     // global animation timer for bullet sprite frame
 
   // Deployable structures (persist across the run, not per-drone)
   refineries: [],           // { x, y, hp, fueling (bool transient) }
@@ -894,7 +1062,7 @@ function newDrone() {
   return {
     x: 0, y: 0,
     vx: 0, vy: 0, angle: -Math.PI/2,
-    r: 10,
+    r: 14,
     thrusting: false
   };
 }
@@ -942,8 +1110,16 @@ function buildChunk(cx, cy) {
       const rr = r * (0.75 + rng() * 0.5);
       shape.push({ a, r: rr });
     }
+    // Collision radius: the asteroid sprite's visible rock takes up about 40% of
+    // its 96x96 bounding box. At render size = r * 2.2, visible rock radius is
+    // r * 2.2 * 0.40 / 2 ≈ r * 0.44. Use this for collision so hitboxes match
+    // what players actually see, not the full sprite bounds.
+    const collisionR = r * 0.44;
     const astObj = {
-      x: ax, y: ay, r, shape,
+      x: ax, y: ay,
+      r,                    // render-scale radius (used for sprite size + label positioning)
+      collisionR,           // actual hit-test radius (matches visible rock)
+      shape,
       scanned: false, mined: false,
       mineral: null,
       oreUnits: 0,
@@ -952,13 +1128,13 @@ function buildChunk(cx, cy) {
       rotSpd: (rng() - 0.5) * 0.004,
       band
     };
-    // Improved Scanner perk: pre-reveal mineral + ore units at chunk gen time
+    // Improved Scanner perk: pre-reveal mineral + ore units at chunk gen time.
+    // Empty rocks are still drillable — you just know up-front they're empty.
     if (hasUpgrade('improved_scanner')) {
       const mrng = mulberry32(hash2(state.seed, Math.floor(astObj.x), Math.floor(astObj.y)));
       astObj.mineral = pickMineralForBand(mrng, band);
       astObj.oreUnits = astObj.mineral.value === 0 ? 0 : (1 + Math.floor(mrng() * 3));
       astObj.scanned = true;
-      if (astObj.oreUnits === 0) astObj.mined = true;
     }
     asteroids.push(astObj);
   }
@@ -975,20 +1151,25 @@ function buildChunk(cx, cy) {
 
     const facKey = factionForSector(cx, cy);
     const fac = FACTIONS[facKey];
+    const stats = FACTION_STATS[facKey] || FACTION_STATS.coalition;
 
     for (let i = 0; i < count; i++) {
       const ex = cx * CHUNK + rng() * CHUNK;
       const ey = cy * CHUNK + rng() * CHUNK;
+      // Per-faction fire rate: lower shootCD = shoots more often.
+      // We divide the base CD range by fireRateMul so Syndicate (1.2) cycles faster.
+      const baseCD = ENEMY_SHOOT_CD_MIN + rng() * (ENEMY_SHOOT_CD_MAX - ENEMY_SHOOT_CD_MIN);
       enemies.push({
         x: ex, y: ey, vx: 0, vy: 0,
         angle: rng() * Math.PI * 2,
         patrolAngle: rng() * Math.PI * 2,
         patrolTimer: 60 + rng() * 180,
         r: 11, hp: 2,
-        shootCD: Math.floor(ENEMY_SHOOT_CD_MIN + rng() * (ENEMY_SHOOT_CD_MAX - ENEMY_SHOOT_CD_MIN)),
+        shootCD: Math.floor(baseCD / stats.fireRateMul),
         aggroRange: ENEMY_AGGRO_BASE * aggroBoost,
-        speedMult: speedBoost,
-        bulletSpdMult: bulletSpdBoost,
+        speedMult:    speedBoost    * stats.speedMul,
+        bulletSpdMult: bulletSpdBoost * stats.bulletSpdMul,
+        fireRateMul:  stats.fireRateMul,    // stored so shoot-cooldown reset uses it too
         state: 'patrol',
         homeChunk: chunkKey(cx, cy),
         band,
@@ -1099,7 +1280,7 @@ function rayBlockedByAsteroid(ox, oy, tx, ty, ignoreAsteroid) {
     const perpX = cx - ux * proj;
     const perpY = cy - uy * proj;
     const perpDist = Math.hypot(perpX, perpY);
-    if (perpDist < a.r) return true;
+    if (perpDist < (a.collisionR || a.r)) return true;
   }
   return false;
 }
@@ -1108,7 +1289,7 @@ function rayBlockedByAsteroid(ox, oy, tx, ty, ignoreAsteroid) {
 function asteroidAtPoint(px, py) {
   for (const a of allAsteroids()) {
     if (a.mined) continue;
-    if (Math.hypot(a.x - px, a.y - py) < a.r) return a;
+    if (Math.hypot(a.x - px, a.y - py) < (a.collisionR || a.r)) return a;
   }
   return null;
 }
@@ -1166,8 +1347,11 @@ function startRun() {
   state._chunkMemory = new Map();
   state.visitedChunks = new Set();
   state.bullets = [];
+  state.playerBullets = [];         // auto-cannon projectiles (RMB-fired, proximity-assisted)
+  state.playerShootCD = 0;          // frames until next player bullet can fire
   state.salvage = [];
   state.particles = [];
+  state.asteroidExplosions = [];   // {x, y, size, frame, frameTimer}
   state.refineries = [];
   state.refineriesRemaining = state.refineriesBought;   // stays across drones
   state.refineryDeployCD = 0;
@@ -1220,6 +1404,7 @@ function deployNextDrone(first=false) {
       orbitRadius: ESCORT_ORBIT_MIN + (ESCORT_ORBIT_MAX - ESCORT_ORBIT_MIN) * (i / Math.max(1, totalEscorts - 1)),
       shootCD: i * 5,
       angle: angle + Math.PI,
+      faction: state.playerFaction,          // escorts fly colors to match the player
       isGuard: i >= state.escortsBought   // last slot is the guard drone if perk owned
     });
     state.runStats.escortsDeployed++;
@@ -1495,7 +1680,9 @@ function update() {
   state.cam.y += (targY - state.cam.y) * 0.12;
 
   // ── LASER ──────────────────────────────────────────────────────
-  const wantFire = !!keys[' '];
+  // Beam fires on LEFT MOUSE only. Mining weapon, damages asteroids only.
+  // Combat is handled by the auto-cannon on RIGHT MOUSE, independent of the beam.
+  const wantFire = mouse.left;
 
   if (state.laser.firing) {
     state.laser.heat += HEAT_PER_FRAME;
@@ -1567,8 +1754,9 @@ function update() {
       const closestX = ox + dx * tProj;
       const closestY = oy + dy * tProj;
       const perp = Math.hypot(a.x - closestX, a.y - closestY);
-      if (perp < a.r) {
-        const back = Math.sqrt(Math.max(0, a.r*a.r - perp*perp));
+      const cr = a.collisionR || a.r;
+      if (perp < cr) {
+        const back = Math.sqrt(Math.max(0, cr*cr - perp*perp));
         const t = tProj - back;
         if (t > 0 && t < bestT) { bestT = t; bestAst = a; bestEnemy = null; }
       }
@@ -1594,84 +1782,149 @@ function update() {
 
     if (bestAst) {
       state.laser.hitAsteroid = bestAst;
-      if (!bestAst.scanned) {
-        const rng = mulberry32(hash2(state.seed, Math.floor(bestAst.x), Math.floor(bestAst.y)));
-        bestAst.mineral = pickMineralForBand(rng, bestAst.band);
-        bestAst.oreUnits = bestAst.mineral.value === 0 ? 0 : (1 + Math.floor(rng() * 3));
-        bestAst.scanned = true;
-        if (bestAst.oreUnits === 0) bestAst.mined = true;
-        if (bestAst.mineral.value >= 60) showMsg(`${bestAst.mineral.name} DETECTED`, 1200, bestAst.mineral.color);
-      }
-      if (bestAst.scanned && !bestAst.mined && bestAst.mineral.value > 0 && state.cargoCount < state.caps.cargo) {
+      // Mining is allowed on every rock (even not-yet-scanned ones).
+      // Cargo-full only blocks when the drill bar is about to complete AND
+      // the rock would yield ore — checked at completion time below.
+      if (!bestAst.mined) {
         bestAst.mineProgress += LASER_MINE_RATE;
+        // Drilling sparks — color varies: neutral for unknown, mineral color for scanned
         if (Math.random() < 0.3) {
           const ang = Math.atan2(oy - bestAst.y, ox - bestAst.x) + (Math.random() - 0.5) * 0.6;
+          const sparkColor = bestAst.scanned && bestAst.mineral ? bestAst.mineral.color : '#c8b088';
           state.particles.push({
             x: state.laser.targetX, y: state.laser.targetY,
             vx: Math.cos(ang) * (1 + Math.random()*2), vy: Math.sin(ang) * (1 + Math.random()*2),
             life: 18 + Math.random()*10, max: 28,
-            color: bestAst.mineral.color, size: 1.3 + Math.random()
+            color: sparkColor, size: 1.3 + Math.random()
           });
         }
         if (bestAst.mineProgress >= 100) {
-          bestAst.oreUnits--;
-          state.cargoCount++;
-          state.cargoValue += bestAst.mineral.value;
-          state.runStats.rocksMined++;
-          for (let i = 0; i < 8; i++) {
-            const a2 = Math.random() * Math.PI * 2;
-            state.particles.push({
-              x: bestAst.x, y: bestAst.y,
-              vx: Math.cos(a2)*2, vy: Math.sin(a2)*2,
-              life:22, max:22, color: bestAst.mineral.color, size:1.8
+          // First-completion reveal: if we haven't scanned this rock yet,
+          // pick its mineral + ore quantity now. Empty rocks just get no units.
+          if (!bestAst.scanned) {
+            const rng = mulberry32(hash2(state.seed, Math.floor(bestAst.x), Math.floor(bestAst.y)));
+            bestAst.mineral = pickMineralForBand(rng, bestAst.band);
+            bestAst.oreUnits = bestAst.mineral.value === 0 ? 0 : (1 + Math.floor(rng() * 3));
+            bestAst.scanned = true;
+            if (bestAst.mineral.value >= 60) {
+              showMsg(`${bestAst.mineral.name} DETECTED`, 1200, bestAst.mineral.color);
+            }
+          }
+
+          // Credit ore if the rock has value AND cargo has room
+          if (bestAst.mineral.value > 0 && bestAst.oreUnits > 0) {
+            if (state.cargoCount < state.caps.cargo) {
+              bestAst.oreUnits--;
+              state.cargoCount++;
+              state.cargoValue += bestAst.mineral.value;
+              state.runStats.rocksMined++;
+              for (let i = 0; i < 8; i++) {
+                const a2 = Math.random() * Math.PI * 2;
+                state.particles.push({
+                  x: bestAst.x, y: bestAst.y,
+                  vx: Math.cos(a2)*2, vy: Math.sin(a2)*2,
+                  life:22, max:22, color: bestAst.mineral.color, size:1.8
+                });
+              }
+            } else {
+              // Cargo full — don't deplete the unit, hold the rock at 100% until room
+              bestAst.mineProgress = 100;
+              return; // skip rest of this tick for this laser
+            }
+          } else {
+            // Empty / depleted rock — brief flash message
+            if (!bestAst._emptyAnnounced) {
+              showMsg('DEPLETED · no ore', 900, '#8a7a50');
+              bestAst._emptyAnnounced = true;
+            }
+            state.runStats.rocksMined++;
+          }
+
+          // Rock exhausted (either no more units or never had any)
+          if (bestAst.oreUnits <= 0) {
+            bestAst.mined = true;
+            state.asteroidExplosions.push({
+              x: bestAst.x,
+              y: bestAst.y,
+              size: bestAst.r * 2.2,
+              frame: 0,
+              frameTimer: 0,
             });
           }
-          if (bestAst.oreUnits <= 0) bestAst.mined = true;
           bestAst.mineProgress = 0;
         }
       }
     } else if (bestEnemy) {
+      // Beam-lock only — the mining beam targets the enemy visually (gold reticle),
+      // but combat damage comes from the right-mouse auto-cannon below.
       state.laser.hitEnemy = bestEnemy;
-      bestEnemy.hp -= LASER_DPS;
-      if (Math.random() < 0.5) {
-        const ang = Math.random() * Math.PI * 2;
-        state.particles.push({
-          x: state.laser.targetX, y: state.laser.targetY,
-          vx: Math.cos(ang) * 2, vy: Math.sin(ang) * 2,
-          life: 10, max: 10, color: '#ff4a4a', size: 1.3
-        });
-      }
-      if (bestEnemy.hp <= 0) {
-        // Explosion
-        for (let k = 0; k < 22; k++) {
-          const a = Math.random() * Math.PI * 2;
-          const s = 1 + Math.random() * 3.5;
-          state.particles.push({
-            x: bestEnemy.x, y: bestEnemy.y,
-            vx: Math.cos(a)*s, vy: Math.sin(a)*s,
-            life:25+Math.random()*20, max:45,
-            color: k < 10 ? '#ff4444' : '#882222', size:2
-          });
-        }
-        // Drop salvage
-        const val = salvageValueForBand(bestEnemy.band);
-        state.salvage.push({
-          x: bestEnemy.x, y: bestEnemy.y,
-          vx: (Math.random() - 0.5) * 0.6,
-          vy: (Math.random() - 0.5) * 0.6,
-          value: val, life: 1200,
-          color: '#86ff6a',
-          pulse: 0
-        });
-        // Remove enemy
-        const chunk = state.chunks.get(bestEnemy.homeChunk);
-        if (chunk) {
-          const idx = chunk.enemies.indexOf(bestEnemy);
-          if (idx !== -1) chunk.enemies.splice(idx, 1);
-        }
-        state.runStats.enemiesKilled++;
-      }
     }
+  }
+
+  // ── Auto-cannon combat (RIGHT MOUSE) — independent of mining beam ──
+  // Fires a projectile forward of the ship. Within close range (AIM_SNAP_RANGE)
+  // and a ±60° forward cone, the bullet snaps to the nearest rival. Beyond that,
+  // it flies straight. Aim assist, not homing — bullet still travels in a line.
+  if (mouse.right && state.drone && state.playerShootCD <= 0) {
+    const d = state.drone;
+    const ox = d.x + Math.cos(d.angle) * 14;
+    const oy = d.y + Math.sin(d.angle) * 14;
+
+    // Start with straight-forward aim
+    let aimDx = Math.cos(d.angle);
+    let aimDy = Math.sin(d.angle);
+    let aimAngle = d.angle;
+
+    // Proximity snap: find nearest rival within cone + range
+    const AIM_SNAP_RANGE = LASER_RANGE * 0.5;            // ~140 units
+    const AIM_SNAP_COS = Math.cos(Math.PI / 3);           // cos(60°) ≈ 0.5
+    const forwardX = aimDx, forwardY = aimDy;
+    let bestTarget = null;
+    let bestDist = Infinity;
+    for (const e of allEnemies()) {
+      if (e.faction === state.playerFaction) continue;   // allies skip
+      if (e.hp <= 0) continue;
+      const dxE = e.x - ox, dyE = e.y - oy;
+      const dist = Math.hypot(dxE, dyE);
+      if (dist > AIM_SNAP_RANGE || dist < 1) continue;
+      // Dot product with forward vector tells us if inside the cone
+      const dot = (dxE / dist) * forwardX + (dyE / dist) * forwardY;
+      if (dot < AIM_SNAP_COS) continue;                  // outside ±60° cone
+      if (dist < bestDist) { bestDist = dist; bestTarget = e; }
+    }
+    if (bestTarget) {
+      // Lead the target by ~4 frames of its velocity
+      const lead = 4;
+      const tx = bestTarget.x + (bestTarget.vx || 0) * lead;
+      const ty = bestTarget.y + (bestTarget.vy || 0) * lead;
+      const adx = tx - ox, ady = ty - oy;
+      const amag = Math.hypot(adx, ady) || 1;
+      aimDx = adx / amag;
+      aimDy = ady / amag;
+      aimAngle = Math.atan2(ady, adx);
+    }
+
+    state.playerBullets.push({
+      x: ox, y: oy,
+      vx: aimDx * PLAYER_BULLET_SPD,
+      vy: aimDy * PLAYER_BULLET_SPD,
+      angle: aimAngle,
+      life: PLAYER_BULLET_LIFE,
+    });
+    // Muzzle flash — bright sparks forward of the barrel
+    for (let mf = 0; mf < 5; mf++) {
+      const flashAngle = aimAngle + (Math.random() - 0.5) * 0.5;
+      const flashSpd = 1.5 + Math.random() * 2.5;
+      state.particles.push({
+        x: ox, y: oy,
+        vx: Math.cos(flashAngle) * flashSpd,
+        vy: Math.sin(flashAngle) * flashSpd,
+        life: 8, max: 8,
+        color: mf < 2 ? '#ffffff' : '#ffcc44',
+        size: 1.5 + Math.random()
+      });
+    }
+    state.playerShootCD = PLAYER_SHOOT_CD;
   }
 
   // ── Salvage pickup ─────────────────────────────────────────────
@@ -1760,9 +2013,10 @@ function update() {
   for (const a of allAsteroids()) {
     a.rot += a.rotSpd;
     if (a.mined) continue;
+    const acr = a.collisionR || a.r;
     const dx2 = d.x - a.x, dy2 = d.y - a.y;
     const dist = Math.hypot(dx2, dy2);
-    const minDist = d.r + a.r;
+    const minDist = d.r + acr;
     if (dist < minDist && dist > 0) {
       const nx = dx2 / dist, ny = dy2 / dist;
       const overlap = minDist - dist;
@@ -1901,7 +2155,7 @@ function update() {
             const s = 1 + Math.random() * 3;
             state.particles.push({ x:en.x, y:en.y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life:22+Math.random()*18, max:40, color:k<10?'#ff4444':'#882222', size:2 });
           }
-          const val = salvageValueForBand(en.band);
+          const val = salvageValueForEnemy(en);
           state.salvage.push({
             x: en.x, y: en.y,
             vx: (Math.random() - 0.5) * 0.6, vy: (Math.random() - 0.5) * 0.6,
@@ -1922,7 +2176,65 @@ function update() {
     // Absorb on asteroids
     for (const a of allAsteroids()) {
       if (a.mined) continue;
-      if (Math.hypot(b.x - a.x, b.y - a.y) < a.r) { state.escortBullets.splice(i, 1); consumed = true; break; }
+      if (Math.hypot(b.x - a.x, b.y - a.y) < (a.collisionR || a.r)) { state.escortBullets.splice(i, 1); consumed = true; break; }
+    }
+  }
+
+  // ── Player auto-cannon bullets → enemy collision ────────────────
+  if (state.playerShootCD > 0) state.playerShootCD--;
+  state.playerBulletAnimT = (state.playerBulletAnimT || 0) + 1;
+
+  for (let i = state.playerBullets.length - 1; i >= 0; i--) {
+    const b = state.playerBullets[i];
+    const prevX = b.x, prevY = b.y;
+    b.x += b.vx; b.y += b.vy; b.life--;
+    if (b.life <= 0) { state.playerBullets.splice(i, 1); continue; }
+    // Asteroid block (swept)
+    if (rayBlockedByAsteroid(prevX, prevY, b.x, b.y)) {
+      state.playerBullets.splice(i, 1);
+      continue;
+    }
+    let consumed = false;
+    for (const en of allEnemies()) {
+      if (en.faction === state.playerFaction) continue; // passes through allies
+      if (Math.hypot(b.x - en.x, b.y - en.y) < en.r + 3) {
+        en.hp -= PLAYER_BULLET_DMG;
+        // Hit sparks in faction color of target so you can see damage registered
+        for (let k = 0; k < 5; k++) {
+          const a = Math.random() * Math.PI * 2;
+          state.particles.push({ x:b.x, y:b.y, vx:Math.cos(a)*1.8, vy:Math.sin(a)*1.8, life:14, max:14, color:'#ffcc44', size:1.3 });
+        }
+        if (en.hp <= 0) {
+          // Death explosion
+          for (let k = 0; k < 22; k++) {
+            const a = Math.random() * Math.PI * 2;
+            const s = 1 + Math.random() * 3.5;
+            state.particles.push({ x:en.x, y:en.y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life:25+Math.random()*20, max:45, color:k<10?'#ff4444':'#882222', size:2 });
+          }
+          // Tiered salvage: base band value × faction difficulty × run-scaling.
+          // Tougher fights → better loot.
+          const val = salvageValueForEnemy(en);
+          state.salvage.push({
+            x: en.x, y: en.y,
+            vx: (Math.random() - 0.5) * 0.6, vy: (Math.random() - 0.5) * 0.6,
+            value: val, life: 1200, color:'#86ff6a', pulse: 0
+          });
+          const chunk = state.chunks.get(en.homeChunk);
+          if (chunk) {
+            const idx = chunk.enemies.indexOf(en);
+            if (idx !== -1) chunk.enemies.splice(idx, 1);
+          }
+          state.runStats.enemiesKilled++;
+        }
+        consumed = true;
+        break;
+      }
+    }
+    if (consumed) { state.playerBullets.splice(i, 1); continue; }
+    // Absorb on asteroids
+    for (const a of allAsteroids()) {
+      if (a.mined) continue;
+      if (Math.hypot(b.x - a.x, b.y - a.y) < (a.collisionR || a.r)) { state.playerBullets.splice(i, 1); consumed = true; break; }
     }
   }
 
@@ -1951,7 +2263,7 @@ function update() {
         if (a.mined) continue;
         const adx = e.x - a.x, ady = e.y - a.y;
         const adist = Math.hypot(adx, ady);
-        const minDist = e.r + a.r;
+        const minDist = e.r + (a.collisionR || a.r);
         if (adist < minDist && adist > 0) {
           const nx = adx / adist, ny = ady / adist;
           const overlap = minDist - adist;
@@ -2075,7 +2387,7 @@ function update() {
             life: 90,
             faction: e.faction   // who fired — used for enemy-vs-enemy hit detection
           });
-          e.shootCD = Math.floor(ENEMY_SHOOT_CD_MIN + Math.random() * (ENEMY_SHOOT_CD_MAX - ENEMY_SHOOT_CD_MIN));
+          e.shootCD = Math.floor((ENEMY_SHOOT_CD_MIN + Math.random() * (ENEMY_SHOOT_CD_MAX - ENEMY_SHOOT_CD_MIN)) / (e.fireRateMul || 1));
         }
       }
     } else {
@@ -2101,7 +2413,7 @@ function update() {
       if (a.mined) continue;
       const adx = e.x - a.x, ady = e.y - a.y;
       const adist = Math.hypot(adx, ady);
-      const minDist = e.r + a.r;
+      const minDist = e.r + (a.collisionR || a.r);
       if (adist < minDist && adist > 0) {
         const nx = adx / adist, ny = ady / adist;
         const overlap = minDist - adist;
@@ -2224,7 +2536,7 @@ function update() {
     // Asteroid absorb
     for (const a of allAsteroids()) {
       if (a.mined) continue;
-      if (Math.hypot(b.x - a.x, b.y - a.y) < a.r) { state.bullets.splice(i, 1); consumed = true; break; }
+      if (Math.hypot(b.x - a.x, b.y - a.y) < (a.collisionR || a.r)) { state.bullets.splice(i, 1); consumed = true; break; }
     }
   }
 
@@ -2233,6 +2545,21 @@ function update() {
     const p = state.particles[i];
     p.x += p.vx; p.y += p.vy; p.life--;
     if (p.life <= 0) state.particles.splice(i, 1);
+  }
+
+  // Asteroid explosion sprites — advance frame every ~4 ticks (15fps animation)
+  if (Array.isArray(state.asteroidExplosions)) {
+    for (let i = state.asteroidExplosions.length - 1; i >= 0; i--) {
+      const e = state.asteroidExplosions[i];
+      e.frameTimer++;
+      if (e.frameTimer >= 4) {
+        e.frameTimer = 0;
+        e.frame++;
+        if (e.frame >= (SPRITES.asteroidExplode.frames || 8)) {
+          state.asteroidExplosions.splice(i, 1);
+        }
+      }
+    }
   }
 
   // Thruster particles
@@ -2254,6 +2581,23 @@ function updateHUD() {
   // Drone panel
   document.getElementById('h-drone').textContent = state.dronesUsed;
   document.getElementById('h-drone-total').textContent = 'of ' + state.dronesBought;
+
+  // Auto-cannon status
+  const hWeap = document.getElementById('h-weapon');
+  if (hWeap) {
+    if (mouse.right) {
+      if (state.playerShootCD > 0) {
+        hWeap.textContent = 'FIRING';
+        hWeap.style.color = '#ffcc44';
+      } else {
+        hWeap.textContent = 'READY';
+        hWeap.style.color = '#ffee88';
+      }
+    } else {
+      hWeap.textContent = 'RMB · FIRE';
+      hWeap.style.color = '#86ff6a';
+    }
+  }
 
   // Cargo panel
   document.getElementById('h-cargo').textContent = state.cargoCount;
@@ -2434,6 +2778,39 @@ function render() {
   }
   X.lineCap = 'butt';
 
+  // Player auto-cannon bullets — 4-frame sprite animation, rotated to travel direction
+  if (state.playerBullets.length > 0) {
+    const pbSpr = SPRITES.playerBullet;
+    if (pbSpr.loaded) {
+      // Global frame index cycles every 6 ticks = 10fps over the 4-frame loop
+      const frame = Math.floor((state.playerBulletAnimT || 0) / 6) % (pbSpr.frames || 4);
+      for (const b of state.playerBullets) {
+        X.save();
+        X.translate(b.x - camX, b.y - camY);
+        X.rotate(b.angle);
+        // Bullet sprite points right in source strip already (no rotation offset needed)
+        const size = 20;
+        X.drawImage(
+          pbSpr.img,
+          frame * pbSpr.w, 0, pbSpr.w, pbSpr.h,
+          -size/2, -size/2, size, size
+        );
+        X.restore();
+      }
+    } else {
+      // Vector fallback — gold tracer like escort bullets
+      for (const b of state.playerBullets) {
+        X.strokeStyle = '#ffcc44'; X.lineWidth = 2;
+        X.beginPath();
+        X.moveTo(b.x - camX, b.y - camY);
+        X.lineTo(b.x - camX - b.vx*1.8, b.y - camY - b.vy*1.8);
+        X.stroke();
+        X.fillStyle = '#ffee88';
+        X.beginPath(); X.arc(b.x - camX, b.y - camY, 2, 0, Math.PI*2); X.fill();
+      }
+    }
+  }
+
   // Mining laser beam
   if (state.laser.firing && state.drone) {
     const d = state.drone;
@@ -2485,6 +2862,19 @@ function render() {
     X.fillRect(p.x - camX - p.size/2, p.y - camY - p.size/2, p.size, p.size);
   }
   X.globalAlpha = 1;
+
+  // Asteroid explosion sprites
+  if (SPRITES.asteroidExplode.loaded && Array.isArray(state.asteroidExplosions)) {
+    const es = SPRITES.asteroidExplode;
+    for (const e of state.asteroidExplosions) {
+      // Draw current frame from strip at (frame * 96, 0)
+      X.drawImage(
+        es.img,
+        e.frame * es.w, 0, es.w, es.h,
+        e.x - camX - e.size/2, e.y - camY - e.size/2, e.size, e.size
+      );
+    }
+  }
 
   // Player drone + aim predictor + aggro bracket
   if (state.drone) {
@@ -2649,60 +3039,76 @@ function drawMothership(x, y) {
 }
 
 function drawAsteroid(a, x, y) {
+  // Mined rocks are gone — explosion animation handles the visual departure
+  if (a.mined) return;
+
+  const spr = SPRITES.asteroid;
   X.save();
   X.translate(x, y);
   X.rotate(a.rot);
 
-  if (a.scanned) {
-    X.fillStyle = a.mineral.color + '22';
-    X.strokeStyle = a.mineral.color;
+  if (spr.loaded) {
+    const size = a.r * 2.2;
+    const tint = (a.scanned && a.mineral) ? (a.mineral.color + '55') : null;
+    drawSpriteTinted(spr.img, 0, 0, spr.w, spr.h, size, size, tint);
   } else {
-    X.fillStyle = '#1a1610';
-    X.strokeStyle = '#4a3a20';
+    // Vector fallback — original polygon drawing
+    if (a.scanned) {
+      X.fillStyle = a.mineral.color + '22';
+      X.strokeStyle = a.mineral.color;
+    } else {
+      X.fillStyle = '#1a1610';
+      X.strokeStyle = '#4a3a20';
+    }
+    X.lineWidth = 1.4;
+    X.beginPath();
+    for (let i = 0; i < a.shape.length; i++) {
+      const s = a.shape[i];
+      const px = Math.cos(s.a) * s.r;
+      const py = Math.sin(s.a) * s.r;
+      if (i === 0) X.moveTo(px, py); else X.lineTo(px, py);
+    }
+    X.closePath();
+    X.fill(); X.stroke();
+    X.strokeStyle = a.scanned ? (a.mineral.color + '66') : '#2a1a10';
+    X.lineWidth = 0.8;
+    X.beginPath();
+    X.moveTo(-a.r*0.4, -a.r*0.2);
+    X.lineTo(a.r*0.3, a.r*0.4);
+    X.stroke();
   }
-  X.lineWidth = 1.4;
-  X.beginPath();
-  for (let i = 0; i < a.shape.length; i++) {
-    const s = a.shape[i];
-    const px = Math.cos(s.a) * s.r;
-    const py = Math.sin(s.a) * s.r;
-    if (i === 0) X.moveTo(px, py); else X.lineTo(px, py);
-  }
-  X.closePath();
-  X.fill(); X.stroke();
-
-  X.strokeStyle = a.scanned ? (a.mineral.color + '66') : '#2a1a10';
-  X.lineWidth = 0.8;
-  X.beginPath();
-  X.moveTo(-a.r*0.4, -a.r*0.2);
-  X.lineTo(a.r*0.3, a.r*0.4);
-  X.stroke();
 
   X.restore();
 
-  if (a.scanned && !a.mined && a.mineProgress > 0) {
-    X.strokeStyle = a.mineral.color;
+  // Progress arc while drilling — neutral tan for unknown, mineral color once scanned
+  if (!a.mined && a.mineProgress > 0) {
+    X.strokeStyle = (a.scanned && a.mineral) ? a.mineral.color : '#c8b088';
     X.lineWidth = 2;
     X.beginPath();
     X.arc(x, y, a.r + 6, -Math.PI/2, -Math.PI/2 + (a.mineProgress/100) * Math.PI * 2);
     X.stroke();
   }
 
-  if (a.scanned && !a.mined) {
+  // Labels: unknown rocks show "???", scanned rocks show name + price, depleted show "DEPLETED"
+  if (!a.mined) {
     X.textAlign = 'center';
-    // Mineral name — bigger, bolder
-    X.fillStyle = a.mineral.color;
-    X.font = "bold 16px 'Courier New'";
-    X.fillText(a.mineral.name, x, y - a.r - 12);
-    if (a.mineral.value > 0) {
-      // Price tag — large, high contrast. Dark backing for legibility against bright rocks
+    if (!a.scanned) {
+      X.fillStyle = '#8a7a50';
+      X.font = "bold 14px 'Courier New'";
+      X.fillText('???', x, y - a.r - 12);
+    } else if (a.mineral.value === 0 || a.oreUnits <= 0) {
+      X.fillStyle = '#8a7a50';
+      X.font = "bold 14px 'Courier New'";
+      X.fillText('DEPLETED', x, y - a.r - 12);
+    } else {
+      X.fillStyle = a.mineral.color;
+      X.font = "bold 16px 'Courier New'";
+      X.fillText(a.mineral.name, x, y - a.r - 12);
       const priceText = `Ƒ${a.mineral.value} × ${a.oreUnits}`;
       X.font = "bold 18px 'Courier New'";
       const tw = X.measureText(priceText).width;
-      // Background plate
       X.fillStyle = 'rgba(3,2,8,0.72)';
       X.fillRect(x - tw/2 - 6, y - a.r - 38, tw + 12, 22);
-      // Text
       X.fillStyle = a.mineral.color;
       X.fillText(priceText, x, y - a.r - 22);
     }
@@ -2711,36 +3117,83 @@ function drawAsteroid(a, x, y) {
 
 function drawEnemy(e, x, y) {
   const fac = e.fac || FACTIONS.syndicate;
+  // Pick the sprite based on enemy faction
+  const stats = FACTION_STATS[e.faction] || FACTION_STATS.coalition;
+  const spr = SPRITES[stats.sprite];
   X.save();
   X.translate(x, y);
   X.rotate(e.angle);
 
-  X.fillStyle = fac.hull;
-  X.strokeStyle = e.state === 'chase' ? fac.chase : fac.stroke;
-  X.lineWidth = 1.6;
-  X.beginPath();
-  X.moveTo(12, 0);
-  X.lineTo(-8, 7);
-  X.lineTo(-5, 0);
-  X.lineTo(-8, -7);
-  X.closePath();
-  X.fill(); X.stroke();
-
-  X.fillStyle = e.state === 'chase' ? fac.chase : fac.eye;
-  X.beginPath(); X.arc(4, 0, 1.8, 0, Math.PI*2); X.fill();
+  if (spr && spr.loaded) {
+    // Ship sprite faces up; rotate +π/2 so angle=0 means facing right
+    X.rotate(Math.PI/2);
+    const size = 40;
+    // Sprites are already faction-colored — render clean
+    X.drawImage(spr.img, -size/2, -size/2, size, size);
+  } else {
+    // Vector fallback — original diamond
+    X.fillStyle = fac.hull;
+    X.strokeStyle = e.state === 'chase' ? fac.chase : fac.stroke;
+    X.lineWidth = 1.6;
+    X.beginPath();
+    X.moveTo(12, 0);
+    X.lineTo(-8, 7);
+    X.lineTo(-5, 0);
+    X.lineTo(-8, -7);
+    X.closePath();
+    X.fill(); X.stroke();
+    X.fillStyle = e.state === 'chase' ? fac.chase : fac.eye;
+    X.beginPath(); X.arc(4, 0, 1.8, 0, Math.PI*2); X.fill();
+  }
 
   X.restore();
 
   if (e.hp < 2) {
     X.fillStyle = fac.stroke;
-    X.fillRect(x - 6, y - 14, 12, 1.5);
+    X.fillRect(x - 6, y - 18, 12, 1.5);
     X.fillStyle = '#1a0808';
-    X.fillRect(x - 6 + Math.max(0, e.hp/2)*12, y - 14, Math.max(0, 1 - e.hp/2)*12, 1.5);
+    X.fillRect(x - 6 + Math.max(0, e.hp/2)*12, y - 18, Math.max(0, 1 - e.hp/2)*12, 1.5);
+  }
+
+  // HOSTILE tag — every rival ship gets a red floating label.
+  // Not shown for same-faction allies (they're passive and won't shoot you).
+  if (e.faction !== state.playerFaction) {
+    // Pulse alpha so the label draws attention without being obnoxious
+    const pulse = 0.75 + Math.sin(state.mothershipPulse * 3) * 0.25;
+    const labelY = y - 28;
+    X.textAlign = 'center';
+    X.font = "bold 10px 'Courier New'";
+    // Dark plate behind the text for legibility against bright space
+    const text = 'HOSTILE';
+    const tw = X.measureText(text).width;
+    X.fillStyle = 'rgba(10,0,0,0.65)';
+    X.fillRect(x - tw/2 - 3, labelY - 8, tw + 6, 11);
+    // Red text with pulsing alpha
+    X.fillStyle = 'rgba(255,74,74,' + pulse.toFixed(2) + ')';
+    X.fillText(text, x, labelY);
   }
 }
 
 function drawDrone(d, x, y) {
   const fac = FACTIONS[state.playerFaction] || FACTIONS.coalition;
+  // Faction ship sprite resolution with explicit fallback chain.
+  let factionSprKey = null;
+  if (state.playerFaction === 'coalition')      factionSprKey = 'shipCoalition';
+  else if (state.playerFaction === 'syndicate') factionSprKey = 'shipSyndicate';
+  else if (state.playerFaction === 'void')      factionSprKey = 'shipVoid';
+
+  const factionSpr = factionSprKey ? SPRITES[factionSprKey] : null;
+  const mainSpr = SPRITES.playerShip;
+  let spr = null, needsTint = false;
+  if (factionSpr && factionSpr.loaded) {
+    spr = factionSpr;
+  } else if (mainSpr.loaded && factionSprKey) {
+    spr = mainSpr;
+    needsTint = true;
+  } else if (mainSpr.loaded) {
+    spr = mainSpr;
+  }
+
   X.save();
   X.translate(x, y);
   X.rotate(d.angle);
@@ -2748,28 +3201,38 @@ function drawDrone(d, x, y) {
   if (d.thrusting) {
     X.fillStyle = 'rgba(96,200,255,0.4)';
     X.beginPath();
-    X.moveTo(-10, 0);
-    X.lineTo(-18, 4);
-    X.lineTo(-22, 0);
-    X.lineTo(-18, -4);
+    X.moveTo(-14, 0);
+    X.lineTo(-24, 5);
+    X.lineTo(-30, 0);
+    X.lineTo(-24, -5);
     X.closePath();
     X.fill();
   }
 
-  X.fillStyle = fac.hull;
-  // Heat lockout still overrides to red as a hazard warning
-  X.strokeStyle = state.laser.lockedOut ? '#ff4a4a' : fac.stroke;
-  X.lineWidth = 1.8;
-  X.beginPath();
-  X.moveTo(12, 0);
-  X.lineTo(-8, 7);
-  X.lineTo(-4, 0);
-  X.lineTo(-8, -7);
-  X.closePath();
-  X.fill(); X.stroke();
-
-  X.fillStyle = fac.eye;
-  X.beginPath(); X.arc(5, 0, 1.8, 0, Math.PI*2); X.fill();
+  if (spr && spr.loaded) {
+    X.rotate(Math.PI/2);
+    const size = 48;
+    if (state.laser.lockedOut) {
+      drawSpriteTinted(spr.img, 0, 0, spr.w, spr.h, size, size, 'rgba(255,74,74,0.6)');
+    } else if (needsTint) {
+      drawSpriteTinted(spr.img, 0, 0, spr.w, spr.h, size, size, fac.stroke + 'aa');
+    } else {
+      X.drawImage(spr.img, -size/2, -size/2, size, size);
+    }
+  } else {
+    X.fillStyle = fac.hull;
+    X.strokeStyle = state.laser.lockedOut ? '#ff4a4a' : fac.stroke;
+    X.lineWidth = 1.8;
+    X.beginPath();
+    X.moveTo(16, 0);
+    X.lineTo(-10, 9);
+    X.lineTo(-5, 0);
+    X.lineTo(-10, -9);
+    X.closePath();
+    X.fill(); X.stroke();
+    X.fillStyle = fac.eye;
+    X.beginPath(); X.arc(6, 0, 2, 0, Math.PI*2); X.fill();
+  }
 
   X.restore();
 }
@@ -2838,23 +3301,40 @@ function drawRefinery(r, x, y) {
 
 function drawEscort(esc, x, y) {
   const fac = FACTIONS[state.playerFaction] || FACTIONS.coalition;
+  // Pick sprite based on escort's faction (matches player at spawn time).
+  // Factionless escorts use Main Ship like the player drone.
+  let sprKey = 'playerShip';
+  const fKey = esc.faction || state.playerFaction;
+  if (fKey === 'coalition') sprKey = 'shipCoalition';
+  else if (fKey === 'syndicate') sprKey = 'shipSyndicate';
+  else if (fKey === 'void')      sprKey = 'shipVoid';
+  const spr = SPRITES[sprKey];
+
   X.save();
   X.translate(x, y);
   X.rotate(esc.angle);
 
-  X.fillStyle = fac.hull;
-  X.strokeStyle = fac.stroke;
-  X.lineWidth = 1.3;
-  X.beginPath();
-  X.moveTo(9, 0);
-  X.lineTo(-5, 5);
-  X.lineTo(-3, 0);
-  X.lineTo(-5, -5);
-  X.closePath();
-  X.fill(); X.stroke();
-
-  X.fillStyle = fac.eye;
-  X.beginPath(); X.arc(3, 0, 1.3, 0, Math.PI*2); X.fill();
+  if (spr && spr.loaded) {
+    // Same up-facing source orientation as player/enemy ships
+    X.rotate(Math.PI/2);
+    // Escorts render smaller than the player — they're wingmen, not the star
+    const size = 28;
+    X.drawImage(spr.img, -size/2, -size/2, size, size);
+  } else {
+    // Vector fallback — diamond in faction color
+    X.fillStyle = fac.hull;
+    X.strokeStyle = fac.stroke;
+    X.lineWidth = 1.3;
+    X.beginPath();
+    X.moveTo(9, 0);
+    X.lineTo(-5, 5);
+    X.lineTo(-3, 0);
+    X.lineTo(-5, -5);
+    X.closePath();
+    X.fill(); X.stroke();
+    X.fillStyle = fac.eye;
+    X.beginPath(); X.arc(3, 0, 1.3, 0, Math.PI*2); X.fill();
+  }
 
   X.restore();
 
@@ -2862,7 +3342,7 @@ function drawEscort(esc, x, y) {
     for (let i = 0; i < ESCORT_HP; i++) {
       X.fillStyle = i < esc.hp ? fac.stroke : '#2a1a08';
       X.beginPath();
-      X.arc(x + (i - (ESCORT_HP-1)/2) * 4, y - 12, 1.2, 0, Math.PI*2);
+      X.arc(x + (i - (ESCORT_HP-1)/2) * 4, y - 16, 1.2, 0, Math.PI*2);
       X.fill();
     }
   }

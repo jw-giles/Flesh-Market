@@ -2362,7 +2362,10 @@ ws.addEventListener('message', (ev)=>{
     h.innerHTML = ''; // clear any previous
 
     miningIframe = document.createElement('iframe');
-    miningIframe.src = 'assets/drone-mining/index.html';
+    // Cache-buster — forces browser to re-fetch the game HTML on each open.
+    // The inner sprites still use normal cache, but the game HTML itself (which
+    // changes often) stays fresh.
+    miningIframe.src = 'assets/drone-mining/index.html?v=' + Date.now();
     miningIframe.style.cssText = 'border:0; width:100%; height:100%; display:block;';
     miningIframe.setAttribute('allow', 'autoplay');
     miningIframe.setAttribute('title', 'Drone Mining');
@@ -2395,10 +2398,12 @@ ws.addEventListener('message', (ev)=>{
   function pushFactionToIframe() {
     if (!miningIframe || !miningIframe.contentWindow) return;
     // FM faction IDs match the mining game's FACTION_KEYS: coalition / syndicate / void.
-    // Default to coalition if the player has no faction set.
-    let fac = 'coalition';
+    // If the player has no faction set in galaxy menu, send 'none' — the game
+    // will render the neutral Main Ship and treat the player as hostile to all factions.
+    let fac = 'none';
     try {
-      if (typeof ME === 'object' && ME && typeof ME.faction === 'string' && ME.faction) {
+      if (typeof ME === 'object' && ME && typeof ME.faction === 'string' && ME.faction &&
+          (ME.faction === 'coalition' || ME.faction === 'syndicate' || ME.faction === 'void')) {
         fac = ME.faction;
       }
     } catch(_){}

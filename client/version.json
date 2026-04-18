@@ -1,7 +1,7 @@
 {
   "version": "1.0.2.0",
-  "built": "2026-04-18T00:00:00Z",
+  "built": "2026-04-18T22:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
   "patch": "1.0.2.0",
-  "notes": "Drone Mining minigame added as Mining tab; tutorial updated with Mining slide and accurate short/dividend mechanics"
+  "notes": "Drone Mining: sprite-based rendering with faction-specific ships, LMB mining + RMB auto-cannon with proximity aim-snap, HOSTILE tags, tiered enemy salvage, 8-frame asteroid explosions, permanent upgrade store, tutorial accuracy pass"
 }
