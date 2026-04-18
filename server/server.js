@@ -81,6 +81,10 @@ import {
   executeStockSplit,
   // Dividend eligibility (7-trading-day holding requirement)
   snapshotAllHoldings, getEligibleDividendQtyBulk, DIVIDEND_HOLD_CYCLES,
+  // Mining: permanent upgrades + leaderboard
+  MINING_UPGRADE_CATALOG, getMiningUpgrades, hasMiningUpgrade,
+  getMiningStats, canBuyMiningUpgrade, grantMiningUpgrade,
+  recordMiningRun, getMiningLeaderboard,
 } from './db.js';
 
 initDB();
@@ -3776,6 +3780,119 @@ wss.on('connection',(ws,req)=>{
         } catch(_) {}
         ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
         ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      }
+    }
+
+    // ── Mining: list owned upgrades + catalog (sanitized) ──────────────────
+    if (msg.type === 'mining_upgrades_list') {
+      try {
+        const owned = getMiningUpgrades(actor.id);
+        const stats = getMiningStats(actor.id);
+        // Sanitized catalog sent to client — strip internal fields if any added later
+        const catalog = {};
+        for (const [id, def] of Object.entries(MINING_UPGRADE_CATALOG)) {
+          catalog[id] = {
+            id: def.id, name: def.name, price: def.price,
+            kind: def.kind, desc: def.desc,
+            gate: def.gate || null,
+          };
+        }
+        ws.send(JSON.stringify({
+          type: 'mining_upgrades_state',
+          data: {
+            owned, catalog,
+            stats: {
+              total_runs: stats.total_runs,
+              total_profit: stats.total_profit,
+              deepest_band_reached: stats.deepest_band_reached,
+              best_run_profit: stats.best_run_profit,
+            },
+          },
+        }));
+      } catch(e) {
+        ws.send(JSON.stringify({type:'error',data:{msg:'Mining upgrade list failed.'}}));
+      }
+    }
+
+    // ── Mining: purchase an upgrade ────────────────────────────────────────
+    if (msg.type === 'mining_upgrade_buy') {
+      const upgradeId = String(msg.upgradeId || '');
+      const def = MINING_UPGRADE_CATALOG[upgradeId];
+      if (!def) {
+        ws.send(JSON.stringify({type:'error',data:{msg:'Unknown upgrade.'}}));
+        return;
+      }
+      const check = canBuyMiningUpgrade(actor.id, upgradeId);
+      if (!check.ok) {
+        let reasonMsg = 'Cannot purchase this upgrade.';
+        if (check.reason === 'already_owned') reasonMsg = 'You already own this upgrade.';
+        else if (check.reason === 'gate_runs')   reasonMsg = `Requires ${check.need} completed runs (you have ${check.have}).`;
+        else if (check.reason === 'gate_band')   reasonMsg = `Requires reaching the VOID depth band first.`;
+        else if (check.reason === 'gate_profit') reasonMsg = `Requires Ƒ${check.need.toLocaleString()} total mining profit (you have Ƒ${Math.floor(check.have).toLocaleString()}).`;
+        ws.send(JSON.stringify({type:'error',data:{msg:reasonMsg}}));
+        return;
+      }
+      if (actor.cash < def.price) {
+        ws.send(JSON.stringify({type:'error',data:{msg:`Need Ƒ${def.price.toLocaleString()}. You have Ƒ${Math.floor(actor.cash).toLocaleString()}.`}}));
+        return;
+      }
+      // Deduct cash
+      safeAddCash(actor, -def.price);
+      // Grant upgrade
+      grantMiningUpgrade(actor.id, upgradeId);
+      // If this is a title, also grant it to the player's title inventory
+      if (def.kind === 'title' && def.title) {
+        actor.ownedTitles = actor.ownedTitles || [];
+        if (!actor.ownedTitles.includes(def.title)) actor.ownedTitles.push(def.title);
+      }
+      savePlayer(actor);
+      // Respond with updated state
+      const owned = getMiningUpgrades(actor.id);
+      ws.send(JSON.stringify({
+        type: 'mining_upgrade_purchased',
+        data: { id: upgradeId, name: def.name, price: def.price, owned },
+      }));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
+      try {
+        ws.send(JSON.stringify({type:'chat_system',data:{text:`⛏ Purchased ${def.name} for Ƒ${def.price.toLocaleString()}.`}}));
+      } catch(_) {}
+    }
+
+    // ── Mining: record a completed run ─────────────────────────────────────
+    if (msg.type === 'mining_run_complete') {
+      const profit = Number(msg.profit);
+      const banked = Number(msg.banked);
+      const deepestBand = Number(msg.deepestBand);
+      if (!Number.isFinite(profit) || !Number.isFinite(banked)) {
+        return; // silently ignore garbage payload
+      }
+      try {
+        const result = recordMiningRun(actor.id, { profit, banked, deepestBand });
+        ws.send(JSON.stringify({
+          type: 'mining_run_recorded',
+          data: result,
+        }));
+        if (result.isNewBest) {
+          try {
+            ws.send(JSON.stringify({type:'chat_system',data:{text:`⛏ New personal best: Ƒ${Math.floor(profit).toLocaleString()} profit on one run.`}}));
+          } catch(_) {}
+        }
+      } catch(e) {
+        // Don't leak errors; run already completed client-side
+      }
+    }
+
+    // ── Mining: leaderboard fetch ──────────────────────────────────────────
+    if (msg.type === 'mining_leaderboard') {
+      try {
+        const rows = getMiningLeaderboard(10);
+        ws.send(JSON.stringify({
+          type: 'mining_leaderboard_data',
+          data: { rows },
+        }));
+      } catch(e) {
+        ws.send(JSON.stringify({type:'mining_leaderboard_data',data:{rows:[]}}));
       }
     }
 

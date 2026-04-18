@@ -143,6 +143,28 @@ export function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_hs_cycle ON holding_snapshots(cycle);
     CREATE INDEX IF NOT EXISTS idx_hs_player_symbol ON holding_snapshots(player_id, symbol);
+
+    -- Mining: permanent account-wide upgrades purchased via the Mining Store.
+    -- upgrades is a JSON blob of the form {"guard_drone":true,"ion_engines":true,...}.
+    -- Missing rows indicate no upgrades owned.
+    CREATE TABLE IF NOT EXISTS mining_upgrades (
+      player_id TEXT PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+      upgrades  TEXT NOT NULL DEFAULT '{}'
+    );
+
+    -- Mining: per-player lifetime stats and best-run record for the leaderboard.
+    -- best_run_profit is banked minus invested for the single best run.
+    CREATE TABLE IF NOT EXISTS mining_stats (
+      player_id            TEXT PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+      total_runs           INTEGER NOT NULL DEFAULT 0,
+      total_profit         REAL    NOT NULL DEFAULT 0,
+      best_run_profit      REAL    NOT NULL DEFAULT 0,
+      best_run_banked      REAL    NOT NULL DEFAULT 0,
+      best_run_band        INTEGER NOT NULL DEFAULT 0,
+      best_run_timestamp   INTEGER,
+      deepest_band_reached INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_ms_best ON mining_stats(best_run_profit DESC);
   `);
 
   // Migration: safely add new columns if they don't exist yet (upgrade from older DB)
@@ -2065,4 +2087,228 @@ export function getEligibleDividendQtyBulk(playerId, holdings) {
     result[sym] = minQty;
   }
   return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MINING: permanent upgrades + stats (see mining_upgrades, mining_stats)
+// ═══════════════════════════════════════════════════════════════════
+
+// Canonical catalog — single source of truth for IDs, names, prices,
+// descriptions, and any gating requirements. Server validates against this;
+// the client is sent a sanitized copy (no server-only fields).
+export const MINING_UPGRADE_CATALOG = {
+  // Cosmetic titles
+  title_drone_pilot: {
+    id: 'title_drone_pilot',
+    name: 'Title: Drone Pilot',
+    price: 25000,
+    kind: 'title',
+    title: 'Drone Pilot',
+    desc: 'Cosmetic display title. Granted to your FleshMarket account.',
+  },
+  title_belt_runner: {
+    id: 'title_belt_runner',
+    name: 'Title: Belt Runner',
+    price: 250000,
+    kind: 'title',
+    title: 'Belt Runner',
+    gate: { totalRuns: 25 },
+    desc: 'Cosmetic title. Requires 25 completed mining runs.',
+  },
+  title_void_diver: {
+    id: 'title_void_diver',
+    name: 'Title: Void Diver',
+    price: 1000000,
+    kind: 'title',
+    title: 'Void Diver',
+    gate: { deepestBand: 3 },
+    desc: 'Cosmetic title. Requires reaching the VOID depth band at least once.',
+  },
+  title_scrap_baron: {
+    id: 'title_scrap_baron',
+    name: 'Title: Scrap Baron',
+    price: 5000000,
+    kind: 'title',
+    title: 'Scrap Baron',
+    gate: { totalProfit: 10000000 },
+    desc: 'Cosmetic title. Requires Ƒ10M total lifetime mining profit.',
+  },
+  // Mechanical perks
+  guard_drone: {
+    id: 'guard_drone',
+    name: 'Guard Drone',
+    price: 150000,
+    kind: 'perk',
+    desc: 'A free escort drone spawns with every expedition. It can still die in combat and respawns next run.',
+  },
+  ion_engines: {
+    id: 'ion_engines',
+    name: 'Ion Engines',
+    price: 1000000,
+    kind: 'perk',
+    desc: 'Slow fuel trickle while flying. You regain fuel slowly even without a refinery.',
+  },
+  salvage_magnet: {
+    id: 'salvage_magnet',
+    name: 'Salvage Magnet',
+    price: 250000,
+    kind: 'perk',
+    desc: 'Salvage pull radius extended from 90 to 150 units.',
+  },
+  improved_scanner: {
+    id: 'improved_scanner',
+    name: 'Improved Scanner',
+    price: 400000,
+    kind: 'perk',
+    desc: 'Asteroid mineral type and value are shown before you mine them.',
+  },
+  cargo_optimizer: {
+    id: 'cargo_optimizer',
+    name: 'Cargo Optimizer',
+    price: 750000,
+    kind: 'perk',
+    desc: '+10 cargo capacity on every drone, stacks with cargo tier upgrades.',
+  },
+  rescue_beacon: {
+    id: 'rescue_beacon',
+    name: 'Rescue Beacon',
+    price: 500000,
+    kind: 'perk',
+    desc: 'If your drone is destroyed, your current cargo is recovered at the mothership instead of lost. Once per run.',
+  },
+};
+
+// Internal helpers
+function _getUpgradesRow(playerId) {
+  const row = stmt('SELECT upgrades FROM mining_upgrades WHERE player_id=?').get(playerId);
+  if (!row) return {};
+  try { return JSON.parse(row.upgrades) || {}; } catch(_) { return {}; }
+}
+function _setUpgradesRow(playerId, obj) {
+  const json = JSON.stringify(obj || {});
+  stmt(`INSERT INTO mining_upgrades (player_id, upgrades) VALUES (?, ?)
+        ON CONFLICT(player_id) DO UPDATE SET upgrades=excluded.upgrades`).run(playerId, json);
+}
+function _getStatsRow(playerId) {
+  const row = stmt('SELECT * FROM mining_stats WHERE player_id=?').get(playerId);
+  if (row) return row;
+  // Default row for players with no mining history
+  return {
+    player_id: playerId,
+    total_runs: 0, total_profit: 0,
+    best_run_profit: 0, best_run_banked: 0, best_run_band: 0, best_run_timestamp: null,
+    deepest_band_reached: 0,
+  };
+}
+
+// Public API
+export function getMiningUpgrades(playerId) {
+  return _getUpgradesRow(playerId);
+}
+
+export function hasMiningUpgrade(playerId, upgradeId) {
+  const u = _getUpgradesRow(playerId);
+  return !!u[upgradeId];
+}
+
+export function getMiningStats(playerId) {
+  return _getStatsRow(playerId);
+}
+
+// Returns {ok:true} or {ok:false, reason:'...'}.
+// Does NOT deduct cash — caller (server.js) deducts after checking.
+// Gate check uses current lifetime stats.
+export function canBuyMiningUpgrade(playerId, upgradeId) {
+  const def = MINING_UPGRADE_CATALOG[upgradeId];
+  if (!def) return { ok:false, reason:'unknown_upgrade' };
+  const owned = _getUpgradesRow(playerId);
+  if (owned[upgradeId]) return { ok:false, reason:'already_owned' };
+  if (def.gate) {
+    const stats = _getStatsRow(playerId);
+    if (def.gate.totalRuns && stats.total_runs < def.gate.totalRuns) {
+      return { ok:false, reason:'gate_runs', need:def.gate.totalRuns, have:stats.total_runs };
+    }
+    if (def.gate.deepestBand !== undefined && stats.deepest_band_reached < def.gate.deepestBand) {
+      return { ok:false, reason:'gate_band', need:def.gate.deepestBand, have:stats.deepest_band_reached };
+    }
+    if (def.gate.totalProfit && stats.total_profit < def.gate.totalProfit) {
+      return { ok:false, reason:'gate_profit', need:def.gate.totalProfit, have:stats.total_profit };
+    }
+  }
+  return { ok:true, price:def.price, def };
+}
+
+// Grant an upgrade (caller has already checked can-buy + deducted cash).
+export function grantMiningUpgrade(playerId, upgradeId) {
+  const owned = _getUpgradesRow(playerId);
+  owned[upgradeId] = true;
+  _setUpgradesRow(playerId, owned);
+}
+
+// Record a completed mining run. Profit = banked - invested.
+// Caller provides stats from endRun client-side; server validates deepest_band
+// is in [0..3] and profit is finite.
+export function recordMiningRun(playerId, { profit, banked, deepestBand }) {
+  const p = Number.isFinite(profit) ? profit : 0;
+  const b = Number.isFinite(banked) ? Math.max(0, banked) : 0;
+  const band = Math.max(0, Math.min(3, Math.floor(deepestBand || 0)));
+  const now = Math.floor(Date.now() / 1000);
+
+  const cur = _getStatsRow(playerId);
+  const newTotalRuns    = cur.total_runs + 1;
+  const newTotalProfit  = cur.total_profit + p;
+  const newDeepest      = Math.max(cur.deepest_band_reached, band);
+  let best_run_profit   = cur.best_run_profit;
+  let best_run_banked   = cur.best_run_banked;
+  let best_run_band     = cur.best_run_band;
+  let best_run_timestamp= cur.best_run_timestamp;
+  if (p > best_run_profit) {
+    best_run_profit    = p;
+    best_run_banked    = b;
+    best_run_band      = band;
+    best_run_timestamp = now;
+  }
+
+  stmt(`INSERT INTO mining_stats
+          (player_id, total_runs, total_profit,
+           best_run_profit, best_run_banked, best_run_band, best_run_timestamp,
+           deepest_band_reached)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(player_id) DO UPDATE SET
+          total_runs=excluded.total_runs,
+          total_profit=excluded.total_profit,
+          best_run_profit=excluded.best_run_profit,
+          best_run_banked=excluded.best_run_banked,
+          best_run_band=excluded.best_run_band,
+          best_run_timestamp=excluded.best_run_timestamp,
+          deepest_band_reached=excluded.deepest_band_reached
+  `).run(
+    playerId, newTotalRuns, newTotalProfit,
+    best_run_profit, best_run_banked, best_run_band, best_run_timestamp,
+    newDeepest
+  );
+
+  return {
+    total_runs: newTotalRuns,
+    total_profit: newTotalProfit,
+    deepest_band_reached: newDeepest,
+    best_run_profit, best_run_banked, best_run_band, best_run_timestamp,
+    isNewBest: p > cur.best_run_profit,
+  };
+}
+
+// Top N players by best_run_profit. Returns [{name, best_run_profit, best_run_band, best_run_timestamp, total_runs}].
+// Band names: 0=NEAR, 1=MID, 2=DEEP, 3=VOID.
+export function getMiningLeaderboard(limit = 10) {
+  const n = Math.max(1, Math.min(50, Math.floor(limit)));
+  const rows = stmt(`
+    SELECT p.name, p.faction, ms.best_run_profit, ms.best_run_band,
+           ms.best_run_timestamp, ms.total_runs
+    FROM mining_stats ms
+    JOIN players p ON p.id = ms.player_id
+    WHERE ms.best_run_profit > 0
+    ORDER BY ms.best_run_profit DESC
+    LIMIT ?
+  `).all(n);
+  return rows;
 }

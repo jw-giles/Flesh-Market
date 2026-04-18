@@ -397,8 +397,38 @@
     <div class="loadout-row"><span class="lbl">Threat Level</span><span id="sum-threat" class="threat-low">LOW</span></div>
   </div>
 
-  <button id="deploy-btn">DEPLOY</button>
+  <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; justify-content:center">
+    <button id="deploy-btn" style="flex:1; min-width:220px">DEPLOY</button>
+    <button id="store-btn" style="flex:0 0 auto; padding:10px 18px; background:transparent; border:1px solid #3a2a10; color:#c8b088; font:bold 13px 'Courier New',monospace; letter-spacing:.2em; cursor:pointer">⛏ STORE</button>
+    <button id="leaderboard-btn" style="flex:0 0 auto; padding:10px 18px; background:transparent; border:1px solid #3a2a10; color:#c8b088; font:bold 13px 'Courier New',monospace; letter-spacing:.2em; cursor:pointer">◆ LEADERS</button>
+  </div>
   <button id="fm-exit-btn" style="display:none; margin-top:10px; padding:8px 24px; background:transparent; border:1px solid #3a2a08; color:#8a6a30; font:12px 'Courier New',monospace; letter-spacing:.15em; cursor:pointer">⟵ BACK TO FLESHMARKET</button>
+</div>
+
+<!-- Mining Store Modal -->
+<div id="store-modal" style="display:none; position:fixed; inset:0; z-index:100; background:rgba(2,2,10,0.92); padding:20px; overflow-y:auto; font-family:'Courier New',monospace">
+  <div style="max-width:780px; margin:20px auto; border:1px solid #3a2a10; background:#050308; padding:24px 28px">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #3a2a10; padding-bottom:14px">
+      <h2 style="margin:0; color:#e6c27a; font-size:22px; letter-spacing:.25em">⛏ MINING STORE</h2>
+      <button id="store-close" style="background:transparent; border:1px solid #3a2a10; color:#8a7a50; font:bold 16px monospace; cursor:pointer; padding:4px 14px">✕ CLOSE</button>
+    </div>
+    <div style="color:#8a7a50; font-size:12px; letter-spacing:.1em; margin-bottom:16px; line-height:1.6">
+      Permanent account-wide upgrades. Purchased once, applied to every expedition forever.
+      Your bank: <span id="store-bank" style="color:#e6c27a; font-weight:bold">Ƒ0</span>
+    </div>
+    <div id="store-body">Loading…</div>
+  </div>
+</div>
+
+<!-- Leaderboard Modal -->
+<div id="lb-modal" style="display:none; position:fixed; inset:0; z-index:100; background:rgba(2,2,10,0.92); padding:20px; overflow-y:auto; font-family:'Courier New',monospace">
+  <div style="max-width:680px; margin:20px auto; border:1px solid #3a2a10; background:#050308; padding:24px 28px">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #3a2a10; padding-bottom:14px">
+      <h2 style="margin:0; color:#e6c27a; font-size:22px; letter-spacing:.25em">◆ TOP EXPEDITIONS</h2>
+      <button id="lb-close" style="background:transparent; border:1px solid #3a2a10; color:#8a7a50; font:bold 16px monospace; cursor:pointer; padding:4px 14px">✕ CLOSE</button>
+    </div>
+    <div id="lb-body" style="color:#c8b088">Loading…</div>
+  </div>
 </div>
 
 <!-- HUD ─────────────────────────────────────────────────────── -->
@@ -529,6 +559,19 @@ function fmBridgeOnMessage(e) {
     const valid = ['coalition','syndicate','void'];
     window.__pendingFactionSet = valid.includes(e.data.faction) ? e.data.faction : 'coalition';
   }
+  if (e.data.type === 'upgrades_state') {
+    // Server pushed the catalog + owned + stats
+    window.__miningUpgradesState = {
+      owned: e.data.owned || {},
+      catalog: e.data.catalog || {},
+      stats: e.data.stats || {},
+    };
+    if (typeof window.__refreshUpgradesUI === 'function') window.__refreshUpgradesUI();
+  }
+  if (e.data.type === 'leaderboard_data') {
+    window.__miningLeaderboard = Array.isArray(e.data.rows) ? e.data.rows : [];
+    if (typeof window.__refreshLeaderboardUI === 'function') window.__refreshLeaderboardUI();
+  }
   if (e.data.type === 'exit') {
     // Parent wants us to shut down (user pressed ESC in FM).
     fmBridgeSend('closing');
@@ -538,6 +581,14 @@ window.addEventListener('message', fmBridgeOnMessage);
 // Tell parent we're ready to receive initial bank
 if (FM_EMBEDDED) {
   fmBridgeSend('ready');
+}
+
+// Helper: has the player purchased a permanent upgrade?
+// Always false in standalone mode (no FM account).
+function hasUpgrade(id) {
+  if (!FM_EMBEDDED) return false;
+  const s = window.__miningUpgradesState;
+  return !!(s && s.owned && s.owned[id]);
 }
 
 'use strict';
@@ -891,7 +942,7 @@ function buildChunk(cx, cy) {
       const rr = r * (0.75 + rng() * 0.5);
       shape.push({ a, r: rr });
     }
-    asteroids.push({
+    const astObj = {
       x: ax, y: ay, r, shape,
       scanned: false, mined: false,
       mineral: null,
@@ -900,7 +951,16 @@ function buildChunk(cx, cy) {
       rot: rng() * Math.PI * 2,
       rotSpd: (rng() - 0.5) * 0.004,
       band
-    });
+    };
+    // Improved Scanner perk: pre-reveal mineral + ore units at chunk gen time
+    if (hasUpgrade('improved_scanner')) {
+      const mrng = mulberry32(hash2(state.seed, Math.floor(astObj.x), Math.floor(astObj.y)));
+      astObj.mineral = pickMineralForBand(mrng, band);
+      astObj.oreUnits = astObj.mineral.value === 0 ? 0 : (1 + Math.floor(mrng() * 3));
+      astObj.scanned = true;
+      if (astObj.oreUnits === 0) astObj.mined = true;
+    }
+    asteroids.push(astObj);
   }
 
   // Enemies
@@ -1084,12 +1144,13 @@ function startRun() {
 
   state.caps = {
     fuel:  FUEL_TIERS[state.fuelTier].cap,
-    cargo: CARGO_TIERS[state.cargoTier].cap,
+    cargo: CARGO_TIERS[state.cargoTier].cap + (hasUpgrade('cargo_optimizer') ? 10 : 0),
     heat:  HEAT_TIERS[state.heatTier].cap
   };
 
   state.dronesUsed = 0;
   state.runBanked = 0;
+  state.rescueBeaconUsed = false;
   state.runStats = {
     rocksMined:0, enemiesKilled:0, dronesLost:0, chunksVisited:0,
     salvageCollected:0, deepestBand:0,
@@ -1143,19 +1204,23 @@ function deployNextDrone(first=false) {
   state.cam.y = state.drone.y - C.height/2;
   state.docked = true;
 
-  // Spawn escorts for this drone, orbiting the drone
+  // Spawn escorts for this drone, orbiting the drone.
+  // Guard Drone perk: +1 free escort on top of whatever was purchased.
   state.escorts = [];
-  for (let i = 0; i < state.escortsBought; i++) {
-    const angle = (i / state.escortsBought) * Math.PI * 2;
+  const extraFromGuard = hasUpgrade('guard_drone') ? 1 : 0;
+  const totalEscorts = state.escortsBought + extraFromGuard;
+  for (let i = 0; i < totalEscorts; i++) {
+    const angle = (i / Math.max(1, totalEscorts)) * Math.PI * 2;
     state.escorts.push({
       x: state.drone.x + Math.cos(angle) * ESCORT_ORBIT_MIN,
       y: state.drone.y + Math.sin(angle) * ESCORT_ORBIT_MIN,
       vx: 0, vy: 0,
       hp: ESCORT_HP,
       orbitAngle: angle,
-      orbitRadius: ESCORT_ORBIT_MIN + (ESCORT_ORBIT_MAX - ESCORT_ORBIT_MIN) * (i / Math.max(1, state.escortsBought - 1)),
+      orbitRadius: ESCORT_ORBIT_MIN + (ESCORT_ORBIT_MAX - ESCORT_ORBIT_MIN) * (i / Math.max(1, totalEscorts - 1)),
       shootCD: i * 5,
-      angle: angle + Math.PI
+      angle: angle + Math.PI,
+      isGuard: i >= state.escortsBought   // last slot is the guard drone if perk owned
     });
     state.runStats.escortsDeployed++;
   }
@@ -1186,6 +1251,14 @@ function killDrone(cause) {
   }
   state.drone = null;
   state.runStats.dronesLost++;
+
+  // Rescue Beacon perk: one-per-run save. If not yet consumed AND we have cargo,
+  // bank the cargo value instead of losing it. Beacon is then spent for the run.
+  if (hasUpgrade('rescue_beacon') && !state.rescueBeaconUsed && state.cargoValue > 0) {
+    state.runBanked += state.cargoValue;
+    showMsg(`RESCUE BEACON: +Ƒ${state.cargoValue.toLocaleString()} CARGO RECOVERED`, 2400, '#86ff6a');
+    state.rescueBeaconUsed = true;
+  }
   state.cargoCount = 0;
   state.cargoValue = 0;
 
@@ -1207,20 +1280,11 @@ function killDrone(cause) {
 
 function dockDrone() {
   if (!state.drone) return;
-  let parts = [];
-  // Bank cargo every dock
+  // Docking banks cargo. Drone refunds now happen only at end of run
+  // for any drone still alive (aborted mid-run or never deployed).
   if (state.cargoValue > 0) {
     state.runBanked += state.cargoValue;
-    parts.push(`Ƒ${state.cargoValue.toLocaleString()} cargo`);
-  }
-  // Refund only fires the first time this drone docks (safe return bonus)
-  if (!state.drone.refundClaimed) {
-    state.runBanked += DRONE_COST;
-    state.drone.refundClaimed = true;
-    parts.push(`Ƒ${DRONE_COST.toLocaleString()} drone refund`);
-  }
-  if (parts.length > 0) {
-    showMsg('+' + parts.join(' + ') + ' BANKED', 2000, '#86ff6a');
+    showMsg(`+Ƒ${state.cargoValue.toLocaleString()} CARGO BANKED`, 1800, '#86ff6a');
   } else {
     showMsg('NO CARGO TO BANK', 1400);
   }
@@ -1237,8 +1301,8 @@ function endRun(title, line1, line2) {
   // ── End-of-run refunds for unused assets ──────────────────────────
   // 1. Drones purchased but never deployed
   const undeployedDrones = Math.max(0, state.dronesBought - state.dronesUsed);
-  // 2. Current drone still alive and hasn't claimed its dock refund yet
-  const livingDroneRefund = (state.drone && !state.drone.refundClaimed) ? 1 : 0;
+  // 2. Current drone still alive (mid-flight or docked when run ended)
+  const livingDroneRefund = state.drone ? 1 : 0;
   // 3. Refineries still in inventory (never deployed)
   const unusedRefineries = state.refineriesRemaining || 0;
   // 4. Escorts attached to drones that never deployed (escorts are per-drone)
@@ -1259,6 +1323,13 @@ function endRun(title, line1, line2) {
   fmBridgeSend('bank_delta', { delta: state.runBanked, reason: 'banked', amount: state.bank });
   const invested = computeLoadoutCost();
   const net = state.runBanked - invested;
+
+  // Record run on server for leaderboard + upgrade gating stats
+  fmBridgeSend('run_complete', {
+    profit: net,
+    banked: state.runBanked,
+    deepestBand: state.runStats.deepestBand,
+  });
 
   document.getElementById('hud-drone').style.display = 'none';
   document.getElementById('hud-cargo').style.display = 'none';
@@ -1342,6 +1413,11 @@ function update() {
       d.vy -= Math.sin(d.angle) * THRUST * 0.4;
       state.fuel -= FUEL_DRAIN_BRAKE;
     }
+  }
+  // Ion Engines perk: slow passive regen up to tank capacity.
+  // ~0.36 fuel/sec at 60fps. Refineries remain much faster (0.4/frame = 24/sec).
+  if (hasUpgrade('ion_engines') && state.fuel < state.caps.fuel) {
+    state.fuel = Math.min(state.caps.fuel, state.fuel + 0.006);
   }
   // Steering works even during lockout
   if (keys['a'] || keys['arrowleft']) d.angle -= TURN;
@@ -1605,7 +1681,7 @@ function update() {
   //      swept-segment-vs-circle test (checks the line from old→new position)
   //   3. Cargo-full silently dropped pickups — now surfaces feedback
   const PICKUP_RADIUS = 32;        // slightly bumped for forgiveness
-  const PULL_RADIUS = 90;
+  const PULL_RADIUS = hasUpgrade('salvage_magnet') ? 150 : 90;
   let missedDueToCargoFull = false;
   for (let i = state.salvage.length - 1; i >= 0; i--) {
     const s = state.salvage[i];
@@ -2891,6 +2967,158 @@ document.getElementById('seed-rand').addEventListener('click', () => {
 });
 document.getElementById('deploy-btn').addEventListener('click', startRun);
 document.getElementById('go-btn').addEventListener('click', returnToMenu);
+
+// ═══════════════════════════════════════════════════════════════════
+// STORE MODAL
+// ═══════════════════════════════════════════════════════════════════
+const BAND_NAMES = ['NEAR', 'MID', 'DEEP', 'VOID'];
+
+function escH(s) {
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+window.__refreshUpgradesUI = function() {
+  const body = document.getElementById('store-body');
+  if (!body) return;
+  const bankEl = document.getElementById('store-bank');
+  if (bankEl) bankEl.textContent = 'Ƒ' + Math.floor(state.bank).toLocaleString();
+
+  const s = window.__miningUpgradesState;
+  if (!s || !s.catalog || Object.keys(s.catalog).length === 0) {
+    body.innerHTML = '<div style="color:#8a7a50; padding:16px; text-align:center">Connecting to FleshMarket…</div>';
+    return;
+  }
+  const { owned, catalog, stats } = s;
+  const items = Object.values(catalog);
+  // Sort: owned first, then by price ascending
+  items.sort((a, b) => {
+    const aOwned = owned[a.id] ? 1 : 0;
+    const bOwned = owned[b.id] ? 1 : 0;
+    if (aOwned !== bOwned) return bOwned - aOwned;
+    return a.price - b.price;
+  });
+
+  let html = `<div style="display:grid; gap:10px">`;
+  for (const it of items) {
+    const isOwned = !!owned[it.id];
+    let gateText = '';
+    let locked = false;
+    if (it.gate && !isOwned) {
+      if (it.gate.totalRuns && (stats.total_runs || 0) < it.gate.totalRuns) {
+        gateText = `🔒 Requires ${it.gate.totalRuns} completed runs (${stats.total_runs||0} / ${it.gate.totalRuns})`;
+        locked = true;
+      } else if (it.gate.deepestBand !== undefined && (stats.deepest_band_reached || 0) < it.gate.deepestBand) {
+        gateText = `🔒 Requires reaching ${BAND_NAMES[it.gate.deepestBand]} zone`;
+        locked = true;
+      } else if (it.gate.totalProfit && (stats.total_profit || 0) < it.gate.totalProfit) {
+        gateText = `🔒 Requires Ƒ${it.gate.totalProfit.toLocaleString()} lifetime profit (Ƒ${Math.floor(stats.total_profit||0).toLocaleString()} earned)`;
+        locked = true;
+      }
+    }
+    const canAfford = state.bank >= it.price;
+    const disabled = isOwned || locked || !canAfford;
+    const kindBadge = it.kind === 'title'
+      ? '<span style="color:#9b59b6; font-size:10px; letter-spacing:.15em">TITLE</span>'
+      : '<span style="color:#4ecdc4; font-size:10px; letter-spacing:.15em">PERK</span>';
+
+    const btnLabel = isOwned ? '✓ OWNED'
+                  : locked ? 'LOCKED'
+                  : !canAfford ? `NEED Ƒ${it.price.toLocaleString()}`
+                  : `BUY Ƒ${it.price.toLocaleString()}`;
+    const btnColor = isOwned ? '#4ecdc4'
+                   : locked ? '#8a7a50'
+                   : !canAfford ? '#ff6b6b'
+                   : '#e6c27a';
+
+    html += `<div style="border:1px solid ${isOwned ? '#2a5a48' : '#3a2a10'}; background:${isOwned ? 'rgba(76,237,207,.05)' : 'rgba(10,6,2,.6)'}; padding:14px 18px; display:flex; gap:16px; align-items:center">
+      <div style="flex:1">
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:4px">
+          <span style="color:${isOwned ? '#4ecdc4' : '#e6c27a'}; font-weight:bold; font-size:15px">${escH(it.name)}</span>
+          ${kindBadge}
+        </div>
+        <div style="color:#c8b088; font-size:12px; line-height:1.5">${escH(it.desc)}</div>
+        ${gateText ? `<div style="color:#ff9a4a; font-size:11px; margin-top:6px">${gateText}</div>` : ''}
+      </div>
+      <button data-upgrade-id="${escH(it.id)}" ${disabled ? 'disabled' : ''} style="flex:0 0 auto; padding:10px 16px; min-width:140px; background:transparent; border:1px solid ${btnColor}; color:${btnColor}; font:bold 12px 'Courier New',monospace; letter-spacing:.15em; cursor:${disabled ? 'default' : 'pointer'}; opacity:${disabled ? '0.5' : '1'}">${btnLabel}</button>
+    </div>`;
+  }
+  html += '</div>';
+
+  html += `<div style="margin-top:20px; padding-top:14px; border-top:1px solid #3a2a10; color:#8a7a50; font-size:11px; letter-spacing:.08em; line-height:1.7">
+    <div>Lifetime stats: <span style="color:#c8b088">${stats.total_runs||0} runs</span> · <span style="color:#c8b088">Ƒ${Math.floor(stats.total_profit||0).toLocaleString()} total profit</span> · deepest: <span style="color:#c8b088">${BAND_NAMES[stats.deepest_band_reached||0]}</span></div>
+    <div style="margin-top:4px">Best single run: <span style="color:#86ff6a">+Ƒ${Math.floor(stats.best_run_profit||0).toLocaleString()}</span></div>
+  </div>`;
+
+  body.innerHTML = html;
+
+  // Wire buy buttons
+  body.querySelectorAll('button[data-upgrade-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.upgradeId;
+      if (!id || btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = '...';
+      fmBridgeSend('buy_upgrade', { upgradeId: id });
+    });
+  });
+};
+
+window.__refreshLeaderboardUI = function() {
+  const body = document.getElementById('lb-body');
+  if (!body) return;
+  const rows = window.__miningLeaderboard || [];
+  if (rows.length === 0) {
+    body.innerHTML = '<div style="color:#8a7a50; text-align:center; padding:20px">No expeditions recorded yet. Be the first.</div>';
+    return;
+  }
+  let html = `<table style="width:100%; border-collapse:collapse; font-size:13px">
+    <thead>
+      <tr style="color:#8a7a50; text-transform:uppercase; font-size:11px; letter-spacing:.12em">
+        <th style="text-align:left; padding:8px 10px; border-bottom:1px solid #3a2a10">#</th>
+        <th style="text-align:left; padding:8px 10px; border-bottom:1px solid #3a2a10">Pilot</th>
+        <th style="text-align:right; padding:8px 10px; border-bottom:1px solid #3a2a10">Best Run</th>
+        <th style="text-align:center; padding:8px 10px; border-bottom:1px solid #3a2a10">Zone</th>
+        <th style="text-align:right; padding:8px 10px; border-bottom:1px solid #3a2a10">Runs</th>
+      </tr>
+    </thead>
+    <tbody>`;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const bandIdx = Math.max(0, Math.min(3, r.best_run_band|0));
+    const bandColors = ['#86ff6a', '#e6c27a', '#ff9a4a', '#ff4a4a'];
+    const facColor = r.faction === 'syndicate' ? '#e74c3c'
+                   : r.faction === 'void'      ? '#9b59b6'
+                   : r.faction === 'coalition' ? '#4ecdc4'
+                   : '#8a7a50';
+    html += `<tr>
+      <td style="padding:8px 10px; color:#8a7a50">${i+1}</td>
+      <td style="padding:8px 10px; color:${facColor}; font-weight:bold">${escH(r.name)}</td>
+      <td style="padding:8px 10px; text-align:right; color:#86ff6a; font-weight:bold">+Ƒ${Math.floor(r.best_run_profit).toLocaleString()}</td>
+      <td style="padding:8px 10px; text-align:center; color:${bandColors[bandIdx]}; font-size:11px; letter-spacing:.15em">${BAND_NAMES[bandIdx]}</td>
+      <td style="padding:8px 10px; text-align:right; color:#8a7a50">${r.total_runs}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  body.innerHTML = html;
+};
+
+document.getElementById('store-btn').addEventListener('click', () => {
+  document.getElementById('store-modal').style.display = 'block';
+  if (FM_EMBEDDED) fmBridgeSend('request_upgrades');
+  window.__refreshUpgradesUI();
+});
+document.getElementById('store-close').addEventListener('click', () => {
+  document.getElementById('store-modal').style.display = 'none';
+});
+
+document.getElementById('leaderboard-btn').addEventListener('click', () => {
+  document.getElementById('lb-modal').style.display = 'block';
+  if (FM_EMBEDDED) fmBridgeSend('request_leaderboard');
+  window.__refreshLeaderboardUI();
+});
+document.getElementById('lb-close').addEventListener('click', () => {
+  document.getElementById('lb-modal').style.display = 'none';
+});
 
 // FM exit button: only visible when embedded
 if (FM_EMBEDDED) {

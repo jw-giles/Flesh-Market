@@ -1276,7 +1276,11 @@ $all('.tab').forEach(tab=>{
     const _mineTab = el('#miningTab'); if(_mineTab) _mineTab.style.display = sel==='mining'?'flex':'none';
     if (sel==='guild') { loadGuildDirectory(); }
     if (sel==='bugs') { if(window.bugsTabLoad) window.bugsTabLoad(); else lazyLoad('assets/dev-comms.js', ()=>window.bugsTabLoad&&window.bugsTabLoad()); }
-    if (sel==='mining') { try { window.__miningBriefRefresh && window.__miningBriefRefresh(); } catch(_){} }
+    if (sel==='mining') {
+      try { window.__miningBriefRefresh && window.__miningBriefRefresh(); } catch(_){}
+      // Fetch fresh leaderboard whenever the tab is opened
+      try { if (window.ws && window.ws.readyState === 1) window.ws.send(JSON.stringify({type:'mining_leaderboard'})); } catch(_){}
+    }
     // ensure the equity line renders when the P&L tab becomes visible
     if (sel==='pnl') { setTimeout(()=>{ try { drawEquity(); } catch(e){} }, 0); }
   });
@@ -2288,6 +2292,56 @@ ws.addEventListener('message', (ev)=>{
   }
   window.__miningBriefRefresh = refreshBriefBank;
 
+  // Band names for leaderboard display
+  const _MINING_BAND_NAMES = ['NEAR', 'MID', 'DEEP', 'VOID'];
+  const _MINING_BAND_COLORS = ['#86ff6a', '#e6c27a', '#ff9a4a', '#ff4a4a'];
+
+  function _renderBriefLeaderboard(rows) {
+    const body = document.getElementById('miningLeaderboardBody');
+    if (!body) return;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      body.innerHTML = '<div style="color:#6a5a38; text-align:center; padding:14px 0">No expeditions recorded yet. Be the first.</div>';
+      return;
+    }
+    const myName = (typeof ME === 'object' && ME && ME.name) ? ME.name : null;
+    let html = `<table style="width:100%; border-collapse:collapse; font-size:13px; letter-spacing:.04em">
+      <thead>
+        <tr style="color:#8a7a50; text-transform:uppercase; font-size:11px; letter-spacing:.12em">
+          <th style="text-align:left; padding:6px 8px; border-bottom:1px solid #3a2a10">#</th>
+          <th style="text-align:left; padding:6px 8px; border-bottom:1px solid #3a2a10">Pilot</th>
+          <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #3a2a10">Best Run</th>
+          <th style="text-align:center; padding:6px 8px; border-bottom:1px solid #3a2a10">Zone</th>
+          <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #3a2a10">Runs</th>
+        </tr>
+      </thead>
+      <tbody>`;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const isMe = myName && r.name === myName;
+      const bandIdx = Math.max(0, Math.min(3, r.best_run_band|0));
+      const bandName = _MINING_BAND_NAMES[bandIdx];
+      const bandColor = _MINING_BAND_COLORS[bandIdx];
+      const factionColor = r.faction === 'syndicate' ? '#e74c3c'
+                        : r.faction === 'void'      ? '#9b59b6'
+                        : r.faction === 'coalition' ? '#4ecdc4'
+                        : '#8a7a50';
+      const rowBg = isMe ? 'background:rgba(230,194,122,.07);' : '';
+      const nameStyle = isMe ? 'color:#e6c27a; font-weight:bold' : `color:${factionColor}`;
+      html += `<tr style="${rowBg}">
+        <td style="padding:6px 8px; color:#8a7a50; font-size:12px">${i+1}</td>
+        <td style="padding:6px 8px"><span style="${nameStyle}">${_escHtml(r.name)}</span></td>
+        <td style="padding:6px 8px; text-align:right; color:#86ff6a; font-weight:bold">+Ƒ${Math.floor(r.best_run_profit).toLocaleString()}</td>
+        <td style="padding:6px 8px; text-align:center; color:${bandColor}; font-size:11px; letter-spacing:.15em">${bandName}</td>
+        <td style="padding:6px 8px; text-align:right; color:#8a7a50; font-size:12px">${r.total_runs}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    body.innerHTML = html;
+  }
+  function _escHtml(s) {
+    return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
   // Update brief bank on any FM cash change; push faction too on 'me' events
   document.addEventListener('fm_ws_msg', (e) => {
     if (e.detail && (e.detail.type === 'portfolio' || e.detail.type === 'income' || e.detail.type === 'me')) {
@@ -2356,15 +2410,69 @@ ws.addEventListener('message', (ev)=>{
     } catch(_){}
   }
 
+  // Send the upgrades catalog + owned state to the iframe.
+  // Called on ready and whenever server confirms a purchase.
+  function pushUpgradesToIframe(state) {
+    if (!miningIframe || !miningIframe.contentWindow || !state) return;
+    try {
+      miningIframe.contentWindow.postMessage(
+        { source: 'fleshmarket', type: 'upgrades_state', ...state },
+        '*'
+      );
+    } catch(_){}
+  }
+
+  // Send a leaderboard payload to the iframe.
+  function pushLeaderboardToIframe(rows) {
+    if (!miningIframe || !miningIframe.contentWindow) return;
+    try {
+      miningIframe.contentWindow.postMessage(
+        { source: 'fleshmarket', type: 'leaderboard_data', rows: rows || [] },
+        '*'
+      );
+    } catch(_){}
+  }
+
+  // Forward iframe-originated requests into the FM WebSocket.
+  function _wsSendMining(payload) {
+    try {
+      if (window.ws && window.ws.readyState === 1) {
+        window.ws.send(JSON.stringify(payload));
+      }
+    } catch(_){}
+  }
+
+  // Listen for server responses that are mining-store related and
+  // forward them to the iframe + brief-screen leaderboard.
+  document.addEventListener('fm_ws_msg', (e) => {
+    if (!e || !e.detail) return;
+    const t = e.detail.type;
+    if (t === 'mining_upgrades_state') {
+      pushUpgradesToIframe(e.detail.data);
+    } else if (t === 'mining_upgrade_purchased') {
+      // Refresh authoritative state after purchase
+      _wsSendMining({ type: 'mining_upgrades_list' });
+    } else if (t === 'mining_leaderboard_data') {
+      pushLeaderboardToIframe(e.detail.data && e.detail.data.rows);
+      _renderBriefLeaderboard(e.detail.data && e.detail.data.rows);
+    } else if (t === 'mining_run_recorded') {
+      // Stats updated; if the store is open in iframe, refresh catalog state
+      _wsSendMining({ type: 'mining_upgrades_list' });
+      // Refresh leaderboard after a run completes
+      _wsSendMining({ type: 'mining_leaderboard' });
+    }
+  });
+
   // --- postMessage bridge ------------------------------------------
   window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || msg.source !== 'drone-mining') return;
 
     if (msg.type === 'ready') {
-      // Game just loaded — send current bank and faction
+      // Game just loaded — send current bank, faction, and upgrades
       pushBankToIframe();
       pushFactionToIframe();
+      _wsSendMining({ type: 'mining_upgrades_list' });
       return;
     }
 
@@ -2387,6 +2495,29 @@ ws.addEventListener('message', (ev)=>{
 
     if (msg.type === 'closing') {
       closeMining();
+      return;
+    }
+
+    // ── Mining Store requests from the iframe ────────────────────────
+    if (msg.type === 'request_upgrades') {
+      _wsSendMining({ type: 'mining_upgrades_list' });
+      return;
+    }
+    if (msg.type === 'buy_upgrade' && typeof msg.upgradeId === 'string') {
+      _wsSendMining({ type: 'mining_upgrade_buy', upgradeId: msg.upgradeId });
+      return;
+    }
+    if (msg.type === 'run_complete') {
+      _wsSendMining({
+        type: 'mining_run_complete',
+        profit: Number(msg.profit) || 0,
+        banked: Number(msg.banked) || 0,
+        deepestBand: Number(msg.deepestBand) || 0,
+      });
+      return;
+    }
+    if (msg.type === 'request_leaderboard') {
+      _wsSendMining({ type: 'mining_leaderboard' });
       return;
     }
   });
