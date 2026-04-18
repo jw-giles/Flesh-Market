@@ -788,6 +788,10 @@ const MAX_SPD = 4.2;
 const DRAG = 0.985;
 const TURN = 0.052;
 
+// Camera zoom — renders world content at this scale. Drone stays centered.
+// Higher = chunkier sprites, less visible area per frame.
+const CAMERA_ZOOM = 1.25;
+
 const LASER_RANGE = 280;
 const LASER_WIDTH = 0.8;             // thin precision cutting beam
 const LASER_MINE_RATE = 1.6;
@@ -1384,8 +1388,8 @@ function deployNextDrone(first=false) {
   state.mothership.x = 0;
   state.mothership.y = 0;
 
-  state.cam.x = state.drone.x - C.width/2;
-  state.cam.y = state.drone.y - C.height/2;
+  state.cam.x = state.drone.x - C.width  / (2 * CAMERA_ZOOM);
+  state.cam.y = state.drone.y - C.height / (2 * CAMERA_ZOOM);
   state.docked = true;
 
   // Spawn escorts for this drone, orbiting the drone.
@@ -1673,9 +1677,11 @@ function update() {
     return;
   }
 
-  // Camera
-  const targX = d.x - C.width/2 + d.vx * 14;
-  const targY = d.y - C.height/2 + d.vy * 14;
+  // Camera — center the drone in the zoomed viewport
+  const halfW = C.width  / (2 * CAMERA_ZOOM);
+  const halfH = C.height / (2 * CAMERA_ZOOM);
+  const targX = d.x - halfW + d.vx * 14;
+  const targY = d.y - halfH + d.vy * 14;
   state.cam.x += (targX - state.cam.x) * 0.12;
   state.cam.y += (targY - state.cam.y) * 0.12;
 
@@ -2675,13 +2681,21 @@ function render() {
   X.fillStyle = '#030208';
   X.fillRect(0, 0, C.width, C.height);
 
+  // Apply camera zoom — all world rendering below happens at CAMERA_ZOOM scale.
+  // The background fill above stays in screen pixels so it covers the whole canvas.
+  X.save();
+  X.scale(CAMERA_ZOOM, CAMERA_ZOOM);
+  // Visible world area in camera-space after zoom (used for off-screen culling)
+  const viewW = C.width  / CAMERA_ZOOM;
+  const viewH = C.height / CAMERA_ZOOM;
+
   const camX = state.cam.x, camY = state.cam.y;
 
   // Parallax stars
   for (const s of allStars()) {
     const px = s.x - camX * s.depth;
     const py = s.y - camY * s.depth;
-    if (px < -10 || px > C.width+10 || py < -10 || py > C.height+10) continue;
+    if (px < -10 || px > viewW+10 || py < -10 || py > viewH+10) continue;
     X.fillStyle = s.color;
     X.globalAlpha = 0.3 + s.depth * 0.5;
     X.fillRect(Math.floor(px), Math.floor(py), s.size, s.size);
@@ -2692,16 +2706,16 @@ function render() {
   X.strokeStyle = '#0a0a14';
   X.lineWidth = 1;
   const startCX = Math.floor(camX / CHUNK);
-  const endCX = Math.ceil((camX + C.width) / CHUNK);
+  const endCX = Math.ceil((camX + viewW) / CHUNK);
   const startCY = Math.floor(camY / CHUNK);
-  const endCY = Math.ceil((camY + C.height) / CHUNK);
+  const endCY = Math.ceil((camY + viewH) / CHUNK);
   for (let cx = startCX; cx <= endCX; cx++) {
     const x = cx * CHUNK - camX;
-    X.beginPath(); X.moveTo(x, 0); X.lineTo(x, C.height); X.stroke();
+    X.beginPath(); X.moveTo(x, 0); X.lineTo(x, viewH); X.stroke();
   }
   for (let cy = startCY; cy <= endCY; cy++) {
     const y = cy * CHUNK - camY;
-    X.beginPath(); X.moveTo(0, y); X.lineTo(C.width, y); X.stroke();
+    X.beginPath(); X.moveTo(0, y); X.lineTo(viewW, y); X.stroke();
   }
 
   // Mothership
@@ -2710,14 +2724,14 @@ function render() {
   // Asteroids
   for (const a of allAsteroids()) {
     const sx = a.x - camX, sy = a.y - camY;
-    if (sx < -120 || sx > C.width+120 || sy < -120 || sy > C.height+120) continue;
+    if (sx < -120 || sx > viewW+120 || sy < -120 || sy > viewH+120) continue;
     drawAsteroid(a, sx, sy);
   }
 
   // Salvage pickups
   for (const s of state.salvage) {
     const sx = s.x - camX, sy = s.y - camY;
-    if (sx < -30 || sx > C.width+30 || sy < -30 || sy > C.height+30) continue;
+    if (sx < -30 || sx > viewW+30 || sy < -30 || sy > viewH+30) continue;
     const pulse = 0.6 + Math.sin(s.pulse) * 0.4;
     // Fade out in last 200 frames
     const alpha = s.life < 200 ? s.life/200 : 1;
@@ -2737,21 +2751,21 @@ function render() {
   // Refineries (drawn before enemies so enemies can overlay)
   for (const r of state.refineries) {
     const sx = r.x - camX, sy = r.y - camY;
-    if (sx < -80 || sx > C.width+80 || sy < -80 || sy > C.height+80) continue;
+    if (sx < -80 || sx > viewW+80 || sy < -80 || sy > viewH+80) continue;
     drawRefinery(r, sx, sy);
   }
 
   // Enemies
   for (const e of allEnemies()) {
     const sx = e.x - camX, sy = e.y - camY;
-    if (sx < -60 || sx > C.width+60 || sy < -60 || sy > C.height+60) continue;
+    if (sx < -60 || sx > viewW+60 || sy < -60 || sy > viewH+60) continue;
     drawEnemy(e, sx, sy);
   }
 
   // Escort drones (drawn after enemies so they overlay)
   for (const esc of state.escorts) {
     const sx = esc.x - camX, sy = esc.y - camY;
-    if (sx < -40 || sx > C.width+40 || sy < -40 || sy > C.height+40) continue;
+    if (sx < -40 || sx > viewW+40 || sy < -40 || sy > viewH+40) continue;
     drawEscort(esc, sx, sy);
   }
 
@@ -2916,7 +2930,7 @@ function render() {
     X.fillStyle = '#86ff6a';
     X.font = "bold 15px 'Courier New'";
     X.textAlign = 'center';
-    X.fillText('[Q] DOCK AND BANK CARGO', C.width/2, C.height - 70);
+    X.fillText('[Q] DOCK AND BANK CARGO', viewW/2, viewH - 70);
   }
 
   // Off-screen mothership indicator
@@ -2926,12 +2940,12 @@ function render() {
     const mdist = Math.hypot(mdx, mdy);
     const msx = state.mothership.x - camX;
     const msy = state.mothership.y - camY;
-    const onScreen = msx > -60 && msx < C.width+60 && msy > -60 && msy < C.height+60;
+    const onScreen = msx > -60 && msx < viewW+60 && msy > -60 && msy < viewH+60;
     if (!onScreen) {
       const ang = Math.atan2(mdy, mdx);
       const edge = 70;
-      const ex = C.width/2 + Math.cos(ang) * (Math.min(C.width, C.height)/2 - edge);
-      const ey = C.height/2 + Math.sin(ang) * (Math.min(C.width, C.height)/2 - edge);
+      const ex = viewW/2 + Math.cos(ang) * (Math.min(viewW, viewH)/2 - edge);
+      const ey = viewH/2 + Math.sin(ang) * (Math.min(viewW, viewH)/2 - edge);
       // Color hint based on whether you can still get home on current fuel
       // Rough estimate: fuel needed ≈ (distance / MAX_SPD) * FUEL_DRAIN_THRUST
       const framesNeeded = mdist / MAX_SPD;
@@ -2961,14 +2975,14 @@ function render() {
     // Off-screen refinery indicators (smaller, green)
     for (const r of state.refineries) {
       const rsx = r.x - camX, rsy = r.y - camY;
-      const rOn = rsx > -60 && rsx < C.width+60 && rsy > -60 && rsy < C.height+60;
+      const rOn = rsx > -60 && rsx < viewW+60 && rsy > -60 && rsy < viewH+60;
       if (rOn) continue;
       const rdx = r.x - d.x, rdy = r.y - d.y;
       const rdist = Math.hypot(rdx, rdy);
       const rang = Math.atan2(rdy, rdx);
       const redge = 90;
-      const rex = C.width/2 + Math.cos(rang) * (Math.min(C.width, C.height)/2 - redge);
-      const rey = C.height/2 + Math.sin(rang) * (Math.min(C.width, C.height)/2 - redge);
+      const rex = viewW/2 + Math.cos(rang) * (Math.min(viewW, viewH)/2 - redge);
+      const rey = viewH/2 + Math.sin(rang) * (Math.min(viewW, viewH)/2 - redge);
       const rcol = r.fueling ? '#86ff6a' : '#60c8ff';
       X.strokeStyle = rcol; X.lineWidth = 1.2;
       X.beginPath(); X.arc(rex, rey, 6, 0, Math.PI*2); X.stroke();
@@ -2985,6 +2999,8 @@ function render() {
       X.fillText(Math.floor(rdist) + 'm', rex, rey - 12);
     }
   }
+
+  X.restore();  // match X.save() + X.scale() at render start
 }
 
 function drawMothership(x, y) {
