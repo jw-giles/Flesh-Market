@@ -1204,16 +1204,23 @@ function killDrone(cause) {
 
 function dockDrone() {
   if (!state.drone) return;
-  // Successful return refunds the drone's base cost
-  const refund = DRONE_COST;
   let parts = [];
+  // Bank cargo every dock
   if (state.cargoValue > 0) {
     state.runBanked += state.cargoValue;
     parts.push(`Ƒ${state.cargoValue.toLocaleString()} cargo`);
   }
-  state.runBanked += refund;
-  parts.push(`Ƒ${refund.toLocaleString()} drone refund`);
-  showMsg('+' + parts.join(' + ') + ' BANKED', 2000, '#86ff6a');
+  // Refund only fires the first time this drone docks (safe return bonus)
+  if (!state.drone.refundClaimed) {
+    state.runBanked += DRONE_COST;
+    state.drone.refundClaimed = true;
+    parts.push(`Ƒ${DRONE_COST.toLocaleString()} drone refund`);
+  }
+  if (parts.length > 0) {
+    showMsg('+' + parts.join(' + ') + ' BANKED', 2000, '#86ff6a');
+  } else {
+    showMsg('NO CARGO TO BANK', 1400);
+  }
   state.cargoCount = 0;
   state.cargoValue = 0;
   // Fuel NOT refilled — one tank per drone.
