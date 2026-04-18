@@ -1,4 +1,4 @@
-# FleshMarket v1.0.1.9 — MANIFEST
+# FleshMarket v1.0.2.0 — MANIFEST
 
 ## Structure
 
@@ -57,8 +57,12 @@ game/
       casino-mathgame.css   math game styles
       casino-minesweeper.css minesweeper styles
       galaxy.js             galaxy map, factions, colony UI (lazy-loaded)
-      tutorial.js           UNIT-7 onboarding tutorial (12 slides)
+      tutorial.js           UNIT-7 onboarding tutorial (13 slides)
       tutorial.css          tutorial modal styles
+      drone-mining/
+        index.html          standalone Drone Mining game, iframe-embedded in Mining tab
+                            communicates with FM parent via window.postMessage
+                            runs standalone (file://) or embedded; bank syncs with ME.cash
       pnl_stream/
         pnl-boot.js
         pnl-bridge.js

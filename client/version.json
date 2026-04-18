@@ -1,7 +1,7 @@
 {
-  "version": "1.0.1.9",
-  "built": "2026-04-16T00:00:00Z",
+  "version": "1.0.2.0",
+  "built": "2026-04-18T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.1.9",
-  "notes": "Discord button added; dividend eligibility now requires 7-trading-day hold"
+  "patch": "1.0.2.0",
+  "notes": "Drone Mining minigame added as Mining tab; tutorial updated with Mining slide and accurate short/dividend mechanics"
 }

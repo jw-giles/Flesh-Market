@@ -79,14 +79,14 @@
     },
     {
       heading: 'SHORT SELLING',
-      text: `You can <em>short sell</em> stocks you don't own using the <em>⬇ Short</em> button. Shorting sells borrowed shares at the current price — you profit when the price drops. Short positions require <strong>50% cash collateral</strong> (margin) and incur a <em>0.1% borrow fee</em> every 30 minutes. Maximum <strong>500 shares short</strong> per symbol. Cover your short by buying back the shares. <span class="warn">Unlimited downside risk if the price rises.</span>`,
-      callout: 'Short selling is advanced. Your cash is drained by borrow fees until you cover.',
+      text: `Shorting with the <em>⬇ Short</em> button borrows shares and sells them at market price. You profit if the price drops and you cover cheaper. Requirements: <strong>50% of the short value as cash collateral</strong> stays locked while the position is open, the position accrues a <strong>0.1% borrow fee</strong> on position value every <strong>30 minutes</strong>, and you cannot short more than <strong>500 shares per symbol</strong>. To close, you buy back the symbol. Buying more than your short covers first and the excess is rejected — you must be flat before you can go long. Covering counts as a day trade. <span class="warn">Losses scale with how high the price goes. They are not capped.</span>`,
+      callout: 'Borrow fees run until you cover. Sitting on a short that goes sideways will bleed you.',
       tab: 'market',
     },
     {
       heading: 'DIVIDENDS AND ANALYSIS',
-      text: `Every stock pays <em>dividends every 2 hours</em>. Finance, Insurance, Energy, and Tech sectors pay <em>0.6%</em> of position value. All other sectors pay <em>0.2%</em>. Faction colony bonuses can boost rates further. The <em>🔥 Heatmap</em> tab shows the entire market color-coded by daily performance. The <em>P&L</em> tab tracks your net worth over time with a donut chart, position breakdown, sector exposure, and <em>performance metrics</em> including max drawdown and win rate.`,
-      callout: 'Passive income (Ƒ25/30min for free accounts) requires an active connection. Holding pays.',
+      text: `Dividends pay every <em>2 hours</em>. Finance, Insurance, Energy, and Tech sectors pay the full <strong>0.6%</strong> of position value. All other sectors pay a smaller <strong>0.2%</strong> holding dividend. Colony/faction bonuses stack on top, and <em>Merchants Guild</em> members get an additional <strong>+1% per MG member</strong> applied to their total payout. <span class="warn">Hold requirement: shares must be held continuously through the last 7 trading-day snapshots</span> (7 × 30-min cycles, 3.5 hours) to count. Buying right before a dividend and selling after pays nothing; any drop in your position during the window reduces eligibility to that minimum. The <em>🔥 Heatmap</em> tab color-codes the whole market by daily performance. The <em>P&L</em> tab tracks your net worth with a donut chart, position breakdown, sector exposure, and metrics like max drawdown and win rate.`,
+      callout: 'New positions pay no dividend until they have survived 7 × 30-min snapshots continuously.',
       tab: 'heat',
     },
     {
@@ -121,6 +121,12 @@
       text: `Eight casino games are available. <em>Roulette</em> — 13 bet types with animated wheel. <em>Blackjack</em> — 6-deck shoe with card tracking. <em>Poker</em> — Texas Hold'em 6-max vs AI. <em>Horse Racing</em>, <em>Chess</em>, <em>Sudoku</em>, <em>Math Quiz</em>, and <em>Minesweeper</em>. All games use your Social Credit balance directly — wins are real, losses are real. No house tokens, no abstraction.`,
       callout: 'Casino winnings are the fastest way to grow early. Also the fastest way to go broke.',
       tab: 'casino',
+    },
+    {
+      heading: 'DRONE MINING',
+      text: `The <em>⛏ Mining</em> tab opens an unregulated asteroid extraction zone. Pilot a single drone into the belt, mine ore with your laser, and bring it back to bank. Every faction agreed that mining is where conflict happens, so safe mining is not enforced anywhere. Hostile drones patrol every sector. Drones of <strong>your own faction</strong> leave you alone. Depth bands get richer and more hostile the further you push: <span style="color:#86ff6a">NEAR</span>, <span style="color:#e6c27a">MID</span>, <span style="color:#ff9a4a">DEEP</span>, <span style="color:#ff4a4a">VOID</span>. One hostile hit ends the drone. Docking safely refunds the drone's Ƒ1,000 build cost. Fuel does not refill.`,
+      callout: 'Your FleshMarket faction determines who shoots at you. The game opens fullscreen, ESC returns.',
+      tab: 'mining',
     },
     {
       heading: 'SOCIAL AND ECONOMY',

@@ -1,0 +1,2834 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>FLESH MARKET — Open Range Mining</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; background:#030208; color:#c8a050;
+    font-family:'Courier New',monospace; overflow:hidden; user-select:none; }
+  canvas { display:block; position:fixed; top:0; left:0; }
+
+  .lbl { color:#5a4a28; letter-spacing:.1em; font-size:12px; text-transform:uppercase; }
+  .val { color:#e6c27a; font-weight:bold; font-size:14px; }
+  .good { color:#86ff6a !important; }
+  .warn { color:#ff6b6b !important; }
+  .danger { color:#ff4a4a !important; }
+
+  /* ── HUD ─────────────────────────────────────────────────────── */
+  .hud-panel {
+    position:fixed; z-index:10; display:none;
+    background:rgba(3,2,8,.82);
+    border:1px solid #1a1208;
+    padding:8px 12px;
+    backdrop-filter:blur(2px);
+  }
+  .hud-panel .row { display:flex; align-items:center; gap:10px; }
+  .hud-panel .row + .row { margin-top:6px; }
+  .hud-panel .tag {
+    font-size:11px; letter-spacing:.2em; color:#5a4a28; text-transform:uppercase;
+    min-width:52px;
+  }
+  .hud-panel .num { font-size:20px; font-weight:bold; color:#e6c27a; letter-spacing:.05em; }
+  .hud-panel .num.big { font-size:26px; }
+  .hud-panel .sub { font-size:12px; color:#8a7a50; margin-left:4px; }
+  .hud-panel .sub.good { color:#86ff6a; }
+  .hud-panel .sub.warn { color:#ff9a4a; }
+
+  /* Top-left: drone count + position */
+  #hud-drone {
+    top:12px; left:12px; min-width:180px;
+  }
+
+  /* Top-right: cargo + banked */
+  #hud-cargo {
+    top:12px; right:12px; min-width:200px; text-align:right;
+  }
+  #hud-cargo .row { justify-content:flex-end; }
+
+  /* Bottom-left: FUEL — the big one */
+  #hud-fuel {
+    bottom:40px; left:12px; min-width:240px;
+    padding:10px 14px;
+  }
+  #hud-fuel.critical {
+    border-color:#ff4a4a;
+    animation:fuelAlarm 0.8s ease-in-out infinite;
+  }
+  @keyframes fuelAlarm {
+    0%,100% { box-shadow:0 0 0 rgba(255,74,74,0); }
+    50%     { box-shadow:0 0 24px rgba(255,74,74,.5), inset 0 0 12px rgba(255,74,74,.15); }
+  }
+  #hud-fuel .fuel-row-top {
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom:6px;
+  }
+  #hud-fuel .fuel-label {
+    font-size:13px; letter-spacing:.25em; color:#8a7a50; text-transform:uppercase;
+  }
+  #hud-fuel.critical .fuel-label { color:#ff4a4a; }
+  #hud-fuel .fuel-value {
+    font-size:28px; font-weight:bold; color:#86ff6a; letter-spacing:.05em;
+  }
+  #hud-fuel.warn .fuel-value { color:#ffaa40; }
+  #hud-fuel.critical .fuel-value { color:#ff4a4a; }
+  #hud-fuel .fuel-value-cap {
+    font-size:15px; color:#5a4a28; font-weight:normal; margin-left:2px;
+  }
+  #hud-fuel .fuel-bar-bg {
+    position:relative; width:100%; height:14px;
+    background:#0a0808; border:1px solid #2a1a04;
+    overflow:hidden;
+  }
+  #hud-fuel .fuel-bar-fill {
+    position:absolute; top:0; bottom:0; left:0;
+    width:100%; background:linear-gradient(90deg, #60c8ff 0%, #86ff6a 100%);
+    transition:width .12s linear;
+  }
+  #hud-fuel.warn .fuel-bar-fill {
+    background:linear-gradient(90deg, #ffaa40 0%, #ffd060 100%);
+  }
+  #hud-fuel.critical .fuel-bar-fill {
+    background:linear-gradient(90deg, #ff4a4a 0%, #ff8060 100%);
+  }
+  /* Segmented overlay (tick marks every 25%) */
+  #hud-fuel .fuel-bar-ticks {
+    position:absolute; top:0; bottom:0; left:0; right:0;
+    pointer-events:none;
+    background:repeating-linear-gradient(90deg,
+      transparent 0, transparent calc(25% - 1px),
+      rgba(0,0,0,.6) calc(25% - 1px), rgba(0,0,0,.6) 25%);
+  }
+  #hud-fuel .fuel-footnote {
+    margin-top:5px;
+    font-size:11px; letter-spacing:.14em; color:#5a4a28;
+    display:flex; justify-content:space-between;
+  }
+  #hud-fuel .range-est { color:#6a5a30; }
+  #hud-fuel.critical .range-est { color:#ff6b6b; }
+
+  /* Bottom-right: HEAT — also a big bar, mirrors fuel */
+  #hud-heat {
+    bottom:40px; right:12px; min-width:240px;
+    padding:10px 14px;
+  }
+  #hud-heat.locked { border-color:#ff4a4a; }
+  #hud-heat .heat-row-top {
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom:6px;
+  }
+  #hud-heat .heat-label {
+    font-size:13px; letter-spacing:.25em; color:#8a7a50; text-transform:uppercase;
+  }
+  #hud-heat.locked .heat-label { color:#ff4a4a; animation:pulse 0.6s ease-in-out infinite; }
+  #hud-heat .heat-value {
+    font-size:28px; font-weight:bold; color:#60c8ff; letter-spacing:.05em;
+  }
+  #hud-heat.hot .heat-value { color:#ffaa40; }
+  #hud-heat.locked .heat-value { color:#ff4a4a; }
+  #hud-heat .heat-value-cap {
+    font-size:15px; color:#5a4a28; font-weight:normal; margin-left:2px;
+  }
+  #hud-heat .heat-bar-bg {
+    position:relative; width:100%; height:14px;
+    background:#0a0808; border:1px solid #2a1a04;
+    overflow:hidden;
+  }
+  #hud-heat .heat-bar-fill {
+    position:absolute; top:0; bottom:0; left:0;
+    width:0%; background:linear-gradient(90deg, #60c8ff 0%, #ff4a4a 100%);
+    transition:width .12s linear;
+  }
+  #hud-heat .heat-bar-ticks {
+    position:absolute; top:0; bottom:0; left:0; right:0;
+    pointer-events:none;
+    background:repeating-linear-gradient(90deg,
+      transparent 0, transparent calc(25% - 1px),
+      rgba(0,0,0,.6) calc(25% - 1px), rgba(0,0,0,.6) 25%);
+  }
+  #hud-heat .heat-footnote {
+    margin-top:5px;
+    font-size:11px; letter-spacing:.14em; color:#5a4a28;
+  }
+  #hud-heat.locked .heat-footnote { color:#ff6b6b; }
+
+  /* Bottom center control hints */
+  #hud-controls {
+    position:fixed; bottom:10px; left:50%; transform:translateX(-50%);
+    display:none; z-index:10; font-size:12px; color:#3a3018;
+    letter-spacing:.1em; white-space:nowrap;
+  }
+  #hud-controls .key {
+    display:inline-block; padding:2px 7px; border:1px solid #2a1a08;
+    color:#8a7a50; margin:0 2px; background:rgba(10,6,2,.6);
+    font-size:12px;
+  }
+
+  #msg {
+    position:fixed; top:40%; left:50%; transform:translate(-50%,-50%);
+    font-size:18px; letter-spacing:.14em; text-align:center; color:#e6c27a;
+    text-shadow:0 0 20px rgba(230,194,122,.5); pointer-events:none;
+    z-index:15; opacity:0; transition:opacity .35s; font-weight:bold;
+  }
+
+  /* ── MENU ───────────────────────────────────────────────────── */
+  #menu {
+    position:fixed; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; z-index:20;
+    background:
+      radial-gradient(ellipse at 30% 20%, #120820 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 80%, #1a0a08 0%, transparent 55%),
+      #030208;
+    overflow-y:auto; padding:20px 0;
+  }
+  #menu::before {
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0, rgba(255,255,255,.012) 1px, transparent 1px, transparent 3px);
+  }
+  #menu h1 {
+    font-size:32px; letter-spacing:.3em; color:#e6c27a;
+    margin-bottom:4px; text-shadow:0 0 24px rgba(230,194,122,.3);
+  }
+  #menu .sub { font-size:13px; color:#4a3a18; letter-spacing:.2em; margin-bottom:18px; }
+  #menu .lore {
+    max-width:560px; font-size:14px; color:#6a5a38; line-height:1.7;
+    text-align:center; margin-bottom:18px; letter-spacing:.04em;
+    padding:0 20px;
+  }
+  #menu .lore em { color:#8a6a30; font-style:normal; }
+
+  #loadout {
+    border:1px solid #2a1a08; padding:14px 22px; margin-bottom:12px;
+    background:rgba(10,6,2,.6); width:620px;
+  }
+  #loadout h3 {
+    font-size:13px; letter-spacing:.2em; color:#8a6a30;
+    text-align:center; margin-bottom:10px;
+  }
+  .loadout-row { display:flex; justify-content:space-between; align-items:center; padding:5px 0; }
+  .loadout-row .lbl { flex:0 0 150px; font-size:12px; }
+  .stepper { display:flex; gap:8px; align-items:center; }
+  .stepper button {
+    width:28px; height:28px; background:transparent; border:1px solid #3a2a08;
+    color:#c8a050; font:16px 'Courier New',monospace; cursor:pointer;
+    padding:0; line-height:26px;
+  }
+  .stepper button:hover:not(:disabled) { background:#1a1008; border-color:#c8a050; }
+  .stepper button:disabled { opacity:.3; cursor:not-allowed; }
+  .stepper .count { min-width:32px; text-align:center; color:#e6c27a; font-weight:bold; font-size:16px; }
+
+  .tier-pick { display:flex; gap:4px; flex:1; }
+  .tier-pick button {
+    flex:1; padding:7px 8px; background:transparent; border:1px solid #3a2a08;
+    color:#8a6a30; font:11px 'Courier New',monospace; letter-spacing:.04em; cursor:pointer;
+  }
+  .tier-pick button.sel { border-color:#e6c27a; color:#e6c27a; background:#0a0600; }
+  .tier-pick button:hover:not(.sel) { border-color:#8a6a30; color:#c8a050; }
+
+  #seed-input {
+    background:#0a0600; border:1px solid #2a1a08; color:#c8a050;
+    font:13px 'Courier New',monospace; padding:6px 10px; width:160px;
+    letter-spacing:.05em;
+  }
+  #seed-input:focus { outline:none; border-color:#c8a050; }
+  #seed-rand { padding:4px 10px; background:transparent; border:1px solid #2a1a08;
+    color:#8a7a50; font:12px 'Courier New',monospace; cursor:pointer; margin-left:4px; letter-spacing:.1em; }
+  #seed-rand:hover { border-color:#c8a050; color:#c8a050; }
+
+  #summary {
+    border:1px solid #2a1a08; padding:12px 22px; margin-bottom:14px;
+    background:rgba(10,6,2,.6); width:620px;
+    font-size:14px;
+  }
+  #summary .loadout-row { padding:4px 0; }
+  .threat-low { color:#86ff6a; }
+  .threat-med { color:#e6c27a; }
+  .threat-high { color:#ff9a4a; }
+  .threat-insane { color:#ff4a4a; animation:pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.55; } }
+
+  #deploy-btn {
+    width:620px; padding:18px 20px; margin-top:2px;
+    background:linear-gradient(180deg, #1a0f04 0%, #0a0600 100%);
+    border:1px solid #8a6a30; color:#e6c27a;
+    font:18px 'Courier New',monospace; letter-spacing:.2em; cursor:pointer;
+    transition:all .15s; font-weight:bold;
+  }
+  #deploy-btn:hover:not(:disabled) { border-color:#e6c27a; color:#fff2c8;
+    box-shadow:0 0 24px rgba(230,194,122,.25); }
+  #deploy-btn:disabled { opacity:.35; cursor:not-allowed; }
+
+  #bank-display {
+    position:absolute; top:18px; right:18px; font-size:13px;
+    color:#8a6a30; letter-spacing:.1em;
+  }
+  #bank-display .val { color:#e6c27a; font-size:17px; margin-left:6px; }
+
+  #colony-tag {
+    position:absolute; top:18px; left:18px; font-size:12px;
+    color:#5a4a28; letter-spacing:.2em; text-transform:uppercase;
+  }
+
+  #gameover {
+    position:fixed; inset:0; display:none; flex-direction:column;
+    align-items:center; justify-content:center; z-index:25;
+    background:rgba(3,2,8,.96);
+  }
+  #gameover h2 { font-size:28px; color:#e6c27a; letter-spacing:.22em; margin-bottom:14px; }
+  #gameover h2.death { color:#ff4a4a; text-shadow:0 0 20px rgba(255,74,74,.4); }
+  #gameover .line { font-size:14px; color:#8a7a50; margin:3px 0; letter-spacing:.06em; }
+  #gameover .payout { font-size:24px; margin:14px 0; letter-spacing:.1em; font-weight:bold; }
+  #gameover .payout.plus { color:#86ff6a; text-shadow:0 0 16px rgba(134,255,106,.3); }
+  #gameover .payout.minus { color:#ff6b6b; }
+  #gameover .stats {
+    margin:10px 0; padding:14px 22px; border:1px solid #2a1a08;
+    font-size:14px; color:#8a7a50; min-width:440px;
+  }
+  #gameover .stats .loadout-row { padding:3px 0; }
+  #gameover button {
+    margin-top:14px; padding:12px 36px; background:transparent;
+    border:1px solid #3a2a08; color:#c8a050;
+    font:14px 'Courier New',monospace; letter-spacing:.12em; cursor:pointer;
+  }
+  #gameover button:hover { background:#0a0800; border-color:#e6c27a; color:#e6c27a; }
+
+  #legend {
+    position:fixed; bottom:210px; right:16px; font-size:11px;
+    color:#5a4a28; letter-spacing:.08em; line-height:1.6;
+    display:none; z-index:8; text-align:right;
+  }
+</style>
+</head>
+<body>
+
+<!-- MENU ─────────────────────────────────────────────────────── -->
+<div id="menu">
+  <div id="colony-tag">OPEN RANGE · UNREGULATED EXTRACTION ZONE</div>
+  <div id="bank-display"><span class="lbl">Bank</span><span class="val" id="bank-val">Ƒ25,000</span></div>
+
+  <h1>DRONE MINING</h1>
+  <div class="sub">ONE SHOT · ONE TANK · ONE CHANCE</div>
+
+  <div class="lore">
+    Open range asteroid belts stretch past the edge of charted space. Every faction has agreed
+    that mining is where conflict happens. Safe mining is not enforced, anywhere.
+    Your drone has <em>one fuel tank</em>. Dock at the mothership to bank cargo and refund
+    the drone's cost. No refuel. A single hostile round ends the drone. The good ore is deep.
+  </div>
+
+  <div id="loadout">
+    <h3>LOADOUT</h3>
+
+    <div class="loadout-row">
+      <span class="lbl">Drones</span>
+      <div class="stepper">
+        <button id="drones-minus">−</button>
+        <span class="count" id="drones-count">1</span>
+        <button id="drones-plus">+</button>
+      </div>
+      <span class="lbl" style="flex:0 0 110px; text-align:right" id="drones-cost">Ƒ1,000</span>
+    </div>
+
+    <div class="loadout-row">
+      <span class="lbl">Fuel Tank</span>
+      <div class="tier-pick" id="tier-fuel">
+        <button data-tier="0" class="sel">SMALL · 100</button>
+        <button data-tier="1">MEDIUM · 200 · Ƒ300</button>
+        <button data-tier="2">LARGE · 400 · Ƒ1,000</button>
+      </div>
+    </div>
+
+    <div class="loadout-row">
+      <span class="lbl">Cargo Hold</span>
+      <div class="tier-pick" id="tier-cargo">
+        <button data-tier="0" class="sel">SMALL · 20</button>
+        <button data-tier="1">MEDIUM · 40 · Ƒ500</button>
+        <button data-tier="2">LARGE · 80 · Ƒ2,000</button>
+      </div>
+    </div>
+
+    <div class="loadout-row">
+      <span class="lbl">Heat Sink</span>
+      <div class="tier-pick" id="tier-heat">
+        <button data-tier="0" class="sel">STOCK · 100</button>
+        <button data-tier="1">UPGRADED · 150 · Ƒ1,000</button>
+        <button data-tier="2">MILITARY · 200 · Ƒ3,000</button>
+      </div>
+    </div>
+
+    <div class="loadout-row">
+      <span class="lbl">Faction</span>
+      <span class="val" id="faction-readout" style="flex:1; text-align:left; padding-left:6px; letter-spacing:.14em; font-weight:bold">COALITION</span>
+    </div>
+
+    <div class="loadout-row">
+      <span class="lbl">Refineries</span>
+      <div class="stepper">
+        <button id="refineries-minus">−</button>
+        <span class="count" id="refineries-count">0</span>
+        <button id="refineries-plus">+</button>
+      </div>
+      <span class="lbl" style="flex:0 0 110px; text-align:right" id="refineries-cost">Ƒ0</span>
+    </div>
+
+    <div class="loadout-row">
+      <span class="lbl">Escort Drones</span>
+      <div class="stepper">
+        <button id="escorts-minus">−</button>
+        <span class="count" id="escorts-count">0</span>
+        <button id="escorts-plus">+</button>
+      </div>
+      <span class="lbl" style="flex:0 0 110px; text-align:right" id="escorts-cost">Ƒ0</span>
+    </div>
+
+    <div class="loadout-row">
+      <span class="lbl">Field Seed</span>
+      <div style="flex:1; display:flex; align-items:center; gap:4px">
+        <input id="seed-input" type="text" value="OPENRANGE-001" maxlength="24">
+        <button id="seed-rand">RAND</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="summary">
+    <div class="loadout-row"><span class="lbl">Total Cost</span><span class="val" id="sum-cost">Ƒ1,000</span></div>
+    <div class="loadout-row"><span class="lbl">Per-Drone Cost</span><span class="val" id="sum-perdrone">Ƒ1,000</span></div>
+    <div class="loadout-row"><span class="lbl">Hostile Density</span><span class="val" id="sum-hostiles">scales by depth</span></div>
+    <div class="loadout-row"><span class="lbl">Threat Level</span><span id="sum-threat" class="threat-low">LOW</span></div>
+  </div>
+
+  <button id="deploy-btn">DEPLOY</button>
+  <button id="fm-exit-btn" style="display:none; margin-top:10px; padding:8px 24px; background:transparent; border:1px solid #3a2a08; color:#8a6a30; font:12px 'Courier New',monospace; letter-spacing:.15em; cursor:pointer">⟵ BACK TO FLESHMARKET</button>
+</div>
+
+<!-- HUD ─────────────────────────────────────────────────────── -->
+
+<!-- Top-left: drone info + sector -->
+<div class="hud-panel" id="hud-drone">
+  <div class="row">
+    <span class="tag">Drone</span>
+    <span class="num" id="h-drone">1</span><span class="sub" id="h-drone-total">of 1</span>
+  </div>
+  <div class="row">
+    <span class="tag">Sector</span>
+    <span class="num" id="h-sector" style="font-size:16px">0,0</span>
+  </div>
+  <div class="row">
+    <span class="tag">Zone</span>
+    <span class="num" id="h-zone" style="font-size:16px; color:#86ff6a">NEAR</span>
+  </div>
+  <div class="row" id="h-assets-row" style="display:none">
+    <span class="tag">Assets</span>
+    <span class="num" id="h-refineries" style="font-size:16px; color:#60c8ff">0</span>
+    <span class="sub" style="color:#60c8ff">REF</span>
+    <span class="num" id="h-escorts" style="font-size:16px; color:#ffd060; margin-left:4px">0</span>
+    <span class="sub" style="color:#ffd060">ESC</span>
+  </div>
+</div>
+
+<!-- Top-right: cargo + banked -->
+<div class="hud-panel" id="hud-cargo">
+  <div class="row">
+    <span class="num" id="h-cargo">0</span><span class="sub" id="h-cargo-total">/ 20</span>
+    <span class="tag">Cargo</span>
+  </div>
+  <div class="row">
+    <span class="num good" id="h-cargoval" style="font-size:18px">Ƒ0</span>
+    <span class="tag">Hold</span>
+  </div>
+  <div class="row">
+    <span class="num good" id="h-banked" style="font-size:18px">Ƒ0</span>
+    <span class="tag">Banked</span>
+  </div>
+</div>
+
+<!-- Bottom-left: FUEL (prominent) -->
+<div class="hud-panel" id="hud-fuel">
+  <div class="fuel-row-top">
+    <span class="fuel-label" id="h-fuel-label">FUEL</span>
+    <span><span class="fuel-value" id="h-fuel">100</span><span class="fuel-value-cap" id="h-fuel-cap">/100</span></span>
+  </div>
+  <div class="fuel-bar-bg">
+    <div class="fuel-bar-fill" id="h-fuel-bar"></div>
+    <div class="fuel-bar-ticks"></div>
+  </div>
+  <div class="fuel-footnote">
+    <span>ONE TANK · NO REFUEL</span>
+    <span class="range-est" id="h-return-est">HOME ∞</span>
+  </div>
+</div>
+
+<!-- Bottom-right: HEAT -->
+<div class="hud-panel" id="hud-heat">
+  <div class="heat-row-top">
+    <span class="heat-label" id="h-heat-label">LASER HEAT</span>
+    <span><span class="heat-value" id="h-heat">0</span><span class="heat-value-cap" id="h-heat-cap">/100</span></span>
+  </div>
+  <div class="heat-bar-bg">
+    <div class="heat-bar-fill" id="h-heat-bar"></div>
+    <div class="heat-bar-ticks"></div>
+  </div>
+  <div class="heat-footnote" id="h-heat-status">NOMINAL</div>
+</div>
+
+<!-- Bottom-center control hints -->
+<div id="hud-controls">
+  <span class="key">WASD</span> FLY &nbsp;&nbsp;
+  <span class="key">SPACE</span> LASER &nbsp;&nbsp;
+  <span class="key">R</span> REFINERY &nbsp;&nbsp;
+  <span class="key">Q</span> DOCK &nbsp;&nbsp;
+  <span class="key">ESC</span> ABORT
+</div>
+
+<div id="msg"></div>
+
+<div id="legend">
+  <span style="color:#a0a0a0">■</span> DEPLETED &nbsp;
+  <span style="color:#b8a080">■</span> IRON &nbsp;
+  <span style="color:#60a0d0">■</span> COBALT<br>
+  <span style="color:#ffd060">■</span> GOLD &nbsp;
+  <span style="color:#ff6080">■</span> PAINITE<br>
+  <span style="color:#a060ff">■</span> VOID OPAL &nbsp;
+  <span style="color:#ffffff">■</span> MUSGRAVITE
+</div>
+
+<!-- GAMEOVER ─────────────────────────────────────────────── -->
+<div id="gameover">
+  <h2 id="go-title">RUN COMPLETE</h2>
+  <div class="line" id="go-line1"></div>
+  <div class="line" id="go-line2"></div>
+  <div class="stats" id="go-stats"></div>
+  <div class="payout" id="go-payout"></div>
+  <button id="go-btn">RETURN TO STATION</button>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// FLESHMARKET BRIDGE (iframe postMessage)
+// ═══════════════════════════════════════════════════════════════════
+// When embedded in FleshMarket, the parent window owns the bank.
+// We send 'mining_bank_delta' messages for deductions/credits and
+// receive 'mining_bank_set' for the initial bank value.
+// When running standalone (file://), this bridge is inert.
+const FM_EMBEDDED = (window.parent && window.parent !== window);
+const FM_ORIGIN = '*'; // dev; tighten to specific origin in production
+
+function fmBridgeSend(type, payload) {
+  if (!FM_EMBEDDED) return;
+  try { window.parent.postMessage({ source:'drone-mining', type, ...payload }, FM_ORIGIN); } catch(_){}
+}
+function fmBridgeOnMessage(e) {
+  if (!e.data || e.data.source !== 'fleshmarket') return;
+  if (e.data.type === 'bank_set' && typeof e.data.amount === 'number') {
+    window.__pendingBankSet = e.data.amount;
+  }
+  if (e.data.type === 'faction_set' && typeof e.data.faction === 'string') {
+    // Normalize — FM sends 'coalition'/'syndicate'/'void'; unknown values default to coalition
+    const valid = ['coalition','syndicate','void'];
+    window.__pendingFactionSet = valid.includes(e.data.faction) ? e.data.faction : 'coalition';
+  }
+  if (e.data.type === 'exit') {
+    // Parent wants us to shut down (user pressed ESC in FM).
+    fmBridgeSend('closing');
+  }
+}
+window.addEventListener('message', fmBridgeOnMessage);
+// Tell parent we're ready to receive initial bank
+if (FM_EMBEDDED) {
+  fmBridgeSend('ready');
+}
+
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════════
+// CANVAS / INPUT
+// ═══════════════════════════════════════════════════════════════════
+const C = document.getElementById('c');
+const X = C.getContext('2d');
+function resize(){ C.width = window.innerWidth; C.height = window.innerHeight; }
+resize(); window.addEventListener('resize', resize);
+
+const keys = {};
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  if (k === 'escape' && state.running) {
+    endRun('ABORTED', 'Drone recalled mid-flight.', 'Banked cargo preserved.');
+  }
+  if (k === ' ') e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+// ═══════════════════════════════════════════════════════════════════
+// HASHING (deterministic chunk gen)
+// ═══════════════════════════════════════════════════════════════════
+function hashStr(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+function hash2(seed, a, b) {
+  let h = seed >>> 0;
+  h ^= Math.imul(a | 0, 2654435761) >>> 0;
+  h = (h << 13) | (h >>> 19);
+  h = Math.imul(h, 5) + 0xe6546b64 >>> 0;
+  h ^= Math.imul(b | 0, 40503) >>> 0;
+  h = (h << 15) | (h >>> 17);
+  h = Math.imul(h, 2246822519) >>> 0;
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function() {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let r = t;
+    r = Math.imul(r ^ (r >>> 15), r | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════
+const CHUNK = 1000;
+const LOAD_RADIUS = 3;
+const UNLOAD_RADIUS = 4;
+
+const THRUST = 0.18;
+const MAX_SPD = 4.2;
+const DRAG = 0.985;
+const TURN = 0.052;
+
+const LASER_RANGE = 280;
+const LASER_WIDTH = 2.2;
+const LASER_DPS = 0.12;                  // damage per frame to enemies (doubled from 0.06)
+const LASER_MINE_RATE = 1.6;
+const LASER_LOCK_CONE = 0.35;            // radians — enemies within this cone from aim angle get locked
+const LASER_LOCK_RANGE = LASER_RANGE;    // same as laser range
+
+const HEAT_PER_FRAME = 0.9;
+const HEAT_COOLDOWN = 0.55;
+const HEAT_LOCKOUT_RELEASE_FRAC = 0.4;   // must cool below 40% of max to re-enable
+
+const ENEMY_BULLET_SPD = 5.2;
+const ENEMY_SHOOT_CD_MIN = 55;
+const ENEMY_SHOOT_CD_MAX = 110;
+const ENEMY_AGGRO_BASE = 380;
+
+const DOCK_RADIUS = 120;
+
+const DRONE_COST = 1000;
+
+// Loadout tiers
+const FUEL_TIERS  = [ {cap:100, cost:0},   {cap:200, cost:300},  {cap:400, cost:1000} ];
+const CARGO_TIERS = [ {cap:20,  cost:0},   {cap:40,  cost:500},  {cap:80,  cost:2000} ];
+const HEAT_TIERS  = [ {cap:100, cost:0},   {cap:150, cost:1000}, {cap:200, cost:3000} ];
+
+// Refineries — deployable fuel generators
+const REFINERY_COST     = 400;
+const REFINERY_MAX_BUY  = 5;
+const REFINERY_HP       = 3;
+const REFINERY_RADIUS   = 14;            // physical collider / selection
+const REFINERY_FUEL_RANGE = 60;          // drone must be within this to refuel
+const REFINERY_FUEL_RATE  = 0.4;         // fuel per frame when drone in range
+const REFINERY_DEPLOY_COOLDOWN = 30;     // frames between deploys (half second)
+
+// Escort drones — orbiting protectors
+const ESCORT_COST       = 1500;
+const ESCORT_MAX_BUY    = 3;
+const ESCORT_HP         = 2;
+const ESCORT_ORBIT_MIN  = 45;
+const ESCORT_ORBIT_MAX  = 75;
+const ESCORT_ORBIT_SPD  = 0.025;         // radians per frame around player
+const ESCORT_MAX_SPD    = 3.8;
+const ESCORT_TARGET_RANGE = 260;
+const ESCORT_BULLET_SPD = 6.5;
+const ESCORT_SHOOT_CD   = 28;            // frames between shots
+const ESCORT_BULLET_LIFE = 60;
+const ESCORT_BULLET_DMG = 1.5;           // per hit on enemy (enemies have 2 hp, so 2 shots kill)
+
+// Fuel drain per frame, only while thrusting
+const FUEL_DRAIN_THRUST = 0.035;
+const FUEL_DRAIN_BRAKE  = 0.015;
+
+// Minerals — now rolled by depth band, not flat
+const MINERALS = {
+  depleted:   { name:'DEPLETED',   color:'#a0a0a0', value:0   },
+  iron:       { name:'IRON',       color:'#b8a080', value:5   },
+  cobalt:     { name:'COBALT',     color:'#60a0d0', value:12  },
+  gold:       { name:'GOLD',       color:'#ffd060', value:25  },
+  painite:    { name:'PAINITE',    color:'#ff6080', value:60  },
+  voidopal:   { name:'VOID OPAL',  color:'#a060ff', value:120 },
+  musgravite: { name:'MUSGRAVITE', color:'#ffffff', value:250 }
+};
+
+// Depth bands: by sector distance from origin (Chebyshev distance, i.e. max(|cx|,|cy|))
+// Distribution: 30% depleted across the board. The remaining 70% splits by table below.
+// Values are normalized probabilities of the non-depleted 70%.
+// [iron, cobalt, gold, painite, voidopal, musgravite]
+const DEPTH_BANDS = [
+  { name:'NEAR',  color:'#86ff6a', maxSector:2,  weights:[0.45, 0.25, 0.15, 0.05, 0.00, 0.00] },
+  { name:'MID',   color:'#e6c27a', maxSector:5,  weights:[0.25, 0.25, 0.20, 0.15, 0.10, 0.02] },
+  { name:'DEEP',  color:'#ff9a4a', maxSector:9,  weights:[0.10, 0.15, 0.20, 0.25, 0.20, 0.10] },
+  { name:'VOID',  color:'#ff4a4a', maxSector:99, weights:[0.05, 0.05, 0.15, 0.25, 0.30, 0.20] }
+];
+const MINERAL_KEYS = ['iron','cobalt','gold','painite','voidopal','musgravite'];
+
+// Factions — hostile drones in each sector belong to a faction for visual
+// variety and future FleshMarket galaxy-state integration. Colors match
+// FleshMarket's galaxy.js faction palette.
+// When integrated with the main game, replace factionForSector() with a
+// lookup against the colony's controlling faction from colony_state.
+const FACTIONS = {
+  coalition: { name:'COALITION', hull:'#0a1a1c', stroke:'#4ecdc4', chase:'#6afff2', eye:'#4ecdc4', bullet:'#4ecdc4' },
+  syndicate: { name:'SYNDICATE', hull:'#1a0808', stroke:'#e74c3c', chase:'#ff6a5c', eye:'#ff4a4a', bullet:'#e74c3c' },
+  void:      { name:'VOID',      hull:'#140820', stroke:'#9b59b6', chase:'#c080e0', eye:'#b070d8', bullet:'#9b59b6' }
+};
+const FACTION_KEYS = ['coalition','syndicate','void'];
+
+// Deterministic faction per chunk based on seed + coords.
+// Weighted toward Syndicate as depth increases — void chunks lean toward Void Collective.
+function factionForSector(cx, cy) {
+  const band = bandForSector(cx, cy);
+  const bandIdx = DEPTH_BANDS.indexOf(band);
+  const h = hash2(state.seed ^ 0xf4c71a, cx, cy);
+  const rng = mulberry32(h);
+  const r = rng();
+  // Weighted selection by band:
+  // NEAR: mostly Coalition
+  // MID: balanced
+  // DEEP: more Syndicate
+  // VOID: mostly Void Collective
+  const weights = [
+    [0.60, 0.30, 0.10],  // NEAR
+    [0.35, 0.40, 0.25],  // MID
+    [0.15, 0.50, 0.35],  // DEEP
+    [0.05, 0.35, 0.60]   // VOID
+  ][bandIdx];
+  let acc = 0;
+  for (let i = 0; i < FACTION_KEYS.length; i++) {
+    acc += weights[i];
+    if (r < acc) return FACTION_KEYS[i];
+  }
+  return 'syndicate';
+}
+
+function bandForSector(cx, cy) {
+  const d = Math.max(Math.abs(cx), Math.abs(cy));
+  for (const b of DEPTH_BANDS) if (d <= b.maxSector) return b;
+  return DEPTH_BANDS[DEPTH_BANDS.length - 1];
+}
+function bandForWorld(x, y) { return bandForSector(Math.floor(x/CHUNK), Math.floor(y/CHUNK)); }
+
+function pickMineralForBand(rng, band) {
+  // 30% chance depleted
+  if (rng() < 0.30) return MINERALS.depleted;
+  const r = rng();
+  let acc = 0;
+  // Normalize weights (they may sum to <1 in lower bands)
+  const total = band.weights.reduce((s,w)=>s+w,0);
+  for (let i = 0; i < band.weights.length; i++) {
+    acc += band.weights[i] / total;
+    if (r < acc) return MINERALS[MINERAL_KEYS[i]];
+  }
+  return MINERALS.iron;
+}
+
+// Enemy density by (drones_bought, band_index)
+// Rows: drones 1-5+, Cols: NEAR, MID, DEEP, VOID
+const ENEMY_DENSITY_TABLE = [
+  [1.0,  2.0,  4.0,  8.0 ],   // 1 drone
+  [2.5,  5.0,  10.0, 20.0],   // 2 drones
+  [5.0,  10.0, 20.0, 40.0],   // 3 drones
+  [10.0, 20.0, 40.0, 80.0],   // 4 drones
+  [20.0, 40.0, 80.0, 160.0],  // 5 drones
+  [40.0, 80.0, 160.0, 320.0]  // 6+ drones
+];
+function enemyDensityForChunk(dronesBought, band) {
+  const row = ENEMY_DENSITY_TABLE[Math.min(ENEMY_DENSITY_TABLE.length - 1, dronesBought - 1)];
+  const bandIdx = DEPTH_BANDS.indexOf(band);
+  return row[bandIdx];
+}
+
+// Enemy salvage value by band index
+const SALVAGE_VALUE = [40, 75, 120, 180];
+function salvageValueForBand(band) {
+  return SALVAGE_VALUE[DEPTH_BANDS.indexOf(band)];
+}
+
+const ASTEROID_DENSITY = 12;
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════
+const state = {
+  bank: 25000,
+  running: false,
+  dronesBought: 1,
+  dronesUsed: 0,
+
+  // Loadout tier selections (0/1/2)
+  fuelTier: 0,
+  cargoTier: 0,
+  heatTier: 0,
+
+  // Refinery / escort purchases (count)
+  refineriesBought: 0,
+  escortsBought: 0,
+
+  // Player faction — drones of this faction do not aggro or shoot at you
+  playerFaction: 'coalition',
+
+  seed: 0,
+  seedStr: 'OPENRANGE-001',
+  drone: null,
+
+  // Per-drone caps snapshot at launch
+  caps: { fuel:100, cargo:20, heat:100 },
+
+  chunks: new Map(),
+  bullets: [],              // enemy bullets
+  salvage: [],              // floating salvage pickups { x, y, value, life, color, band }
+  particles: [],
+
+  // Deployable structures (persist across the run, not per-drone)
+  refineries: [],           // { x, y, hp, fueling (bool transient) }
+  refineriesRemaining: 0,   // inventory — drops by 1 per deploy
+  refineryDeployCD: 0,
+
+  // Escort drones (reset per drone)
+  escorts: [],              // { x, y, vx, vy, hp, orbitAngle, shootCD, target }
+  escortsRemaining: 0,      // inventory for THIS drone — resets on deploy
+  escortBullets: [],        // friendly bullets
+
+  cam: { x:0, y:0 },
+  cargoValue: 0,
+  cargoCount: 0,
+  runBanked: 0,
+  runStats: {
+    rocksMined: 0,
+    enemiesKilled: 0,
+    dronesLost: 0,
+    chunksVisited: 0,
+    salvageCollected: 0,
+    deepestBand: 0,
+    refineriesDeployed: 0,
+    refineriesLost: 0,
+    escortsDeployed: 0,
+    escortsLost: 0,
+    fuelFromRefineries: 0
+  },
+  docked: false,
+  fuel: 100,                // current drone fuel
+  mothership: { x:0, y:0 },
+  mothershipPulse: 0,
+
+  laser: { firing:false, targetX:0, targetY:0, hitAsteroid:null, hitEnemy:null, heat:0, lockedOut:false, locked:false },
+  aggroed: false,           // is any enemy currently aggro'd on us
+  aggroFlashT: 0,
+
+  visitedChunks: new Set(),
+  _qHeld: false,
+  _chunkMemory: null
+};
+
+function newDrone() {
+  return {
+    x: 0, y: 0,
+    vx: 0, vy: 0, angle: -Math.PI/2,
+    r: 10,
+    thrusting: false
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CHUNKS
+// ═══════════════════════════════════════════════════════════════════
+function chunkKey(cx, cy) { return cx + ',' + cy; }
+function chunkOf(wx, wy) { return { cx: Math.floor(wx / CHUNK), cy: Math.floor(wy / CHUNK) }; }
+
+function buildChunk(cx, cy) {
+  const isOrigin = (cx === 0 && cy === 0);
+  const band = bandForSector(cx, cy);
+
+  const h = hash2(state.seed, cx, cy);
+  const rng = mulberry32(h);
+
+  const stars = [];
+  const asteroids = [];
+  const enemies = [];
+
+  // Stars
+  for (let i = 0; i < 80; i++) {
+    stars.push({
+      x: cx * CHUNK + rng() * CHUNK,
+      y: cy * CHUNK + rng() * CHUNK,
+      depth: 0.3 + rng() * 0.7,
+      size: rng() < 0.08 ? 1.6 : 0.8,
+      color: rng() < 0.05 ? '#8a6ad0' : (rng() < 0.1 ? '#d0a050' : '#4a4a60')
+    });
+  }
+
+  // Asteroids
+  const astCount = Math.floor(ASTEROID_DENSITY * (0.7 + rng() * 0.6));
+  for (let i = 0; i < astCount; i++) {
+    const ax = cx * CHUNK + rng() * CHUNK;
+    const ay = cy * CHUNK + rng() * CHUNK;
+    if (isOrigin && Math.hypot(ax, ay) < 180) continue;
+
+    const r = 24 + rng() * 46;
+    const verts = 8 + Math.floor(rng() * 5);
+    const shape = [];
+    for (let j = 0; j < verts; j++) {
+      const a = (j / verts) * Math.PI * 2;
+      const rr = r * (0.75 + rng() * 0.5);
+      shape.push({ a, r: rr });
+    }
+    asteroids.push({
+      x: ax, y: ay, r, shape,
+      scanned: false, mined: false,
+      mineral: null,
+      oreUnits: 0,
+      mineProgress: 0,
+      rot: rng() * Math.PI * 2,
+      rotSpd: (rng() - 0.5) * 0.004,
+      band
+    });
+  }
+
+  // Enemies
+  if (!isOrigin) {
+    const density = enemyDensityForChunk(state.dronesBought, band);
+    let count = Math.floor(density);
+    if (rng() < density - count) count++;
+
+    const aggroBoost   = 1 + Math.max(0, state.dronesBought - 2) * 0.20;
+    const speedBoost   = 1 + (state.dronesBought - 1) * 0.08;
+    const bulletSpdBoost = 1 + Math.max(0, state.dronesBought - 2) * 0.12;
+
+    const facKey = factionForSector(cx, cy);
+    const fac = FACTIONS[facKey];
+
+    for (let i = 0; i < count; i++) {
+      const ex = cx * CHUNK + rng() * CHUNK;
+      const ey = cy * CHUNK + rng() * CHUNK;
+      enemies.push({
+        x: ex, y: ey, vx: 0, vy: 0,
+        angle: rng() * Math.PI * 2,
+        patrolAngle: rng() * Math.PI * 2,
+        patrolTimer: 60 + rng() * 180,
+        r: 11, hp: 2,
+        shootCD: Math.floor(ENEMY_SHOOT_CD_MIN + rng() * (ENEMY_SHOOT_CD_MAX - ENEMY_SHOOT_CD_MIN)),
+        aggroRange: ENEMY_AGGRO_BASE * aggroBoost,
+        speedMult: speedBoost,
+        bulletSpdMult: bulletSpdBoost,
+        state: 'patrol',
+        homeChunk: chunkKey(cx, cy),
+        band,
+        faction: facKey,
+        fac
+      });
+    }
+  }
+
+  return { asteroids, enemies, stars, band, _restored:false };
+}
+
+function ensureChunksLoaded() {
+  if (!state.drone) return;
+  const c = chunkOf(state.drone.x, state.drone.y);
+
+  for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+    for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
+      const k = chunkKey(c.cx + dx, c.cy + dy);
+      if (!state.chunks.has(k)) {
+        state.chunks.set(k, buildChunk(c.cx + dx, c.cy + dy));
+        if (!state.visitedChunks.has(k)) {
+          state.visitedChunks.add(k);
+          state.runStats.chunksVisited = state.visitedChunks.size;
+          // Track deepest band
+          const band = bandForSector(c.cx + dx, c.cy + dy);
+          const idx = DEPTH_BANDS.indexOf(band);
+          if (idx > state.runStats.deepestBand) state.runStats.deepestBand = idx;
+        }
+      }
+    }
+  }
+
+  for (const k of [...state.chunks.keys()]) {
+    const [cx, cy] = k.split(',').map(Number);
+    if (Math.abs(cx - c.cx) > UNLOAD_RADIUS || Math.abs(cy - c.cy) > UNLOAD_RADIUS) {
+      const chunk = state.chunks.get(k);
+      const modified = chunk.asteroids
+        .filter(a => a.scanned || a.mined)
+        .map(a => ({
+          x:a.x, y:a.y,
+          scanned:a.scanned, mined:a.mined,
+          mineralKey: a.mineral ? keyForMineral(a.mineral) : null,
+          oreUnits: a.oreUnits,
+          mineProgress: a.mineProgress
+        }));
+      if (modified.length > 0) {
+        state._chunkMemory = state._chunkMemory || new Map();
+        state._chunkMemory.set(k, modified);
+      }
+      state.chunks.delete(k);
+    }
+  }
+}
+
+function keyForMineral(m) {
+  for (const k in MINERALS) if (MINERALS[k] === m) return k;
+  return 'iron';
+}
+
+function restoreChunkMemory(cx, cy, chunk) {
+  if (!state._chunkMemory) return;
+  const k = chunkKey(cx, cy);
+  const mem = state._chunkMemory.get(k);
+  if (!mem) return;
+  for (const m of mem) {
+    const match = chunk.asteroids.find(a => Math.abs(a.x - m.x) < 1 && Math.abs(a.y - m.y) < 1);
+    if (match) {
+      match.scanned = m.scanned;
+      match.mined = m.mined;
+      match.oreUnits = m.oreUnits;
+      match.mineProgress = m.mineProgress || 0;
+      if (m.mineralKey) match.mineral = MINERALS[m.mineralKey] || MINERALS.iron;
+    }
+  }
+}
+
+function* allAsteroids() {
+  for (const chunk of state.chunks.values())
+    for (const a of chunk.asteroids) yield a;
+}
+function* allEnemies() {
+  for (const chunk of state.chunks.values())
+    for (const e of chunk.enemies) yield e;
+}
+function* allStars() {
+  for (const chunk of state.chunks.values())
+    for (const s of chunk.stars) yield s;
+}
+
+// Line-of-sight test: returns true if any unmined asteroid intersects the
+// segment from (ox,oy) to (tx,ty). Used to stop enemies from shooting
+// through rocks and to veto bullets spawning inside asteroids.
+function rayBlockedByAsteroid(ox, oy, tx, ty, ignoreAsteroid) {
+  const dx = tx - ox, dy = ty - oy;
+  const len = Math.hypot(dx, dy);
+  if (len < 0.01) return false;
+  const ux = dx / len, uy = dy / len;
+  for (const a of allAsteroids()) {
+    if (a.mined) continue;
+    if (a === ignoreAsteroid) continue;
+    const cx = a.x - ox, cy = a.y - oy;
+    const proj = cx * ux + cy * uy;
+    if (proj < 0 || proj > len) continue;
+    const perpX = cx - ux * proj;
+    const perpY = cy - uy * proj;
+    const perpDist = Math.hypot(perpX, perpY);
+    if (perpDist < a.r) return true;
+  }
+  return false;
+}
+
+// Returns the asteroid containing the point (px,py), or null.
+function asteroidAtPoint(px, py) {
+  for (const a of allAsteroids()) {
+    if (a.mined) continue;
+    if (Math.hypot(a.x - px, a.y - py) < a.r) return a;
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LIFECYCLE
+// ═══════════════════════════════════════════════════════════════════
+function showMsg(text, duration = 1800, color) {
+  const el = document.getElementById('msg');
+  el.textContent = text;
+  el.style.color = color || '#e6c27a';
+  el.style.opacity = '1';
+  clearTimeout(showMsg._t);
+  showMsg._t = setTimeout(() => { el.style.opacity = '0'; }, duration);
+}
+
+function computeLoadoutCost() {
+  // Escorts are per-drone (each drone spawns its own set)
+  const perDrone = DRONE_COST
+    + FUEL_TIERS[state.fuelTier].cost
+    + CARGO_TIERS[state.cargoTier].cost
+    + HEAT_TIERS[state.heatTier].cost
+    + ESCORT_COST * state.escortsBought;
+  // Refineries are bought once, shared across the whole run
+  return perDrone * state.dronesBought + REFINERY_COST * state.refineriesBought;
+}
+
+function startRun() {
+  const totalCost = computeLoadoutCost();
+  if (state.bank < totalCost) { showMsg('INSUFFICIENT CREDITS', 1400, '#ff6b6b'); return; }
+  state.bank -= totalCost;
+  fmBridgeSend('bank_delta', { delta: -totalCost, reason: 'loadout', amount: state.bank });
+
+  state.caps = {
+    fuel:  FUEL_TIERS[state.fuelTier].cap,
+    cargo: CARGO_TIERS[state.cargoTier].cap,
+    heat:  HEAT_TIERS[state.heatTier].cap
+  };
+
+  state.dronesUsed = 0;
+  state.runBanked = 0;
+  state.runStats = {
+    rocksMined:0, enemiesKilled:0, dronesLost:0, chunksVisited:0,
+    salvageCollected:0, deepestBand:0,
+    refineriesDeployed:0, refineriesLost:0,
+    escortsDeployed:0, escortsLost:0, fuelFromRefineries:0
+  };
+
+  const seedInput = document.getElementById('seed-input').value.trim() || 'OPENRANGE-001';
+  state.seedStr = seedInput;
+  state.seed = hashStr(seedInput);
+
+  state.chunks = new Map();
+  state._chunkMemory = new Map();
+  state.visitedChunks = new Set();
+  state.bullets = [];
+  state.salvage = [];
+  state.particles = [];
+  state.refineries = [];
+  state.refineriesRemaining = state.refineriesBought;   // stays across drones
+  state.refineryDeployCD = 0;
+  state.escorts = [];
+  state.escortBullets = [];
+
+  deployNextDrone(true);
+
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('hud-drone').style.display = 'block';
+  document.getElementById('hud-cargo').style.display = 'block';
+  document.getElementById('hud-fuel').style.display = 'block';
+  document.getElementById('hud-heat').style.display = 'block';
+  document.getElementById('hud-controls').style.display = 'block';
+  document.getElementById('legend').style.display = 'block';
+  state.running = true;
+}
+
+function deployNextDrone(first=false) {
+  state.dronesUsed++;
+  state.drone = newDrone();
+  state.drone.x = 0; state.drone.y = 0;
+  state.cargoCount = 0;
+  state.cargoValue = 0;
+  state.fuel = state.caps.fuel;
+  state.bullets = [];
+  state.escortBullets = [];
+  state.laser = { firing:false, targetX:0, targetY:0, hitAsteroid:null, hitEnemy:null, heat:0, lockedOut:false, locked:false };
+
+  state.mothership.x = 0;
+  state.mothership.y = 0;
+
+  state.cam.x = state.drone.x - C.width/2;
+  state.cam.y = state.drone.y - C.height/2;
+  state.docked = true;
+
+  // Spawn escorts for this drone, orbiting the drone
+  state.escorts = [];
+  for (let i = 0; i < state.escortsBought; i++) {
+    const angle = (i / state.escortsBought) * Math.PI * 2;
+    state.escorts.push({
+      x: state.drone.x + Math.cos(angle) * ESCORT_ORBIT_MIN,
+      y: state.drone.y + Math.sin(angle) * ESCORT_ORBIT_MIN,
+      vx: 0, vy: 0,
+      hp: ESCORT_HP,
+      orbitAngle: angle,
+      orbitRadius: ESCORT_ORBIT_MIN + (ESCORT_ORBIT_MAX - ESCORT_ORBIT_MIN) * (i / Math.max(1, state.escortsBought - 1)),
+      shootCD: i * 5,
+      angle: angle + Math.PI
+    });
+    state.runStats.escortsDeployed++;
+  }
+
+  ensureChunksLoaded();
+  for (const [k, chunk] of state.chunks) {
+    const [cx, cy] = k.split(',').map(Number);
+    restoreChunkMemory(cx, cy, chunk);
+    chunk._restored = true;
+  }
+
+  if (!first) showMsg(`DRONE ${state.dronesUsed} OF ${state.dronesBought} DEPLOYED`, 1600);
+  else        showMsg(`DRONE 1 OF ${state.dronesBought} DEPLOYED`, 2200);
+  updateHUD();
+}
+
+function killDrone(cause) {
+  if (!state.drone) return;
+  const d = state.drone;
+  for (let i = 0; i < 32; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = 1 + Math.random() * 5;
+    state.particles.push({
+      x: d.x, y: d.y, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+      life: 30 + Math.random()*25, max: 55,
+      color: i < 10 ? '#ffcc44' : (i < 22 ? '#ff4444' : '#662222'), size: 2 + Math.random()*2
+    });
+  }
+  state.drone = null;
+  state.runStats.dronesLost++;
+  state.cargoCount = 0;
+  state.cargoValue = 0;
+
+  // Escorts are tethered to the drone — they're lost when it dies
+  for (const e of state.escorts) state.runStats.escortsLost++;
+  state.escorts = [];
+  state.escortBullets = [];
+
+  if (state.dronesUsed < state.dronesBought) {
+    setTimeout(() => {
+      if (!state.running) return;
+      deployNextDrone(false);
+      showMsg(`DRONE DESTROYED. ${cause}`, 2400, '#ff6b6b');
+    }, 1200);
+  } else {
+    setTimeout(() => { endRun('ALL DRONES LOST', cause, 'No drones remaining.'); }, 1400);
+  }
+}
+
+function dockDrone() {
+  if (!state.drone) return;
+  // Successful return refunds the drone's base cost
+  const refund = DRONE_COST;
+  let parts = [];
+  if (state.cargoValue > 0) {
+    state.runBanked += state.cargoValue;
+    parts.push(`Ƒ${state.cargoValue.toLocaleString()} cargo`);
+  }
+  state.runBanked += refund;
+  parts.push(`Ƒ${refund.toLocaleString()} drone refund`);
+  showMsg('+' + parts.join(' + ') + ' BANKED', 2000, '#86ff6a');
+  state.cargoCount = 0;
+  state.cargoValue = 0;
+  // Fuel NOT refilled — one tank per drone.
+  state.drone.vx = 0; state.drone.vy = 0;
+  updateHUD();
+}
+
+function endRun(title, line1, line2) {
+  state.running = false;
+  state.bank += state.runBanked;
+  fmBridgeSend('bank_delta', { delta: state.runBanked, reason: 'banked', amount: state.bank });
+  const invested = computeLoadoutCost();
+  const net = state.runBanked - invested;
+
+  document.getElementById('hud-drone').style.display = 'none';
+  document.getElementById('hud-cargo').style.display = 'none';
+  document.getElementById('hud-fuel').style.display = 'none';
+  document.getElementById('hud-heat').style.display = 'none';
+  document.getElementById('hud-controls').style.display = 'none';
+  document.getElementById('legend').style.display = 'none';
+
+  const go = document.getElementById('gameover');
+  const goTitle = document.getElementById('go-title');
+  goTitle.textContent = title;
+  goTitle.className = (title === 'RUN COMPLETE' || title === 'ABORTED') ? '' : 'death';
+  document.getElementById('go-line1').textContent = line1;
+  document.getElementById('go-line2').textContent = line2;
+  const deepestName = DEPTH_BANDS[state.runStats.deepestBand].name;
+  document.getElementById('go-stats').innerHTML = `
+    <div class="loadout-row"><span class="lbl">Drones Lost</span><span class="val">${state.runStats.dronesLost} / ${state.dronesBought}</span></div>
+    <div class="loadout-row"><span class="lbl">Sectors Explored</span><span class="val">${state.runStats.chunksVisited}</span></div>
+    <div class="loadout-row"><span class="lbl">Deepest Zone</span><span class="val" style="color:${DEPTH_BANDS[state.runStats.deepestBand].color}">${deepestName}</span></div>
+    <div class="loadout-row"><span class="lbl">Rocks Mined</span><span class="val">${state.runStats.rocksMined}</span></div>
+    <div class="loadout-row"><span class="lbl">Hostiles Killed</span><span class="val">${state.runStats.enemiesKilled}</span></div>
+    <div class="loadout-row"><span class="lbl">Salvage Collected</span><span class="val">${state.runStats.salvageCollected}</span></div>
+    ${state.refineriesBought > 0 ? `<div class="loadout-row"><span class="lbl">Refineries Deployed</span><span class="val">${state.runStats.refineriesDeployed} / ${state.refineriesBought} (${state.runStats.refineriesLost} destroyed)</span></div>
+    <div class="loadout-row"><span class="lbl">Fuel Refined</span><span class="val">${Math.round(state.runStats.fuelFromRefineries)}</span></div>` : ''}
+    ${state.escortsBought > 0 ? `<div class="loadout-row"><span class="lbl">Escorts Deployed</span><span class="val">${state.runStats.escortsDeployed} (${state.runStats.escortsLost} lost)</span></div>` : ''}
+    <div class="loadout-row"><span class="lbl">Banked</span><span class="val good">Ƒ${state.runBanked.toLocaleString()}</span></div>
+    <div class="loadout-row"><span class="lbl">Loadout Cost</span><span class="val warn">Ƒ${invested.toLocaleString()}</span></div>
+  `;
+  const payEl = document.getElementById('go-payout');
+  if (net >= 0) { payEl.className = 'payout plus'; payEl.textContent = `NET +Ƒ${net.toLocaleString()}`; }
+  else          { payEl.className = 'payout minus'; payEl.textContent = `NET −Ƒ${Math.abs(net).toLocaleString()}`; }
+  go.style.display = 'flex';
+}
+
+function returnToMenu() {
+  document.getElementById('gameover').style.display = 'none';
+  document.getElementById('menu').style.display = 'flex';
+  refreshMenu();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// UPDATE
+// ═══════════════════════════════════════════════════════════════════
+function update() {
+  const d = state.drone;
+  state.mothershipPulse += 0.035;
+  if (state.aggroFlashT > 0) state.aggroFlashT--;
+  if (!d) return;
+
+  const lockedOut = state.laser.lockedOut;
+
+  // ── Flight ─────────────────────────────────────────────────────
+  d.thrusting = false;
+  // Overheat disables thrust
+  if (!lockedOut) {
+    if (keys['w'] || keys['arrowup']) {
+      d.vx += Math.cos(d.angle) * THRUST;
+      d.vy += Math.sin(d.angle) * THRUST;
+      d.thrusting = true;
+      state.fuel -= FUEL_DRAIN_THRUST;
+    }
+    if (keys['s'] || keys['arrowdown']) {
+      d.vx -= Math.cos(d.angle) * THRUST * 0.4;
+      d.vy -= Math.sin(d.angle) * THRUST * 0.4;
+      state.fuel -= FUEL_DRAIN_BRAKE;
+    }
+  }
+  // Steering works even during lockout
+  if (keys['a'] || keys['arrowleft']) d.angle -= TURN;
+  if (keys['d'] || keys['arrowright']) d.angle += TURN;
+
+  const spd = Math.hypot(d.vx, d.vy);
+  if (spd > MAX_SPD) { d.vx *= MAX_SPD/spd; d.vy *= MAX_SPD/spd; }
+  d.vx *= DRAG; d.vy *= DRAG;
+  d.x += d.vx; d.y += d.vy;
+
+  ensureChunksLoaded();
+  for (const [k, chunk] of state.chunks) {
+    if (!chunk._restored) {
+      const [cx, cy] = k.split(',').map(Number);
+      restoreChunkMemory(cx, cy, chunk);
+      chunk._restored = true;
+    }
+  }
+
+  // Docking
+  const distMother = Math.hypot(d.x - state.mothership.x, d.y - state.mothership.y);
+  state.docked = distMother < DOCK_RADIUS;
+  if (state.docked && keys['q']) {
+    if (!state._qHeld) { dockDrone(); state._qHeld = true; }
+  }
+  if (!keys['q']) state._qHeld = false;
+
+  // ── Refinery deploy (R key) ────────────────────────────────────
+  if (state.refineryDeployCD > 0) state.refineryDeployCD--;
+  if (keys['r']) {
+    if (!state._rHeld) {
+      state._rHeld = true;
+      if (state.refineriesRemaining <= 0) {
+        showMsg('NO REFINERIES REMAINING', 1000, '#ff9a4a');
+      } else if (state.refineryDeployCD > 0) {
+        // cooldown, ignore silently
+      } else if (state.docked) {
+        showMsg('CANNOT DEPLOY AT MOTHERSHIP', 1000, '#ff9a4a');
+      } else {
+        // Deploy at drone position
+        state.refineries.push({
+          x: d.x, y: d.y,
+          hp: REFINERY_HP,
+          fueling: false,
+          pulse: 0
+        });
+        state.refineriesRemaining--;
+        state.refineryDeployCD = REFINERY_DEPLOY_COOLDOWN;
+        state.runStats.refineriesDeployed++;
+        showMsg(`REFINERY DEPLOYED (${state.refineriesRemaining} LEFT)`, 1400, '#86ff6a');
+        // Spark burst
+        for (let i = 0; i < 14; i++) {
+          const a = Math.random() * Math.PI * 2;
+          state.particles.push({
+            x: d.x, y: d.y, vx: Math.cos(a)*2, vy: Math.sin(a)*2,
+            life:20, max:20, color:'#86ff6a', size:1.4
+          });
+        }
+      }
+    }
+  }
+  if (!keys['r']) state._rHeld = false;
+
+  // Fuel death
+  if (state.fuel <= 0) {
+    state.fuel = 0;
+    killDrone('Fuel depleted. Drifted into the dark.');
+    return;
+  }
+
+  // Camera
+  const targX = d.x - C.width/2 + d.vx * 14;
+  const targY = d.y - C.height/2 + d.vy * 14;
+  state.cam.x += (targX - state.cam.x) * 0.12;
+  state.cam.y += (targY - state.cam.y) * 0.12;
+
+  // ── LASER ──────────────────────────────────────────────────────
+  const wantFire = !!keys[' '];
+
+  if (state.laser.firing) {
+    state.laser.heat += HEAT_PER_FRAME;
+    if (state.laser.heat >= state.caps.heat) {
+      state.laser.heat = state.caps.heat;
+      state.laser.lockedOut = true;
+      state.laser.firing = false;
+      showMsg('OVERHEAT. WEAPON & THRUST LOCKED', 1100, '#ff4a4a');
+    }
+  } else {
+    state.laser.heat = Math.max(0, state.laser.heat - HEAT_COOLDOWN);
+    if (state.laser.lockedOut && state.laser.heat < state.caps.heat * HEAT_LOCKOUT_RELEASE_FRAC) {
+      state.laser.lockedOut = false;
+    }
+  }
+
+  const canFire = wantFire && !state.laser.lockedOut;
+  state.laser.firing = canFire;
+  state.laser.hitAsteroid = null;
+  state.laser.hitEnemy = null;
+  state.laser.locked = false;
+  state.laser.targetX = d.x + Math.cos(d.angle) * LASER_RANGE;
+  state.laser.targetY = d.y + Math.sin(d.angle) * LASER_RANGE;
+
+  if (canFire) {
+    const ox = d.x, oy = d.y;
+
+    // ── Auto-lock: find nearest enemy within aim cone and snap to it ────
+    // Skip same-faction drones so the laser doesn't lock onto allies.
+    let lockedEnemy = null;
+    {
+      let bestLockScore = Infinity;
+      for (const e of allEnemies()) {
+        if (e.faction === state.playerFaction) continue;
+        const relX = e.x - ox, relY = e.y - oy;
+        const dist = Math.hypot(relX, relY);
+        if (dist > LASER_LOCK_RANGE) continue;
+        // Signed angle delta from drone's current aim
+        const toEnemyAngle = Math.atan2(relY, relX);
+        let diff = toEnemyAngle - d.angle;
+        while (diff > Math.PI)  diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        if (Math.abs(diff) > LASER_LOCK_CONE) continue;
+        // Prefer enemies closer to center of cone, weighted by distance
+        const score = Math.abs(diff) * 50 + dist;
+        if (score < bestLockScore) { bestLockScore = score; lockedEnemy = e; }
+      }
+    }
+
+    // Direction: lock-on points at enemy, else straight ahead
+    let dx, dy;
+    if (lockedEnemy) {
+      const relX = lockedEnemy.x - ox, relY = lockedEnemy.y - oy;
+      const mag = Math.hypot(relX, relY) || 1;
+      dx = relX / mag; dy = relY / mag;
+    } else {
+      dx = Math.cos(d.angle); dy = Math.sin(d.angle);
+    }
+    state.laser.locked = !!lockedEnemy;
+
+    let bestT = LASER_RANGE;
+    let bestAst = null, bestEnemy = null;
+
+    for (const a of allAsteroids()) {
+      if (a.mined) continue;
+      const cx = a.x - ox, cy = a.y - oy;
+      const tProj = cx*dx + cy*dy;
+      if (tProj < 0 || tProj > bestT) continue;
+      const closestX = ox + dx * tProj;
+      const closestY = oy + dy * tProj;
+      const perp = Math.hypot(a.x - closestX, a.y - closestY);
+      if (perp < a.r) {
+        const back = Math.sqrt(Math.max(0, a.r*a.r - perp*perp));
+        const t = tProj - back;
+        if (t > 0 && t < bestT) { bestT = t; bestAst = a; bestEnemy = null; }
+      }
+    }
+
+    for (const e of allEnemies()) {
+      if (e.faction === state.playerFaction) continue;  // beam passes through allies
+      const cx = e.x - ox, cy = e.y - oy;
+      const tProj = cx*dx + cy*dy;
+      if (tProj < 0 || tProj > bestT) continue;
+      const closestX = ox + dx * tProj;
+      const closestY = oy + dy * tProj;
+      const perp = Math.hypot(e.x - closestX, e.y - closestY);
+      if (perp < e.r + 2) {
+        const back = Math.sqrt(Math.max(0, (e.r+2)*(e.r+2) - perp*perp));
+        const t = tProj - back;
+        if (t > 0 && t < bestT) { bestT = t; bestAst = null; bestEnemy = e; }
+      }
+    }
+
+    state.laser.targetX = ox + dx * bestT;
+    state.laser.targetY = oy + dy * bestT;
+
+    if (bestAst) {
+      state.laser.hitAsteroid = bestAst;
+      if (!bestAst.scanned) {
+        const rng = mulberry32(hash2(state.seed, Math.floor(bestAst.x), Math.floor(bestAst.y)));
+        bestAst.mineral = pickMineralForBand(rng, bestAst.band);
+        bestAst.oreUnits = bestAst.mineral.value === 0 ? 0 : (1 + Math.floor(rng() * 3));
+        bestAst.scanned = true;
+        if (bestAst.oreUnits === 0) bestAst.mined = true;
+        if (bestAst.mineral.value >= 60) showMsg(`${bestAst.mineral.name} DETECTED`, 1200, bestAst.mineral.color);
+      }
+      if (bestAst.scanned && !bestAst.mined && bestAst.mineral.value > 0 && state.cargoCount < state.caps.cargo) {
+        bestAst.mineProgress += LASER_MINE_RATE;
+        if (Math.random() < 0.3) {
+          const ang = Math.atan2(oy - bestAst.y, ox - bestAst.x) + (Math.random() - 0.5) * 0.6;
+          state.particles.push({
+            x: state.laser.targetX, y: state.laser.targetY,
+            vx: Math.cos(ang) * (1 + Math.random()*2), vy: Math.sin(ang) * (1 + Math.random()*2),
+            life: 18 + Math.random()*10, max: 28,
+            color: bestAst.mineral.color, size: 1.3 + Math.random()
+          });
+        }
+        if (bestAst.mineProgress >= 100) {
+          bestAst.oreUnits--;
+          state.cargoCount++;
+          state.cargoValue += bestAst.mineral.value;
+          state.runStats.rocksMined++;
+          for (let i = 0; i < 8; i++) {
+            const a2 = Math.random() * Math.PI * 2;
+            state.particles.push({
+              x: bestAst.x, y: bestAst.y,
+              vx: Math.cos(a2)*2, vy: Math.sin(a2)*2,
+              life:22, max:22, color: bestAst.mineral.color, size:1.8
+            });
+          }
+          if (bestAst.oreUnits <= 0) bestAst.mined = true;
+          bestAst.mineProgress = 0;
+        }
+      }
+    } else if (bestEnemy) {
+      state.laser.hitEnemy = bestEnemy;
+      bestEnemy.hp -= LASER_DPS;
+      if (Math.random() < 0.5) {
+        const ang = Math.random() * Math.PI * 2;
+        state.particles.push({
+          x: state.laser.targetX, y: state.laser.targetY,
+          vx: Math.cos(ang) * 2, vy: Math.sin(ang) * 2,
+          life: 10, max: 10, color: '#ff4a4a', size: 1.3
+        });
+      }
+      if (bestEnemy.hp <= 0) {
+        // Explosion
+        for (let k = 0; k < 22; k++) {
+          const a = Math.random() * Math.PI * 2;
+          const s = 1 + Math.random() * 3.5;
+          state.particles.push({
+            x: bestEnemy.x, y: bestEnemy.y,
+            vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+            life:25+Math.random()*20, max:45,
+            color: k < 10 ? '#ff4444' : '#882222', size:2
+          });
+        }
+        // Drop salvage
+        const val = salvageValueForBand(bestEnemy.band);
+        state.salvage.push({
+          x: bestEnemy.x, y: bestEnemy.y,
+          vx: (Math.random() - 0.5) * 0.6,
+          vy: (Math.random() - 0.5) * 0.6,
+          value: val, life: 1200,
+          color: '#86ff6a',
+          pulse: 0
+        });
+        // Remove enemy
+        const chunk = state.chunks.get(bestEnemy.homeChunk);
+        if (chunk) {
+          const idx = chunk.enemies.indexOf(bestEnemy);
+          if (idx !== -1) chunk.enemies.splice(idx, 1);
+        }
+        state.runStats.enemiesKilled++;
+      }
+    }
+  }
+
+  // ── Salvage pickup ─────────────────────────────────────────────
+  // Bug fixes from earlier version:
+  //   1. Distance was tested against pre-motion position — now tested after
+  //   2. High-speed flybys could skip pickup range in one frame — now uses
+  //      swept-segment-vs-circle test (checks the line from old→new position)
+  //   3. Cargo-full silently dropped pickups — now surfaces feedback
+  const PICKUP_RADIUS = 32;        // slightly bumped for forgiveness
+  const PULL_RADIUS = 90;
+  let missedDueToCargoFull = false;
+  for (let i = state.salvage.length - 1; i >= 0; i--) {
+    const s = state.salvage[i];
+    s.life--;
+    s.pulse += 0.12;
+    if (s.life <= 0) { state.salvage.splice(i, 1); continue; }
+
+    // Pull toward drone when in range
+    const sdx = d.x - s.x, sdy = d.y - s.y;
+    const preDist = Math.hypot(sdx, sdy);
+    if (preDist < PULL_RADIUS && preDist > 0) {
+      const pull = 0.3 * (1 - preDist/PULL_RADIUS);
+      s.vx += (sdx/preDist) * pull;
+      s.vy += (sdy/preDist) * pull;
+    }
+    s.vx *= 0.95; s.vy *= 0.95;
+
+    // Remember old position for swept-collision test
+    const oldX = s.x, oldY = s.y;
+    s.x += s.vx; s.y += s.vy;
+
+    // Swept test: find the minimum distance from drone to the segment
+    //   [(oldX,oldY) → (s.x,s.y)]
+    // If minimum is within PICKUP_RADIUS, collect.
+    // Math: project drone onto line segment, clamp t∈[0,1], measure distance.
+    const segDX = s.x - oldX, segDY = s.y - oldY;
+    const segLen2 = segDX*segDX + segDY*segDY;
+    let minDist;
+    if (segLen2 < 0.0001) {
+      // Salvage didn't move this frame; just test current position
+      minDist = Math.hypot(d.x - s.x, d.y - s.y);
+    } else {
+      const t = Math.max(0, Math.min(1, ((d.x - oldX)*segDX + (d.y - oldY)*segDY) / segLen2));
+      const closestX = oldX + t*segDX;
+      const closestY = oldY + t*segDY;
+      minDist = Math.hypot(d.x - closestX, d.y - closestY);
+    }
+
+    if (minDist < PICKUP_RADIUS) {
+      if (state.cargoCount < state.caps.cargo) {
+        state.cargoCount++;
+        state.cargoValue += s.value;
+        state.runStats.salvageCollected++;
+        showMsg(`+SALVAGE · Ƒ${s.value}`, 700, '#86ff6a');
+        for (let j = 0; j < 5; j++) {
+          const a = Math.random() * Math.PI * 2;
+          state.particles.push({
+            x: s.x, y: s.y, vx: Math.cos(a)*1.5, vy: Math.sin(a)*1.5,
+            life:16, max:16, color:'#86ff6a', size:1.4
+          });
+        }
+        state.salvage.splice(i, 1);
+      } else {
+        // Cargo full — salvage bounces off the drone instead of being absorbed
+        missedDueToCargoFull = true;
+        const bounceDX = s.x - d.x, bounceDY = s.y - d.y;
+        const bounceMag = Math.hypot(bounceDX, bounceDY) || 1;
+        s.vx = (bounceDX / bounceMag) * 2;
+        s.vy = (bounceDY / bounceMag) * 2;
+        // Push it just outside pickup radius so it doesn't immediately re-trigger
+        s.x = d.x + (bounceDX / bounceMag) * (PICKUP_RADIUS + 2);
+        s.y = d.y + (bounceDY / bounceMag) * (PICKUP_RADIUS + 2);
+      }
+    }
+  }
+  // One-shot message when cargo blocks a pickup (throttled to avoid spam)
+  if (missedDueToCargoFull) {
+    const now = performance.now();
+    if (!state._lastCargoFullMsg || now - state._lastCargoFullMsg > 1500) {
+      showMsg('CARGO FULL. DOCK TO BANK', 1200, '#ffaa40');
+      state._lastCargoFullMsg = now;
+    }
+  }
+
+  // ── Asteroid rotation + collision ──────────────────────────────
+  for (const a of allAsteroids()) {
+    a.rot += a.rotSpd;
+    if (a.mined) continue;
+    const dx2 = d.x - a.x, dy2 = d.y - a.y;
+    const dist = Math.hypot(dx2, dy2);
+    const minDist = d.r + a.r;
+    if (dist < minDist && dist > 0) {
+      const nx = dx2 / dist, ny = dy2 / dist;
+      const overlap = minDist - dist;
+      d.x += nx * overlap;
+      d.y += ny * overlap;
+      const dot = d.vx * nx + d.vy * ny;
+      d.vx -= 1.6 * dot * nx;
+      d.vy -= 1.6 * dot * ny;
+      d.vx *= 0.7; d.vy *= 0.7;
+    }
+  }
+
+  // ── Refineries: fuel the drone when in range ───────────────────
+  for (let i = state.refineries.length - 1; i >= 0; i--) {
+    const r = state.refineries[i];
+    r.pulse += 0.08;
+    const dx2 = d.x - r.x, dy2 = d.y - r.y;
+    const rdist = Math.hypot(dx2, dy2);
+    r.fueling = rdist < REFINERY_FUEL_RANGE && state.fuel < state.caps.fuel;
+    if (r.fueling) {
+      const gain = Math.min(REFINERY_FUEL_RATE, state.caps.fuel - state.fuel);
+      state.fuel += gain;
+      state.runStats.fuelFromRefineries += gain;
+      // Fuel-flow particles every few frames
+      if (Math.random() < 0.25) {
+        const ang = Math.atan2(dy2, dx2);
+        state.particles.push({
+          x: r.x, y: r.y,
+          vx: Math.cos(ang) * 1.4, vy: Math.sin(ang) * 1.4,
+          life: 30, max: 30, color:'#60c8ff', size:1.5
+        });
+      }
+    }
+    // Drone physical collision with refinery (solid)
+    const collDist = d.r + REFINERY_RADIUS;
+    if (rdist < collDist && rdist > 0) {
+      const nx = dx2 / rdist, ny = dy2 / rdist;
+      const overlap = collDist - rdist;
+      d.x += nx * overlap;
+      d.y += ny * overlap;
+      const dot = d.vx * nx + d.vy * ny;
+      d.vx -= 1.2 * dot * nx;
+      d.vy -= 1.2 * dot * ny;
+      d.vx *= 0.8; d.vy *= 0.8;
+    }
+  }
+
+  // ── Escort drone AI ────────────────────────────────────────────
+  for (let i = state.escorts.length - 1; i >= 0; i--) {
+    const esc = state.escorts[i];
+    // Orbit around the player
+    esc.orbitAngle += ESCORT_ORBIT_SPD;
+    const targetX = d.x + Math.cos(esc.orbitAngle) * esc.orbitRadius;
+    const targetY = d.y + Math.sin(esc.orbitAngle) * esc.orbitRadius;
+
+    // Find closest enemy in range — skip same-faction (allies)
+    let tgt = null;
+    let tgtDist = ESCORT_TARGET_RANGE;
+    for (const en of allEnemies()) {
+      if (en.faction === state.playerFaction) continue;
+      const ddx = en.x - esc.x, ddy = en.y - esc.y;
+      const dd = Math.hypot(ddx, ddy);
+      if (dd < tgtDist) { tgt = en; tgtDist = dd; }
+    }
+
+    // Face target if any, else face direction of motion
+    if (tgt) {
+      esc.angle = Math.atan2(tgt.y - esc.y, tgt.x - esc.x);
+    } else {
+      esc.angle = Math.atan2(targetY - esc.y, targetX - esc.x);
+    }
+
+    // Move toward orbit position
+    const mdx = targetX - esc.x, mdy = targetY - esc.y;
+    const md = Math.hypot(mdx, mdy);
+    if (md > 2) {
+      esc.vx += (mdx / md) * 0.35;
+      esc.vy += (mdy / md) * 0.35;
+    }
+    const espd = Math.hypot(esc.vx, esc.vy);
+    if (espd > ESCORT_MAX_SPD) { esc.vx *= ESCORT_MAX_SPD / espd; esc.vy *= ESCORT_MAX_SPD / espd; }
+    esc.vx *= 0.92; esc.vy *= 0.92;
+    esc.x += esc.vx; esc.y += esc.vy;
+
+    // Shoot at target
+    esc.shootCD--;
+    if (tgt && esc.shootCD <= 0) {
+      const ang = esc.angle;
+      state.escortBullets.push({
+        x: esc.x + Math.cos(ang) * 9,
+        y: esc.y + Math.sin(ang) * 9,
+        vx: Math.cos(ang) * ESCORT_BULLET_SPD,
+        vy: Math.sin(ang) * ESCORT_BULLET_SPD,
+        life: ESCORT_BULLET_LIFE
+      });
+      esc.shootCD = ESCORT_SHOOT_CD;
+    }
+
+    // Check if dead
+    if (esc.hp <= 0) {
+      for (let k = 0; k < 14; k++) {
+        const a = Math.random() * Math.PI * 2;
+        state.particles.push({
+          x: esc.x, y: esc.y, vx: Math.cos(a)*(1+Math.random()*2), vy: Math.sin(a)*(1+Math.random()*2),
+          life: 22, max: 32, color: k<6?'#ffcc44':'#e6c27a', size: 1.8
+        });
+      }
+      state.escorts.splice(i, 1);
+      state.runStats.escortsLost++;
+      showMsg('ESCORT LOST', 1000, '#ff9a4a');
+    }
+  }
+
+  // ── Escort bullets → enemy collision ───────────────────────────
+  for (let i = state.escortBullets.length - 1; i >= 0; i--) {
+    const b = state.escortBullets[i];
+    const prevX = b.x, prevY = b.y;
+    b.x += b.vx; b.y += b.vy; b.life--;
+    if (b.life <= 0) { state.escortBullets.splice(i, 1); continue; }
+    // Asteroid block (swept)
+    if (rayBlockedByAsteroid(prevX, prevY, b.x, b.y)) {
+      state.escortBullets.splice(i, 1);
+      continue;
+    }
+    let consumed = false;
+    for (const en of allEnemies()) {
+      if (Math.hypot(b.x - en.x, b.y - en.y) < en.r + 3) {
+        en.hp -= ESCORT_BULLET_DMG;
+        for (let k = 0; k < 4; k++) {
+          const a = Math.random() * Math.PI * 2;
+          state.particles.push({ x:b.x, y:b.y, vx:Math.cos(a)*1.5, vy:Math.sin(a)*1.5, life:12, max:12, color:'#ffaa44', size:1.2 });
+        }
+        if (en.hp <= 0) {
+          for (let k = 0; k < 20; k++) {
+            const a = Math.random() * Math.PI * 2;
+            const s = 1 + Math.random() * 3;
+            state.particles.push({ x:en.x, y:en.y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life:22+Math.random()*18, max:40, color:k<10?'#ff4444':'#882222', size:2 });
+          }
+          const val = salvageValueForBand(en.band);
+          state.salvage.push({
+            x: en.x, y: en.y,
+            vx: (Math.random() - 0.5) * 0.6, vy: (Math.random() - 0.5) * 0.6,
+            value: val, life: 1200, color:'#86ff6a', pulse: 0
+          });
+          const chunk = state.chunks.get(en.homeChunk);
+          if (chunk) {
+            const idx = chunk.enemies.indexOf(en);
+            if (idx !== -1) chunk.enemies.splice(idx, 1);
+          }
+          state.runStats.enemiesKilled++;
+        }
+        consumed = true;
+        break;
+      }
+    }
+    if (consumed) { state.escortBullets.splice(i, 1); continue; }
+    // Absorb on asteroids
+    for (const a of allAsteroids()) {
+      if (a.mined) continue;
+      if (Math.hypot(b.x - a.x, b.y - a.y) < a.r) { state.escortBullets.splice(i, 1); consumed = true; break; }
+    }
+  }
+
+  // ── Enemies ────────────────────────────────────────────────────
+  state.aggroed = false;
+  for (const e of allEnemies()) {
+    // Same-faction drones are friendly — they patrol, collide with rocks, but
+    // never aggro or shoot at the player, escorts, or refineries.
+    if (e.faction === state.playerFaction) {
+      e.state = 'patrol';
+      e.patrolTimer--;
+      if (e.patrolTimer <= 0) {
+        e.patrolAngle = Math.random() * Math.PI * 2;
+        e.patrolTimer = 80 + Math.random() * 200;
+      }
+      e.angle += (e.patrolAngle - e.angle) * 0.02;
+      e.vx += Math.cos(e.angle) * 0.015 * e.speedMult;
+      e.vy += Math.sin(e.angle) * 0.015 * e.speedMult;
+      const espd = Math.hypot(e.vx, e.vy);
+      const emax = 2.6 * e.speedMult;
+      if (espd > emax) { e.vx *= emax/espd; e.vy *= emax/espd; }
+      e.vx *= 0.97; e.vy *= 0.97;
+      e.x += e.vx; e.y += e.vy;
+      // Still collide with asteroids
+      for (const a of allAsteroids()) {
+        if (a.mined) continue;
+        const adx = e.x - a.x, ady = e.y - a.y;
+        const adist = Math.hypot(adx, ady);
+        const minDist = e.r + a.r;
+        if (adist < minDist && adist > 0) {
+          const nx = adx / adist, ny = ady / adist;
+          const overlap = minDist - adist;
+          e.x += nx * overlap;
+          e.y += ny * overlap;
+          const dot = e.vx * nx + e.vy * ny;
+          e.vx -= 1.4 * dot * nx;
+          e.vy -= 1.4 * dot * ny;
+          e.vx *= 0.65; e.vy *= 0.65;
+        }
+      }
+      continue;
+    }
+
+    // Target selection: player is preferred (threat priority),
+    // but escorts and refineries can draw aggro if they're much closer
+    // or if player is out of range.
+    let tx = d.x, ty = d.y, tType = 'player';
+    const playerDx = d.x - e.x, playerDy = d.y - e.y;
+    const playerDist = Math.hypot(playerDx, playerDy);
+    let targetDist = playerDist;
+    let playerInRange = playerDist < e.aggroRange;
+
+    // Check escorts
+    let bestEscort = null, bestEscortDist = Infinity;
+    for (const esc of state.escorts) {
+      const dd = Math.hypot(esc.x - e.x, esc.y - e.y);
+      if (dd < e.aggroRange && dd < bestEscortDist) { bestEscort = esc; bestEscortDist = dd; }
+    }
+    // Check refineries
+    let bestRef = null, bestRefDist = Infinity;
+    for (const r of state.refineries) {
+      const dd = Math.hypot(r.x - e.x, r.y - e.y);
+      if (dd < e.aggroRange && dd < bestRefDist) { bestRef = r; bestRefDist = dd; }
+    }
+
+    // Pick target: player always wins if in range AND not significantly farther than alternatives.
+    // If player is out of range, pick nearest escort or refinery.
+    // If an alternative is 40% closer than player, target it instead.
+    if (playerInRange) {
+      tx = d.x; ty = d.y; tType = 'player';
+      targetDist = playerDist;
+      if (bestEscort && bestEscortDist < playerDist * 0.6) {
+        tx = bestEscort.x; ty = bestEscort.y; tType = 'escort';
+        targetDist = bestEscortDist;
+      } else if (bestRef && bestRefDist < playerDist * 0.6) {
+        tx = bestRef.x; ty = bestRef.y; tType = 'refinery';
+        targetDist = bestRefDist;
+      }
+    } else if (bestEscort || bestRef) {
+      if (bestEscortDist < bestRefDist) {
+        tx = bestEscort.x; ty = bestEscort.y; tType = 'escort';
+        targetDist = bestEscortDist;
+      } else {
+        tx = bestRef.x; ty = bestRef.y; tType = 'refinery';
+        targetDist = bestRefDist;
+      }
+    }
+
+    const hasTarget = targetDist < e.aggroRange;
+    if (hasTarget && tType === 'player') state.aggroed = true;
+
+    if (hasTarget) {
+      if (e.state !== 'chase') state.aggroFlashT = 30;
+      e.state = 'chase';
+      const targetAng = Math.atan2(ty - e.y, tx - e.x);
+      let diff = targetAng - e.angle;
+      while (diff > Math.PI) diff -= Math.PI*2;
+      while (diff < -Math.PI) diff += Math.PI*2;
+      e.angle += Math.max(-0.05, Math.min(0.05, diff));
+      const ideal = 220;
+      if (targetDist > ideal) {
+        e.vx += Math.cos(e.angle) * 0.06 * e.speedMult;
+        e.vy += Math.sin(e.angle) * 0.06 * e.speedMult;
+      } else if (targetDist < ideal - 40) {
+        e.vx -= Math.cos(e.angle) * 0.04 * e.speedMult;
+        e.vy -= Math.sin(e.angle) * 0.04 * e.speedMult;
+      }
+      e.shootCD--;
+      if (e.shootCD <= 0 && targetDist < 500) {
+        const bx = e.x + Math.cos(e.angle) * 12;
+        const by = e.y + Math.sin(e.angle) * 12;
+        // Do not fire if a rock blocks line of sight, or if the bullet
+        // would spawn inside an asteroid. Reset the cooldown short so
+        // the enemy tries again shortly rather than going silent.
+        if (rayBlockedByAsteroid(bx, by, tx, ty) || asteroidAtPoint(bx, by)) {
+          e.shootCD = 18;   // brief re-check delay
+        } else {
+          state.bullets.push({
+            x: bx, y: by,
+            vx: Math.cos(e.angle) * ENEMY_BULLET_SPD * e.bulletSpdMult,
+            vy: Math.sin(e.angle) * ENEMY_BULLET_SPD * e.bulletSpdMult,
+            life: 90
+          });
+          e.shootCD = Math.floor(ENEMY_SHOOT_CD_MIN + Math.random() * (ENEMY_SHOOT_CD_MAX - ENEMY_SHOOT_CD_MIN));
+        }
+      }
+    } else {
+      e.state = 'patrol';
+      e.patrolTimer--;
+      if (e.patrolTimer <= 0) {
+        e.patrolAngle = Math.random() * Math.PI * 2;
+        e.patrolTimer = 80 + Math.random() * 200;
+      }
+      e.angle += (e.patrolAngle - e.angle) * 0.02;
+      e.vx += Math.cos(e.angle) * 0.015 * e.speedMult;
+      e.vy += Math.sin(e.angle) * 0.015 * e.speedMult;
+    }
+
+    const espd = Math.hypot(e.vx, e.vy);
+    const emax = 2.6 * e.speedMult;
+    if (espd > emax) { e.vx *= emax/espd; e.vy *= emax/espd; }
+    e.vx *= 0.97; e.vy *= 0.97;
+    e.x += e.vx; e.y += e.vy;
+
+    // Asteroid collision — enemies bounce off rocks same as the player
+    for (const a of allAsteroids()) {
+      if (a.mined) continue;
+      const adx = e.x - a.x, ady = e.y - a.y;
+      const adist = Math.hypot(adx, ady);
+      const minDist = e.r + a.r;
+      if (adist < minDist && adist > 0) {
+        const nx = adx / adist, ny = ady / adist;
+        const overlap = minDist - adist;
+        e.x += nx * overlap;
+        e.y += ny * overlap;
+        const dot = e.vx * nx + e.vy * ny;
+        e.vx -= 1.4 * dot * nx;
+        e.vy -= 1.4 * dot * ny;
+        e.vx *= 0.65; e.vy *= 0.65;
+        // If patrolling into a rock, bias patrol angle away so they don't stick
+        if (e.state === 'patrol') {
+          e.patrolAngle = Math.atan2(ny, nx);
+          e.patrolTimer = 60 + Math.random() * 100;
+        }
+      }
+    }
+  }
+
+  // ── Enemy bullets (one-shot kill on player, reduce HP on escorts/refineries) ─
+  for (let i = state.bullets.length - 1; i >= 0; i--) {
+    const b = state.bullets[i];
+    const prevX = b.x, prevY = b.y;
+    b.x += b.vx; b.y += b.vy; b.life--;
+    if (b.life <= 0) { state.bullets.splice(i, 1); continue; }
+    // Swept asteroid check — catch fast bullets that would tunnel through small rocks
+    if (rayBlockedByAsteroid(prevX, prevY, b.x, b.y)) {
+      state.bullets.splice(i, 1);
+      continue;
+    }
+    // Player hit = one shot
+    if (d && Math.hypot(b.x - d.x, b.y - d.y) < d.r + 3) {
+      state.bullets.splice(i, 1);
+      killDrone('Hostile fire. One hit, one drone.');
+      return;
+    }
+    let consumed = false;
+    // Escort hit
+    for (const esc of state.escorts) {
+      if (Math.hypot(b.x - esc.x, b.y - esc.y) < 10) {
+        esc.hp--;
+        for (let k = 0; k < 4; k++) {
+          const a = Math.random() * Math.PI * 2;
+          state.particles.push({ x:b.x, y:b.y, vx:Math.cos(a)*1.5, vy:Math.sin(a)*1.5, life:10, max:10, color:'#ffcc44', size:1.2 });
+        }
+        consumed = true;
+        break;
+      }
+    }
+    if (consumed) { state.bullets.splice(i, 1); continue; }
+    // Refinery hit
+    for (let ri = state.refineries.length - 1; ri >= 0; ri--) {
+      const r = state.refineries[ri];
+      if (Math.hypot(b.x - r.x, b.y - r.y) < REFINERY_RADIUS + 2) {
+        r.hp--;
+        for (let k = 0; k < 5; k++) {
+          const a = Math.random() * Math.PI * 2;
+          state.particles.push({ x:b.x, y:b.y, vx:Math.cos(a)*1.5, vy:Math.sin(a)*1.5, life:12, max:12, color:'#ff6b6b', size:1.3 });
+        }
+        if (r.hp <= 0) {
+          // Destruction burst
+          for (let k = 0; k < 26; k++) {
+            const a = Math.random() * Math.PI * 2;
+            const s = 1 + Math.random() * 4;
+            state.particles.push({
+              x: r.x, y: r.y, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+              life: 30+Math.random()*20, max: 50,
+              color: k<10 ? '#ffcc44' : (k<20 ? '#ff4444' : '#662222'), size: 2
+            });
+          }
+          state.refineries.splice(ri, 1);
+          state.runStats.refineriesLost++;
+          showMsg('REFINERY DESTROYED', 1200, '#ff6b6b');
+        }
+        consumed = true;
+        break;
+      }
+    }
+    if (consumed) { state.bullets.splice(i, 1); continue; }
+    // Asteroid absorb
+    for (const a of allAsteroids()) {
+      if (a.mined) continue;
+      if (Math.hypot(b.x - a.x, b.y - a.y) < a.r) { state.bullets.splice(i, 1); consumed = true; break; }
+    }
+  }
+
+  // Particles
+  for (let i = state.particles.length - 1; i >= 0; i--) {
+    const p = state.particles[i];
+    p.x += p.vx; p.y += p.vy; p.life--;
+    if (p.life <= 0) state.particles.splice(i, 1);
+  }
+
+  // Thruster particles
+  if (d.thrusting && Math.random() < 0.7) {
+    const back = d.angle + Math.PI;
+    const spread = (Math.random() - 0.5) * 0.4;
+    state.particles.push({
+      x: d.x + Math.cos(back) * 11, y: d.y + Math.sin(back) * 11,
+      vx: Math.cos(back+spread) * 2.2 + d.vx*0.5,
+      vy: Math.sin(back+spread) * 2.2 + d.vy*0.5,
+      life: 14, max: 14, color: Math.random() < 0.5 ? '#60c8ff' : '#b0e0ff', size: 1.5
+    });
+  }
+
+  updateHUD();
+}
+
+function updateHUD() {
+  // Drone panel
+  document.getElementById('h-drone').textContent = state.dronesUsed;
+  document.getElementById('h-drone-total').textContent = 'of ' + state.dronesBought;
+
+  // Cargo panel
+  document.getElementById('h-cargo').textContent = state.cargoCount;
+  document.getElementById('h-cargo-total').textContent = '/ ' + state.caps.cargo;
+  document.getElementById('h-cargoval').textContent = 'Ƒ' + state.cargoValue.toLocaleString();
+  document.getElementById('h-banked').textContent = 'Ƒ' + state.runBanked.toLocaleString();
+
+  // Fuel panel — the prominent one
+  const fuelPct = (state.fuel / state.caps.fuel) * 100;
+  const fuelPanel = document.getElementById('hud-fuel');
+  document.getElementById('h-fuel').textContent = Math.ceil(state.fuel);
+  document.getElementById('h-fuel-cap').textContent = '/' + state.caps.fuel;
+  document.getElementById('h-fuel-bar').style.width = fuelPct + '%';
+  fuelPanel.classList.toggle('warn',     fuelPct < 50 && fuelPct >= 20);
+  fuelPanel.classList.toggle('critical', fuelPct < 20);
+
+  // Return range estimate — how far from origin on remaining fuel
+  if (state.drone) {
+    const distHome = Math.hypot(state.drone.x, state.drone.y);
+    // Very rough: each frame of thrust burns FUEL_DRAIN_THRUST, moves MAX_SPD
+    // So max travel on remaining fuel ≈ (fuel / drain) * speed. Add 30% safety.
+    const maxTravel = (state.fuel / FUEL_DRAIN_THRUST) * MAX_SPD * 0.77;
+    const est = document.getElementById('h-return-est');
+    if (distHome < 50) {
+      est.textContent = 'AT HOME';
+    } else if (maxTravel >= distHome) {
+      const margin = Math.round(((maxTravel - distHome) / distHome) * 100);
+      est.textContent = 'HOME OK · +' + margin + '%';
+    } else {
+      const short = Math.round(distHome - maxTravel);
+      est.textContent = 'SHORT ' + short + 'm';
+    }
+  }
+
+  // Heat panel
+  const heatPct = (state.laser.heat / state.caps.heat) * 100;
+  const heatPanel = document.getElementById('hud-heat');
+  document.getElementById('h-heat').textContent = Math.round(state.laser.heat);
+  document.getElementById('h-heat-cap').textContent = '/' + state.caps.heat;
+  document.getElementById('h-heat-bar').style.width = heatPct + '%';
+  heatPanel.classList.toggle('hot', heatPct > 60 && !state.laser.lockedOut);
+  heatPanel.classList.toggle('locked', state.laser.lockedOut);
+  const heatStatus = document.getElementById('h-heat-status');
+  if (state.laser.lockedOut) heatStatus.textContent = 'COOLING. WEAPON & THRUST LOCKED';
+  else if (heatPct > 80)     heatStatus.textContent = 'CRITICAL';
+  else if (heatPct > 50)     heatStatus.textContent = 'WARM';
+  else                        heatStatus.textContent = 'NOMINAL';
+
+  // Sector + Zone in drone panel
+  if (state.drone) {
+    const c = chunkOf(state.drone.x, state.drone.y);
+    document.getElementById('h-sector').textContent = c.cx + ',' + c.cy;
+    const band = bandForSector(c.cx, c.cy);
+    const zoneEl = document.getElementById('h-zone');
+    zoneEl.textContent = band.name;
+    zoneEl.style.color = band.color;
+  }
+
+  // Asset row: shown only if player has any refineries (bought or deployed) or escorts
+  const hasAssets = state.refineriesBought > 0 || state.escortsBought > 0 || state.refineries.length > 0 || state.escorts.length > 0;
+  const assetsRow = document.getElementById('h-assets-row');
+  if (hasAssets) {
+    assetsRow.style.display = 'flex';
+    document.getElementById('h-refineries').textContent = state.refineries.length + '/' + state.refineriesRemaining;
+    document.getElementById('h-escorts').textContent = state.escorts.length + '/' + state.escortsBought;
+  } else {
+    assetsRow.style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════════
+function render() {
+  X.fillStyle = '#030208';
+  X.fillRect(0, 0, C.width, C.height);
+
+  const camX = state.cam.x, camY = state.cam.y;
+
+  // Parallax stars
+  for (const s of allStars()) {
+    const px = s.x - camX * s.depth;
+    const py = s.y - camY * s.depth;
+    if (px < -10 || px > C.width+10 || py < -10 || py > C.height+10) continue;
+    X.fillStyle = s.color;
+    X.globalAlpha = 0.3 + s.depth * 0.5;
+    X.fillRect(Math.floor(px), Math.floor(py), s.size, s.size);
+  }
+  X.globalAlpha = 1;
+
+  // Chunk grid (very subtle)
+  X.strokeStyle = '#0a0a14';
+  X.lineWidth = 1;
+  const startCX = Math.floor(camX / CHUNK);
+  const endCX = Math.ceil((camX + C.width) / CHUNK);
+  const startCY = Math.floor(camY / CHUNK);
+  const endCY = Math.ceil((camY + C.height) / CHUNK);
+  for (let cx = startCX; cx <= endCX; cx++) {
+    const x = cx * CHUNK - camX;
+    X.beginPath(); X.moveTo(x, 0); X.lineTo(x, C.height); X.stroke();
+  }
+  for (let cy = startCY; cy <= endCY; cy++) {
+    const y = cy * CHUNK - camY;
+    X.beginPath(); X.moveTo(0, y); X.lineTo(C.width, y); X.stroke();
+  }
+
+  // Mothership
+  drawMothership(state.mothership.x - camX, state.mothership.y - camY);
+
+  // Asteroids
+  for (const a of allAsteroids()) {
+    const sx = a.x - camX, sy = a.y - camY;
+    if (sx < -120 || sx > C.width+120 || sy < -120 || sy > C.height+120) continue;
+    drawAsteroid(a, sx, sy);
+  }
+
+  // Salvage pickups
+  for (const s of state.salvage) {
+    const sx = s.x - camX, sy = s.y - camY;
+    if (sx < -30 || sx > C.width+30 || sy < -30 || sy > C.height+30) continue;
+    const pulse = 0.6 + Math.sin(s.pulse) * 0.4;
+    // Fade out in last 200 frames
+    const alpha = s.life < 200 ? s.life/200 : 1;
+    X.globalAlpha = alpha;
+    X.strokeStyle = '#86ff6a';
+    X.lineWidth = 1.5;
+    X.beginPath(); X.arc(sx, sy, 8 * pulse, 0, Math.PI*2); X.stroke();
+    X.fillStyle = 'rgba(134,255,106,0.4)';
+    X.beginPath(); X.arc(sx, sy, 4, 0, Math.PI*2); X.fill();
+    X.fillStyle = '#c8ffb0';
+    X.font = "bold 13px 'Courier New'";
+    X.textAlign = 'center';
+    X.fillText('Ƒ' + s.value, sx, sy - 14);
+    X.globalAlpha = 1;
+  }
+
+  // Refineries (drawn before enemies so enemies can overlay)
+  for (const r of state.refineries) {
+    const sx = r.x - camX, sy = r.y - camY;
+    if (sx < -80 || sx > C.width+80 || sy < -80 || sy > C.height+80) continue;
+    drawRefinery(r, sx, sy);
+  }
+
+  // Enemies
+  for (const e of allEnemies()) {
+    const sx = e.x - camX, sy = e.y - camY;
+    if (sx < -60 || sx > C.width+60 || sy < -60 || sy > C.height+60) continue;
+    drawEnemy(e, sx, sy);
+  }
+
+  // Escort drones (drawn after enemies so they overlay)
+  for (const esc of state.escorts) {
+    const sx = esc.x - camX, sy = esc.y - camY;
+    if (sx < -40 || sx > C.width+40 || sy < -40 || sy > C.height+40) continue;
+    drawEscort(esc, sx, sy);
+  }
+
+  // Enemy bullets
+  X.lineCap = 'round';
+  for (const b of state.bullets) {
+    X.strokeStyle = '#ff4a4a'; X.lineWidth = 2.2;
+    X.beginPath();
+    X.moveTo(b.x - camX, b.y - camY);
+    X.lineTo(b.x - camX - b.vx*1.8, b.y - camY - b.vy*1.8);
+    X.stroke();
+    X.fillStyle = '#ff8080';
+    X.beginPath(); X.arc(b.x - camX, b.y - camY, 2, 0, Math.PI*2); X.fill();
+  }
+  // Escort bullets — gold, distinct from player laser + enemy red
+  for (const b of state.escortBullets) {
+    X.strokeStyle = '#ffd060'; X.lineWidth = 2;
+    X.beginPath();
+    X.moveTo(b.x - camX, b.y - camY);
+    X.lineTo(b.x - camX - b.vx*1.8, b.y - camY - b.vy*1.8);
+    X.stroke();
+    X.fillStyle = '#fff2c8';
+    X.beginPath(); X.arc(b.x - camX, b.y - camY, 1.8, 0, Math.PI*2); X.fill();
+  }
+  X.lineCap = 'butt';
+
+  // Mining laser beam
+  if (state.laser.firing && state.drone) {
+    const d = state.drone;
+    const startX = d.x - camX + Math.cos(d.angle) * 14;
+    const startY = d.y - camY + Math.sin(d.angle) * 14;
+    const endX = state.laser.targetX - camX;
+    const endY = state.laser.targetY - camY;
+    const locked = state.laser.locked;
+    // Locked = gold/yellow beam. Free-fire = reddish white.
+    const glow = locked ? 'rgba(255,200,80,0.25)'  : 'rgba(255,120,120,0.25)';
+    const mid  = locked ? 'rgba(255,230,150,0.55)' : 'rgba(255,200,200,0.55)';
+    const core = locked ? '#fff2c8' : '#ffffff';
+    X.strokeStyle = glow;
+    X.lineWidth = LASER_WIDTH * 5;
+    X.beginPath(); X.moveTo(startX, startY); X.lineTo(endX, endY); X.stroke();
+    X.strokeStyle = mid;
+    X.lineWidth = LASER_WIDTH * 2.2;
+    X.beginPath(); X.moveTo(startX, startY); X.lineTo(endX, endY); X.stroke();
+    X.strokeStyle = core;
+    X.lineWidth = LASER_WIDTH;
+    X.beginPath(); X.moveTo(startX, startY); X.lineTo(endX, endY); X.stroke();
+    const burstSize = 5 + Math.sin(state.mothershipPulse * 8) * 2;
+    X.fillStyle = locked ? 'rgba(255,230,150,0.6)' : 'rgba(255,200,200,0.6)';
+    X.beginPath(); X.arc(endX, endY, burstSize, 0, Math.PI*2); X.fill();
+    X.fillStyle = core;
+    X.beginPath(); X.arc(endX, endY, burstSize * 0.4, 0, Math.PI*2); X.fill();
+
+    // Lock reticle on the hit enemy
+    if (locked && state.laser.hitEnemy) {
+      const e = state.laser.hitEnemy;
+      const ex = e.x - camX, ey = e.y - camY;
+      const rsize = 18 + Math.sin(state.mothershipPulse * 6) * 2;
+      X.strokeStyle = '#ffd060';
+      X.lineWidth = 1.4;
+      const ln = 5;
+      X.beginPath();
+      X.moveTo(ex - rsize, ey - rsize + ln); X.lineTo(ex - rsize, ey - rsize); X.lineTo(ex - rsize + ln, ey - rsize);
+      X.moveTo(ex + rsize - ln, ey - rsize); X.lineTo(ex + rsize, ey - rsize); X.lineTo(ex + rsize, ey - rsize + ln);
+      X.moveTo(ex + rsize, ey + rsize - ln); X.lineTo(ex + rsize, ey + rsize); X.lineTo(ex + rsize - ln, ey + rsize);
+      X.moveTo(ex - rsize + ln, ey + rsize); X.lineTo(ex - rsize, ey + rsize); X.lineTo(ex - rsize, ey + rsize - ln);
+      X.stroke();
+    }
+  }
+
+  // Particles
+  for (const p of state.particles) {
+    X.globalAlpha = p.life / p.max;
+    X.fillStyle = p.color;
+    X.fillRect(p.x - camX - p.size/2, p.y - camY - p.size/2, p.size, p.size);
+  }
+  X.globalAlpha = 1;
+
+  // Player drone + aim predictor + aggro bracket
+  if (state.drone) {
+    const d = state.drone;
+    // Trajectory predictor line
+    if (Math.hypot(d.vx, d.vy) > 0.15) {
+      X.strokeStyle = 'rgba(96,200,255,0.18)';
+      X.lineWidth = 1;
+      X.setLineDash([4, 6]);
+      X.beginPath();
+      X.moveTo(d.x - camX, d.y - camY);
+      X.lineTo(d.x - camX + d.vx * 40, d.y - camY + d.vy * 40);
+      X.stroke();
+      X.setLineDash([]);
+    }
+    // Aggro bracket (blinks on new aggro, solid while aggroed)
+    if (state.aggroed) {
+      const pulse = state.aggroFlashT > 0
+        ? (state.aggroFlashT % 8 < 4 ? 1 : 0.3)
+        : 0.5 + Math.sin(state.mothershipPulse * 3) * 0.25;
+      X.strokeStyle = `rgba(255,74,74,${pulse})`;
+      X.lineWidth = 1.4;
+      const r = 22;
+      const sx = d.x - camX, sy = d.y - camY;
+      // Four corner brackets
+      const len = 6;
+      X.beginPath();
+      X.moveTo(sx-r, sy-r+len); X.lineTo(sx-r, sy-r); X.lineTo(sx-r+len, sy-r);
+      X.moveTo(sx+r-len, sy-r); X.lineTo(sx+r, sy-r); X.lineTo(sx+r, sy-r+len);
+      X.moveTo(sx+r, sy+r-len); X.lineTo(sx+r, sy+r); X.lineTo(sx+r-len, sy+r);
+      X.moveTo(sx-r+len, sy+r); X.lineTo(sx-r, sy+r); X.lineTo(sx-r, sy+r-len);
+      X.stroke();
+    }
+    drawDrone(d, d.x - camX, d.y - camY);
+  }
+
+  // Docking prompt
+  if (state.docked && state.drone) {
+    X.fillStyle = '#86ff6a';
+    X.font = "bold 15px 'Courier New'";
+    X.textAlign = 'center';
+    X.fillText('[Q] DOCK AND BANK CARGO', C.width/2, C.height - 70);
+  }
+
+  // Off-screen mothership indicator
+  if (state.drone) {
+    const d = state.drone;
+    const mdx = state.mothership.x - d.x, mdy = state.mothership.y - d.y;
+    const mdist = Math.hypot(mdx, mdy);
+    const msx = state.mothership.x - camX;
+    const msy = state.mothership.y - camY;
+    const onScreen = msx > -60 && msx < C.width+60 && msy > -60 && msy < C.height+60;
+    if (!onScreen) {
+      const ang = Math.atan2(mdy, mdx);
+      const edge = 70;
+      const ex = C.width/2 + Math.cos(ang) * (Math.min(C.width, C.height)/2 - edge);
+      const ey = C.height/2 + Math.sin(ang) * (Math.min(C.width, C.height)/2 - edge);
+      // Color hint based on whether you can still get home on current fuel
+      // Rough estimate: fuel needed ≈ (distance / MAX_SPD) * FUEL_DRAIN_THRUST
+      const framesNeeded = mdist / MAX_SPD;
+      const fuelNeeded = framesNeeded * FUEL_DRAIN_THRUST * 1.3;  // safety margin
+      const dangerReturn = fuelNeeded > state.fuel;
+      const col = dangerReturn ? '#ff4a4a' : '#60c8ff';
+      X.strokeStyle = col; X.lineWidth = 1.5;
+      X.beginPath(); X.arc(ex, ey, 9, 0, Math.PI*2); X.stroke();
+      X.save();
+      X.translate(ex, ey);
+      X.rotate(ang);
+      X.beginPath();
+      X.moveTo(4, 0); X.lineTo(-2, 3); X.lineTo(-2, -3); X.closePath();
+      X.fillStyle = col; X.fill();
+      X.restore();
+      X.fillStyle = col;
+      X.font = "bold 12px 'Courier New'";
+      X.textAlign = 'center';
+      X.fillText(Math.floor(mdist) + 'm', ex, ey - 16);
+      if (dangerReturn) {
+        X.fillStyle = '#ff4a4a';
+        X.font = "bold 14px 'Courier New'";
+        X.fillText('!', ex, ey + 22);
+      }
+    }
+
+    // Off-screen refinery indicators (smaller, green)
+    for (const r of state.refineries) {
+      const rsx = r.x - camX, rsy = r.y - camY;
+      const rOn = rsx > -60 && rsx < C.width+60 && rsy > -60 && rsy < C.height+60;
+      if (rOn) continue;
+      const rdx = r.x - d.x, rdy = r.y - d.y;
+      const rdist = Math.hypot(rdx, rdy);
+      const rang = Math.atan2(rdy, rdx);
+      const redge = 90;
+      const rex = C.width/2 + Math.cos(rang) * (Math.min(C.width, C.height)/2 - redge);
+      const rey = C.height/2 + Math.sin(rang) * (Math.min(C.width, C.height)/2 - redge);
+      const rcol = r.fueling ? '#86ff6a' : '#60c8ff';
+      X.strokeStyle = rcol; X.lineWidth = 1.2;
+      X.beginPath(); X.arc(rex, rey, 6, 0, Math.PI*2); X.stroke();
+      X.save();
+      X.translate(rex, rey);
+      X.rotate(rang);
+      X.beginPath();
+      X.moveTo(3, 0); X.lineTo(-1, 2); X.lineTo(-1, -2); X.closePath();
+      X.fillStyle = rcol; X.fill();
+      X.restore();
+      X.fillStyle = rcol;
+      X.font = "bold 11px 'Courier New'";
+      X.textAlign = 'center';
+      X.fillText(Math.floor(rdist) + 'm', rex, rey - 12);
+    }
+  }
+}
+
+function drawMothership(x, y) {
+  const pulse = 1 + Math.sin(state.mothershipPulse) * 0.15;
+  X.strokeStyle = 'rgba(96,200,255,' + (0.18 + Math.sin(state.mothershipPulse)*0.08) + ')';
+  X.lineWidth = 2;
+  X.beginPath();
+  X.arc(x, y, DOCK_RADIUS * pulse, 0, Math.PI * 2);
+  X.stroke();
+  X.strokeStyle = 'rgba(96,200,255,0.25)';
+  X.lineWidth = 1;
+  X.beginPath();
+  X.arc(x, y, DOCK_RADIUS * 0.7, 0, Math.PI * 2);
+  X.stroke();
+
+  X.save();
+  X.translate(x, y);
+  X.rotate(Math.PI/6);
+
+  X.fillStyle = '#1a1a22';
+  X.strokeStyle = '#3a4a60';
+  X.lineWidth = 2;
+  X.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3;
+    const px = Math.cos(a) * 48;
+    const py = Math.sin(a) * 48;
+    if (i === 0) X.moveTo(px, py); else X.lineTo(px, py);
+  }
+  X.closePath();
+  X.fill(); X.stroke();
+
+  X.fillStyle = '#60c8ff';
+  X.beginPath();
+  X.arc(0, 0, 6 + Math.sin(state.mothershipPulse*1.4)*1.2, 0, Math.PI*2);
+  X.fill();
+  X.fillStyle = 'rgba(96,200,255,0.3)';
+  X.beginPath();
+  X.arc(0, 0, 14, 0, Math.PI*2);
+  X.fill();
+
+  X.strokeStyle = '#4a5a70';
+  X.lineWidth = 1.5;
+  for (let i = 0; i < 3; i++) {
+    const a = i * Math.PI * 2 / 3;
+    X.beginPath();
+    X.moveTo(Math.cos(a) * 20, Math.sin(a) * 20);
+    X.lineTo(Math.cos(a) * 46, Math.sin(a) * 46);
+    X.stroke();
+  }
+  X.restore();
+}
+
+function drawAsteroid(a, x, y) {
+  X.save();
+  X.translate(x, y);
+  X.rotate(a.rot);
+
+  if (a.scanned) {
+    X.fillStyle = a.mineral.color + '22';
+    X.strokeStyle = a.mineral.color;
+  } else {
+    X.fillStyle = '#1a1610';
+    X.strokeStyle = '#4a3a20';
+  }
+  X.lineWidth = 1.4;
+  X.beginPath();
+  for (let i = 0; i < a.shape.length; i++) {
+    const s = a.shape[i];
+    const px = Math.cos(s.a) * s.r;
+    const py = Math.sin(s.a) * s.r;
+    if (i === 0) X.moveTo(px, py); else X.lineTo(px, py);
+  }
+  X.closePath();
+  X.fill(); X.stroke();
+
+  X.strokeStyle = a.scanned ? (a.mineral.color + '66') : '#2a1a10';
+  X.lineWidth = 0.8;
+  X.beginPath();
+  X.moveTo(-a.r*0.4, -a.r*0.2);
+  X.lineTo(a.r*0.3, a.r*0.4);
+  X.stroke();
+
+  X.restore();
+
+  if (a.scanned && !a.mined && a.mineProgress > 0) {
+    X.strokeStyle = a.mineral.color;
+    X.lineWidth = 2;
+    X.beginPath();
+    X.arc(x, y, a.r + 6, -Math.PI/2, -Math.PI/2 + (a.mineProgress/100) * Math.PI * 2);
+    X.stroke();
+  }
+
+  if (a.scanned && !a.mined) {
+    X.textAlign = 'center';
+    // Mineral name — bigger, bolder
+    X.fillStyle = a.mineral.color;
+    X.font = "bold 16px 'Courier New'";
+    X.fillText(a.mineral.name, x, y - a.r - 12);
+    if (a.mineral.value > 0) {
+      // Price tag — large, high contrast. Dark backing for legibility against bright rocks
+      const priceText = `Ƒ${a.mineral.value} × ${a.oreUnits}`;
+      X.font = "bold 18px 'Courier New'";
+      const tw = X.measureText(priceText).width;
+      // Background plate
+      X.fillStyle = 'rgba(3,2,8,0.72)';
+      X.fillRect(x - tw/2 - 6, y - a.r - 38, tw + 12, 22);
+      // Text
+      X.fillStyle = a.mineral.color;
+      X.fillText(priceText, x, y - a.r - 22);
+    }
+  }
+}
+
+function drawEnemy(e, x, y) {
+  const fac = e.fac || FACTIONS.syndicate;
+  X.save();
+  X.translate(x, y);
+  X.rotate(e.angle);
+
+  X.fillStyle = fac.hull;
+  X.strokeStyle = e.state === 'chase' ? fac.chase : fac.stroke;
+  X.lineWidth = 1.6;
+  X.beginPath();
+  X.moveTo(12, 0);
+  X.lineTo(-8, 7);
+  X.lineTo(-5, 0);
+  X.lineTo(-8, -7);
+  X.closePath();
+  X.fill(); X.stroke();
+
+  X.fillStyle = e.state === 'chase' ? fac.chase : fac.eye;
+  X.beginPath(); X.arc(4, 0, 1.8, 0, Math.PI*2); X.fill();
+
+  X.restore();
+
+  if (e.hp < 2) {
+    X.fillStyle = fac.stroke;
+    X.fillRect(x - 6, y - 14, 12, 1.5);
+    X.fillStyle = '#1a0808';
+    X.fillRect(x - 6 + Math.max(0, e.hp/2)*12, y - 14, Math.max(0, 1 - e.hp/2)*12, 1.5);
+  }
+}
+
+function drawDrone(d, x, y) {
+  const fac = FACTIONS[state.playerFaction] || FACTIONS.coalition;
+  X.save();
+  X.translate(x, y);
+  X.rotate(d.angle);
+
+  if (d.thrusting) {
+    X.fillStyle = 'rgba(96,200,255,0.4)';
+    X.beginPath();
+    X.moveTo(-10, 0);
+    X.lineTo(-18, 4);
+    X.lineTo(-22, 0);
+    X.lineTo(-18, -4);
+    X.closePath();
+    X.fill();
+  }
+
+  X.fillStyle = fac.hull;
+  // Heat lockout still overrides to red as a hazard warning
+  X.strokeStyle = state.laser.lockedOut ? '#ff4a4a' : fac.stroke;
+  X.lineWidth = 1.8;
+  X.beginPath();
+  X.moveTo(12, 0);
+  X.lineTo(-8, 7);
+  X.lineTo(-4, 0);
+  X.lineTo(-8, -7);
+  X.closePath();
+  X.fill(); X.stroke();
+
+  X.fillStyle = fac.eye;
+  X.beginPath(); X.arc(5, 0, 1.8, 0, Math.PI*2); X.fill();
+
+  X.restore();
+}
+
+function drawRefinery(r, x, y) {
+  // Fueling ring — shows when drone is pulling fuel
+  if (r.fueling) {
+    X.strokeStyle = `rgba(96,200,255,${0.25 + Math.sin(r.pulse) * 0.15})`;
+    X.lineWidth = 2;
+    X.beginPath();
+    X.arc(x, y, REFINERY_FUEL_RANGE, 0, Math.PI * 2);
+    X.stroke();
+  }
+  // Faint always-on fuel range hint
+  X.strokeStyle = 'rgba(96,200,255,0.06)';
+  X.lineWidth = 1;
+  X.beginPath();
+  X.arc(x, y, REFINERY_FUEL_RANGE, 0, Math.PI * 2);
+  X.stroke();
+
+  X.save();
+  X.translate(x, y);
+
+  // Structural legs
+  X.strokeStyle = '#4a5a70';
+  X.lineWidth = 1.4;
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2 + Math.PI/4;
+    X.beginPath();
+    X.moveTo(Math.cos(a) * 4, Math.sin(a) * 4);
+    X.lineTo(Math.cos(a) * (REFINERY_RADIUS + 3), Math.sin(a) * (REFINERY_RADIUS + 3));
+    X.stroke();
+  }
+
+  // Hexagonal body
+  X.fillStyle = '#121a20';
+  X.strokeStyle = r.fueling ? '#60c8ff' : '#2a4050';
+  X.lineWidth = 1.6;
+  X.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3;
+    const px = Math.cos(a) * REFINERY_RADIUS;
+    const py = Math.sin(a) * REFINERY_RADIUS;
+    if (i === 0) X.moveTo(px, py); else X.lineTo(px, py);
+  }
+  X.closePath();
+  X.fill(); X.stroke();
+
+  // Core beacon
+  const beaconSize = r.fueling ? 4 + Math.sin(r.pulse * 2) * 1.2 : 3;
+  X.fillStyle = r.fueling ? '#86ff6a' : '#60c8ff';
+  X.beginPath(); X.arc(0, 0, beaconSize, 0, Math.PI*2); X.fill();
+  X.fillStyle = r.fueling ? 'rgba(134,255,106,0.35)' : 'rgba(96,200,255,0.35)';
+  X.beginPath(); X.arc(0, 0, beaconSize * 2.2, 0, Math.PI*2); X.fill();
+
+  X.restore();
+
+  // HP pips
+  for (let i = 0; i < REFINERY_HP; i++) {
+    X.fillStyle = i < r.hp ? '#86ff6a' : '#2a0808';
+    X.beginPath();
+    X.arc(x + (i - 1) * 5, y - REFINERY_RADIUS - 8, 1.5, 0, Math.PI*2);
+    X.fill();
+  }
+}
+
+function drawEscort(esc, x, y) {
+  const fac = FACTIONS[state.playerFaction] || FACTIONS.coalition;
+  X.save();
+  X.translate(x, y);
+  X.rotate(esc.angle);
+
+  X.fillStyle = fac.hull;
+  X.strokeStyle = fac.stroke;
+  X.lineWidth = 1.3;
+  X.beginPath();
+  X.moveTo(9, 0);
+  X.lineTo(-5, 5);
+  X.lineTo(-3, 0);
+  X.lineTo(-5, -5);
+  X.closePath();
+  X.fill(); X.stroke();
+
+  X.fillStyle = fac.eye;
+  X.beginPath(); X.arc(3, 0, 1.3, 0, Math.PI*2); X.fill();
+
+  X.restore();
+
+  if (esc.hp < ESCORT_HP) {
+    for (let i = 0; i < ESCORT_HP; i++) {
+      X.fillStyle = i < esc.hp ? fac.stroke : '#2a1a08';
+      X.beginPath();
+      X.arc(x + (i - (ESCORT_HP-1)/2) * 4, y - 12, 1.2, 0, Math.PI*2);
+      X.fill();
+    }
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// MAIN LOOP
+// ═══════════════════════════════════════════════════════════════════
+function loop() {
+  if (state.running) update();
+  render();
+  requestAnimationFrame(loop);
+}
+loop();
+
+// ═══════════════════════════════════════════════════════════════════
+// MENU
+// ═══════════════════════════════════════════════════════════════════
+function refreshMenu() {
+  document.getElementById('bank-val').textContent = 'Ƒ' + state.bank.toLocaleString();
+  document.getElementById('drones-count').textContent = state.dronesBought;
+  document.getElementById('refineries-count').textContent = state.refineriesBought;
+  document.getElementById('escorts-count').textContent = state.escortsBought;
+
+  // Per-drone loadout cost (excluding refineries which are shared)
+  const perDrone = DRONE_COST
+    + FUEL_TIERS[state.fuelTier].cost
+    + CARGO_TIERS[state.cargoTier].cost
+    + HEAT_TIERS[state.heatTier].cost
+    + ESCORT_COST * state.escortsBought;
+  const totalCost = computeLoadoutCost();
+
+  document.getElementById('drones-cost').textContent = 'Ƒ' + (DRONE_COST * state.dronesBought).toLocaleString();
+  document.getElementById('refineries-cost').textContent = 'Ƒ' + (REFINERY_COST * state.refineriesBought).toLocaleString();
+  document.getElementById('escorts-cost').textContent = 'Ƒ' + (ESCORT_COST * state.escortsBought * state.dronesBought).toLocaleString();
+  document.getElementById('sum-cost').textContent = 'Ƒ' + totalCost.toLocaleString();
+  document.getElementById('sum-perdrone').textContent = 'Ƒ' + perDrone.toLocaleString();
+
+  // Hostile density display
+  const nearD = ENEMY_DENSITY_TABLE[Math.min(ENEMY_DENSITY_TABLE.length-1, state.dronesBought-1)][0];
+  const midD  = ENEMY_DENSITY_TABLE[Math.min(ENEMY_DENSITY_TABLE.length-1, state.dronesBought-1)][1];
+  const voidD = ENEMY_DENSITY_TABLE[Math.min(ENEMY_DENSITY_TABLE.length-1, state.dronesBought-1)][3];
+  document.getElementById('sum-hostiles').textContent = `${nearD} near / ${midD} mid / ${voidD} void per sector`;
+
+  const threatEl = document.getElementById('sum-threat');
+  if (state.dronesBought === 1)      { threatEl.textContent = 'LOW';    threatEl.className = 'threat-low'; }
+  else if (state.dronesBought === 2) { threatEl.textContent = 'MEDIUM'; threatEl.className = 'threat-med'; }
+  else if (state.dronesBought === 3) { threatEl.textContent = 'HIGH';   threatEl.className = 'threat-high'; }
+  else                                { threatEl.textContent = 'INSANE'; threatEl.className = 'threat-insane'; }
+
+  const deployBtn = document.getElementById('deploy-btn');
+  deployBtn.disabled = state.bank < totalCost;
+  deployBtn.textContent = state.bank < totalCost ? 'INSUFFICIENT CREDITS' : `DEPLOY · Ƒ${totalCost.toLocaleString()}`;
+
+  // Faction readout — reflects state.playerFaction (set by FM parent via bridge, or default)
+  const factionEl = document.getElementById('faction-readout');
+  if (factionEl) {
+    const fac = FACTIONS[state.playerFaction] || FACTIONS.coalition;
+    factionEl.textContent = fac.name;
+    factionEl.style.color = fac.stroke;
+  }
+}
+
+document.getElementById('drones-plus').addEventListener('click', () => {
+  if (state.dronesBought < 10) { state.dronesBought++; refreshMenu(); }
+});
+document.getElementById('drones-minus').addEventListener('click', () => {
+  if (state.dronesBought > 1) { state.dronesBought--; refreshMenu(); }
+});
+document.getElementById('refineries-plus').addEventListener('click', () => {
+  if (state.refineriesBought < REFINERY_MAX_BUY) { state.refineriesBought++; refreshMenu(); }
+});
+document.getElementById('refineries-minus').addEventListener('click', () => {
+  if (state.refineriesBought > 0) { state.refineriesBought--; refreshMenu(); }
+});
+document.getElementById('escorts-plus').addEventListener('click', () => {
+  if (state.escortsBought < ESCORT_MAX_BUY) { state.escortsBought++; refreshMenu(); }
+});
+document.getElementById('escorts-minus').addEventListener('click', () => {
+  if (state.escortsBought > 0) { state.escortsBought--; refreshMenu(); }
+});
+
+function setupTierPicker(elId, stateKey) {
+  document.querySelectorAll(`#${elId} button`).forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll(`#${elId} button`).forEach(x => x.classList.remove('sel'));
+      b.classList.add('sel');
+      state[stateKey] = parseInt(b.dataset.tier, 10);
+      refreshMenu();
+    });
+  });
+}
+setupTierPicker('tier-fuel',  'fuelTier');
+setupTierPicker('tier-cargo', 'cargoTier');
+setupTierPicker('tier-heat',  'heatTier');
+
+document.getElementById('seed-rand').addEventListener('click', () => {
+  const words = ['OPENRANGE', 'DEEP', 'VOID', 'BELT', 'FRONTIER', 'RIM', 'DUSTBELT'];
+  const n = Math.floor(Math.random() * 9999).toString().padStart(3, '0');
+  document.getElementById('seed-input').value = words[Math.floor(Math.random() * words.length)] + '-' + n;
+});
+document.getElementById('deploy-btn').addEventListener('click', startRun);
+document.getElementById('go-btn').addEventListener('click', returnToMenu);
+
+// FM exit button: only visible when embedded
+if (FM_EMBEDDED) {
+  const exitBtn = document.getElementById('fm-exit-btn');
+  exitBtn.style.display = 'block';
+  exitBtn.addEventListener('click', () => {
+    fmBridgeSend('exit_request');
+  });
+}
+
+// When embedded in FleshMarket, wait briefly for the parent to send us
+// the initial bank and faction. If they arrive before we render, use them;
+// otherwise start with defaults and update on first push.
+if (FM_EMBEDDED) {
+  let tries = 0;
+  const waitForInit = setInterval(() => {
+    tries++;
+    let changed = false;
+    if (typeof window.__pendingBankSet === 'number') {
+      state.bank = window.__pendingBankSet;
+      window.__pendingBankSet = null;
+      changed = true;
+    }
+    if (typeof window.__pendingFactionSet === 'string') {
+      state.playerFaction = window.__pendingFactionSet;
+      window.__pendingFactionSet = null;
+      changed = true;
+    }
+    if (changed) refreshMenu();
+    if (tries > 20) {
+      // ~1 second timeout; render with whatever we have
+      refreshMenu();
+      clearInterval(waitForInit);
+    }
+  }, 50);
+
+  // Also listen for live updates (parent may push new bank or faction mid-menu)
+  setInterval(() => {
+    let changed = false;
+    if (typeof window.__pendingBankSet === 'number') {
+      state.bank = window.__pendingBankSet;
+      window.__pendingBankSet = null;
+      changed = true;
+    }
+    if (typeof window.__pendingFactionSet === 'string') {
+      state.playerFaction = window.__pendingFactionSet;
+      window.__pendingFactionSet = null;
+      changed = true;
+    }
+    if (changed) {
+      const m = document.getElementById('menu');
+      if (m && m.style.display !== 'none') refreshMenu();
+    }
+  }, 500);
+} else {
+  refreshMenu();
+}
+</script>
+</body>
+</html>

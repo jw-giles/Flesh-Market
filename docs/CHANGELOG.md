@@ -4,6 +4,45 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.2.0 (2026-04-18)
+
+**Drone Mining minigame + tutorial accuracy pass.**
+
+### Drone Mining — new Mining tab
+- New **⛏ Mining tab** added to the main tab bar between Galaxy and Bugs.
+- **Brief screen** inside the tab shows a tutorial covering movement, mining, combat, heat, factions, depth bands, docking, death, refineries, and escorts. High-contrast body text (`#c8b088` on dark) at 16px.
+- Clicking **⛏ LAUNCH EXPEDITION** opens the drone mining game in a fullscreen iframe overlay. An in-game "BACK TO FLESHMARKET" button tears down the iframe and returns to the brief screen.
+- Bank is shared with the FleshMarket account via the `casino` WS sync pattern (same as Plinko). Run-start loadout cost is deducted, run-end banked cargo is credited; changes propagate through `ME.cash` and the standard portfolio sync.
+- Game lives at `assets/drone-mining/index.html` as a standalone HTML file that communicates with FM via `window.postMessage`. Runs isolated in an iframe, no CSS/DOM collisions. Still playable standalone (file://) with an internal Ƒ25,000 bank; detected via `window.parent !== window`.
+
+### Drone Mining — gameplay
+- Single-drone expeditions into an infinite chunked asteroid belt. Depth bands NEAR / MID / DEEP / VOID with escalating mineral richness and hostile density.
+- Minerals: Iron Ƒ5, Cobalt Ƒ12, Gold Ƒ25, Painite Ƒ60, Void Opal Ƒ120, Musgravite Ƒ250. Distribution weighted by depth.
+- **Faction alignment auto-read from FleshMarket.** The mining game reads the player's `ME.faction` via the iframe bridge; no faction picker in the loadout. A non-editable faction readout displays the alignment. Drones matching the player's faction patrol neutrally, do not aggro, do not shoot, and are skipped by laser auto-lock and escort targeting. Rival-faction drones engage normally.
+- **Player drone and escorts render in the player's faction color** (teal / red / purple). Mothership stays faction-neutral blue-grey as a home-base visual. Heat lockout still flashes the drone red as a hazard override.
+- **Drone refund on safe return.** Docking at the mothership refunds the drone's Ƒ1,000 base cost in addition to banking cargo. The refund is added to the run's banked total. Dead drones do not refund. Loadout upgrades (fuel, cargo, heat, escorts, refineries) are not refunded.
+- **Open Range framing.** Game text reframed as unregulated asteroid extraction zones where every faction has agreed that mining is where conflict happens. Colony tag reads "Open Range · Unregulated Extraction Zone".
+- One-shot death model, laser overheat with heat lockout (weapon + thrust both locked at 100% heat until cooling to 40%).
+- **Mobile refineries** (Ƒ400) deployable with R — stationary fuel generators, 3 HP, destructible by enemies.
+- **Escort drones** (Ƒ1,500 per drone) orbit and shoot automatically, 2 HP each, lost with the drone they escort.
+- Auto-lock laser targeting with gold reticle when locked on a rival-faction enemy.
+- Enemies collide with asteroids and require line-of-sight to shoot through rocks; bullets are absorbed on asteroid hit.
+- Em dashes scrubbed from player-visible UI strings per style rule.
+
+### Onboarding tutorial
+- **New DRONE MINING slide** (10th of 13) between Casino and Social/Economy. Switches to the Mining tab when viewed.
+- **SHORT SELLING slide rewritten** for accuracy against current server code: 50% cash collateral locked while open, 0.1% borrow fee on position value every 30 minutes, 500-share cap per symbol, covering counts as a day trade, buying more than your short position auto-covers first and rejects excess. Clarified that losses are uncapped.
+- **DIVIDENDS AND ANALYSIS slide rewritten** for accuracy: Finance/Insurance/Energy/Tech pay 0.6% every 2 hours, all other sectors pay 0.2% holding dividend, colony/faction bonuses stack on top, Merchants Guild members receive +1% per MG member. Added the v1.0.1.9 seven-cycle continuous-hold requirement — new buys pay zero until they have aged through 7 × 30-min snapshots (3.5 hours), and any drop in position during the window reduces eligibility to that minimum.
+- Manifest updated to reflect 13 tutorial slides (up from 12).
+
+### Integration details
+- `client/assets/core.js` — tab switcher wired for `mining` pane; `pushBankToIframe()` and `pushFactionToIframe()` helpers push `ME.cash` and `ME.faction` to the iframe on `ready` and on `fm_ws_msg` `me`/`portfolio`/`income` events; `closeMining()` tears down the iframe.
+- `client/assets/tutorial.js` — DRONE MINING slide added; SHORT SELLING and DIVIDENDS AND ANALYSIS slides rewritten for accuracy.
+- `client/index.html` — Mining tab button added; brief screen pane and fullscreen iframe host `<div>` inserted before the Bugs tab.
+- `client/assets/drone-mining/index.html` — standalone game with FM-bridge postMessage hooks, faction-read from parent, drone/escort faction coloring, drone refund on dock, Open Range framing.
+
+---
+
 ## v1.0.1.9 (2026-04-16)
 
 **Discord button + dividend hold-time exploit fix.**

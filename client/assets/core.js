@@ -1273,8 +1273,10 @@ $all('.tab').forEach(tab=>{
     const _gt = el('#guildTab'); if(_gt) _gt.style.display = sel==='guild'?'block':'none';
     const _bugsTab = el('#bugsTab'); if(_bugsTab) _bugsTab.style.display = sel==='bugs'?'flex':'none';
     const _galTab = el('#galacticTab'); if(_galTab) _galTab.style.display = sel==='galactic'?'flex':'none';
+    const _mineTab = el('#miningTab'); if(_mineTab) _mineTab.style.display = sel==='mining'?'flex':'none';
     if (sel==='guild') { loadGuildDirectory(); }
     if (sel==='bugs') { if(window.bugsTabLoad) window.bugsTabLoad(); else lazyLoad('assets/dev-comms.js', ()=>window.bugsTabLoad&&window.bugsTabLoad()); }
+    if (sel==='mining') { try { window.__miningBriefRefresh && window.__miningBriefRefresh(); } catch(_){} }
     // ensure the equity line renders when the P&L tab becomes visible
     if (sel==='pnl') { setTimeout(()=>{ try { drawEquity(); } catch(e){} }, 0); }
   });
@@ -2250,3 +2252,182 @@ ws.addEventListener('message', (ev)=>{
 })();
   // Time control selector behavior handled in chess IIFE below
 
+
+// ═══════════════════════════════════════════════════════════════════
+// DRONE MINING integration (iframe embed + postMessage bridge)
+// ═══════════════════════════════════════════════════════════════════
+(function(){
+  'use strict';
+
+  // --- Bank helpers -------------------------------------------------
+  function getCash() {
+    try { if (typeof ME === 'object' && ME && typeof ME.cash === 'number') return ME.cash; } catch(e){}
+    return 0;
+  }
+  function setCash(v) {
+    try {
+      if (typeof ME === 'object' && ME && typeof ME.cash === 'number') {
+        ME.cash = v;
+        try { window.__PnLLastCash = Number(v) || 0; window.__MY_CASH = Number(v) || 0; } catch(_){}
+        try { window.PnLBridge && typeof window.PnLBridge.pushNow === 'function' && window.PnLBridge.pushNow(); } catch(_){}
+      }
+    } catch(e){}
+    const c = document.getElementById('cash');
+    if (c) c.textContent = 'Ƒ' + (Math.round(v * 100) / 100).toLocaleString();
+    try {
+      if (window.ws && window.ws.readyState === 1) {
+        window.ws.send(JSON.stringify({ type: 'casino', sync: Number(v) || 0 }));
+      }
+    } catch(_){}
+  }
+
+  // --- Brief-screen bank refresh -----------------------------------
+  function refreshBriefBank() {
+    const el = document.getElementById('mining-brief-bank');
+    if (el) el.textContent = 'Ƒ' + Math.floor(getCash()).toLocaleString();
+  }
+  window.__miningBriefRefresh = refreshBriefBank;
+
+  // Update brief bank on any FM cash change; push faction too on 'me' events
+  document.addEventListener('fm_ws_msg', (e) => {
+    if (e.detail && (e.detail.type === 'portfolio' || e.detail.type === 'income' || e.detail.type === 'me')) {
+      refreshBriefBank();
+      pushBankToIframe();
+      if (e.detail.type === 'me') pushFactionToIframe();
+    }
+  });
+
+  // --- Iframe lifecycle --------------------------------------------
+  let miningIframe = null;
+  const host = () => document.getElementById('miningFullscreenHost');
+
+  function launchMining() {
+    if (miningIframe) return; // already open
+    const h = host();
+    if (!h) return;
+    h.innerHTML = ''; // clear any previous
+
+    miningIframe = document.createElement('iframe');
+    miningIframe.src = 'assets/drone-mining/index.html';
+    miningIframe.style.cssText = 'border:0; width:100%; height:100%; display:block;';
+    miningIframe.setAttribute('allow', 'autoplay');
+    miningIframe.setAttribute('title', 'Drone Mining');
+    h.appendChild(miningIframe);
+    h.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeMining() {
+    const h = host();
+    if (h) {
+      h.style.display = 'none';
+      h.innerHTML = '';
+    }
+    miningIframe = null;
+    document.body.style.overflow = '';
+    refreshBriefBank();
+  }
+
+  function pushBankToIframe() {
+    if (!miningIframe || !miningIframe.contentWindow) return;
+    try {
+      miningIframe.contentWindow.postMessage(
+        { source: 'fleshmarket', type: 'bank_set', amount: getCash() },
+        '*'
+      );
+    } catch(_){}
+  }
+
+  function pushFactionToIframe() {
+    if (!miningIframe || !miningIframe.contentWindow) return;
+    // FM faction IDs match the mining game's FACTION_KEYS: coalition / syndicate / void.
+    // Default to coalition if the player has no faction set.
+    let fac = 'coalition';
+    try {
+      if (typeof ME === 'object' && ME && typeof ME.faction === 'string' && ME.faction) {
+        fac = ME.faction;
+      }
+    } catch(_){}
+    try {
+      miningIframe.contentWindow.postMessage(
+        { source: 'fleshmarket', type: 'faction_set', faction: fac },
+        '*'
+      );
+    } catch(_){}
+  }
+
+  // --- postMessage bridge ------------------------------------------
+  window.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || msg.source !== 'drone-mining') return;
+
+    if (msg.type === 'ready') {
+      // Game just loaded — send current bank and faction
+      pushBankToIframe();
+      pushFactionToIframe();
+      return;
+    }
+
+    if (msg.type === 'bank_delta') {
+      // Game is reporting a bank change (run start deduction, or run end credit).
+      // Apply it to FM's cash and sync via WS.
+      const delta = Number(msg.delta) || 0;
+      if (delta === 0) return;
+      const newCash = Math.max(0, getCash() + delta);
+      setCash(newCash);
+      // Echo the new authoritative bank back to the game so it stays aligned
+      pushBankToIframe();
+      return;
+    }
+
+    if (msg.type === 'exit_request') {
+      closeMining();
+      return;
+    }
+
+    if (msg.type === 'closing') {
+      closeMining();
+      return;
+    }
+  });
+
+  // --- Launch button ------------------------------------------------
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (t && t.id === 'miningLaunchBtn') {
+      // Affordability check before launch
+      if (getCash() < 1000) {
+        const btn = document.getElementById('miningLaunchBtn');
+        if (btn) {
+          const orig = btn.textContent;
+          btn.textContent = 'NEED Ƒ1,000 MIN';
+          btn.style.borderColor = '#ff6b6b';
+          btn.style.color = '#ff6b6b';
+          setTimeout(() => {
+            btn.textContent = orig;
+            btn.style.borderColor = '#8a6a30';
+            btn.style.color = '#e6c27a';
+          }, 1400);
+        }
+        return;
+      }
+      launchMining();
+    }
+  });
+
+  // --- ESC key exit while fullscreen --------------------------------
+  window.addEventListener('keydown', (e) => {
+    if (!miningIframe) return;
+    // ESC only closes if we're not in active gameplay — the iframe handles
+    // its own ESC for aborting a run. To avoid stealing ESC from the game,
+    // we don't listen here. Exit is via the in-game "BACK TO FLESHMARKET"
+    // button which posts exit_request.
+  });
+
+  // --- Initial brief render when tab becomes active -----------------
+  // The tab switcher calls __miningBriefRefresh on open, so this is just a
+  // safety net for first-paint.
+  if (document.getElementById('miningTab')) {
+    refreshBriefBank();
+  }
+})();
