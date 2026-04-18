@@ -320,16 +320,6 @@
     <h3>LOADOUT</h3>
 
     <div class="loadout-row">
-      <span class="lbl">Drones</span>
-      <div class="stepper">
-        <button id="drones-minus">−</button>
-        <span class="count" id="drones-count">1</span>
-        <button id="drones-plus">+</button>
-      </div>
-      <span class="lbl" style="flex:0 0 110px; text-align:right" id="drones-cost">Ƒ1,000</span>
-    </div>
-
-    <div class="loadout-row">
       <span class="lbl">Fuel Tank</span>
       <div class="tier-pick" id="tier-fuel">
         <button data-tier="0" class="sel">SMALL · 100</button>
@@ -433,12 +423,8 @@
 
 <!-- HUD ─────────────────────────────────────────────────────── -->
 
-<!-- Top-left: drone info + sector -->
+<!-- Top-left: sector + zone + weapon -->
 <div class="hud-panel" id="hud-drone">
-  <div class="row">
-    <span class="tag">Drone</span>
-    <span class="num" id="h-drone">1</span><span class="sub" id="h-drone-total">of 1</span>
-  </div>
   <div class="row">
     <span class="tag">Sector</span>
     <span class="num" id="h-sector" style="font-size:16px">0,0</span>
@@ -941,21 +927,21 @@ function pickMineralForBand(rng, band) {
   return MINERALS.iron;
 }
 
-// Enemy density by (drones_bought, band_index)
-// Rows: drones 1-5+, Cols: NEAR, MID, DEEP, VOID
-const ENEMY_DENSITY_TABLE = [
-  [1.0,  2.0,  4.0,  8.0 ],   // 1 drone
-  [2.5,  5.0,  10.0, 20.0],   // 2 drones
-  [5.0,  10.0, 20.0, 40.0],   // 3 drones
-  [10.0, 20.0, 40.0, 80.0],   // 4 drones
-  [20.0, 40.0, 80.0, 160.0],  // 5 drones
-  [40.0, 80.0, 160.0, 320.0]  // 6+ drones
-];
+// Enemy density per sector, scaled by depth band only (distance from origin).
+// Hard-capped at 1.5x baseline to prevent chunk overload that lagged the game.
+// Deeper zones feel harder via richer minerals and per-faction combat stats,
+// not by flooding the screen with enemies.
+// Cols: NEAR, MID, DEEP, VOID
+const ENEMY_DENSITY_BY_BAND = [1.0, 1.15, 1.30, 1.50];
 function enemyDensityForChunk(dronesBought, band) {
-  const row = ENEMY_DENSITY_TABLE[Math.min(ENEMY_DENSITY_TABLE.length - 1, dronesBought - 1)];
+  // dronesBought param kept for call-site compatibility but no longer used —
+  // scaling is distance/band-based only now.
   const bandIdx = DEPTH_BANDS.indexOf(band);
-  return row[bandIdx];
+  return ENEMY_DENSITY_BY_BAND[Math.max(0, bandIdx)];
 }
+
+// Legacy table name kept as an alias for the hostile-density HUD readout.
+const ENEMY_DENSITY_TABLE = [ENEMY_DENSITY_BY_BAND];
 
 // Enemy salvage value by band index
 const SALVAGE_VALUE = [40, 75, 120, 180];
@@ -1421,8 +1407,7 @@ function deployNextDrone(first=false) {
     chunk._restored = true;
   }
 
-  if (!first) showMsg(`DRONE ${state.dronesUsed} OF ${state.dronesBought} DEPLOYED`, 1600);
-  else        showMsg(`DRONE 1 OF ${state.dronesBought} DEPLOYED`, 2200);
+  showMsg('DRONE DEPLOYED', 2000);
   updateHUD();
 }
 
@@ -1456,15 +1441,8 @@ function killDrone(cause) {
   state.escorts = [];
   state.escortBullets = [];
 
-  if (state.dronesUsed < state.dronesBought) {
-    setTimeout(() => {
-      if (!state.running) return;
-      deployNextDrone(false);
-      showMsg(`DRONE DESTROYED. ${cause}`, 2400, '#ff6b6b');
-    }, 1200);
-  } else {
-    setTimeout(() => { endRun('ALL DRONES LOST', cause, 'No drones remaining.'); }, 1400);
-  }
+  // One life. Drone dies, run ends.
+  setTimeout(() => { endRun('DRONE LOST', cause, 'Expedition ended.'); }, 1400);
 }
 
 function dockDrone() {
@@ -1488,21 +1466,14 @@ function endRun(title, line1, line2) {
   state.running = false;
 
   // ── End-of-run refunds for unused assets ──────────────────────────
-  // 1. Drones purchased but never deployed
-  const undeployedDrones = Math.max(0, state.dronesBought - state.dronesUsed);
-  // 2. Current drone still alive (mid-flight or docked when run ended)
+  // Single-drone runs: the drone refund is Ƒ1,000 IF it's still alive at run-end
+  // (successfully docked or aborted cleanly). Dead drones get nothing.
   const livingDroneRefund = state.drone ? 1 : 0;
-  // 3. Refineries still in inventory (never deployed)
   const unusedRefineries = state.refineriesRemaining || 0;
-  // 4. Escorts attached to drones that never deployed (escorts are per-drone)
-  //    Note: escorts of the living drone are NOT refunded — they've already spawned.
-  const unusedEscortCount = undeployedDrones * state.escortsBought;
 
-  const undeployedDroneRefund = undeployedDrones * DRONE_COST;
-  const livingDroneAmount     = livingDroneRefund * DRONE_COST;
-  const refineryRefund        = unusedRefineries * REFINERY_COST;
-  const escortRefund          = unusedEscortCount * ESCORT_COST;
-  const totalEndRefund        = undeployedDroneRefund + livingDroneAmount + refineryRefund + escortRefund;
+  const livingDroneAmount = livingDroneRefund * DRONE_COST;
+  const refineryRefund    = unusedRefineries * REFINERY_COST;
+  const totalEndRefund    = livingDroneAmount + refineryRefund;
 
   if (totalEndRefund > 0) {
     state.runBanked += totalEndRefund;
@@ -1538,12 +1509,8 @@ function endRun(title, line1, line2) {
   // Build refund-line HTML only if anything was actually refunded
   let refundHtml = '';
   if (totalEndRefund > 0) {
-    const droneCount = undeployedDrones + livingDroneRefund;
-    if (droneCount > 0) {
-      refundHtml += `<div class="loadout-row"><span class="lbl">Unused Drones Refunded</span><span class="val good">${droneCount} × Ƒ${DRONE_COST.toLocaleString()} = Ƒ${(droneCount * DRONE_COST).toLocaleString()}</span></div>`;
-    }
-    if (unusedEscortCount > 0) {
-      refundHtml += `<div class="loadout-row"><span class="lbl">Unused Escorts Refunded</span><span class="val good">${unusedEscortCount} × Ƒ${ESCORT_COST.toLocaleString()} = Ƒ${escortRefund.toLocaleString()}</span></div>`;
+    if (livingDroneRefund > 0) {
+      refundHtml += `<div class="loadout-row"><span class="lbl">Drone Refunded</span><span class="val good">Ƒ${DRONE_COST.toLocaleString()}</span></div>`;
     }
     if (unusedRefineries > 0) {
       refundHtml += `<div class="loadout-row"><span class="lbl">Unused Refineries Refunded</span><span class="val good">${unusedRefineries} × Ƒ${REFINERY_COST.toLocaleString()} = Ƒ${refineryRefund.toLocaleString()}</span></div>`;
@@ -1551,7 +1518,7 @@ function endRun(title, line1, line2) {
   }
 
   document.getElementById('go-stats').innerHTML = `
-    <div class="loadout-row"><span class="lbl">Drones Lost</span><span class="val">${state.runStats.dronesLost} / ${state.dronesBought}</span></div>
+    <div class="loadout-row"><span class="lbl">Outcome</span><span class="val">${state.runStats.dronesLost > 0 ? 'DRONE LOST' : 'SURVIVED'}</span></div>
     <div class="loadout-row"><span class="lbl">Sectors Explored</span><span class="val">${state.runStats.chunksVisited}</span></div>
     <div class="loadout-row"><span class="lbl">Deepest Zone</span><span class="val" style="color:${DEPTH_BANDS[state.runStats.deepestBand].color}">${deepestName}</span></div>
     <div class="loadout-row"><span class="lbl">Rocks Mined</span><span class="val">${state.runStats.rocksMined}</span></div>
@@ -2584,10 +2551,6 @@ function update() {
 }
 
 function updateHUD() {
-  // Drone panel
-  document.getElementById('h-drone').textContent = state.dronesUsed;
-  document.getElementById('h-drone-total').textContent = 'of ' + state.dronesBought;
-
   // Auto-cannon status
   const hWeap = document.getElementById('h-weapon');
   if (hWeap) {
@@ -3380,11 +3343,10 @@ loop();
 // ═══════════════════════════════════════════════════════════════════
 function refreshMenu() {
   document.getElementById('bank-val').textContent = 'Ƒ' + state.bank.toLocaleString();
-  document.getElementById('drones-count').textContent = state.dronesBought;
   document.getElementById('refineries-count').textContent = state.refineriesBought;
   document.getElementById('escorts-count').textContent = state.escortsBought;
 
-  // Per-drone loadout cost (excluding refineries which are shared)
+  // Loadout cost — drone lives are fixed at 1, so this is just the per-drone loadout
   const perDrone = DRONE_COST
     + FUEL_TIERS[state.fuelTier].cost
     + CARGO_TIERS[state.cargoTier].cost
@@ -3392,23 +3354,20 @@ function refreshMenu() {
     + ESCORT_COST * state.escortsBought;
   const totalCost = computeLoadoutCost();
 
-  document.getElementById('drones-cost').textContent = 'Ƒ' + (DRONE_COST * state.dronesBought).toLocaleString();
   document.getElementById('refineries-cost').textContent = 'Ƒ' + (REFINERY_COST * state.refineriesBought).toLocaleString();
-  document.getElementById('escorts-cost').textContent = 'Ƒ' + (ESCORT_COST * state.escortsBought * state.dronesBought).toLocaleString();
+  document.getElementById('escorts-cost').textContent = 'Ƒ' + (ESCORT_COST * state.escortsBought).toLocaleString();
   document.getElementById('sum-cost').textContent = 'Ƒ' + totalCost.toLocaleString();
   document.getElementById('sum-perdrone').textContent = 'Ƒ' + perDrone.toLocaleString();
 
-  // Hostile density display
-  const nearD = ENEMY_DENSITY_TABLE[Math.min(ENEMY_DENSITY_TABLE.length-1, state.dronesBought-1)][0];
-  const midD  = ENEMY_DENSITY_TABLE[Math.min(ENEMY_DENSITY_TABLE.length-1, state.dronesBought-1)][1];
-  const voidD = ENEMY_DENSITY_TABLE[Math.min(ENEMY_DENSITY_TABLE.length-1, state.dronesBought-1)][3];
+  // Hostile density display — single drone = baseline row
+  const nearD = ENEMY_DENSITY_TABLE[0][0];
+  const midD  = ENEMY_DENSITY_TABLE[0][1];
+  const voidD = ENEMY_DENSITY_TABLE[0][3];
   document.getElementById('sum-hostiles').textContent = `${nearD} near / ${midD} mid / ${voidD} void per sector`;
 
   const threatEl = document.getElementById('sum-threat');
-  if (state.dronesBought === 1)      { threatEl.textContent = 'LOW';    threatEl.className = 'threat-low'; }
-  else if (state.dronesBought === 2) { threatEl.textContent = 'MEDIUM'; threatEl.className = 'threat-med'; }
-  else if (state.dronesBought === 3) { threatEl.textContent = 'HIGH';   threatEl.className = 'threat-high'; }
-  else                                { threatEl.textContent = 'INSANE'; threatEl.className = 'threat-insane'; }
+  threatEl.textContent = 'LOW';
+  threatEl.className = 'threat-low';
 
   const deployBtn = document.getElementById('deploy-btn');
   deployBtn.disabled = state.bank < totalCost;
@@ -3423,12 +3382,6 @@ function refreshMenu() {
   }
 }
 
-document.getElementById('drones-plus').addEventListener('click', () => {
-  if (state.dronesBought < 3) { state.dronesBought++; refreshMenu(); }
-});
-document.getElementById('drones-minus').addEventListener('click', () => {
-  if (state.dronesBought > 1) { state.dronesBought--; refreshMenu(); }
-});
 document.getElementById('refineries-plus').addEventListener('click', () => {
   if (state.refineriesBought < REFINERY_MAX_BUY) { state.refineriesBought++; refreshMenu(); }
 });
