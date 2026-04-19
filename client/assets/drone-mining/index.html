@@ -2770,7 +2770,9 @@ function render() {
         X.save();
         X.translate(b.x - camX, b.y - camY);
         X.rotate(b.angle);
-        // Bullet sprite points right in source strip already (no rotation offset needed)
+        // Source sprite points UP (content is 10x17 vertical). Rotate +π/2 so
+        // the tip faces the bullet's travel direction (angle 0 = right).
+        X.rotate(Math.PI/2);
         const size = 20;
         X.drawImage(
           pbSpr.img,
