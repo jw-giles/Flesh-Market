@@ -608,6 +608,8 @@ const SPRITES = {
   shipCoalition:   { img: new Image(), loaded: false, w: 64, h: 64 },
   shipSyndicate:   { img: new Image(), loaded: false, w: 64, h: 64 },
   shipVoid:        { img: new Image(), loaded: false, w: 64, h: 64 },
+  // Mothership — science vessel sprite, 159x135 source
+  mothership:      { img: new Image(), loaded: false, w: 159, h: 135 },
   // Player combat projectile — 4-frame animation, each frame 32x32
   playerBullet:    { img: new Image(), loaded: false, w: 32, h: 32, frames: 4 },
 };
@@ -661,6 +663,7 @@ Promise.all([
   loadSprite('shipCoalition',   'nairan_fighter.png'),
   loadSprite('shipSyndicate',   'klaed_fighter.png'),
   loadSprite('shipVoid',        'nautolan_fighter.png'),
+  loadSprite('mothership',      'mothership.png'),
   loadSprite('playerBullet',    'player_bullet.png'),
 ]).then(results => {
   const loadedCount = results.filter(Boolean).length;
@@ -2968,6 +2971,7 @@ function render() {
 
 function drawMothership(x, y) {
   const pulse = 1 + Math.sin(state.mothershipPulse) * 0.15;
+  // Outer dock-range glow rings — kept from original to show dock radius
   X.strokeStyle = 'rgba(96,200,255,' + (0.18 + Math.sin(state.mothershipPulse)*0.08) + ')';
   X.lineWidth = 2;
   X.beginPath();
@@ -2979,23 +2983,44 @@ function drawMothership(x, y) {
   X.arc(x, y, DOCK_RADIUS * 0.7, 0, Math.PI * 2);
   X.stroke();
 
+  const spr = SPRITES.mothership;
   X.save();
   X.translate(x, y);
-  X.rotate(Math.PI/6);
 
-  X.fillStyle = '#1a1a22';
-  X.strokeStyle = '#3a4a60';
-  X.lineWidth = 2;
-  X.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const a = i * Math.PI / 3;
-    const px = Math.cos(a) * 48;
-    const py = Math.sin(a) * 48;
-    if (i === 0) X.moveTo(px, py); else X.lineTo(px, py);
+  if (spr && spr.loaded) {
+    // Science vessel sprite. Source is 159x135 — render at 160x136 so it visually
+    // reads at capital-ship scale above the drone's 48px
+    const w = 160, h = 136;
+    X.drawImage(spr.img, -w/2, -h/2, w, h);
+  } else {
+    // Vector fallback — original hexagon
+    X.rotate(Math.PI/6);
+    X.fillStyle = '#1a1a22';
+    X.strokeStyle = '#3a4a60';
+    X.lineWidth = 2;
+    X.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3;
+      const px = Math.cos(a) * 48;
+      const py = Math.sin(a) * 48;
+      if (i === 0) X.moveTo(px, py); else X.lineTo(px, py);
+    }
+    X.closePath();
+    X.fill(); X.stroke();
+    X.fillStyle = '#4a5a70';
+    X.strokeStyle = '#4a5a70';
+    X.lineWidth = 1.5;
+    for (let i = 0; i < 3; i++) {
+      const a = i * Math.PI * 2 / 3;
+      X.beginPath();
+      X.moveTo(Math.cos(a) * 20, Math.sin(a) * 20);
+      X.lineTo(Math.cos(a) * 46, Math.sin(a) * 46);
+      X.stroke();
+    }
   }
-  X.closePath();
-  X.fill(); X.stroke();
 
+  // Central docking light — pulses on top of the sprite so you can see where
+  // to aim even when the sprite is busy
   X.fillStyle = '#60c8ff';
   X.beginPath();
   X.arc(0, 0, 6 + Math.sin(state.mothershipPulse*1.4)*1.2, 0, Math.PI*2);
@@ -3005,15 +3030,6 @@ function drawMothership(x, y) {
   X.arc(0, 0, 14, 0, Math.PI*2);
   X.fill();
 
-  X.strokeStyle = '#4a5a70';
-  X.lineWidth = 1.5;
-  for (let i = 0; i < 3; i++) {
-    const a = i * Math.PI * 2 / 3;
-    X.beginPath();
-    X.moveTo(Math.cos(a) * 20, Math.sin(a) * 20);
-    X.lineTo(Math.cos(a) * 46, Math.sin(a) * 46);
-    X.stroke();
-  }
   X.restore();
 }
 
