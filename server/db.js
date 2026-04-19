@@ -2148,6 +2148,13 @@ export const MINING_UPGRADE_CATALOG = {
     kind: 'perk',
     desc: 'Slow fuel trickle while flying. You regain fuel slowly even without a refinery.',
   },
+  cryo_cooled_emitter: {
+    id: 'cryo_cooled_emitter',
+    name: 'Cryo-Cooled Emitter',
+    price: 1000000,
+    kind: 'perk',
+    desc: 'Blue-phase laser retrofit. Heat builds 30% slower while firing. Stacks with heat tier upgrades.',
+  },
   salvage_magnet: {
     id: 'salvage_magnet',
     name: 'Salvage Magnet',

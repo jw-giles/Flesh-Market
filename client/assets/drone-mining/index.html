@@ -1661,7 +1661,9 @@ function update() {
   const wantFire = mouse.left;
 
   if (state.laser.firing) {
-    state.laser.heat += HEAT_PER_FRAME;
+    // Cryo-Cooled Emitter perk: heat builds 30% slower
+    const heatRate = hasUpgrade('cryo_cooled_emitter') ? HEAT_PER_FRAME * 0.70 : HEAT_PER_FRAME;
+    state.laser.heat += heatRate;
     if (state.laser.heat >= state.caps.heat) {
       state.laser.heat = state.caps.heat;
       state.laser.lockedOut = true;
@@ -2799,10 +2801,19 @@ function render() {
     const endX = state.laser.targetX - camX;
     const endY = state.laser.targetY - camY;
     const locked = state.laser.locked;
-    // Locked = gold/yellow beam. Free-fire = reddish white.
-    const glow = locked ? 'rgba(255,200,80,0.25)'  : 'rgba(255,120,120,0.25)';
-    const mid  = locked ? 'rgba(255,230,150,0.55)' : 'rgba(255,200,200,0.55)';
-    const core = locked ? '#fff2c8' : '#ffffff';
+    const cryo = hasUpgrade('cryo_cooled_emitter');
+    // Beam color layers. Cryo-Cooled Emitter tints the beam blue.
+    // Locked = yellow/gold tint. Free-fire = white/red or blue if cryo.
+    let glow, mid, core;
+    if (cryo) {
+      glow = locked ? 'rgba(120,200,255,0.30)' : 'rgba(80,180,255,0.30)';
+      mid  = locked ? 'rgba(180,230,255,0.60)' : 'rgba(140,220,255,0.60)';
+      core = locked ? '#d8f0ff'                : '#eaf6ff';
+    } else {
+      glow = locked ? 'rgba(255,200,80,0.25)'  : 'rgba(255,120,120,0.25)';
+      mid  = locked ? 'rgba(255,230,150,0.55)' : 'rgba(255,200,200,0.55)';
+      core = locked ? '#fff2c8'                : '#ffffff';
+    }
     X.strokeStyle = glow;
     X.lineWidth = LASER_WIDTH * 5;
     X.beginPath(); X.moveTo(startX, startY); X.lineTo(endX, endY); X.stroke();
@@ -2813,7 +2824,9 @@ function render() {
     X.lineWidth = LASER_WIDTH;
     X.beginPath(); X.moveTo(startX, startY); X.lineTo(endX, endY); X.stroke();
     const burstSize = 5 + Math.sin(state.mothershipPulse * 8) * 2;
-    X.fillStyle = locked ? 'rgba(255,230,150,0.6)' : 'rgba(255,200,200,0.6)';
+    X.fillStyle = cryo
+      ? (locked ? 'rgba(180,230,255,0.65)' : 'rgba(140,220,255,0.65)')
+      : (locked ? 'rgba(255,230,150,0.6)'  : 'rgba(255,200,200,0.6)');
     X.beginPath(); X.arc(endX, endY, burstSize, 0, Math.PI*2); X.fill();
     X.fillStyle = core;
     X.beginPath(); X.arc(endX, endY, burstSize * 0.4, 0, Math.PI*2); X.fill();
