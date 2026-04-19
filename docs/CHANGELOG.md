@@ -4,6 +4,45 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.2.2 (2026-04-19)
+
+**NPC ship classes + friendly variants + class-scaled salvage.**
+
+### NPC ship classes
+NPCs now spawn as one of five ship classes instead of a single fighter type. Each class has distinct stats (HP, speed, fire rate, hitbox, render size) that stack with existing faction stats.
+
+| Class | HP | Speed | Fire rate | Salvage | Notes |
+|---|---|---|---|---|---|
+| Fighter | 2 | 1.0× | 1.0× | 1.0× | Baseline, same as before |
+| Scout | 1 | 1.4× | 1.1× | 1.2× | Fast, fragile |
+| Prospector | 3 | 0.95× | 0.9× | 1.6× | Tanky, slower |
+| Hauler | 4 | 0.75× | 0.8× | 2.2× | Slow, hard to kill, big target |
+| Dreadnought | 8 | 0.70× | 1.5× | 4.0× | Rare boss encounter |
+
+Class spawn distribution shifts by depth band — NEAR zone is mostly fighters, VOID is mostly haulers. Dreadnoughts have a flat 1% chance at any band, making them an RNG threat even in starter zones.
+
+NPC ships use the existing buyable ship sprites (Scout/Prospector/Hauler/Dreadnought × Coalition/Syndicate/Void variants). Hauler and Dreadnought render noticeably larger than Fighter.
+
+### Dreadnought warning label
+Dreadnoughts wear a `⚠ DREADNOUGHT` label instead of the standard `HOSTILE` tag so players immediately know they're staring down a capital-class threat. Label font is bumped and the glow plate is slightly larger.
+
+### Class-scaled salvage
+`salvageValueForEnemy` now multiplies the base band value by class salvageMul. A Dreadnought kill in VOID with chase bonus can hit ~Ƒ1,200. Bigger hulls = bigger scrap drops, matching the effort required to kill them. Still worthwhile to engage capital ships if you've got combat-oriented gear.
+
+### Friendly variants (same ship faction = ally)
+New `isPlayerAlly(faction)` helper: a faction is friendly to the player if it matches either their FM account faction OR their equipped ship's faction. Flying a Syndicate hull into Syndicate space means the patrol ships there are your allies, even if your FM account is Coalition.
+
+In rival sectors, 20% of NPCs spawn flying the player's ship-faction colors instead of the sector's. This creates a sense of contested territory — Coalition patrols show up in Syndicate space and vice versa. Dreadnoughts never spawn as allies; they're always hostile to preserve the threat.
+
+Ally NPCs get a green `ALLY` label instead of red `HOSTILE`, making them visually distinguishable at a glance.
+
+All aggro / beam / bullet checks updated to use `isPlayerAlly` — your escorts' beam passes through ally NPCs, enemy bullets from ally factions don't hit you, etc.
+
+### Files modified
+- `client/assets/drone-mining/index.html` — `NPC_SHIP_CLASSES` table, `NPC_CLASS_TABLE` spawn weights per band, `pickNpcClass()`, `isPlayerAlly()` + `isPlayerEnemy()` helpers, refactored enemy spawn in `buildChunk`, refactored `drawEnemy` to use class sprite + dynamic size + maxHp-aware HP bar, DREADNOUGHT/ALLY labels, `salvageValueForEnemy` class multiplier, all faction aggro checks updated to use the helpers.
+
+---
+
 ## v1.0.2.1 (2026-04-19)
 
 **Mining: ship store, faction-style hulls, hull HP, auto-miner toggle, cargo drones, shipyard UI, HUD cleanup.**

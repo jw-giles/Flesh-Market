@@ -1048,6 +1048,7 @@ function salvageValueForBand(band) {
 //   - Faction toughness: Void (slow, hard bullets) drops the most, Coalition baseline, Syndicate fast but fragile
 //   - Run threat scaling: each extra drone bought makes enemies tougher (existing) and scrap richer
 //   - Chase state: enemies that were actively engaging you drop +20% — they earned it
+//   - Ship class: bigger hulls drop proportionally more (see NPC_SHIP_CLASSES below)
 function salvageValueForEnemy(e) {
   const base = SALVAGE_VALUE[DEPTH_BANDS.indexOf(e.band)] || SALVAGE_VALUE[0];
   // Faction difficulty — inverse of how easy they are to kill
@@ -1059,7 +1060,87 @@ function salvageValueForEnemy(e) {
   const threatMul = 1 + Math.max(0, (state.dronesBought - 1)) * 0.15;
   // Chase bonus
   const chaseMul = e.state === 'chase' ? 1.20 : 1.0;
-  return Math.round(base * facMul * threatMul * chaseMul);
+  // Class salvage multiplier (fighter = 1.0x baseline)
+  const classMul = (NPC_SHIP_CLASSES[e.shipClass || 'fighter'] || NPC_SHIP_CLASSES.fighter).salvageMul;
+  return Math.round(base * facMul * threatMul * chaseMul * classMul);
+}
+
+// NPC ship classes — when enemies spawn, they pick a class from this table
+// based on depth band. Scout/Prospector/Hauler/Dreadnought mirror the
+// buyable ship catalog; Fighter is the baseline 'no-class' enemy.
+// Class stats multiply the base enemy stats.
+const NPC_SHIP_CLASSES = {
+  fighter: {
+    hp: 2,  hpMul: 1.0,  speedMul: 1.0,  fireRateMul: 1.0,  radius: 11,
+    renderSize: 40,  salvageMul: 1.0,
+    // no custom sprite — falls back to the faction fighter (existing behavior)
+    spriteKey: null,
+  },
+  scout: {
+    hp: 1,  hpMul: 1.0,  speedMul: 1.4,  fireRateMul: 1.1,  radius: 10,
+    renderSize: 36,  salvageMul: 1.2,
+    spriteKey: 'ship_scout_',   // suffix with faction at spawn
+  },
+  prospector: {
+    hp: 3,  hpMul: 1.0,  speedMul: 0.95, fireRateMul: 0.9,  radius: 14,
+    renderSize: 48,  salvageMul: 1.6,
+    spriteKey: 'ship_prospector_',
+  },
+  hauler: {
+    hp: 4,  hpMul: 1.0,  speedMul: 0.75, fireRateMul: 0.8,  radius: 16,
+    renderSize: 52,  salvageMul: 2.2,
+    spriteKey: 'ship_hauler_',
+  },
+  dreadnought: {
+    hp: 8,  hpMul: 1.0,  speedMul: 0.70, fireRateMul: 1.5,  radius: 24,
+    renderSize: 88,  salvageMul: 4.0,
+    spriteKey: 'ship_dreadnought_',
+  },
+};
+
+// Spawn table — what class an enemy is, by band.
+// Weights sum doesn't matter; they're normalized at pick time.
+// Dreadnoughts get a flat 1% roll at any band BEFORE the main table rolls.
+const NPC_CLASS_TABLE = {
+  NEAR: { fighter: 70, scout: 20, prospector: 9, hauler: 1 },
+  MID:  { fighter: 35, scout: 30, prospector: 25, hauler: 10 },
+  DEEP: { fighter: 10, scout: 20, prospector: 35, hauler: 35 },
+  VOID: { fighter: 5,  scout: 10, prospector: 30, hauler: 55 },
+};
+const DREADNOUGHT_SPAWN_CHANCE = 0.01;   // 1% per enemy, any band
+
+// Pick a weighted class from the band table. `rng()` is the chunk's seeded RNG.
+function pickNpcClass(band, rng) {
+  if (rng() < DREADNOUGHT_SPAWN_CHANCE) return 'dreadnought';
+  const tbl = NPC_CLASS_TABLE[band.name] || NPC_CLASS_TABLE.NEAR;
+  let total = 0;
+  for (const w of Object.values(tbl)) total += w;
+  let roll = rng() * total;
+  for (const [cls, w] of Object.entries(tbl)) {
+    roll -= w;
+    if (roll <= 0) return cls;
+  }
+  return 'fighter';
+}
+
+// Returns true if the given faction is friendly to the player.
+// Player is allied with:
+//   - their own FM account faction (state.playerFaction)
+//   - the faction of their equipped ship (if it's a purchased faction hull)
+// This lets players buy a Syndicate ship and have Syndicate NPCs treat them
+// as friendly, even if their FM account is Coalition.
+function isPlayerAlly(faction) {
+  if (!faction) return false;
+  if (faction === state.playerFaction) return true;
+  const ship = (typeof getEquippedShip === 'function') ? getEquippedShip() : null;
+  if (ship && ship.shipFaction && ship.shipFaction !== 'none' && faction === ship.shipFaction) return true;
+  return false;
+}
+
+// Returns true if this faction is *hostile* to the player.
+// Simpler: not an ally.
+function isPlayerEnemy(faction) {
+  return !isPlayerAlly(faction);
 }
 
 const ASTEROID_DENSITY = 12;
@@ -1251,29 +1332,59 @@ function buildChunk(cx, cy) {
     const fac = FACTIONS[facKey];
     const stats = FACTION_STATS[facKey] || FACTION_STATS.coalition;
 
+    // Friendly-variant spawn: if the player's ship is a purchased faction ship
+    // and the sector belongs to a rival faction, each NPC has a 20% chance to
+    // spawn flying the PLAYER'S ship faction colors instead of the sector's.
+    // Mechanically these show up as allies (same-faction check → passive + will
+    // fight enemies of their faction). Lore: patrol incursions into rival space.
+    // Only applies to non-default ships; default Mining Drone doesn't carry faction
+    // allegiance beyond the player's account faction.
+    const _equipped = (typeof getEquippedShip === 'function') ? getEquippedShip() : null;
+    const playerShipFaction = (_equipped && _equipped.shipFaction && _equipped.shipFaction !== 'none')
+      ? _equipped.shipFaction
+      : null;
+    const canSpawnFriendly = playerShipFaction && playerShipFaction !== facKey;
+    const FRIENDLY_SPAWN_RATE = 0.20;   // 20% of NPCs in rival sectors are allies
+
     for (let i = 0; i < count; i++) {
       const ex = cx * CHUNK + rng() * CHUNK;
       const ey = cy * CHUNK + rng() * CHUNK;
+      // Pick ship class from band table — Dreadnoughts have a flat 1% chance at any band
+      const shipClass = pickNpcClass(band, rng);
+      const classDef = NPC_SHIP_CLASSES[shipClass];
+      // Friendly flip: small chance this NPC wears player's ship-faction colors
+      // instead of the sector's. Dreadnoughts never flip friendly — they're always a threat.
+      let npcFaction = facKey;
+      let npcFac = fac;
+      let npcStats = stats;
+      if (canSpawnFriendly && shipClass !== 'dreadnought' && rng() < FRIENDLY_SPAWN_RATE) {
+        npcFaction = playerShipFaction;
+        npcFac = FACTIONS[playerShipFaction];
+        npcStats = FACTION_STATS[playerShipFaction] || stats;
+      }
       // Per-faction fire rate: lower shootCD = shoots more often.
       // We divide the base CD range by fireRateMul so Syndicate (1.2) cycles faster.
+      // Class fireRateMul also applies (Dreadnought shoots 50% faster than a Fighter).
       const baseCD = ENEMY_SHOOT_CD_MIN + rng() * (ENEMY_SHOOT_CD_MAX - ENEMY_SHOOT_CD_MIN);
       enemies.push({
         x: ex, y: ey, vx: 0, vy: 0,
         angle: rng() * Math.PI * 2,
         patrolAngle: rng() * Math.PI * 2,
         patrolTimer: 60 + rng() * 180,
-        r: 11, hp: 2,
-        shootCD: Math.floor(baseCD / stats.fireRateMul),
+        r: classDef.radius, hp: classDef.hp,
+        maxHp: classDef.hp,
+        shootCD: Math.floor(baseCD / (npcStats.fireRateMul * classDef.fireRateMul)),
         aggroRange: ENEMY_AGGRO_BASE * aggroBoost,
-        speedMult:    speedBoost    * stats.speedMul,
-        bulletSpdMult: bulletSpdBoost * stats.bulletSpdMul,
-        fireRateMul:  stats.fireRateMul,    // stored so shoot-cooldown reset uses it too
+        speedMult:    speedBoost * npcStats.speedMul * classDef.speedMul,
+        bulletSpdMult: bulletSpdBoost * npcStats.bulletSpdMul,
+        fireRateMul:  npcStats.fireRateMul * classDef.fireRateMul,
         state: 'patrol',
         homeChunk: chunkKey(cx, cy),
         band,
-        faction: facKey,
-        fac,
-        // ~40% chance this enemy is hostile to rival factions (not just the player)
+        faction: npcFaction,
+        fac: npcFac,
+        shipClass,
+        renderSize: classDef.renderSize,
         hostileToRivals: rng() < 0.40,
         rivalRetargetT: 0
       });
@@ -1869,7 +1980,7 @@ function update() {
     {
       let bestLockScore = Infinity;
       for (const e of allEnemies()) {
-        if (e.faction === state.playerFaction) continue;
+        if (isPlayerAlly(e.faction)) continue;
         const relX = e.x - ox, relY = e.y - oy;
         const dist = Math.hypot(relX, relY);
         if (dist > LASER_LOCK_RANGE) continue;
@@ -1921,7 +2032,7 @@ function update() {
     }
 
     for (const e of allEnemies()) {
-      if (e.faction === state.playerFaction) continue;  // beam passes through allies
+      if (isPlayerAlly(e.faction)) continue;  // beam passes through allies
       const cx = e.x - ox, cy = e.y - oy;
       const tProj = cx*dx + cy*dy;
       if (tProj < 0 || tProj > bestT) continue;
@@ -2040,7 +2151,7 @@ function update() {
     let bestTarget = null;
     let bestDist = Infinity;
     for (const e of allEnemies()) {
-      if (e.faction === state.playerFaction) continue;   // allies skip
+      if (isPlayerAlly(e.faction)) continue;   // allies skip
       if (e.hp <= 0) continue;
       const dxE = e.x - ox, dyE = e.y - oy;
       const dist = Math.hypot(dxE, dyE);
@@ -2502,7 +2613,7 @@ function update() {
   for (const e of allEnemies()) {
     // Same-faction drones are friendly — they patrol, collide with rocks, but
     // never aggro or shoot at the player, escorts, or refineries.
-    if (e.faction === state.playerFaction) {
+    if (isPlayerAlly(e.faction)) {
       e.state = 'patrol';
       e.patrolTimer--;
       if (e.patrolTimer <= 0) {
@@ -2704,7 +2815,7 @@ function update() {
     }
     // Player hit — decrement HP. Ships with HP > 1 survive multiple hits.
     // Brief invulnerability after a hit prevents double-damage from close-packed bullets.
-    if (d && b.faction !== state.playerFaction && d.iframes <= 0 && Math.hypot(b.x - d.x, b.y - d.y) < d.r + 3) {
+    if (d && isPlayerEnemy(b.faction) && d.iframes <= 0 && Math.hypot(b.x - d.x, b.y - d.y) < d.r + 3) {
       state.bullets.splice(i, 1);
       d.hp--;
       d.hitFlash = 10;
@@ -2725,7 +2836,7 @@ function update() {
     }
     let consumed = false;
     // Escort hit — skip same-faction (escorts wear player colors)
-    if (b.faction !== state.playerFaction) {
+    if (isPlayerEnemy(b.faction)) {
       for (const esc of state.escorts) {
         if (Math.hypot(b.x - esc.x, b.y - esc.y) < 10) {
           esc.hp--;
@@ -2740,7 +2851,7 @@ function update() {
       if (consumed) { state.bullets.splice(i, 1); continue; }
     }
     // Cargo drone hit — small and fragile, takes the bullet and maybe drops cargo
-    if (b.faction !== state.playerFaction && state.cargoDrones) {
+    if (isPlayerEnemy(b.faction) && state.cargoDrones) {
       for (const cd of state.cargoDrones) {
         if (cd.mode === 'dead') continue;
         if (Math.hypot(b.x - cd.x, b.y - cd.y) < 9) {
@@ -2756,7 +2867,7 @@ function update() {
       if (consumed) { state.bullets.splice(i, 1); continue; }
     }
     // Refinery hit (refineries are player-owned, same-faction bullets skip them)
-    if (b.faction !== state.playerFaction) {
+    if (isPlayerEnemy(b.faction)) {
       for (let ri = state.refineries.length - 1; ri >= 0; ri--) {
         const r = state.refineries[ri];
         if (Math.hypot(b.x - r.x, b.y - r.y) < REFINERY_RADIUS + 2) {
@@ -3426,9 +3537,17 @@ function drawAsteroid(a, x, y) {
 
 function drawEnemy(e, x, y) {
   const fac = e.fac || FACTIONS.syndicate;
-  // Pick the sprite based on enemy faction
+  // Class-specific sprite: Scout/Prospector/Hauler/Dreadnought use the buyable ship
+  // sprites (ship_scout_coalition.png etc.). Fighters fall back to the faction fighter.
+  const classDef = NPC_SHIP_CLASSES[e.shipClass || 'fighter'] || NPC_SHIP_CLASSES.fighter;
   const stats = FACTION_STATS[e.faction] || FACTION_STATS.coalition;
-  const spr = SPRITES[stats.sprite];
+  let spr = null;
+  if (classDef.spriteKey) {
+    // e.g. "ship_scout_" + "coalition" -> "ship_scout_coalition"
+    spr = SPRITES[classDef.spriteKey + e.faction];
+  }
+  if (!spr || !spr.loaded) spr = SPRITES[stats.sprite];   // fighter fallback
+
   X.save();
   X.translate(x, y);
   X.rotate(e.angle);
@@ -3436,8 +3555,7 @@ function drawEnemy(e, x, y) {
   if (spr && spr.loaded) {
     // Ship sprite faces up; rotate +π/2 so angle=0 means facing right
     X.rotate(Math.PI/2);
-    const size = 40;
-    // Sprites are already faction-colored — render clean
+    const size = e.renderSize || classDef.renderSize || 40;
     X.drawImage(spr.img, -size/2, -size/2, size, size);
   } else {
     // Vector fallback — original diamond
@@ -3457,28 +3575,37 @@ function drawEnemy(e, x, y) {
 
   X.restore();
 
-  if (e.hp < 2) {
+  // HP bar — scales with max HP. Only shows while damaged.
+  if (e.hp < (e.maxHp || 2)) {
+    const maxHp = e.maxHp || 2;
+    const barW = Math.max(12, maxHp * 4);
+    const barOffset = (e.renderSize || 40) / 2 + 6;
     X.fillStyle = fac.stroke;
-    X.fillRect(x - 6, y - 18, 12, 1.5);
+    X.fillRect(x - barW/2, y - barOffset, barW, 2);
     X.fillStyle = '#1a0808';
-    X.fillRect(x - 6 + Math.max(0, e.hp/2)*12, y - 18, Math.max(0, 1 - e.hp/2)*12, 1.5);
+    X.fillRect(x - barW/2 + (e.hp/maxHp)*barW, y - barOffset, (1 - e.hp/maxHp)*barW, 2);
   }
 
-  // HOSTILE tag — every rival ship gets a red floating label.
-  // Not shown for same-faction allies (they're passive and won't shoot you).
+  // Label — HOSTILE/DREADNOUGHT for rivals, ALLY for same-faction ship variants.
+  // Rival-faction NPCs that match the player's ship faction are considered allies
+  // and wear a green tag instead of red. Dreadnoughts always show red to warn the player.
   if (e.faction !== state.playerFaction) {
-    // Pulse alpha so the label draws attention without being obnoxious
+    const isDread = e.shipClass === 'dreadnought';
+    // Is this NPC flying the same faction as the player's equipped ship? If so, it's an ally.
+    const _equipped = (typeof getEquippedShip === 'function') ? getEquippedShip() : null;
+    const playerShipFaction = (_equipped && _equipped.shipFaction && _equipped.shipFaction !== 'none') ? _equipped.shipFaction : null;
+    const isAlly = !isDread && playerShipFaction && e.faction === playerShipFaction;
+
     const pulse = 0.75 + Math.sin(state.mothershipPulse * 3) * 0.25;
-    const labelY = y - 28;
+    const labelY = y - ((e.renderSize || 40) / 2) - 12;
     X.textAlign = 'center';
-    X.font = "bold 10px 'Courier New'";
-    // Dark plate behind the text for legibility against bright space
-    const text = 'HOSTILE';
+    X.font = isDread ? "bold 12px 'Courier New'" : "bold 10px 'Courier New'";
+    const text = isDread ? '⚠ DREADNOUGHT' : (isAlly ? 'ALLY' : 'HOSTILE');
     const tw = X.measureText(text).width;
-    X.fillStyle = 'rgba(10,0,0,0.65)';
-    X.fillRect(x - tw/2 - 3, labelY - 8, tw + 6, 11);
-    // Red text with pulsing alpha
-    X.fillStyle = 'rgba(255,74,74,' + pulse.toFixed(2) + ')';
+    X.fillStyle = isAlly ? 'rgba(0,20,0,0.75)' : 'rgba(10,0,0,0.75)';
+    X.fillRect(x - tw/2 - 4, labelY - (isDread ? 10 : 8), tw + 8, isDread ? 14 : 11);
+    const colorRGB = isAlly ? '134,255,106' : '255,74,74';
+    X.fillStyle = `rgba(${colorRGB},${pulse.toFixed(2)})`;
     X.fillText(text, x, labelY);
   }
 }
