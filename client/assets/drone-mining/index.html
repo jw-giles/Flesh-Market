@@ -35,11 +35,6 @@
   .hud-panel .sub.good { color:#86ff6a; }
   .hud-panel .sub.warn { color:#ff9a4a; }
 
-  /* Top-left: drone count + position */
-  #hud-drone {
-    top:12px; left:12px; min-width:180px;
-  }
-
   /* Top-right: cargo + banked */
   #hud-cargo {
     top:12px; right:12px; min-width:200px; text-align:right;
@@ -313,7 +308,7 @@
     Open range asteroid belts stretch past the edge of charted space. Every faction has agreed
     that mining is where conflict happens. Safe mining is not enforced, anywhere.
     Your drone has <em>one fuel tank</em>. Dock at the mothership to bank cargo and refund
-    the drone's cost. No refuel. A single hostile round ends the drone. The good ore is deep.
+    the drone's cost. No refuel. A single hostile round ends a stock drone — armored hulls take more. The good ore is deep.
   </div>
 
   <div id="loadout">
@@ -352,6 +347,13 @@
     </div>
 
     <div class="loadout-row">
+      <span class="lbl">Ship</span>
+      <div id="ship-picker" style="flex:1; display:flex; gap:6px; flex-wrap:wrap; align-items:center">
+        <span style="color:#8a7a50; font-size:11px">Loading…</span>
+      </div>
+    </div>
+
+    <div class="loadout-row">
       <span class="lbl">Refineries</span>
       <div class="stepper">
         <button id="refineries-minus">−</button>
@@ -369,6 +371,16 @@
         <button id="escorts-plus">+</button>
       </div>
       <span class="lbl" style="flex:0 0 110px; text-align:right" id="escorts-cost">Ƒ0</span>
+    </div>
+
+    <div class="loadout-row">
+      <span class="lbl">Cargo Drones</span>
+      <div class="stepper">
+        <button id="cargodrones-minus">−</button>
+        <span class="count" id="cargodrones-count">0</span>
+        <button id="cargodrones-plus">+</button>
+      </div>
+      <span class="lbl" style="flex:0 0 110px; text-align:right" id="cargodrones-cost">Ƒ0</span>
     </div>
 
     <div class="loadout-row">
@@ -390,6 +402,7 @@
   <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; justify-content:center">
     <button id="deploy-btn" style="flex:1; min-width:220px">DEPLOY</button>
     <button id="store-btn" style="flex:0 0 auto; padding:10px 18px; background:transparent; border:1px solid #3a2a10; color:#c8b088; font:bold 13px 'Courier New',monospace; letter-spacing:.2em; cursor:pointer">⛏ STORE</button>
+    <button id="ships-btn" style="flex:0 0 auto; padding:10px 18px; background:transparent; border:1px solid #3a2a10; color:#c8b088; font:bold 13px 'Courier New',monospace; letter-spacing:.2em; cursor:pointer">◈ SHIPS</button>
     <button id="leaderboard-btn" style="flex:0 0 auto; padding:10px 18px; background:transparent; border:1px solid #3a2a10; color:#c8b088; font:bold 13px 'Courier New',monospace; letter-spacing:.2em; cursor:pointer">◆ LEADERS</button>
   </div>
   <button id="fm-exit-btn" style="display:none; margin-top:10px; padding:8px 24px; background:transparent; border:1px solid #3a2a08; color:#8a6a30; font:12px 'Courier New',monospace; letter-spacing:.15em; cursor:pointer">⟵ BACK TO FLESHMARKET</button>
@@ -410,6 +423,21 @@
   </div>
 </div>
 
+<!-- Ships Modal -->
+<div id="ships-modal" style="display:none; position:fixed; inset:0; z-index:100; background:rgba(2,2,10,0.92); padding:20px; overflow-y:auto; font-family:'Courier New',monospace">
+  <div style="max-width:880px; margin:20px auto; border:1px solid #3a2a10; background:#050308; padding:28px 32px">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #3a2a10; padding-bottom:14px">
+      <h2 style="margin:0; color:#e6c27a; font-size:24px; letter-spacing:.25em">◈ SHIPYARD</h2>
+      <button id="ships-close" style="background:transparent; border:1px solid #3a2a10; color:#8a7a50; font:bold 16px monospace; cursor:pointer; padding:4px 14px">✕ CLOSE</button>
+    </div>
+    <div style="color:#c8b088; font-size:13px; letter-spacing:.08em; margin-bottom:18px; line-height:1.6">
+      Alternate hulls for every faction style. Coalition ships drill faster, Syndicate ships fight harder, Void ships delegate to drones. Stats multiply with your loadout and perks.
+      Your bank: <span id="ships-bank" style="color:#e6c27a; font-weight:bold">Ƒ0</span>
+    </div>
+    <div id="store-ships-body">Loading ships…</div>
+  </div>
+</div>
+
 <!-- Leaderboard Modal -->
 <div id="lb-modal" style="display:none; position:fixed; inset:0; z-index:100; background:rgba(2,2,10,0.92); padding:20px; overflow-y:auto; font-family:'Courier New',monospace">
   <div style="max-width:680px; margin:20px auto; border:1px solid #3a2a10; background:#050308; padding:24px 28px">
@@ -422,29 +450,6 @@
 </div>
 
 <!-- HUD ─────────────────────────────────────────────────────── -->
-
-<!-- Top-left: sector + zone + weapon -->
-<div class="hud-panel" id="hud-drone">
-  <div class="row">
-    <span class="tag">Sector</span>
-    <span class="num" id="h-sector" style="font-size:16px">0,0</span>
-  </div>
-  <div class="row">
-    <span class="tag">Zone</span>
-    <span class="num" id="h-zone" style="font-size:16px; color:#86ff6a">NEAR</span>
-  </div>
-  <div class="row">
-    <span class="tag">Weapon</span>
-    <span class="num" id="h-weapon" style="font-size:12px; color:#86ff6a">AUTO-CANNON READY</span>
-  </div>
-  <div class="row" id="h-assets-row" style="display:none">
-    <span class="tag">Assets</span>
-    <span class="num" id="h-refineries" style="font-size:16px; color:#60c8ff">0</span>
-    <span class="sub" style="color:#60c8ff">REF</span>
-    <span class="num" id="h-escorts" style="font-size:16px; color:#ffd060; margin-left:4px">0</span>
-    <span class="sub" style="color:#ffd060">ESC</span>
-  </div>
-</div>
 
 <!-- Top-right: cargo + banked -->
 <div class="hud-panel" id="hud-cargo">
@@ -498,7 +503,7 @@
   <span class="key">RMB</span> FIRE &nbsp;&nbsp;
   <span class="key">R</span> REFINERY &nbsp;&nbsp;
   <span class="key">Q</span> DOCK &nbsp;&nbsp;
-  <span class="key">ESC</span> ABORT
+  <span id="hud-control-t" style="display:none"><span class="key">T</span> AUTO-MINE &nbsp;&nbsp;</span><span class="key">ESC</span> ABORT
 </div>
 
 <div id="msg"></div>
@@ -560,6 +565,16 @@ function fmBridgeOnMessage(e) {
     };
     if (typeof window.__refreshUpgradesUI === 'function') window.__refreshUpgradesUI();
   }
+  if (e.data.type === 'ships_state') {
+    // Server pushed: which ships the player owns + currently equipped + the catalog
+    window.__miningShipsState = {
+      owned: e.data.owned || {},
+      equipped: e.data.equipped || 'default',
+      catalog: e.data.catalog || {},
+    };
+    if (typeof window.__refreshShipsUI === 'function') window.__refreshShipsUI();
+    if (typeof window.__refreshShipPickerUI === 'function') window.__refreshShipPickerUI();
+  }
   if (e.data.type === 'leaderboard_data') {
     window.__miningLeaderboard = Array.isArray(e.data.rows) ? e.data.rows : [];
     if (typeof window.__refreshLeaderboardUI === 'function') window.__refreshLeaderboardUI();
@@ -581,6 +596,35 @@ function hasUpgrade(id) {
   if (!FM_EMBEDDED) return false;
   const s = window.__miningUpgradesState;
   return !!(s && s.owned && s.owned[id]);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SHIP REGISTRY — the currently-equipped ship and its effective stats.
+// In standalone mode (no FM) the player is always on the default ship.
+// ─────────────────────────────────────────────────────────────────
+// Fallback default that mirrors the server's 'default' entry, used when
+// ships_state hasn't arrived yet or when standalone.
+const DEFAULT_SHIP = {
+  id: 'default', name: 'Mining Drone', price: 0,
+  spriteKeyBase: 'playerShip', spriteSize: 48,
+  shipClass: 'baseline', shipFaction: 'none',
+  speedMul: 1.0, cargoMul: 1.0, heatMul: 1.0,
+  drillMul: 1.0, fireRateMul: 1.0, bulletSpdMul: 1.0,
+  autoMiner: false, cargoDrones: 0, freeEscorts: 0,
+  desc: '',
+};
+// Returns the definition of the currently-equipped ship.
+function getEquippedShip() {
+  const st = window.__miningShipsState;
+  if (!st || !st.catalog) return DEFAULT_SHIP;
+  const id = st.equipped || 'default';
+  return st.catalog[id] || DEFAULT_SHIP;
+}
+// Returns true if the player owns this ship (default is always owned).
+function ownsShip(id) {
+  if (id === 'default') return true;
+  const st = window.__miningShipsState;
+  return !!(st && st.owned && st.owned[id]);
 }
 
 'use strict';
@@ -612,6 +656,23 @@ const SPRITES = {
   mothership:      { img: new Image(), loaded: false, w: 159, h: 135 },
   // Player combat projectile — 4-frame animation, each frame 32x32
   playerBullet:    { img: new Image(), loaded: false, w: 32, h: 32, frames: 4 },
+  // Buyable ships — 4 classes × 4 factions (none = factionless, same art as syndicate)
+  ship_scout_coalition:      { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_scout_syndicate:      { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_scout_void:           { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_scout_none:           { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_prospector_coalition: { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_prospector_syndicate: { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_prospector_void:      { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_prospector_none:      { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_hauler_coalition:     { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_hauler_syndicate:     { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_hauler_void:          { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_hauler_none:          { img: new Image(), loaded: false, w: 64,  h: 64 },
+  ship_dreadnought_coalition:{ img: new Image(), loaded: false, w: 128, h: 128 },
+  ship_dreadnought_syndicate:{ img: new Image(), loaded: false, w: 128, h: 128 },
+  ship_dreadnought_void:     { img: new Image(), loaded: false, w: 128, h: 128 },
+  ship_dreadnought_none:     { img: new Image(), loaded: false, w: 128, h: 128 },
 };
 // Build absolute URL to the sprites directory. Works with cache-busted iframe src,
 // dev-server, production deploy, and file:// testing. Uses the HTML's own location
@@ -665,6 +726,23 @@ Promise.all([
   loadSprite('shipVoid',        'nautolan_fighter.png'),
   loadSprite('mothership',      'mothership.png'),
   loadSprite('playerBullet',    'player_bullet.png'),
+  // Buyable ship sprites — 16 total (4 classes × 4 factions incl. factionless)
+  loadSprite('ship_scout_coalition',       'ship_scout_coalition.png'),
+  loadSprite('ship_scout_syndicate',       'ship_scout_syndicate.png'),
+  loadSprite('ship_scout_void',            'ship_scout_void.png'),
+  loadSprite('ship_scout_none',            'ship_scout_none.png'),
+  loadSprite('ship_prospector_coalition',  'ship_prospector_coalition.png'),
+  loadSprite('ship_prospector_syndicate',  'ship_prospector_syndicate.png'),
+  loadSprite('ship_prospector_void',       'ship_prospector_void.png'),
+  loadSprite('ship_prospector_none',       'ship_prospector_none.png'),
+  loadSprite('ship_hauler_coalition',      'ship_hauler_coalition.png'),
+  loadSprite('ship_hauler_syndicate',      'ship_hauler_syndicate.png'),
+  loadSprite('ship_hauler_void',           'ship_hauler_void.png'),
+  loadSprite('ship_hauler_none',           'ship_hauler_none.png'),
+  loadSprite('ship_dreadnought_coalition', 'ship_dreadnought_coalition.png'),
+  loadSprite('ship_dreadnought_syndicate', 'ship_dreadnought_syndicate.png'),
+  loadSprite('ship_dreadnought_void',      'ship_dreadnought_void.png'),
+  loadSprite('ship_dreadnought_none',      'ship_dreadnought_none.png'),
 ]).then(results => {
   const loadedCount = results.filter(Boolean).length;
   console.log('[mining] sprites loaded:', loadedCount, '/', results.length, '@', SPRITE_BASE);
@@ -712,6 +790,17 @@ window.addEventListener('keydown', e => {
   keys[k] = true;
   if (k === 'escape' && state.running) {
     endRun('ABORTED', 'Drone recalled mid-flight.', 'Banked cargo preserved.');
+  }
+  // T toggles auto-miner (only meaningful on ships with the capability)
+  if (k === 't' && state.running) {
+    const ship = getEquippedShip();
+    if (ship && ship.autoMiner) {
+      state.autoMineOn = !state.autoMineOn;
+      showMsg(state.autoMineOn ? 'AUTO-MINER: ON' : 'AUTO-MINER: OFF',
+              900, state.autoMineOn ? '#86ff6a' : '#8a7a50');
+    } else {
+      showMsg('No auto-miner on this hull.', 900, '#8a7a50');
+    }
   }
   if (k === ' ') e.preventDefault();
 });
@@ -823,6 +912,8 @@ const REFINERY_DEPLOY_COOLDOWN = 30;     // frames between deploys (half second)
 // Escort drones — orbiting protectors
 const ESCORT_COST       = 1500;
 const ESCORT_MAX_BUY    = 3;
+const CARGO_DRONE_COST   = 800;
+const CARGO_DRONE_MAX_BUY = 3;
 const ESCORT_HP         = 2;
 const ESCORT_ORBIT_MIN  = 45;
 const ESCORT_ORBIT_MAX  = 75;
@@ -987,9 +1078,10 @@ const state = {
   cargoTier: 0,
   heatTier: 0,
 
-  // Refinery / escort purchases (count)
+  // Refinery / escort / cargo-drone purchases (count)
   refineriesBought: 0,
   escortsBought: 0,
+  cargoDronesBought: 0,
 
   // Player faction — drones of this faction do not aggro or shoot at you
   playerFaction: 'none',
@@ -1019,6 +1111,13 @@ const state = {
   escorts: [],              // { x, y, vx, vy, hp, orbitAngle, shootCD, target }
   escortsRemaining: 0,      // inventory for THIS drone — resets on deploy
   escortBullets: [],        // friendly bullets
+
+  // Cargo delegate drones (reset per drone). Spawned by ships with cargoDrones > 0.
+  cargoDrones: [],
+
+  // Auto-miner toggle — only takes effect on ships with autoMiner:true.
+  // Default OFF so players in low-band areas don't immediately overheat.
+  autoMineOn: false,
 
   cam: { x:0, y:0 },
   cargoValue: 0,
@@ -1052,11 +1151,17 @@ const state = {
 };
 
 function newDrone() {
+  const ship = getEquippedShip();
+  const maxHP = ship.hp || 1;
   return {
     x: 0, y: 0,
     vx: 0, vy: 0, angle: -Math.PI/2,
     r: 14,
-    thrusting: false
+    thrusting: false,
+    hp: maxHP,
+    maxHP,
+    hitFlash: 0,         // frame countdown for red-tint on hit
+    iframes: 0,          // brief invulnerability after a hit to avoid double-tap deaths
   };
 }
 
@@ -1300,12 +1405,13 @@ function showMsg(text, duration = 1800, color) {
 }
 
 function computeLoadoutCost() {
-  // Escorts are per-drone (each drone spawns its own set)
+  // Escorts + cargo drones are per-drone (each drone spawns its own set)
   const perDrone = DRONE_COST
     + FUEL_TIERS[state.fuelTier].cost
     + CARGO_TIERS[state.cargoTier].cost
     + HEAT_TIERS[state.heatTier].cost
-    + ESCORT_COST * state.escortsBought;
+    + ESCORT_COST * state.escortsBought
+    + CARGO_DRONE_COST * state.cargoDronesBought;
   // Refineries are bought once, shared across the whole run
   return perDrone * state.dronesBought + REFINERY_COST * state.refineriesBought;
 }
@@ -1316,10 +1422,14 @@ function startRun() {
   state.bank -= totalCost;
   fmBridgeSend('bank_delta', { delta: -totalCost, reason: 'loadout', amount: state.bank });
 
+  // Apply equipped ship stat multipliers to the base caps.
+  // Fuel cap doesn't get a ship multiplier (fuel is unique per ship doesn't feel right),
+  // but cargo and heat both do. Floor to integers so UI displays cleanly.
+  const ship = getEquippedShip();
   state.caps = {
     fuel:  FUEL_TIERS[state.fuelTier].cap,
-    cargo: CARGO_TIERS[state.cargoTier].cap + (hasUpgrade('cargo_optimizer') ? 10 : 0),
-    heat:  HEAT_TIERS[state.heatTier].cap
+    cargo: Math.floor((CARGO_TIERS[state.cargoTier].cap + (hasUpgrade('cargo_optimizer') ? 10 : 0)) * ship.cargoMul),
+    heat:  Math.floor(HEAT_TIERS[state.heatTier].cap * ship.heatMul)
   };
 
   state.dronesUsed = 0;
@@ -1350,11 +1460,11 @@ function startRun() {
   state.refineryDeployCD = 0;
   state.escorts = [];
   state.escortBullets = [];
+  state.cargoDrones = [];    // built-in courier drones (ship perk)
 
   deployNextDrone(true);
 
   document.getElementById('menu').style.display = 'none';
-  document.getElementById('hud-drone').style.display = 'block';
   document.getElementById('hud-cargo').style.display = 'block';
   document.getElementById('hud-fuel').style.display = 'block';
   document.getElementById('hud-heat').style.display = 'block';
@@ -1382,10 +1492,18 @@ function deployNextDrone(first=false) {
   state.docked = true;
 
   // Spawn escorts for this drone, orbiting the drone.
-  // Guard Drone perk: +1 free escort on top of whatever was purchased.
+  // Escort headcount = bought + Guard Drone perk (+1) + ship's freeEscorts (0..4).
+  // Escort sprite faction: if on a purchased faction ship, escorts take the ship's
+  // faction sprite (the Nairan/Kla'ed/Nautolan fighter). On default Mining Drone,
+  // escorts follow the player's FM account faction like before.
   state.escorts = [];
+  const _equipped = getEquippedShip();
+  const escortFaction = (_equipped.shipFaction && _equipped.shipFaction !== 'none')
+    ? _equipped.shipFaction
+    : state.playerFaction;
   const extraFromGuard = hasUpgrade('guard_drone') ? 1 : 0;
-  const totalEscorts = state.escortsBought + extraFromGuard;
+  const shipFreeEscorts = _equipped.freeEscorts || 0;
+  const totalEscorts = state.escortsBought + extraFromGuard + shipFreeEscorts;
   for (let i = 0; i < totalEscorts; i++) {
     const angle = (i / Math.max(1, totalEscorts)) * Math.PI * 2;
     state.escorts.push({
@@ -1397,10 +1515,34 @@ function deployNextDrone(first=false) {
       orbitRadius: ESCORT_ORBIT_MIN + (ESCORT_ORBIT_MAX - ESCORT_ORBIT_MIN) * (i / Math.max(1, totalEscorts - 1)),
       shootCD: i * 5,
       angle: angle + Math.PI,
-      faction: state.playerFaction,          // escorts fly colors to match the player
-      isGuard: i >= state.escortsBought   // last slot is the guard drone if perk owned
+      faction: escortFaction,
+      // 'free' means non-refundable (ship or guard perk spawned it). Bought escorts refund.
+      isFree: i >= state.escortsBought,
     });
     state.runStats.escortsDeployed++;
+  }
+
+  // Spawn cargo drones:
+  //   - built-in from the equipped ship (permanent, not refundable)
+  //   - bought from the loadout (refunded if unused at run end, lost if destroyed)
+  state.cargoDrones = [];
+  const shipCargoDroneCount = getEquippedShip().cargoDrones || 0;
+  const totalCargoDrones = shipCargoDroneCount + state.cargoDronesBought;
+  for (let i = 0; i < totalCargoDrones; i++) {
+    const ang = (i / Math.max(1, totalCargoDrones)) * Math.PI * 2 + Math.PI;
+    state.cargoDrones.push({
+      x: state.drone.x + Math.cos(ang) * 30,
+      y: state.drone.y + Math.sin(ang) * 30,
+      vx: 0, vy: 0,
+      angle: ang,
+      mode: 'idle',                       // idle | flying_home | returning | dead
+      carryingValue: 0, carryingCount: 0,
+      hp: 2,
+      orbitAngle: ang,
+      deadTimer: 0,                       // counts down to respawn after death
+      // isFree = built-in from ship (non-refundable); bought ones are refunded if alive at run end
+      isFree: i < shipCargoDroneCount,
+    });
   }
 
   ensureChunksLoaded();
@@ -1474,9 +1616,20 @@ function endRun(title, line1, line2) {
   const livingDroneRefund = state.drone ? 1 : 0;
   const unusedRefineries = state.refineriesRemaining || 0;
 
+  // Bought cargo drones refund if still alive at run end (not destroyed).
+  // Drones in 'dead' state at end = destroyed, not refunded. Ship's built-in
+  // drones (isFree) are never refunded — they're part of the ship, not hardware.
+  let survivingBoughtCargo = 0;
+  if (state.cargoDrones && state.drone) {
+    for (const cd of state.cargoDrones) {
+      if (!cd.isFree && cd.mode !== 'dead') survivingBoughtCargo++;
+    }
+  }
+
   const livingDroneAmount = livingDroneRefund * DRONE_COST;
   const refineryRefund    = unusedRefineries * REFINERY_COST;
-  const totalEndRefund    = livingDroneAmount + refineryRefund;
+  const cargoDroneRefund  = survivingBoughtCargo * CARGO_DRONE_COST;
+  const totalEndRefund    = livingDroneAmount + refineryRefund + cargoDroneRefund;
 
   if (totalEndRefund > 0) {
     state.runBanked += totalEndRefund;
@@ -1494,7 +1647,6 @@ function endRun(title, line1, line2) {
     deepestBand: state.runStats.deepestBand,
   });
 
-  document.getElementById('hud-drone').style.display = 'none';
   document.getElementById('hud-cargo').style.display = 'none';
   document.getElementById('hud-fuel').style.display = 'none';
   document.getElementById('hud-heat').style.display = 'none';
@@ -1517,6 +1669,9 @@ function endRun(title, line1, line2) {
     }
     if (unusedRefineries > 0) {
       refundHtml += `<div class="loadout-row"><span class="lbl">Unused Refineries Refunded</span><span class="val good">${unusedRefineries} × Ƒ${REFINERY_COST.toLocaleString()} = Ƒ${refineryRefund.toLocaleString()}</span></div>`;
+    }
+    if (survivingBoughtCargo > 0) {
+      refundHtml += `<div class="loadout-row"><span class="lbl">Cargo Drones Recovered</span><span class="val good">${survivingBoughtCargo} × Ƒ${CARGO_DRONE_COST.toLocaleString()} = Ƒ${cargoDroneRefund.toLocaleString()}</span></div>`;
     }
   }
 
@@ -1556,20 +1711,23 @@ function update() {
   if (!d) return;
 
   const lockedOut = state.laser.lockedOut;
+  // Ship speed multiplier — scales thrust and max speed
+  const shipDef = getEquippedShip();
+  const shipSpdMul = shipDef.speedMul || 1.0;
 
   // ── Flight ─────────────────────────────────────────────────────
   d.thrusting = false;
   // Overheat disables thrust
   if (!lockedOut) {
     if (keys['w'] || keys['arrowup']) {
-      d.vx += Math.cos(d.angle) * THRUST;
-      d.vy += Math.sin(d.angle) * THRUST;
+      d.vx += Math.cos(d.angle) * THRUST * shipSpdMul;
+      d.vy += Math.sin(d.angle) * THRUST * shipSpdMul;
       d.thrusting = true;
       state.fuel -= FUEL_DRAIN_THRUST;
     }
     if (keys['s'] || keys['arrowdown']) {
-      d.vx -= Math.cos(d.angle) * THRUST * 0.4;
-      d.vy -= Math.sin(d.angle) * THRUST * 0.4;
+      d.vx -= Math.cos(d.angle) * THRUST * 0.4 * shipSpdMul;
+      d.vy -= Math.sin(d.angle) * THRUST * 0.4 * shipSpdMul;
       state.fuel -= FUEL_DRAIN_BRAKE;
     }
   }
@@ -1583,9 +1741,12 @@ function update() {
   if (keys['d'] || keys['arrowright']) d.angle += TURN;
 
   const spd = Math.hypot(d.vx, d.vy);
-  if (spd > MAX_SPD) { d.vx *= MAX_SPD/spd; d.vy *= MAX_SPD/spd; }
+  const maxSpd = MAX_SPD * shipSpdMul;
+  if (spd > maxSpd) { d.vx *= maxSpd/spd; d.vy *= maxSpd/spd; }
   d.vx *= DRAG; d.vy *= DRAG;
   d.x += d.vx; d.y += d.vy;
+  if (d.iframes > 0) d.iframes--;
+  if (d.hitFlash > 0) d.hitFlash--;
 
   ensureChunksLoaded();
   for (const [k, chunk] of state.chunks) {
@@ -1658,7 +1819,21 @@ function update() {
   // ── LASER ──────────────────────────────────────────────────────
   // Beam fires on LEFT MOUSE only. Mining weapon, damages asteroids only.
   // Combat is handled by the auto-cannon on RIGHT MOUSE, independent of the beam.
-  const wantFire = mouse.left;
+  let wantFire = mouse.left;
+
+  // Auto-miner ships: if the player isn't firing manually, isn't overheating,
+  // AND has the auto-mine toggle ON, auto-fire the beam at the nearest in-range
+  // unmined asteroid. Default OFF so low-band areas don't cook your heat sink.
+  let autoMinerTarget = null;
+  if (!wantFire && !state.laser.lockedOut && shipDef.autoMiner && state.autoMineOn) {
+    let bestD = LASER_RANGE;
+    for (const a of allAsteroids()) {
+      if (a.mined) continue;
+      const dd = Math.hypot(a.x - d.x, a.y - d.y);
+      if (dd < bestD) { bestD = dd; autoMinerTarget = a; }
+    }
+    if (autoMinerTarget) wantFire = true;
+  }
 
   if (state.laser.firing) {
     // Cryo-Cooled Emitter perk: heat builds 30% slower
@@ -1710,9 +1885,14 @@ function update() {
       }
     }
 
-    // Direction: lock-on points at enemy, else straight ahead
+    // Direction: auto-miner points at the chosen rock; else lock-on points at
+    // enemy; else straight ahead from drone facing.
     let dx, dy;
-    if (lockedEnemy) {
+    if (autoMinerTarget) {
+      const relX = autoMinerTarget.x - ox, relY = autoMinerTarget.y - oy;
+      const mag = Math.hypot(relX, relY) || 1;
+      dx = relX / mag; dy = relY / mag;
+    } else if (lockedEnemy) {
       const relX = lockedEnemy.x - ox, relY = lockedEnemy.y - oy;
       const mag = Math.hypot(relX, relY) || 1;
       dx = relX / mag; dy = relY / mag;
@@ -1764,7 +1944,7 @@ function update() {
       // Cargo-full only blocks when the drill bar is about to complete AND
       // the rock would yield ore — checked at completion time below.
       if (!bestAst.mined) {
-        bestAst.mineProgress += LASER_MINE_RATE;
+        bestAst.mineProgress += LASER_MINE_RATE * shipDef.drillMul;
         // Drilling sparks — color varies: neutral for unknown, mineral color for scanned
         if (Math.random() < 0.3) {
           const ang = Math.atan2(oy - bestAst.y, ox - bestAst.x) + (Math.random() - 0.5) * 0.6;
@@ -1884,8 +2064,8 @@ function update() {
 
     state.playerBullets.push({
       x: ox, y: oy,
-      vx: aimDx * PLAYER_BULLET_SPD,
-      vy: aimDy * PLAYER_BULLET_SPD,
+      vx: aimDx * PLAYER_BULLET_SPD * shipDef.bulletSpdMul,
+      vy: aimDy * PLAYER_BULLET_SPD * shipDef.bulletSpdMul,
       angle: aimAngle,
       life: PLAYER_BULLET_LIFE,
     });
@@ -1902,7 +2082,8 @@ function update() {
         size: 1.5 + Math.random()
       });
     }
-    state.playerShootCD = PLAYER_SHOOT_CD;
+    // Fire-rate multiplier: higher fireRateMul = shorter cooldown between shots
+    state.playerShootCD = PLAYER_SHOOT_CD / (shipDef.fireRateMul || 1.0);
   }
 
   // ── Salvage pickup ─────────────────────────────────────────────
@@ -2105,6 +2286,106 @@ function update() {
       state.escorts.splice(i, 1);
       state.runStats.escortsLost++;
       showMsg('ESCORT LOST', 1000, '#ff9a4a');
+    }
+  }
+
+  // ── Cargo drone AI (built-in ship perk — Void-style delegate) ──────
+  // States: idle (orbits player) -> flying_home (carrying cargo to mothership)
+  //         -> returning (empty, flying back to player) -> idle.
+  // Dead drones respawn at mothership after 20s.
+  const CARGO_DRONE_SPD = 3.2;
+  const CARGO_DRONE_ACCEL = 0.45;
+  const CARGO_DRONE_RESPAWN = 1200;   // 20 seconds at 60fps
+  const CARGO_DRONE_CAP = 300;        // cargo value each drone can carry
+  if (!state.cargoDrones) state.cargoDrones = [];
+  for (const cd of state.cargoDrones) {
+    // Dead drones tick down respawn timer, do nothing else
+    if (cd.mode === 'dead') {
+      cd.deadTimer--;
+      if (cd.deadTimer <= 0) {
+        cd.mode = 'idle';
+        cd.hp = 2;
+        cd.x = state.mothership.x;
+        cd.y = state.mothership.y;
+        cd.carryingValue = 0;
+        cd.carryingCount = 0;
+      }
+      continue;
+    }
+
+    let targetX, targetY;
+    if (cd.mode === 'idle') {
+      // Orbit the player loosely
+      cd.orbitAngle += 0.02;
+      targetX = d.x + Math.cos(cd.orbitAngle) * 40;
+      targetY = d.y + Math.sin(cd.orbitAngle) * 40;
+      // Promote to cargo run if player cargo >= 50% of cap (gives you time to fill up
+      // from one or two rocks before the drone decides it's time).
+      if (state.cargoValue > 0 && state.cargoCount >= state.caps.cargo * 0.5) {
+        // Proportional transfer: drone takes (takeVal/cargoValue) fraction of the count.
+        // This keeps per-unit Ƒ value consistent between what the drone hauls and what
+        // the player keeps.
+        const takeVal = Math.min(state.cargoValue, CARGO_DRONE_CAP);
+        const fraction = takeVal / state.cargoValue;
+        const takeCount = Math.max(1, Math.min(state.cargoCount, Math.round(state.cargoCount * fraction)));
+        cd.carryingValue = takeVal;
+        cd.carryingCount = takeCount;
+        state.cargoValue -= takeVal;
+        state.cargoCount -= takeCount;
+        cd.mode = 'flying_home';
+      }
+    } else if (cd.mode === 'flying_home') {
+      targetX = state.mothership.x;
+      targetY = state.mothership.y;
+      const dd = Math.hypot(cd.x - state.mothership.x, cd.y - state.mothership.y);
+      if (dd < DOCK_RADIUS) {
+        // Deposit!
+        state.runBanked += cd.carryingValue;
+        fmBridgeSend('bank_delta', { delta: cd.carryingValue, reason: 'cargo_drone', amount: state.bank + state.runBanked });
+        showMsg(`CARGO DRONE +Ƒ${cd.carryingValue.toLocaleString()}`, 1400, '#60c8ff');
+        cd.carryingValue = 0;
+        cd.carryingCount = 0;
+        cd.mode = 'returning';
+      }
+    } else if (cd.mode === 'returning') {
+      targetX = d.x;
+      targetY = d.y;
+      const dd = Math.hypot(cd.x - d.x, cd.y - d.y);
+      if (dd < 60) cd.mode = 'idle';
+    }
+
+    // Move toward target (shared seek-and-cap-speed)
+    const mdx = targetX - cd.x, mdy = targetY - cd.y;
+    const md = Math.hypot(mdx, mdy);
+    if (md > 1) {
+      cd.vx += (mdx / md) * CARGO_DRONE_ACCEL;
+      cd.vy += (mdy / md) * CARGO_DRONE_ACCEL;
+    }
+    const cspd = Math.hypot(cd.vx, cd.vy);
+    if (cspd > CARGO_DRONE_SPD) { cd.vx *= CARGO_DRONE_SPD / cspd; cd.vy *= CARGO_DRONE_SPD / cspd; }
+    cd.vx *= 0.92; cd.vy *= 0.92;
+    cd.x += cd.vx; cd.y += cd.vy;
+    cd.angle = Math.atan2(cd.vy, cd.vx);
+
+    // Death check
+    if (cd.hp <= 0 && cd.mode !== 'dead') {
+      for (let k = 0; k < 14; k++) {
+        const a = Math.random() * Math.PI * 2;
+        state.particles.push({
+          x: cd.x, y: cd.y, vx: Math.cos(a)*(1+Math.random()*2), vy: Math.sin(a)*(1+Math.random()*2),
+          life: 22, max: 32, color: k<6?'#60c8ff':'#2a6088', size: 1.8
+        });
+      }
+      // Cargo carried was lost
+      if (cd.carryingValue > 0) {
+        showMsg(`CARGO DRONE DESTROYED — Ƒ${cd.carryingValue.toLocaleString()} LOST`, 1800, '#ff4a4a');
+      } else {
+        showMsg('CARGO DRONE DESTROYED', 1400, '#ff9a4a');
+      }
+      cd.mode = 'dead';
+      cd.carryingValue = 0;
+      cd.carryingCount = 0;
+      cd.deadTimer = CARGO_DRONE_RESPAWN;
     }
   }
 
@@ -2421,11 +2702,26 @@ function update() {
       state.bullets.splice(i, 1);
       continue;
     }
-    // Player hit = one shot (but same-faction bullets don't hit the player)
-    if (d && b.faction !== state.playerFaction && Math.hypot(b.x - d.x, b.y - d.y) < d.r + 3) {
+    // Player hit — decrement HP. Ships with HP > 1 survive multiple hits.
+    // Brief invulnerability after a hit prevents double-damage from close-packed bullets.
+    if (d && b.faction !== state.playerFaction && d.iframes <= 0 && Math.hypot(b.x - d.x, b.y - d.y) < d.r + 3) {
       state.bullets.splice(i, 1);
-      killDrone('Hostile fire. One hit, one drone.');
-      return;
+      d.hp--;
+      d.hitFlash = 10;
+      d.iframes = 30;       // half-second grace at 60fps
+      // Visual impact — spark burst + flash-color ring
+      for (let k = 0; k < 14; k++) {
+        const a = Math.random() * Math.PI * 2;
+        const s = 1 + Math.random() * 3;
+        state.particles.push({ x:d.x, y:d.y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life:18, max:24, color:k<6?'#ffcc44':'#ff6644', size:1.5 });
+      }
+      if (d.hp <= 0) {
+        killDrone('Hostile fire. Armor breached.');
+        return;
+      } else {
+        showMsg(`ARMOR HIT — ${d.hp}/${d.maxHP} HULL`, 900, '#ff9a4a');
+        continue;
+      }
     }
     let consumed = false;
     // Escort hit — skip same-faction (escorts wear player colors)
@@ -2436,6 +2732,22 @@ function update() {
           for (let k = 0; k < 4; k++) {
             const a = Math.random() * Math.PI * 2;
             state.particles.push({ x:b.x, y:b.y, vx:Math.cos(a)*1.5, vy:Math.sin(a)*1.5, life:10, max:10, color:'#ffcc44', size:1.2 });
+          }
+          consumed = true;
+          break;
+        }
+      }
+      if (consumed) { state.bullets.splice(i, 1); continue; }
+    }
+    // Cargo drone hit — small and fragile, takes the bullet and maybe drops cargo
+    if (b.faction !== state.playerFaction && state.cargoDrones) {
+      for (const cd of state.cargoDrones) {
+        if (cd.mode === 'dead') continue;
+        if (Math.hypot(b.x - cd.x, b.y - cd.y) < 9) {
+          cd.hp--;
+          for (let k = 0; k < 4; k++) {
+            const a = Math.random() * Math.PI * 2;
+            state.particles.push({ x:b.x, y:b.y, vx:Math.cos(a)*1.5, vy:Math.sin(a)*1.5, life:10, max:10, color:'#60c8ff', size:1.2 });
           }
           consumed = true;
           break;
@@ -2556,20 +2868,18 @@ function update() {
 }
 
 function updateHUD() {
-  // Auto-cannon status
-  const hWeap = document.getElementById('h-weapon');
-  if (hWeap) {
-    if (mouse.right) {
-      if (state.playerShootCD > 0) {
-        hWeap.textContent = 'FIRING';
-        hWeap.style.color = '#ffcc44';
-      } else {
-        hWeap.textContent = 'READY';
-        hWeap.style.color = '#ffee88';
-      }
+  // Auto-cannon status — weapon row was removed with the top-left panel.
+  // Auto-mine bottom-bar [T] hint shown/hidden based on equipped ship capability.
+  const ship = getEquippedShip();
+  const tHint = document.getElementById('hud-control-t');
+  if (tHint) {
+    if (ship && ship.autoMiner) {
+      tHint.style.display = '';
+      // Color-code the T hint so players see current state at a glance
+      const kbd = tHint.querySelector('.key');
+      if (kbd) kbd.style.color = state.autoMineOn ? '#86ff6a' : '';
     } else {
-      hWeap.textContent = 'RMB · FIRE';
-      hWeap.style.color = '#86ff6a';
+      tHint.style.display = 'none';
     }
   }
 
@@ -2619,27 +2929,6 @@ function updateHUD() {
   else if (heatPct > 80)     heatStatus.textContent = 'CRITICAL';
   else if (heatPct > 50)     heatStatus.textContent = 'WARM';
   else                        heatStatus.textContent = 'NOMINAL';
-
-  // Sector + Zone in drone panel
-  if (state.drone) {
-    const c = chunkOf(state.drone.x, state.drone.y);
-    document.getElementById('h-sector').textContent = c.cx + ',' + c.cy;
-    const band = bandForSector(c.cx, c.cy);
-    const zoneEl = document.getElementById('h-zone');
-    zoneEl.textContent = band.name;
-    zoneEl.style.color = band.color;
-  }
-
-  // Asset row: shown only if player has any refineries (bought or deployed) or escorts
-  const hasAssets = state.refineriesBought > 0 || state.escortsBought > 0 || state.refineries.length > 0 || state.escorts.length > 0;
-  const assetsRow = document.getElementById('h-assets-row');
-  if (hasAssets) {
-    assetsRow.style.display = 'flex';
-    document.getElementById('h-refineries').textContent = state.refineries.length + '/' + state.refineriesRemaining;
-    document.getElementById('h-escorts').textContent = state.escorts.length + '/' + state.escortsBought;
-  } else {
-    assetsRow.style.display = 'none';
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2735,6 +3024,16 @@ function render() {
     const sx = esc.x - camX, sy = esc.y - camY;
     if (sx < -40 || sx > viewW+40 || sy < -40 || sy > viewH+40) continue;
     drawEscort(esc, sx, sy);
+  }
+
+  // Cargo drones — built-in ship perk. Small blue delegates that haul cargo.
+  if (state.cargoDrones) {
+    for (const cd of state.cargoDrones) {
+      if (cd.mode === 'dead') continue;
+      const sx = cd.x - camX, sy = cd.y - camY;
+      if (sx < -40 || sx > viewW+40 || sy < -40 || sy > viewH+40) continue;
+      drawCargoDrone(cd, sx, sy);
+    }
   }
 
   // Enemy bullets
@@ -3186,43 +3485,65 @@ function drawEnemy(e, x, y) {
 
 function drawDrone(d, x, y) {
   const fac = FACTIONS[state.playerFaction] || FACTIONS.coalition;
-  // Faction ship sprite resolution with explicit fallback chain.
-  let factionSprKey = null;
-  if (state.playerFaction === 'coalition')      factionSprKey = 'shipCoalition';
-  else if (state.playerFaction === 'syndicate') factionSprKey = 'shipSyndicate';
-  else if (state.playerFaction === 'void')      factionSprKey = 'shipVoid';
+  const ship = getEquippedShip();
 
-  const factionSpr = factionSprKey ? SPRITES[factionSprKey] : null;
-  const mainSpr = SPRITES.playerShip;
-  let spr = null, needsTint = false;
-  if (factionSpr && factionSpr.loaded) {
-    spr = factionSpr;
-  } else if (mainSpr.loaded && factionSprKey) {
-    spr = mainSpr;
-    needsTint = true;
-  } else if (mainSpr.loaded) {
-    spr = mainSpr;
+  // Resolve the ship's sprite:
+  //   - default ship: use the faction-specific main fighter (Nairan/Kla'ed/Nautolan) or main_ship
+  //   - buyable ship: use spriteKeyBase directly (already faction-specific in its filename)
+  let spr = null;
+  let needsTint = false;
+
+  if (ship.id === 'default') {
+    // Default Mining Drone — use the faction fighter like before
+    let factionSprKey = null;
+    if (state.playerFaction === 'coalition')      factionSprKey = 'shipCoalition';
+    else if (state.playerFaction === 'syndicate') factionSprKey = 'shipSyndicate';
+    else if (state.playerFaction === 'void')      factionSprKey = 'shipVoid';
+    const factionSpr = factionSprKey ? SPRITES[factionSprKey] : null;
+    const mainSpr = SPRITES.playerShip;
+    if (factionSpr && factionSpr.loaded) {
+      spr = factionSpr;
+    } else if (mainSpr.loaded && factionSprKey) {
+      spr = mainSpr; needsTint = true;
+    } else if (mainSpr.loaded) {
+      spr = mainSpr;
+    }
+  } else {
+    // Buyable ship — sprite key is already stored on the catalog entry
+    const shipSpr = SPRITES[ship.spriteKeyBase];
+    if (shipSpr && shipSpr.loaded) {
+      spr = shipSpr;
+    } else {
+      // Fallback: try main ship, then vector
+      const mainSpr = SPRITES.playerShip;
+      if (mainSpr.loaded) { spr = mainSpr; needsTint = true; }
+    }
   }
 
   X.save();
   X.translate(x, y);
   X.rotate(d.angle);
 
+  // Thruster glow behind the ship — scale with ship size for big hulls
   if (d.thrusting) {
+    const thrusterSize = ship.spriteSize >= 80 ? 1.3 : 1.0;
     X.fillStyle = 'rgba(96,200,255,0.4)';
     X.beginPath();
-    X.moveTo(-14, 0);
-    X.lineTo(-24, 5);
-    X.lineTo(-30, 0);
-    X.lineTo(-24, -5);
+    X.moveTo(-14 * thrusterSize, 0);
+    X.lineTo(-24 * thrusterSize, 5 * thrusterSize);
+    X.lineTo(-30 * thrusterSize, 0);
+    X.lineTo(-24 * thrusterSize, -5 * thrusterSize);
     X.closePath();
     X.fill();
   }
 
   if (spr && spr.loaded) {
     X.rotate(Math.PI/2);
-    const size = 48;
-    if (state.laser.lockedOut) {
+    const size = ship.spriteSize || 48;
+    if (d.hitFlash > 0) {
+      // Recent hit — strong red flash regardless of laser state
+      drawSpriteTinted(spr.img, 0, 0, spr.w, spr.h, size, size, `rgba(255,80,80,${0.3 + (d.hitFlash/10) * 0.5})`);
+    } else if (state.laser.lockedOut) {
       drawSpriteTinted(spr.img, 0, 0, spr.w, spr.h, size, size, 'rgba(255,74,74,0.6)');
     } else if (needsTint) {
       drawSpriteTinted(spr.img, 0, 0, spr.w, spr.h, size, size, fac.stroke + 'aa');
@@ -3245,6 +3566,21 @@ function drawDrone(d, x, y) {
   }
 
   X.restore();
+
+  // Hull HP pips above the drone — world-space, like escorts. Only shown on
+  // armored hulls (maxHP > 1); a 1-HP stock drone has no need for pips.
+  if (d.maxHP > 1) {
+    // Offset above sprite scales with ship size; default 48 → ~28px gap, big hulls further.
+    const pipOffset = (ship.spriteSize || 48) / 2 + 8;
+    const pct = d.hp / d.maxHP;
+    const activeColor = pct > 0.66 ? '#86ff6a' : (pct > 0.33 ? '#ffcc44' : '#ff4a4a');
+    for (let i = 0; i < d.maxHP; i++) {
+      X.fillStyle = i < d.hp ? activeColor : '#2a1a08';
+      X.beginPath();
+      X.arc(x + (i - (d.maxHP - 1) / 2) * 5, y - pipOffset, 1.6, 0, Math.PI*2);
+      X.fill();
+    }
+  }
 }
 
 function drawRefinery(r, x, y) {
@@ -3358,6 +3694,71 @@ function drawEscort(esc, x, y) {
   }
 }
 
+function drawCargoDrone(cd, x, y) {
+  // Cargo drones are visually small default Mining Drones — same main_ship sprite
+  // as the baseline, scaled down. Gold glow while carrying, vector fallback if
+  // sprite hasn't loaded yet.
+  const spr = SPRITES.playerShip;
+  const carrying = cd.carryingValue > 0;
+
+  X.save();
+  X.translate(x, y);
+  X.rotate(cd.angle);
+
+  if (carrying) {
+    // Subtle gold glow behind the drone when carrying
+    X.fillStyle = 'rgba(255,204,68,0.28)';
+    X.beginPath();
+    X.arc(0, 0, 16, 0, Math.PI*2);
+    X.fill();
+  }
+
+  if (spr && spr.loaded) {
+    // Main Ship sprite is drawn facing-up by default; rotate +PI/2 to align
+    // with our rightward-pointing angle convention
+    X.rotate(Math.PI/2);
+    const size = 24;
+    if (carrying) {
+      // Tint gold while hauling
+      drawSpriteTinted(spr.img, 0, 0, spr.w, spr.h, size, size, 'rgba(255,204,68,0.5)');
+    } else {
+      X.drawImage(spr.img, -size/2, -size/2, size, size);
+    }
+  } else {
+    // Vector fallback — slim arrowhead
+    X.fillStyle = carrying ? '#88ccff' : '#4a8acc';
+    X.strokeStyle = '#2a5080';
+    X.lineWidth = 1.1;
+    X.beginPath();
+    X.moveTo(9, 0);
+    X.lineTo(-5, 4);
+    X.lineTo(-3, 0);
+    X.lineTo(-5, -4);
+    X.closePath();
+    X.fill(); X.stroke();
+  }
+
+  X.restore();
+
+  // HP pips above drone (shows up only when damaged)
+  if (cd.hp < 2) {
+    for (let i = 0; i < 2; i++) {
+      X.fillStyle = i < cd.hp ? '#60c8ff' : '#1a3044';
+      X.beginPath();
+      X.arc(x + (i - 0.5) * 4, y - 14, 1.1, 0, Math.PI*2);
+      X.fill();
+    }
+  }
+
+  // Small cargo value badge while carrying
+  if (cd.carryingValue > 0) {
+    X.fillStyle = '#ffcc44';
+    X.font = "bold 9px 'Courier New'";
+    X.textAlign = 'center';
+    X.fillText(`Ƒ${cd.carryingValue}`, x, y - 18);
+  }
+}
+
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN LOOP
@@ -3376,17 +3777,20 @@ function refreshMenu() {
   document.getElementById('bank-val').textContent = 'Ƒ' + state.bank.toLocaleString();
   document.getElementById('refineries-count').textContent = state.refineriesBought;
   document.getElementById('escorts-count').textContent = state.escortsBought;
+  document.getElementById('cargodrones-count').textContent = state.cargoDronesBought;
 
   // Loadout cost — drone lives are fixed at 1, so this is just the per-drone loadout
   const perDrone = DRONE_COST
     + FUEL_TIERS[state.fuelTier].cost
     + CARGO_TIERS[state.cargoTier].cost
     + HEAT_TIERS[state.heatTier].cost
-    + ESCORT_COST * state.escortsBought;
+    + ESCORT_COST * state.escortsBought
+    + CARGO_DRONE_COST * state.cargoDronesBought;
   const totalCost = computeLoadoutCost();
 
   document.getElementById('refineries-cost').textContent = 'Ƒ' + (REFINERY_COST * state.refineriesBought).toLocaleString();
   document.getElementById('escorts-cost').textContent = 'Ƒ' + (ESCORT_COST * state.escortsBought).toLocaleString();
+  document.getElementById('cargodrones-cost').textContent = 'Ƒ' + (CARGO_DRONE_COST * state.cargoDronesBought).toLocaleString();
   document.getElementById('sum-cost').textContent = 'Ƒ' + totalCost.toLocaleString();
   document.getElementById('sum-perdrone').textContent = 'Ƒ' + perDrone.toLocaleString();
 
@@ -3411,6 +3815,9 @@ function refreshMenu() {
     factionEl.textContent = fac.name;
     factionEl.style.color = fac.stroke;
   }
+
+  // Ship picker — refresh from ship state if available
+  if (typeof window.__refreshShipPickerUI === 'function') window.__refreshShipPickerUI();
 }
 
 document.getElementById('refineries-plus').addEventListener('click', () => {
@@ -3424,6 +3831,12 @@ document.getElementById('escorts-plus').addEventListener('click', () => {
 });
 document.getElementById('escorts-minus').addEventListener('click', () => {
   if (state.escortsBought > 0) { state.escortsBought--; refreshMenu(); }
+});
+document.getElementById('cargodrones-plus').addEventListener('click', () => {
+  if (state.cargoDronesBought < CARGO_DRONE_MAX_BUY) { state.cargoDronesBought++; refreshMenu(); }
+});
+document.getElementById('cargodrones-minus').addEventListener('click', () => {
+  if (state.cargoDronesBought > 0) { state.cargoDronesBought--; refreshMenu(); }
 });
 
 function setupTierPicker(elId, stateKey) {
@@ -3536,9 +3949,223 @@ window.__refreshUpgradesUI = function() {
     btn.addEventListener('click', () => {
       const id = btn.dataset.upgradeId;
       if (!id || btn.disabled) return;
+      const originalLabel = btn.textContent;
       btn.disabled = true;
       btn.textContent = '...';
       fmBridgeSend('buy_upgrade', { upgradeId: id });
+      // Safety timeout — restore if no response after 4s
+      setTimeout(() => {
+        if (btn.isConnected && btn.disabled && btn.textContent === '...') {
+          btn.textContent = originalLabel;
+          btn.disabled = false;
+          if (FM_EMBEDDED) fmBridgeSend('request_upgrades');
+        }
+      }, 4000);
+    });
+  });
+};
+
+// ─────────────────────────────────────────────────────────────────
+// SHIPS TAB — buy and equip alternate hulls
+// ─────────────────────────────────────────────────────────────────
+// Helper: pick the faction-appropriate sprite key for a given ship class.
+// Buyable ships have spriteKeyBase already resolved per faction; the default
+// ship remaps to the player's current FM faction.
+function _shipPreviewSprite(it) {
+  if (it.id === 'default') {
+    if (state.playerFaction === 'coalition')      return 'shipCoalition';
+    else if (state.playerFaction === 'syndicate') return 'shipSyndicate';
+    else if (state.playerFaction === 'void')      return 'shipVoid';
+    return 'playerShip';
+  }
+  return it.spriteKeyBase;
+}
+
+window.__refreshShipsUI = function() {
+  const body = document.getElementById('store-ships-body');
+  if (!body) return;
+  const bankEl = document.getElementById('store-bank');
+  if (bankEl) bankEl.textContent = 'Ƒ' + Math.floor(state.bank).toLocaleString();
+  const shipsBankEl = document.getElementById('ships-bank');
+  if (shipsBankEl) shipsBankEl.textContent = 'Ƒ' + Math.floor(state.bank).toLocaleString();
+
+  const s = window.__miningShipsState;
+  if (!s || !s.catalog || Object.keys(s.catalog).length === 0) {
+    body.innerHTML = '<div style="color:#8a7a50; padding:16px; text-align:center">Connecting to FleshMarket…</div>';
+    return;
+  }
+  const { owned, equipped, catalog } = s;
+  const items = Object.values(catalog);
+  // Group by faction style for readability: default first, then Coalition / Syndicate / Void
+  const groupOrder = ['none', 'coalition', 'syndicate', 'void'];
+  const groupLabels = {
+    none: 'BASELINE',
+    coalition: 'COALITION · MINING',
+    syndicate: 'SYNDICATE · COMBAT',
+    void: 'VOID · DRONES'
+  };
+  const groupColors = {
+    none: '#c8b088',
+    coalition: '#4ecdc4',
+    syndicate: '#e74c3c',
+    void: '#9b59b6'
+  };
+  const groups = { none: [], coalition: [], syndicate: [], void: [] };
+  for (const it of items) {
+    const g = it.shipFaction || 'none';
+    (groups[g] || groups.none).push(it);
+  }
+  // Within each group, sort by price
+  for (const key of Object.keys(groups)) {
+    groups[key].sort((a, b) => a.price - b.price);
+  }
+
+  let html = '';
+  for (const groupKey of groupOrder) {
+    const groupItems = groups[groupKey];
+    if (!groupItems || groupItems.length === 0) continue;
+    html += `<div style="margin:14px 0 10px; color:${groupColors[groupKey]}; font-size:13px; font-weight:bold; letter-spacing:.25em; padding-top:10px; border-top:1px solid #2a1a08">${groupLabels[groupKey]}</div>`;
+    html += `<div style="display:grid; gap:12px; margin-bottom:20px">`;
+    for (const it of groupItems) {
+      const isOwned = it.id === 'default' ? true : !!owned[it.id];
+      const isEquipped = (equipped || 'default') === it.id;
+      const canAfford = state.bank >= it.price;
+      const stats = [];
+      if (it.speedMul !== 1.0) stats.push(`spd ${(it.speedMul*100).toFixed(0)}%`);
+      if (it.cargoMul !== 1.0) stats.push(`cargo ${(it.cargoMul*100).toFixed(0)}%`);
+      if (it.heatMul !== 1.0)  stats.push(`heat ${(it.heatMul*100).toFixed(0)}%`);
+      if (it.drillMul !== 1.0) stats.push(`drill ${(it.drillMul*100).toFixed(0)}%`);
+      if (it.fireRateMul !== 1.0) stats.push(`fire rate ${(it.fireRateMul*100).toFixed(0)}%`);
+      if (it.bulletSpdMul !== 1.0) stats.push(`bullet spd ${(it.bulletSpdMul*100).toFixed(0)}%`);
+      if (it.hp && it.hp > 1) stats.push(`${it.hp} hull HP`);
+      if (it.autoMiner) stats.push(`auto-miner`);
+      if (it.cargoDrones) stats.push(`${it.cargoDrones} cargo drone${it.cargoDrones>1?'s':''}`);
+      if (it.freeEscorts) stats.push(`${it.freeEscorts} free escort${it.freeEscorts>1?'s':''}`);
+      const statsText = stats.length ? stats.join(' · ') : 'baseline stats';
+
+      let btnLabel, btnColor, btnAction = '';
+      if (isEquipped) {
+        btnLabel = '● EQUIPPED'; btnColor = '#86ff6a';
+      } else if (isOwned) {
+        btnLabel = 'EQUIP'; btnColor = '#e6c27a'; btnAction = 'equip';
+      } else if (!canAfford) {
+        btnLabel = `NEED Ƒ${it.price.toLocaleString()}`; btnColor = '#ff6b6b';
+      } else {
+        btnLabel = `BUY Ƒ${it.price.toLocaleString()}`; btnColor = '#e6c27a'; btnAction = 'buy';
+      }
+      const disabled = isEquipped || (!isOwned && !canAfford);
+
+      // Sprite preview — load URL from SPRITE_BASE
+      const sprKey = _shipPreviewSprite(it);
+      const sprSrc = SPRITE_BASE + (sprKey === 'playerShip' ? 'main_ship.png'
+                                   : sprKey === 'shipCoalition' ? 'nairan_fighter.png'
+                                   : sprKey === 'shipSyndicate' ? 'klaed_fighter.png'
+                                   : sprKey === 'shipVoid'      ? 'nautolan_fighter.png'
+                                   : sprKey + '.png');
+
+      html += `<div style="border:1px solid ${isEquipped ? '#2a6a48' : (isOwned ? '#3a4a40' : '#3a2a10')}; background:${isEquipped ? 'rgba(134,255,106,.05)' : 'rgba(10,6,2,.6)'}; padding:16px 18px; display:flex; gap:16px; align-items:center">
+        <img src="${escH(sprSrc)}" style="flex:0 0 auto; width:64px; height:64px; image-rendering:pixelated; background:rgba(30,20,8,.3); border:1px solid #2a1a08" alt="">
+        <div style="flex:1; min-width:0">
+          <div style="display:flex; gap:10px; align-items:center; margin-bottom:5px">
+            <span style="color:${isOwned ? '#e6c27a' : '#c8b088'}; font-weight:bold; font-size:17px">${escH(it.name)}</span>
+          </div>
+          <div style="color:#d8c8a0; font-size:13px; line-height:1.55; margin-bottom:6px">${escH(it.desc)}</div>
+          <div style="color:#c8b088; font-size:12px; letter-spacing:.05em; line-height:1.5">${escH(statsText)}</div>
+        </div>
+        <button data-ship-id="${escH(it.id)}" data-ship-action="${btnAction}" ${disabled ? 'disabled' : ''} style="flex:0 0 auto; padding:12px 18px; min-width:150px; background:transparent; border:1px solid ${btnColor}; color:${btnColor}; font:bold 12px 'Courier New',monospace; letter-spacing:.15em; cursor:${disabled ? 'default' : 'pointer'}; opacity:${disabled ? '0.5' : '1'}">${btnLabel}</button>
+      </div>`;
+    }
+    html += '</div>';
+  }
+
+  body.innerHTML = html;
+
+  // Wire action buttons
+  body.querySelectorAll('button[data-ship-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.shipId;
+      const action = btn.dataset.shipAction;
+      if (!id || btn.disabled) return;
+      const originalLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '...';
+      if (action === 'buy') {
+        fmBridgeSend('buy_ship', { shipId: id });
+      } else if (action === 'equip') {
+        fmBridgeSend('equip_ship', { shipId: id });
+      }
+      // Safety: if the server response never arrives (WS hiccup, disconnect),
+      // restore the button state and request a fresh list after 4 seconds.
+      // If the response DID arrive, __refreshShipsUI already re-rendered and
+      // this stale button reference won't be on the page anymore.
+      setTimeout(() => {
+        if (btn.isConnected && btn.disabled && btn.textContent === '...') {
+          btn.textContent = originalLabel;
+          btn.disabled = false;
+          if (FM_EMBEDDED) fmBridgeSend('request_ships');
+        }
+      }, 4000);
+    });
+  });
+};
+
+// SHIPS button opens the dedicated Shipyard modal
+document.getElementById('ships-btn').addEventListener('click', () => {
+  document.getElementById('ships-modal').style.display = 'block';
+  if (FM_EMBEDDED) fmBridgeSend('request_ships');
+  window.__refreshShipsUI();
+});
+document.getElementById('ships-close').addEventListener('click', () => {
+  document.getElementById('ships-modal').style.display = 'none';
+});
+
+// ─────────────────────────────────────────────────────────────────
+// LOADOUT SHIP PICKER — shows every owned ship as a clickable tile.
+// Equipping here goes through the same FM bridge as the store Equip button.
+// ─────────────────────────────────────────────────────────────────
+window.__refreshShipPickerUI = function() {
+  const picker = document.getElementById('ship-picker');
+  if (!picker) return;
+  const s = window.__miningShipsState;
+  if (!s || !s.catalog) {
+    picker.innerHTML = '<span style="color:#8a7a50; font-size:11px">Default ship only</span>';
+    return;
+  }
+  const { owned, equipped, catalog } = s;
+  // Only show ships the player owns (plus default)
+  const mine = Object.values(catalog).filter(it => it.id === 'default' || owned[it.id]);
+  // Sort: default first, then by price
+  mine.sort((a, b) => {
+    if (a.id === 'default') return -1;
+    if (b.id === 'default') return 1;
+    return a.price - b.price;
+  });
+  if (mine.length === 1) {
+    // Just the default — hint at the shipyard
+    picker.innerHTML = `<span style="color:#c8b088; font-size:12px; letter-spacing:.1em">Mining Drone · </span><a id="ship-picker-store-link" style="color:#e6c27a; font-size:11px; cursor:pointer; text-decoration:underline">browse shipyard</a>`;
+    const link = document.getElementById('ship-picker-store-link');
+    if (link) link.addEventListener('click', () => {
+      document.getElementById('ships-btn').click();
+    });
+    return;
+  }
+
+  let html = '';
+  for (const it of mine) {
+    const isEquipped = (equipped || 'default') === it.id;
+    const name = it.id === 'default' ? 'Drone' : it.name.replace(/^(Coalition|Syndicate|Void) /, '');
+    const facColor = it.shipFaction === 'coalition' ? '#4ecdc4'
+                   : it.shipFaction === 'syndicate' ? '#e74c3c'
+                   : it.shipFaction === 'void'      ? '#9b59b6'
+                   : '#c8b088';
+    const bg = isEquipped ? `${facColor}22` : 'transparent';
+    html += `<button data-ship-picker="${escH(it.id)}" title="${escH(it.name)}" style="background:${bg}; border:1px solid ${isEquipped ? facColor : '#3a2a10'}; color:${isEquipped ? facColor : '#c8b088'}; font:bold 10px 'Courier New',monospace; letter-spacing:.1em; padding:5px 9px; cursor:pointer">${escH(name)}${isEquipped ? ' ●' : ''}</button>`;
+  }
+  picker.innerHTML = html;
+  picker.querySelectorAll('button[data-ship-picker]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.shipPicker;
+      fmBridgeSend('equip_ship', { shipId: id });
     });
   });
 };

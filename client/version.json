@@ -1,7 +1,7 @@
 {
-  "version": "1.0.2.0",
-  "built": "2026-04-18T22:00:00Z",
+  "version": "1.0.2.1",
+  "built": "2026-04-19T22:10:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.2.0",
-  "notes": "Drone Mining: sprite-based rendering with faction-specific ships, LMB mining + RMB auto-cannon with proximity aim-snap, HOSTILE tags, tiered enemy salvage, 8-frame asteroid explosions, permanent upgrade store, tutorial accuracy pass"
+  "patch": "1.0.2.1",
+  "notes": "Mining: ship store feature complete. 12 buyable hulls across Coalition (mining), Syndicate (combat), Void (drones). Hull HP 1-5 scaling, auto-miner toggle, cargo drones (built-in + loadout-buyable), escort faction sprites, shipyard UI, HUD cleanup."
 }

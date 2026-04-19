@@ -4,6 +4,97 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.2.1 (2026-04-19)
+
+**Mining: ship store, faction-style hulls, hull HP, auto-miner toggle, cargo drones, shipyard UI, HUD cleanup.**
+
+### Ship Store — 12 buyable hulls with faction-style gameplay
+- Dedicated **SHIPS** button in the loadout bar between STORE and LEADERS opens the Shipyard modal. Every ship is buyable regardless of FleshMarket account faction.
+- **Three style tracks × four classes = 12 ships**, plus the free default Mining Drone.
+  - **Coalition (Mining focus)** — Prospector Scout Ƒ500k, Auto-Miner Ƒ1.5M, Mining Barge Ƒ3M, Excavator Ƒ5M. Higher drill rate, higher heat cap, slower fire rate.
+  - **Syndicate (Combat focus)** — Interceptor Ƒ500k, Gunship Ƒ1.5M, Raider Ƒ3M, Warship Ƒ5M. Higher fire rate, higher bullet speed, more free escorts (up to 4).
+  - **Void (Drone focus)** — Courier Scout Ƒ500k, Commander Ƒ1.5M, Mothership Ƒ3M, Hivemind Ƒ5M. Built-in cargo drones and free escorts.
+- Ship stats multiply with Fuel/Cargo/Heat loadout tiers and permanent perks (Cargo Optimizer, Salvage Magnet, Improved Scanner, Ion Engines, Cryo-Cooled Emitter).
+- Stat axes: `speedMul`, `cargoMul`, `heatMul`, `drillMul`, `fireRateMul`, `bulletSpdMul`. Plus flags: `autoMiner`, `cargoDrones`, `freeEscorts`, `hp`.
+- Server-persisted via new `mining_ships` SQLite table (owned JSON blob + equipped column).
+- Ship picker tile row in the loadout shows all owned ships as clickable equip tiles, colored by faction.
+- BUY/EQUIP buttons self-heal after 4 seconds with no server response, auto-resyncing state.
+
+### Hull HP — armored ships take multiple hits
+- Default Mining Drone: 1 HP (unchanged one-shot behavior).
+- Scout: 2 HP. Prospector: 3 HP. Hauler: 4 HP. Dreadnought: 5 HP.
+- Each non-fatal hit decrements HP, flashes the sprite red, and shows a toast "ARMOR HIT — X/Y HULL."
+- 30-frame (0.5s) invulnerability grace after a hit prevents double-tap kills from packed bullets.
+- **HP pips render above the player ship in world-space** (same visual as escort drones). Color shifts green → yellow → red as HP drops. Pip offset scales with ship size. No pips shown for 1-HP default drone.
+- Shipyard cards display hull HP alongside other stats.
+- Opening lore updated: "A single hostile round ends a stock drone — armored hulls take more."
+
+### Auto-miner toggle
+- Auto-miner ships (Coalition Prospector, Coalition Excavator, Void Hivemind) drill nearby rocks passively — but toggled OFF by default so low-band areas don't instantly cook your heat sink.
+- Press **T** in-field to toggle ON/OFF. Toast confirmation on toggle. Pressing T on ships without auto-miner shows "No auto-miner on this hull."
+- Bottom control legend shows `T · AUTO-MINE` when ship has the capability. The T key letter turns green when ON, gray when OFF.
+
+### Cargo drones
+- Ships with `cargoDrones > 0` (Void tier) spawn blue delegate drones that orbit the player.
+- **New Cargo Drones loadout stepper** — Ƒ800 each, max 3 per run. Stacks on top of ship built-ins.
+- When player cargo reaches 50% of cap, an idle drone loads up to Ƒ300 of cargo value, flies to the mothership autonomously, deposits to run-banked total, and returns. Proportional count transfer — the drone hauls the same per-unit value ratio the player keeps.
+- 2 HP each, destroyed by enemy fire (loses carried cargo). Dead drones respawn at mothership after 20 seconds.
+- **Bought cargo drones refund on safe return** if still alive at run end. Built-in ship drones don't refund.
+- Render: 24×24 miniature default Mining Drone sprite. Gold tint + halo while carrying. Carried value shown as `Ƒ###` badge above drone. Health pips visible when damaged.
+
+### Free escorts + faction-adoption
+- Several ships spawn with built-in escort drones that don't cost loadout credits (Coalition Excavator 1, Syndicate Gunship 2, Syndicate Raider 3, Syndicate Warship 4, Void Commander 2, Void Mothership 2, Void Hivemind 3).
+- Guard Drone perk still stacks on top. Bought escorts refund as before — free ones don't.
+- **Escorts adopt ship faction sprite.** Flying a Syndicate ship → escorts wear Kla'ed fighter sprites. Default Mining Drone → escorts follow your FM account faction as before.
+
+### Shipyard UI readability
+- Modal widened 780→880px, more padding.
+- Ship name 14→17px, bolder. Description 11→13px with lighter color (#d8c8a0). Stats line 10→12px with lighter color (#c8b088). Sprite preview 56→64px. Group headers 11→13px bolder.
+- Faction-grouped ship cards with BASELINE / COALITION · MINING / SYNDICATE · COMBAT / VOID · DRONES section headers, color-coded.
+
+### HUD cleanup
+- Top-left HUD panel removed entirely (Sector / Zone / Weapon / Hull / Auto-Mine / Assets). Information moved to world-space pips (hull HP) and bottom-bar legend (auto-mine state).
+- Fuel (bottom-left), Cargo (top-right), Heat (bottom-right) gauges unchanged.
+
+### Mothership visual
+- Replaced vector hexagon mothership with a Starlancer Dominion blue science vessel sprite. Pulsing dock-range rings and central blue docking light preserved.
+- Sprite is ~160×136 on screen, reads clearly as a capital-class docking platform.
+
+### Cryo-Cooled Emitter perk
+- Ƒ1M permanent upgrade. Heat builds 30% slower while firing the mining beam. Mining laser renders blue instead of white/gold while owned.
+
+### Camera zoom
+- World renders at 1.25× zoom. Sprites and asteroids read larger without losing the sense of open belts. Viewport culling bounds and chunk-load radius account for the new effective viewport.
+
+### One-life conversion
+- Drone lives stepper removed from loadout. Every run is a single drone. Death ends the run immediately.
+- Postmortem shows `Outcome: SURVIVED / DRONE LOST` instead of `Drones Lost X/Y`.
+
+### Visual + mechanics polish
+- Bullet sprite rotates +π/2 so projectile tip aligns with travel direction.
+- Asteroid hit-boxes match visible sprite area (44% of render radius) rather than bounding box.
+- HOSTILE red pulsing labels above every rival enemy.
+- RMB auto-cannon with ±60° forward cone proximity aim-snap at ~140 units and 4-frame lead prediction.
+- LMB dedicated to mining beam, SPACE removed from fire input.
+
+### Server-crash fix
+- `buyMiningShip` in db.js previously called `db.transaction()`, a `better-sqlite3` API. This codebase uses `node:sqlite` (`DatabaseSync`). Every ship purchase was crashing the node process with `TypeError: db.transaction is not a function`. Replaced with the module's own `transaction(fn)` wrapper.
+
+### Files modified
+- `server/db.js` — `MINING_SHIP_CATALOG` with 13 entries + `hp` field, `mining_ships` table, ship accessors.
+- `server/server.js` — `mining_ships_list`, `mining_ship_buy`, `mining_ship_equip` WS handlers with validation and atomic cash sync.
+- `client/assets/core.js` — `pushShipsToIframe`, ship purchase/equip forwarding, cache-buster on iframe src.
+- `client/assets/drone-mining/index.html` — 16 new ship sprite registry entries, ship registry + `getEquippedShip()` helper, stat composition, auto-miner toggle, cargo-drone mechanics (built-in + loadout-bought + refund), dedicated SHIPS button and Shipyard modal, loadout ship picker, loadout Cargo Drones stepper, mothership sprite, camera zoom, one-life refund logic, BUY/EQUIP self-heal, HP pips world-space renderer, T key handler, HUD cleanup.
+- `client/assets/drone-mining/sprites/` — 16 new ship PNGs (Scout/Prospector/Hauler/Dreadnought × Coalition/Syndicate/Void/Factionless) + mothership.png + updated bullet rotation.
+- `client/index.html` — tutorial slide rewritten with Ships section including HP scaling and T toggle; opening lore updated.
+
+### Deploy notes
+- No `npm install` required.
+- DB migrates automatically via `CREATE TABLE IF NOT EXISTS`.
+- Existing player-owned upgrades preserved. Ship ownership starts empty (default Mining Drone always equipped).
+
+---
+
 ## v1.0.2.0 (2026-04-18)
 
 **Drone Mining minigame with sprite-based visuals, faction-specific ships, separated mining/combat, tiered salvage, and tutorial accuracy pass.**

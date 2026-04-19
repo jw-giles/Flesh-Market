@@ -85,6 +85,9 @@ import {
   MINING_UPGRADE_CATALOG, getMiningUpgrades, hasMiningUpgrade,
   getMiningStats, canBuyMiningUpgrade, grantMiningUpgrade,
   recordMiningRun, getMiningLeaderboard,
+  // Mining: ship hulls
+  MINING_SHIP_CATALOG, getMiningShips, hasMiningShip,
+  buyMiningShip, equipMiningShip,
 } from './db.js';
 
 initDB();
@@ -3864,6 +3867,87 @@ wss.on('connection',(ws,req)=>{
       try {
         ws.send(JSON.stringify({type:'chat_system',data:{text:`⛏ Purchased ${def.name} for Ƒ${def.price.toLocaleString()}.`}}));
       } catch(_) {}
+    }
+
+    // ── Mining: list owned ships + catalog ─────────────────────────────────
+    if (msg.type === 'mining_ships_list') {
+      try {
+        const { owned, equipped } = getMiningShips(actor.id);
+        const catalog = {};
+        for (const [id, def] of Object.entries(MINING_SHIP_CATALOG)) {
+          catalog[id] = {
+            id: def.id, name: def.name, price: def.price,
+            spriteKeyBase: def.spriteKeyBase,
+            spriteSize: def.spriteSize,
+            shipClass: def.shipClass || 'baseline',
+            shipFaction: def.shipFaction || 'none',
+            speedMul: def.speedMul, cargoMul: def.cargoMul,
+            heatMul: def.heatMul, drillMul: def.drillMul,
+            fireRateMul: def.fireRateMul || 1.0,
+            bulletSpdMul: def.bulletSpdMul || 1.0,
+            autoMiner: !!def.autoMiner,
+            cargoDrones: def.cargoDrones | 0,
+            freeEscorts: def.freeEscorts | 0,
+            hp: def.hp || 1,
+            desc: def.desc,
+          };
+        }
+        ws.send(JSON.stringify({
+          type: 'mining_ships_state',
+          data: { owned, equipped, catalog },
+        }));
+      } catch(e) {
+        ws.send(JSON.stringify({type:'error',data:{msg:'Mining ship list failed.'}}));
+      }
+    }
+
+    // ── Mining: purchase a ship ────────────────────────────────────────────
+    if (msg.type === 'mining_ship_buy') {
+      const shipId = String(msg.shipId || '');
+      const def = MINING_SHIP_CATALOG[shipId];
+      if (!def) {
+        ws.send(JSON.stringify({type:'error',data:{msg:'Unknown ship.'}}));
+        return;
+      }
+      if (shipId === 'default') {
+        ws.send(JSON.stringify({type:'error',data:{msg:'Mining Drone is always available.'}}));
+        return;
+      }
+      if (actor.cash < def.price) {
+        ws.send(JSON.stringify({type:'error',data:{msg:`Need Ƒ${def.price.toLocaleString()}. You have Ƒ${Math.floor(actor.cash).toLocaleString()}.`}}));
+        return;
+      }
+      const result = buyMiningShip(actor.id, shipId);
+      if (!result.ok) {
+        ws.send(JSON.stringify({type:'error',data:{msg: result.error || 'Purchase failed.'}}));
+        return;
+      }
+      // Sync cash back to in-memory actor — buyMiningShip uses the DB column directly
+      actor.cash = result.cash;
+      savePlayer(actor);
+      ws.send(JSON.stringify({
+        type: 'mining_ship_purchased',
+        data: { id: shipId, name: def.name, price: def.price, owned: result.owned, equipped: result.equipped },
+      }));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
+      try {
+        ws.send(JSON.stringify({type:'chat_system',data:{text:`⛏ Acquired ${def.name} for Ƒ${def.price.toLocaleString()}.`}}));
+      } catch(_) {}
+    }
+
+    // ── Mining: equip a ship ───────────────────────────────────────────────
+    if (msg.type === 'mining_ship_equip') {
+      const shipId = String(msg.shipId || '');
+      const result = equipMiningShip(actor.id, shipId);
+      if (!result.ok) {
+        ws.send(JSON.stringify({type:'error',data:{msg: result.error || 'Equip failed.'}}));
+        return;
+      }
+      ws.send(JSON.stringify({
+        type: 'mining_ship_equipped',
+        data: { equipped: result.equipped },
+      }));
     }
 
     // ── Mining: record a completed run ─────────────────────────────────────

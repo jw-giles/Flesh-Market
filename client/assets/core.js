@@ -2427,6 +2427,17 @@ ws.addEventListener('message', (ev)=>{
     } catch(_){}
   }
 
+  // Send the ships catalog + owned + equipped state to the iframe.
+  function pushShipsToIframe(state) {
+    if (!miningIframe || !miningIframe.contentWindow || !state) return;
+    try {
+      miningIframe.contentWindow.postMessage(
+        { source: 'fleshmarket', type: 'ships_state', ...state },
+        '*'
+      );
+    } catch(_){}
+  }
+
   // Send a leaderboard payload to the iframe.
   function pushLeaderboardToIframe(rows) {
     if (!miningIframe || !miningIframe.contentWindow) return;
@@ -2457,6 +2468,11 @@ ws.addEventListener('message', (ev)=>{
     } else if (t === 'mining_upgrade_purchased') {
       // Refresh authoritative state after purchase
       _wsSendMining({ type: 'mining_upgrades_list' });
+    } else if (t === 'mining_ships_state') {
+      pushShipsToIframe(e.detail.data);
+    } else if (t === 'mining_ship_purchased' || t === 'mining_ship_equipped') {
+      // Refresh authoritative ship state after any change
+      _wsSendMining({ type: 'mining_ships_list' });
     } else if (t === 'mining_leaderboard_data') {
       pushLeaderboardToIframe(e.detail.data && e.detail.data.rows);
       _renderBriefLeaderboard(e.detail.data && e.detail.data.rows);
@@ -2474,10 +2490,11 @@ ws.addEventListener('message', (ev)=>{
     if (!msg || msg.source !== 'drone-mining') return;
 
     if (msg.type === 'ready') {
-      // Game just loaded — send current bank, faction, and upgrades
+      // Game just loaded — send current bank, faction, upgrades, and ships
       pushBankToIframe();
       pushFactionToIframe();
       _wsSendMining({ type: 'mining_upgrades_list' });
+      _wsSendMining({ type: 'mining_ships_list' });
       return;
     }
 
@@ -2510,6 +2527,18 @@ ws.addEventListener('message', (ev)=>{
     }
     if (msg.type === 'buy_upgrade' && typeof msg.upgradeId === 'string') {
       _wsSendMining({ type: 'mining_upgrade_buy', upgradeId: msg.upgradeId });
+      return;
+    }
+    if (msg.type === 'request_ships') {
+      _wsSendMining({ type: 'mining_ships_list' });
+      return;
+    }
+    if (msg.type === 'buy_ship' && typeof msg.shipId === 'string') {
+      _wsSendMining({ type: 'mining_ship_buy', shipId: msg.shipId });
+      return;
+    }
+    if (msg.type === 'equip_ship' && typeof msg.shipId === 'string') {
+      _wsSendMining({ type: 'mining_ship_equip', shipId: msg.shipId });
       return;
     }
     if (msg.type === 'run_complete') {

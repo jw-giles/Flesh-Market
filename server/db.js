@@ -165,6 +165,15 @@ export function initDB() {
       deepest_band_reached INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_ms_best ON mining_stats(best_run_profit DESC);
+
+    -- Mining: owned ships + currently equipped ship.
+    -- owned is a JSON blob {"scout":true,"hauler":true,...}.
+    -- equipped is the ship_id string ('default' means stock Mining Drone, no purchase required).
+    CREATE TABLE IF NOT EXISTS mining_ships (
+      player_id TEXT PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+      owned     TEXT NOT NULL DEFAULT '{}',
+      equipped  TEXT NOT NULL DEFAULT 'default'
+    );
   `);
 
   // Migration: safely add new columns if they don't exist yet (upgrade from older DB)
@@ -2185,6 +2194,164 @@ export const MINING_UPGRADE_CATALOG = {
   },
 };
 
+// ─────────────────────────────────────────────────────────────────
+// SHIPS — alternate hulls the player can own and equip.
+// Three faction styles with distinct gameplay focus:
+//   - Coalition: mining focus (drill rate, heat cap)
+//   - Syndicate: combat focus (fire rate, escorts, speed)
+//   - Void: drone focus (cargo drones, free escorts, auto-miner)
+// Every ship is buyable by every player regardless of their FM faction.
+// Stats are multipliers that compose with fuel/cargo/heat tier upgrades
+// and any permanent perks the player owns.
+// The 'default' ship is free and always available; it's the baseline.
+// ─────────────────────────────────────────────────────────────────
+export const MINING_SHIP_CATALOG = {
+  default: {
+    id: 'default', name: 'Mining Drone', price: 0,
+    hp: 1,
+    spriteKeyBase: 'playerShip',         // always uses the main_ship.png
+    spriteSize: 48,
+    speedMul: 1.00, cargoMul: 1.00, heatMul: 1.00,
+    drillMul: 1.00, fireRateMul: 1.00, bulletSpdMul: 1.00,
+    autoMiner: false, cargoDrones: 0, freeEscorts: 0,
+    desc: 'Standard-issue mining drone. Baseline stats. Always available.',
+  },
+
+  // ═══ COALITION — MINING FOCUS ═══
+  scout_coalition: {
+    id: 'scout_coalition', name: 'Coalition Prospector Scout', price: 500000,
+    shipClass: 'scout', shipFaction: 'coalition',
+    hp: 2,
+    spriteKeyBase: 'ship_scout_coalition', spriteSize: 42,
+    speedMul: 1.35, cargoMul: 0.75, heatMul: 1.10,
+    drillMul: 1.25, fireRateMul: 0.90, bulletSpdMul: 1.00,
+    autoMiner: false, cargoDrones: 0, freeEscorts: 0,
+    desc: 'Fast prospector. +35% speed, +25% drill rate, +10% heat cap. Small cargo, weak guns. Ideal for rapid scouting runs.',
+  },
+  prospector_coalition: {
+    id: 'prospector_coalition', name: 'Coalition Auto-Miner', price: 1500000,
+    shipClass: 'prospector', shipFaction: 'coalition',
+    hp: 3,
+    spriteKeyBase: 'ship_prospector_coalition', spriteSize: 52,
+    speedMul: 0.95, cargoMul: 1.20, heatMul: 1.30,
+    drillMul: 1.40, fireRateMul: 0.85, bulletSpdMul: 1.00,
+    autoMiner: true, cargoDrones: 0, freeEscorts: 0,
+    desc: 'Built for the belt. Auto-miner drills nearby rocks passively. +40% drill rate, +30% heat cap. Combat-averse.',
+  },
+  hauler_coalition: {
+    id: 'hauler_coalition', name: 'Coalition Mining Barge', price: 3000000,
+    shipClass: 'hauler', shipFaction: 'coalition',
+    hp: 4,
+    spriteKeyBase: 'ship_hauler_coalition', spriteSize: 52,
+    speedMul: 0.80, cargoMul: 2.00, heatMul: 1.30,
+    drillMul: 1.50, fireRateMul: 0.85, bulletSpdMul: 1.00,
+    autoMiner: false, cargoDrones: 0, freeEscorts: 1,
+    desc: 'Dedicated mining barge. 2x cargo hold, +50% drill rate, +30% heat cap. One free escort. Slow handling.',
+  },
+  dreadnought_coalition: {
+    id: 'dreadnought_coalition', name: 'Coalition Excavator', price: 5000000,
+    shipClass: 'dreadnought', shipFaction: 'coalition',
+    hp: 5,
+    spriteKeyBase: 'ship_dreadnought_coalition', spriteSize: 88,
+    speedMul: 0.75, cargoMul: 3.00, heatMul: 1.60,
+    drillMul: 1.75, fireRateMul: 0.90, bulletSpdMul: 1.00,
+    autoMiner: true, cargoDrones: 0, freeEscorts: 1,
+    desc: 'Capital excavator. 3x cargo, +75% drill rate, auto-miner, one escort. The pinnacle of Coalition mining engineering. Slow.',
+  },
+
+  // ═══ SYNDICATE — COMBAT FOCUS ═══
+  scout_syndicate: {
+    id: 'scout_syndicate', name: 'Syndicate Interceptor', price: 500000,
+    shipClass: 'scout', shipFaction: 'syndicate',
+    hp: 2,
+    spriteKeyBase: 'ship_scout_syndicate', spriteSize: 42,
+    speedMul: 1.50, cargoMul: 0.70, heatMul: 0.90,
+    drillMul: 0.85, fireRateMul: 1.30, bulletSpdMul: 1.15,
+    autoMiner: false, cargoDrones: 0, freeEscorts: 0,
+    desc: 'Fast attack interceptor. +50% speed, +30% fire rate, +15% bullet speed. Small cargo, weak drill.',
+  },
+  prospector_syndicate: {
+    id: 'prospector_syndicate', name: 'Syndicate Gunship', price: 1500000,
+    shipClass: 'prospector', shipFaction: 'syndicate',
+    hp: 3,
+    spriteKeyBase: 'ship_prospector_syndicate', spriteSize: 52,
+    speedMul: 1.05, cargoMul: 1.00, heatMul: 1.00,
+    drillMul: 0.90, fireRateMul: 1.40, bulletSpdMul: 1.20,
+    autoMiner: false, cargoDrones: 0, freeEscorts: 2,
+    desc: 'Combat-focused gunship. +40% fire rate, +20% bullet speed, two free escorts. Hunt enemies for scrap.',
+  },
+  hauler_syndicate: {
+    id: 'hauler_syndicate', name: 'Syndicate Raider', price: 3000000,
+    shipClass: 'hauler', shipFaction: 'syndicate',
+    hp: 4,
+    spriteKeyBase: 'ship_hauler_syndicate', spriteSize: 52,
+    speedMul: 0.90, cargoMul: 2.00, heatMul: 1.10,
+    drillMul: 0.95, fireRateMul: 1.25, bulletSpdMul: 1.15,
+    autoMiner: false, cargoDrones: 0, freeEscorts: 3,
+    desc: 'Raider with cargo bay. 2x cargo hold, +25% fire rate, three free escorts. Scrap the deep belt with a combat wing.',
+  },
+  dreadnought_syndicate: {
+    id: 'dreadnought_syndicate', name: 'Syndicate Warship', price: 5000000,
+    shipClass: 'dreadnought', shipFaction: 'syndicate',
+    hp: 5,
+    spriteKeyBase: 'ship_dreadnought_syndicate', spriteSize: 88,
+    speedMul: 0.80, cargoMul: 1.50, heatMul: 1.25,
+    drillMul: 1.00, fireRateMul: 2.00, bulletSpdMul: 1.30,
+    autoMiner: false, cargoDrones: 0, freeEscorts: 4,
+    desc: 'Capital warship. 2x fire rate, +30% bullet speed, four free escorts. +50% cargo. A mobile weapons platform.',
+  },
+
+  // ═══ VOID — DRONE FOCUS ═══
+  scout_void: {
+    id: 'scout_void', name: 'Void Courier Scout', price: 500000,
+    shipClass: 'scout', shipFaction: 'void',
+    hp: 2,
+    spriteKeyBase: 'ship_scout_void', spriteSize: 42,
+    speedMul: 1.35, cargoMul: 0.80, heatMul: 1.00,
+    drillMul: 0.90, fireRateMul: 1.00, bulletSpdMul: 1.00,
+    autoMiner: false, cargoDrones: 1, freeEscorts: 0,
+    desc: 'Scout with a single cargo drone built in. +35% speed. Cargo drone auto-flies mined ore home while you keep moving.',
+  },
+  prospector_void: {
+    id: 'prospector_void', name: 'Void Commander', price: 1500000,
+    shipClass: 'prospector', shipFaction: 'void',
+    hp: 3,
+    spriteKeyBase: 'ship_prospector_void', spriteSize: 52,
+    speedMul: 1.00, cargoMul: 1.15, heatMul: 1.10,
+    drillMul: 1.00, fireRateMul: 1.05, bulletSpdMul: 1.00,
+    autoMiner: false, cargoDrones: 1, freeEscorts: 2,
+    desc: 'Drone commander. One cargo drone, two free combat escorts. Delegates everything: mining, fighting, hauling.',
+  },
+  hauler_void: {
+    id: 'hauler_void', name: 'Void Mothership', price: 3000000,
+    shipClass: 'hauler', shipFaction: 'void',
+    hp: 4,
+    spriteKeyBase: 'ship_hauler_void', spriteSize: 52,
+    speedMul: 0.85, cargoMul: 1.75, heatMul: 1.15,
+    drillMul: 1.00, fireRateMul: 1.00, bulletSpdMul: 1.00,
+    autoMiner: false, cargoDrones: 2, freeEscorts: 2,
+    desc: 'Mobile mothership. Two cargo drones AND two escorts built in. +75% cargo. Continuously banks ore without you docking.',
+  },
+  dreadnought_void: {
+    id: 'dreadnought_void', name: 'Void Hivemind', price: 5000000,
+    shipClass: 'dreadnought', shipFaction: 'void',
+    hp: 5,
+    spriteKeyBase: 'ship_dreadnought_void', spriteSize: 88,
+    speedMul: 0.80, cargoMul: 2.00, heatMul: 1.30,
+    drillMul: 1.10, fireRateMul: 1.10, bulletSpdMul: 1.00,
+    autoMiner: true, cargoDrones: 3, freeEscorts: 3,
+    desc: 'Capital drone carrier. Auto-miner, 3 cargo drones, 3 escorts. 2x cargo. The ultimate automated mining platform.',
+  },
+};
+
+// Public accessor — returns a sanitized copy safe to send to clients
+export function getShipCatalog() {
+  return Object.values(MINING_SHIP_CATALOG);
+}
+export function getShipDef(shipId) {
+  return MINING_SHIP_CATALOG[shipId] || null;
+}
+
 // Internal helpers
 function _getUpgradesRow(playerId) {
   const row = stmt('SELECT upgrades FROM mining_upgrades WHERE player_id=?').get(playerId);
@@ -2318,4 +2485,64 @@ export function getMiningLeaderboard(limit = 10) {
     LIMIT ?
   `).all(n);
   return rows;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SHIPS — ownership + equipped selection
+// ─────────────────────────────────────────────────────────────────
+function _getShipsRow(playerId) {
+  const row = stmt('SELECT owned, equipped FROM mining_ships WHERE player_id=?').get(playerId);
+  if (!row) return { owned: {}, equipped: 'default' };
+  let owned = {};
+  try { owned = JSON.parse(row.owned) || {}; } catch (_) { owned = {}; }
+  return { owned, equipped: row.equipped || 'default' };
+}
+function _setShipsRow(playerId, owned, equipped) {
+  const json = JSON.stringify(owned || {});
+  stmt(`INSERT INTO mining_ships (player_id, owned, equipped) VALUES (?, ?, ?)
+        ON CONFLICT(player_id) DO UPDATE SET owned=excluded.owned, equipped=excluded.equipped`)
+    .run(playerId, json, equipped || 'default');
+}
+
+// Returns { owned: {scout:true,...}, equipped: 'scout' } for the player.
+// Every player implicitly owns 'default' — it's never stored in the owned map.
+export function getMiningShips(playerId) {
+  return _getShipsRow(playerId);
+}
+
+export function hasMiningShip(playerId, shipId) {
+  if (shipId === 'default') return true;
+  const { owned } = _getShipsRow(playerId);
+  return !!owned[shipId];
+}
+
+// Spend cash and grant a ship. Returns { ok, owned, equipped, cash } or { ok:false, error }.
+export function buyMiningShip(playerId, shipId) {
+  const def = MINING_SHIP_CATALOG[shipId];
+  if (!def) return { ok: false, error: 'Unknown ship.' };
+  if (shipId === 'default') return { ok: false, error: 'Default ship is always owned.' };
+  const { owned, equipped } = _getShipsRow(playerId);
+  if (owned[shipId]) return { ok: false, error: 'Already owned.' };
+  const player = stmt('SELECT cash FROM players WHERE id=?').get(playerId);
+  if (!player) return { ok: false, error: 'Player not found.' };
+  if (player.cash < def.price) return { ok: false, error: 'Insufficient credits.' };
+  // Atomic: deduct and mark owned. Uses this module's transaction() wrapper
+  // (node:sqlite's DatabaseSync does not expose a .transaction method).
+  const tx = transaction(() => {
+    stmt('UPDATE players SET cash = cash - ? WHERE id=?').run(def.price, playerId);
+    owned[shipId] = true;
+    _setShipsRow(playerId, owned, equipped);
+  });
+  tx();
+  const updated = stmt('SELECT cash FROM players WHERE id=?').get(playerId);
+  return { ok: true, owned, equipped, cash: updated.cash };
+}
+
+// Equip an owned ship. Returns { ok, equipped } or { ok:false, error }.
+export function equipMiningShip(playerId, shipId) {
+  if (!MINING_SHIP_CATALOG[shipId]) return { ok: false, error: 'Unknown ship.' };
+  const { owned } = _getShipsRow(playerId);
+  if (shipId !== 'default' && !owned[shipId]) return { ok: false, error: 'Not owned.' };
+  _setShipsRow(playerId, owned, shipId);
+  return { ok: true, equipped: shipId };
 }
