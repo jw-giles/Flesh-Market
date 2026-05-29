@@ -153,6 +153,16 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS idx_hs_cycle ON holding_snapshots(cycle);
     CREATE INDEX IF NOT EXISTS idx_hs_player_symbol ON holding_snapshots(player_id, symbol);
 
+    CREATE TABLE IF NOT EXISTS fund_holding_snapshots (
+      fund_id TEXT    NOT NULL,
+      symbol  TEXT    NOT NULL,
+      qty     INTEGER NOT NULL,
+      cycle   INTEGER NOT NULL,
+      PRIMARY KEY (fund_id, symbol, cycle)
+    );
+    CREATE INDEX IF NOT EXISTS idx_fhs_cycle ON fund_holding_snapshots(cycle);
+    CREATE INDEX IF NOT EXISTS idx_fhs_fund_symbol ON fund_holding_snapshots(fund_id, symbol);
+
     -- Mining: permanent account-wide upgrades purchased via the Mining Store.
     -- upgrades is a JSON blob of the form {"guard_drone":true,"ion_engines":true,...}.
     -- Missing rows indicate no upgrades owned.
@@ -2172,11 +2182,18 @@ export const snapshotAllHoldings = transaction(function() {
   const ins = stmt('INSERT OR REPLACE INTO holding_snapshots(player_id,symbol,qty,cycle) VALUES(?,?,?,?)');
   for (const r of rows) ins.run(r.player_id, r.symbol, r.qty, newCycle);
 
+  // Snapshot fund/house portfolios on the same cycle so funds use the same
+  // holding-eligibility window as players (anti dividend-farming).
+  const fundRows = stmt('SELECT fund_id, symbol, qty FROM fund_portfolios WHERE qty > 0').all();
+  const fins = stmt('INSERT OR REPLACE INTO fund_holding_snapshots(fund_id,symbol,qty,cycle) VALUES(?,?,?,?)');
+  for (const r of fundRows) fins.run(r.fund_id, r.symbol, r.qty, newCycle);
+
   // Prune: keep only snapshots within the eligibility window.
   // We need the last DIVIDEND_HOLD_CYCLES cycles to compute eligibility, so keep
   // anything newer than (newCycle - DIVIDEND_HOLD_CYCLES).
   const cutoff = newCycle - DIVIDEND_HOLD_CYCLES;
   stmt('DELETE FROM holding_snapshots WHERE cycle <= ?').run(cutoff);
+  stmt('DELETE FROM fund_holding_snapshots WHERE cycle <= ?').run(cutoff);
 
   return { cycle: newCycle, snapshotted: rows.length };
 });
@@ -2211,6 +2228,34 @@ export function getEligibleDividendQtyBulk(playerId, holdings) {
   const rows = stmt(
     'SELECT symbol, qty, cycle FROM holding_snapshots WHERE player_id=? AND cycle>=?'
   ).all(playerId, windowStart);
+  const bySymbol = {};
+  for (const r of rows) {
+    if (!bySymbol[r.symbol]) bySymbol[r.symbol] = [];
+    bySymbol[r.symbol].push(r.qty);
+  }
+  for (const [sym, qty] of Object.entries(holdings||{})) {
+    if (!qty || qty <= 0) { result[sym] = 0; continue; }
+    const snaps = bySymbol[sym] || [];
+    if (snaps.length < DIVIDEND_HOLD_CYCLES) { result[sym] = 0; continue; }
+    let minQty = qty;
+    for (const q of snaps) if (q < minQty) minQty = q;
+    result[sym] = minQty;
+  }
+  return result;
+}
+
+// Fund variant: same continuous-holding eligibility, keyed on fund_id.
+export function getEligibleFundDividendQtyBulk(fundId, holdings) {
+  const result = {};
+  const cycle = getDividendCycle();
+  const windowStart = cycle - DIVIDEND_HOLD_CYCLES + 1;
+  if (windowStart < 1) {
+    for (const sym of Object.keys(holdings||{})) result[sym] = 0;
+    return result;
+  }
+  const rows = stmt(
+    'SELECT symbol, qty, cycle FROM fund_holding_snapshots WHERE fund_id=? AND cycle>=?'
+  ).all(fundId, windowStart);
   const bySymbol = {};
   for (const r of rows) {
     if (!bySymbol[r.symbol]) bySymbol[r.symbol] = [];

@@ -3,5 +3,5 @@
   "built": "2026-05-29T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
   "patch": "1.0.2.4",
-  "notes": "Capital Houses guild redesign: renamed from Hedge Funds/Guild, both passive faucets removed (savings interest + distribution), performance P&L (NAV history, allocation donut, per-share metrics), four-pane house view (Overview/Portfolio/Governance/Manage), and per-house governance — Executive/Majority Vote/Council modes with equal or share-weighted voting, fund-scoped proposals resolving on full turnout or an owner-set window (30m/1h/6h/24h/3d)."
+  "notes": "Capital Houses guild redesign: renamed from Hedge Funds/Guild, both passive faucets removed (savings interest + distribution), performance P&L (NAV history, allocation donut, per-share metrics), four-pane house view (Overview/Portfolio/Governance/Manage), and per-house governance — Executive/Majority Vote/Council modes with equal or share-weighted voting, fund-scoped proposals resolving on full turnout or an owner-set window (30m/1h/6h/24h/3d). Capital Houses now also earn portfolio dividends (fund cash, same 2h cycle/sector rates/eligibility as players, no faction/guild bonuses)."
 }

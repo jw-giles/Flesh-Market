@@ -20,6 +20,9 @@ New `fund_nav_history` table (`fund_id, nav, spp, total_shares, ts`, 1000-row ca
 ### Four-pane house view
 The detail panel is restructured into sub-views: **Overview** (stats, performance, deposit/withdraw, members), **Portfolio** (holdings, direct trade, activity), **Governance** (mode, proposals, polls), **Manage** (owner: slots, withdraw, assign, invite, edit, disband). Single withdraw control; destructive actions isolated in Manage (owner-only tab).
 
+### Portfolio dividends
+Capital Houses (and the Merchants Guild) now earn dividends on the shares they hold, paid into fund cash on the same 2h cycle and base sector rates as players (full rate on Finance/Insurance/Energy/Tech, base rate elsewhere). Funds use the same continuous-holding eligibility as players via a parallel `fund_holding_snapshots` table — no faction/guild bonuses (player-only). A house must hold a position through the eligibility window before it pays, so dividends begin a few cycles after deploy.
+
 ### Governance & voting
 Owner sets a per-house mode:
 - **Executive** — owner trades directly; members passive. (Default for player houses.)

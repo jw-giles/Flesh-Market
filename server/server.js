@@ -83,7 +83,7 @@ import {
   addDevRequest, getDevRequests, handleDevRequest,
   executeStockSplit,
   // Dividend eligibility (7-trading-day holding requirement)
-  snapshotAllHoldings, getEligibleDividendQtyBulk, DIVIDEND_HOLD_CYCLES,
+  snapshotAllHoldings, getEligibleDividendQtyBulk, getEligibleFundDividendQtyBulk, DIVIDEND_HOLD_CYCLES,
   // Mining: permanent upgrades + leaderboard
   MINING_UPGRADE_CATALOG, getMiningUpgrades, hasMiningUpgrade,
   getMiningStats, canBuyMiningUpgrade, grantMiningUpgrade,
@@ -1590,6 +1590,38 @@ function runDividends() {
     broadcastToPlayer(playerId, { type: 'portfolio', data: snapshotPortfolio(actor) });
   }
   if (totalPaid > 0) console.log(`[Dividends] Paid Ƒ${totalPaid.toFixed(2)} total`);
+
+  // Fund/house dividends: pay into fund cash on the shares the fund holds, at the
+  // same base sector rates as players, with the same holding-eligibility window.
+  // No faction/guild bonuses (those are player-only perks).
+  let fundPaid = 0;
+  try {
+    for (const fund of getAllFunds()) {
+      const portfolio = getFundPortfolio(fund.id);
+      if (!portfolio.length) continue;
+      const holdingsObj = {};
+      for (const h of portfolio) if (h.qty > 0) holdingsObj[h.symbol] = h.qty;
+      let eligibleMap = {};
+      try { eligibleMap = getEligibleFundDividendQtyBulk(fund.id, holdingsObj); } catch(_) {}
+      let dividend = 0;
+      for (const [sym, qty] of Object.entries(holdingsObj)) {
+        const eligibleQty = eligibleMap[sym] || 0;
+        if (eligibleQty <= 0) continue;
+        const c = companies.find(x => x.symbol === sym);
+        if (!c) continue;
+        const rate = DIVIDEND_SECTORS.has(c.sector) ? DIVIDEND_RATE : 0.002;
+        dividend += c.price * eligibleQty * rate;
+      }
+      if (dividend < 0.01) continue;
+      dividend = Math.round(dividend * 100) / 100;
+      addFundCash(fund.id, dividend);
+      logFundActivity(fund.id, 'dividend', null, null, null, null, dividend, `Portfolio dividend +Ƒ${dividend.toLocaleString()}`);
+      snapshotFund(fund.id);
+      broadcastHouseUpdate(fund.id);
+      fundPaid += dividend;
+    }
+  } catch(e) { console.error('[Fund dividends]', e); }
+  if (fundPaid > 0) console.log(`[Dividends] Paid Ƒ${fundPaid.toFixed(2)} to funds`);
 }
 
 // ─── v5.0: Short-sell borrow fees ─────────────────────────────────────────────
