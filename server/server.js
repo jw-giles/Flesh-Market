@@ -25,8 +25,8 @@ import {
   createPlayerSync, getPlayer, getPlayerByName,
   getPlayerByPatreonEmail, getPlayerByPatreonMemberId,
   isNameAvailable, touchPlayer, renamePlayer, markTutorialSeen,
-  savePlayerFn, recordNetWorthFn,
-  getNetWorthHistory, getLeaderboard,
+  savePlayerFn, recordNetWorthFn, recordFundNAVFn,
+  getNetWorthHistory, getFundNAVHistory, getLeaderboard,
   verifyPassword, createPasswordHash,
   saveMarketState, loadMarketState,
   saveGalaxySystemsState, loadGalaxySystemsState,
@@ -51,6 +51,9 @@ import {
   getFundNAVById, applyFundSavingsInterest,
   fundDepositFn, fundWithdrawFn,
   getFundActivity, logFundActivity,
+  setFundGovernance, createHouseProposal, getHouseProposal, getOpenHouseProposals,
+  getDueHouseProposals, hasVotedHouse, castHouseVote, getHouseVoteCount, resolveHouseProposal,
+  getHouseVoterIds, VOTE_DURATIONS,
   kickFundMember, deleteFund, updateFundInfo,
   initFundPolls, createFundPoll, getFundPolls, voteFundPoll, closeFundPoll, expireOldFundPolls,
   setDevAccount, isDevAccount, syncDevAccounts,
@@ -103,6 +106,125 @@ initItemTables();
 
 function savePlayer(p) { try { savePlayerFn(p); } catch(e) { console.error('savePlayer:', e); } }
 function recordNetWorth(id, net, cash, equity) { try { recordNetWorthFn(id, net, cash, equity); } catch(e) {} }
+function recordFundNAV(fundId, nav, spp, shares) { try { recordFundNAVFn(fundId, nav, spp, shares); } catch(e) {} }
+// Snapshot a single fund's NAV/share now — called on trades/deposits/withdrawals
+// so the performance chart builds with activity instead of only every 30 min.
+function snapshotFund(fundId) {
+  try {
+    const priceMap    = buildPriceMap();
+    const nav         = getFundNAVById(fundId, priceMap);
+    const totalShares = getTotalFundSharesById(fundId);
+    const spp         = totalShares > 0 && nav > 0 ? nav / totalShares : 1;
+    recordFundNAV(fundId, nav, spp, totalShares);
+  } catch(e) {}
+}
+
+// Shared fund trade execution — used by direct (executive/council) trades and by
+// passed proposals (vote/council). Trades at live ticker price against fund cash.
+function executeFundTrade(fundId, side, sym, qty, actorId) {
+  const fund = getFund(fundId);
+  if (!fund) return { ok:false, error:'not_found' };
+  const c = companies.find(x => x.symbol === sym && !x._special);
+  if (!c) return { ok:false, error:'unknown_symbol' };
+  const q = Math.max(1, Math.floor(Number(qty)||0));
+  const fundCash = fund.cash;
+  const haveQty  = getFundPortfolio(fundId).find(h=>h.symbol===sym)?.qty || 0;
+  if (side === 'buy') {
+    const cost = c.price * q;
+    if (fundCash < cost) return { ok:false, error:'insufficient_fund_cash', have:fundCash, need:cost };
+    setFundCashById(fundId, fundCash - cost);
+    setFundPortfolioQty(fundId, sym, haveQty + q);
+    logFundActivity(fundId,'trade_buy',actorId,sym,q,c.price,cost,`Buy ${q}× ${sym} @ Ƒ${c.price.toFixed(2)}`);
+    pushHeadline(`${fund.name}: bought ${q}× ${sym} @ Ƒ${c.price.toFixed(2)}`, 'good', sym);
+  } else if (side === 'sell') {
+    const sellQty = Math.min(q, haveQty);
+    if (sellQty <= 0) return { ok:false, error:'no_holdings' };
+    const proceeds = c.price * sellQty;
+    setFundCashById(fundId, fundCash + proceeds);
+    setFundPortfolioQty(fundId, sym, haveQty - sellQty);
+    logFundActivity(fundId,'trade_sell',actorId,sym,sellQty,c.price,proceeds,`Sell ${sellQty}× ${sym} @ Ƒ${c.price.toFixed(2)}`);
+    pushHeadline(`${fund.name}: sold ${sellQty}× ${sym} @ Ƒ${c.price.toFixed(2)}`, 'neutral', sym);
+  } else {
+    return { ok:false, error:'invalid_side' };
+  }
+  if (fund.type==='flsh') updateFLSHPrice();
+  snapshotFund(fundId);
+  return { ok:true, price:c.price };
+}
+
+// Can this actor participate in a house's governance (propose/vote)?
+function houseMember(fund, actor) {
+  if (!actor) return false;
+  if (fund.type==='patreon') return isGuildEligible(actor);
+  if (fund.type==='flsh')    return isDevAccount(actor.id);
+  return isInFund(fund.id, actor.id);
+}
+// Is this actor the house's executive (owner)?
+function houseOwner(fund, actor) {
+  if (!actor) return false;
+  if (fund.type==='flsh')    return isDevAccount(actor.id);
+  if (fund.type==='patreon') return isOwnerAccount(actor.id); // only prime owner runs the guild
+  return fund.owner_id === actor.id;
+}
+// Vote weight for an actor under the house's vote_weight setting.
+function houseVoteWeight(fund, playerId) {
+  if ((fund.vote_weight||'equal') === 'shares') {
+    const m = getFundMembership(fund.id, playerId);
+    return Math.max(0, m?.shares || 0);
+  }
+  return 1;
+}
+function broadcastHouseUpdate(fundId) {
+  try {
+    const snap = fundDetailSnapshot(fundId, null);
+    broadcastToFundMembers(fundId, { type:'fund_update', data:{ fundId, ...snap }});
+  } catch(_) {}
+}
+
+// Members eligible to vote: everyone in equal mode, shareholders only in share mode
+// (0-weight members can't vote, so they don't block early resolution). Owner included.
+function houseEligibleVoters(fund) {
+  const members = getFundMemberships(fund.id);
+  if ((fund.vote_weight||'equal') === 'shares') {
+    return members.filter(m => (m.shares||0) > 0).map(m => m.player_id);
+  }
+  return members.map(m => m.player_id);
+}
+
+// Apply a proposal's outcome (shared by the timer and early resolution).
+function resolveHouseProposalDecision(fund, p) {
+  const gov = fund.governance || 'executive';
+  const totalCast = (p.votes_yes||0) + (p.votes_no||0);
+  const wouldPass = totalCast > 0 && p.votes_yes > p.votes_no;
+  if (gov === 'vote') {
+    if (wouldPass) {
+      const r = executeFundTrade(fund.id, p.side, p.symbol, p.qty, p.proposer_id);
+      resolveHouseProposal(p.id, r.ok ? 'passed' : 'failed_exec', r.ok);
+      pushHeadline(`${fund.name}: vote ${r.ok?'passed':'failed'} — ${p.side} ${p.qty}× ${p.symbol}`, r.ok?'good':'bad', p.symbol);
+    } else {
+      resolveHouseProposal(p.id, totalCast > 0 ? 'rejected' : 'expired', false);
+    }
+  } else if (gov === 'council') {
+    // Advisory — owner has final execute/veto.
+    resolveHouseProposal(p.id, wouldPass ? 'advisory_pass' : 'advisory_fail', false);
+  } else {
+    resolveHouseProposal(p.id, 'expired', false);
+  }
+  broadcastHouseUpdate(fund.id);
+}
+
+// After a vote lands: if every eligible member has voted, resolve now instead of
+// waiting out the timer.
+function maybeResolveEarly(fund, proposalId) {
+  const prop = getHouseProposal(proposalId);
+  if (!prop || prop.status !== 'open') return false;
+  const eligible = houseEligibleVoters(fund);
+  if (eligible.length === 0) return false;
+  const voted = new Set(getHouseVoterIds(proposalId));
+  if (!eligible.every(id => voted.has(id))) return false;
+  resolveHouseProposalDecision(fund, prop);
+  return true;
+}
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -1897,6 +2019,10 @@ function fundDetailSnapshot(fundId, playerId) {
     id: fund.id, name: fund.name, type: fund.type,
     description: fund.description,
     nav, cash, equity, totalShares, spp,
+    governance: fund.governance || 'executive',
+    voteWeight:  fund.vote_weight || 'equal',
+    voteDurationMs: fund.vote_duration_ms || 21600000,
+    proposals: getOpenHouseProposals(fundId),
     maxMembers: fund.max_members,
     memberCount: members.length,
     savingsRate: fund.savings_rate,
@@ -1990,6 +2116,17 @@ app.get('/api/funds/:id', (req, res) => {
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
 
+// Fund performance history (NAV + NAV-per-share time series). spp is the
+// performance line; nav is fund size. Series begins when snapshotting was deployed.
+app.get('/api/funds/:id/history', (req, res) => {
+  try {
+    const fund = getFund(req.params.id);
+    if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    const limit = Math.max(1, Math.min(1000, parseInt(req.query?.limit) || 300));
+    res.json({ ok:true, history: getFundNAVHistory(fund.id, limit) });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
 app.post('/api/funds/create', (req, res) => {
   try {
     const tok   = tokenFrom(req);
@@ -2065,6 +2202,7 @@ app.post('/api/funds/:id/deposit', (req, res) => {
     if (fund.type==='flsh' && !isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
     const amount = Math.max(1, Math.floor(Number(req.body?.amount)||0));
     const shares = fundDepositFn(fund.id, actor.id, amount);
+    snapshotFund(fund.id);
     const snap   = fundDetailSnapshot(fund.id, actor.id);
     broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
     // Refresh depositor's portfolio (cash decreased)
@@ -2090,6 +2228,7 @@ app.post('/api/funds/:id/withdraw', (req, res) => {
     const priceMap = buildPriceMap();
     const nav = getFundNAVById(fund.id, priceMap);
     const cashOut = fundWithdrawFn(fund.id, actor.id, pct, nav);
+    snapshotFund(fund.id);
     const snap    = fundDetailSnapshot(fund.id, actor.id);
     broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
     try {
@@ -2242,35 +2381,119 @@ app.post('/api/funds/:id/trade', (req, res) => {
     if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
     if (fund.type==='player'  && fund.owner_id !== actor.id) return res.status(403).json({ ok:false, error:'owner_only' });
     if (fund.type==='flsh'    && !isDevAccount(actor.id))    return res.status(403).json({ ok:false, error:'dev_only' });
-    if (fund.type==='patreon' && !isGuildEligible(actor))   return res.status(403).json({ ok:false, error:'guild_only' });
+    if (fund.type==='patreon' && !isGuildEligible(actor))    return res.status(403).json({ ok:false, error:'guild_only' });
+    // Governance: direct trades only in executive or council (owner override). In
+    // vote mode, all trades must go through proposals.
+    const gov = fund.governance || 'executive';
+    if (gov === 'vote') return res.status(403).json({ ok:false, error:'vote_mode_requires_proposal' });
+    if (gov === 'council' && !houseOwner(fund, actor)) return res.status(403).json({ ok:false, error:'council_owner_only_direct' });
     const { side, symbol, qty } = req.body || {};
+    if (!['buy','sell'].includes(side)) return res.status(400).json({ ok:false, error:'invalid_side' });
+    const sym = String(symbol||'').toUpperCase();
+    const q   = Math.max(1, Math.floor(Number(qty)||0));
+    const r = executeFundTrade(fund.id, side, sym, q, actor.id);
+    if (!r.ok) return res.status(400).json(r);
+    const snap = fundDetailSnapshot(fund.id, actor.id);
+    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+    res.json({ ok:true, fund: snap });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// ── Governance: owner sets mode + vote weight ─────────────────────────────────
+app.post('/api/funds/:id/governance', (req, res) => {
+  try {
+    const tok   = tokenFrom(req);
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund  = getFund(req.params.id);
+    if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (!houseOwner(fund, actor)) return res.status(403).json({ ok:false, error:'owner_only' });
+    const governance = String(req.body?.governance||'').toLowerCase();
+    const voteWeight = String(req.body?.voteWeight||'equal').toLowerCase();
+    const voteDurationMs = Number(req.body?.voteDurationMs) || 21600000;
+    if (!['executive','vote','council'].includes(governance)) return res.status(400).json({ ok:false, error:'invalid_mode' });
+    setFundGovernance(fund.id, governance, voteWeight, voteDurationMs);
+    logFundActivity(fund.id,'governance',actor.id,null,null,null,null,`Governance set to ${governance}${governance!=='executive'?` (${voteWeight==='shares'?'share-weighted':'one vote each'})`:''}`);
+    broadcastHouseUpdate(fund.id);
+    res.json({ ok:true, governance, voteWeight });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// ── Propose a trade (vote / council modes) ────────────────────────────────────
+app.post('/api/funds/:id/propose', (req, res) => {
+  try {
+    const tok   = tokenFrom(req);
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund  = getFund(req.params.id);
+    if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    const gov = fund.governance || 'executive';
+    if (gov === 'executive') return res.status(403).json({ ok:false, error:'executive_mode_no_proposals' });
+    if (!houseMember(fund, actor)) return res.status(403).json({ ok:false, error:'not_a_member' });
+    const { side, symbol, qty, reason } = req.body || {};
     if (!['buy','sell'].includes(side)) return res.status(400).json({ ok:false, error:'invalid_side' });
     const sym = String(symbol||'').toUpperCase();
     const c   = companies.find(x => x.symbol === sym && !x._special);
     if (!c) return res.status(400).json({ ok:false, error:'unknown_symbol' });
-    const q   = Math.max(1, Math.floor(Number(qty)||0));
-    const fundCash = fund.cash;
-    const haveQty  = getFundPortfolio(fund.id).find(h=>h.symbol===sym)?.qty || 0;
-    if (side==='buy') {
-      const cost = c.price * q;
-      if (fundCash < cost) return res.status(400).json({ ok:false, error:'insufficient_fund_cash', have:fundCash, need:cost });
-      setFundCashById(fund.id, fundCash - cost);
-      setFundPortfolioQty(fund.id, sym, haveQty + q);
-      logFundActivity(fund.id,'trade_buy',actor.id,sym,q,c.price,cost,`Buy ${q}× ${sym} @ Ƒ${c.price.toFixed(2)}`);
-      pushHeadline(`${fund.name}: bought ${q}× ${sym} @ Ƒ${c.price.toFixed(2)}`, 'good', sym);
+    const q   = Math.max(1, Math.min(1_000_000, Math.floor(Number(qty)||0)));
+    const id  = createHouseProposal(fund.id, actor.id, side, sym, q, reason, fund.vote_duration_ms || 21600000);
+    // Proposer's own vote is auto-cast yes.
+    castHouseVote(id, actor.id, 'yes', houseVoteWeight(fund, actor.id));
+    pushHeadline(`${fund.name}: ${actor.name} proposes ${side} ${q}× ${sym}`, 'neutral', sym);
+    maybeResolveEarly(fund, id); // e.g. solo-owner house resolves immediately
+    broadcastHouseUpdate(fund.id);
+    res.json({ ok:true, proposalId:id });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// ── Vote on a proposal ────────────────────────────────────────────────────────
+app.post('/api/funds/:id/vote', (req, res) => {
+  try {
+    const tok   = tokenFrom(req);
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund  = getFund(req.params.id);
+    if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (!houseMember(fund, actor)) return res.status(403).json({ ok:false, error:'not_a_member' });
+    const { proposalId, vote } = req.body || {};
+    if (!['yes','no'].includes(vote)) return res.status(400).json({ ok:false, error:'invalid_vote' });
+    const prop = getHouseProposal(proposalId);
+    if (!prop || prop.fund_id !== fund.id) return res.status(404).json({ ok:false, error:'proposal_not_found' });
+    if (prop.status !== 'open') return res.status(409).json({ ok:false, error:'proposal_closed' });
+    const weight = houseVoteWeight(fund, actor.id);
+    if (weight <= 0) return res.status(403).json({ ok:false, error:'no_voting_weight' }); // share-weighted with 0 shares
+    const updated = castHouseVote(proposalId, actor.id, vote, weight);
+    maybeResolveEarly(fund, proposalId); // resolve now if all eligible members have voted
+    broadcastHouseUpdate(fund.id);
+    res.json({ ok:true, proposal: updated });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// ── Owner execute / veto (council mode, or owner override on any open proposal) ─
+app.post('/api/funds/:id/proposal/:pid/resolve', (req, res) => {
+  try {
+    const tok   = tokenFrom(req);
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund  = getFund(req.params.id);
+    if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (!houseOwner(fund, actor)) return res.status(403).json({ ok:false, error:'owner_only' });
+    const prop = getHouseProposal(req.params.pid);
+    if (!prop || prop.fund_id !== fund.id) return res.status(404).json({ ok:false, error:'proposal_not_found' });
+    if (!['open','advisory_pass','advisory_fail'].includes(prop.status)) return res.status(409).json({ ok:false, error:'already_resolved' });
+    const action = String(req.body?.action||'').toLowerCase();
+    if (action === 'execute') {
+      const r = executeFundTrade(fund.id, prop.side, prop.symbol, prop.qty, prop.proposer_id);
+      resolveHouseProposal(prop.id, r.ok ? 'passed' : 'failed_exec', r.ok);
+      if (!r.ok) { broadcastHouseUpdate(fund.id); return res.status(400).json(r); }
+      pushHeadline(`${fund.name}: owner executed ${prop.side} ${prop.qty}× ${prop.symbol}`, 'good', prop.symbol);
+    } else if (action === 'veto') {
+      resolveHouseProposal(prop.id, 'vetoed', false);
     } else {
-      const sellQty = Math.min(q, haveQty);
-      if (sellQty <= 0) return res.status(400).json({ ok:false, error:'no_holdings' });
-      const proceeds = c.price * sellQty;
-      setFundCashById(fund.id, fundCash + proceeds);
-      setFundPortfolioQty(fund.id, sym, haveQty - sellQty);
-      logFundActivity(fund.id,'trade_sell',actor.id,sym,sellQty,c.price,proceeds,`Sell ${sellQty}× ${sym} @ Ƒ${c.price.toFixed(2)}`);
-      pushHeadline(`${fund.name}: sold ${sellQty}× ${sym} @ Ƒ${c.price.toFixed(2)}`, 'neutral', sym);
+      return res.status(400).json({ ok:false, error:'invalid_action' });
     }
-    if (fund.type==='flsh') updateFLSHPrice();
-    const snap = fundDetailSnapshot(fund.id, actor.id);
-    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
-    res.json({ ok:true, fund: snap });
+    broadcastHouseUpdate(fund.id);
+    res.json({ ok:true });
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
 
@@ -5118,6 +5341,21 @@ setInterval(broadcastLeaderboard, 15000);
 setInterval(genHeadline, NEWS_MS);
 setInterval(() => { try { saveMarketState(companies, headlines); } catch(e) {} try { saveGalaxySystems(); } catch(e) {} try { savePresidentState(president); } catch(e) {} }, 60_000);
 setInterval(() => { try { processFundProposals(); } catch(e) {} }, 60_000);
+
+// ── House proposal resolution (Capital Houses, fund-scoped voting) ────────────
+// Resolves on a timer by MAJORITY OF VOTES CAST. vote mode → auto-executes a pass;
+// council mode → marks advisory result, owner executes/vetoes; executive → cleaned.
+function processHouseProposals() {
+  const due = getDueHouseProposals(Date.now());
+  for (const p of due) {
+    try {
+      const fund = getFund(p.fund_id);
+      if (!fund) { resolveHouseProposal(p.id, 'expired', false); continue; }
+      resolveHouseProposalDecision(fund, p);
+    } catch(e) { console.error('[House proposal]', p.id, e); }
+  }
+}
+setInterval(() => { try { processHouseProposals(); } catch(e) {} }, 60_000);
 setInterval(() => { try { expireOldFundPolls(); } catch(e) {} }, 5 * 60_000);
 
 // Periodic net worth snapshot every 5 minutes for all online players
@@ -5284,46 +5522,18 @@ const _passiveIncomeTick = () => {
       broadcastLeaderboard();
     }
 
-    // ── Guild fund profit distribution (player funds only) ───────────────────
-    // Every 30min, distribute 10% of fund savings interest proportionally to members
+    // ── Capital House NAV snapshot (for the performance chart) ───────────────
+    // The 30-min profit distribution faucet was removed in v1.0.2.4 — houses earn
+    // through trading, shown in the NAV/share P&L. This loop now only snapshots NAV.
     try {
       const priceMap = buildPriceMap();
       for (const fund of getAllFunds()) {
-        if (fund.type !== 'player') continue;
-        const nav = getFundNAVById(fund.id, priceMap);
-        if (nav <= 0) continue;
+        const nav         = getFundNAVById(fund.id, priceMap);
         const totalShares = getTotalFundSharesById(fund.id);
-        if (totalShares <= 0) continue;
-        // Distribute a small fraction of NAV (0.01% every 30min = ~0.48%/day) to members
-        const DIST_RATE = 0.0001; // 0.01% of NAV every 30min
-        const totalDist = Math.round(nav * DIST_RATE * 100) / 100;
-        if (totalDist < 0.01) continue;
-        // Only distribute if fund has enough cash
-        const fundCash = getFundCashById(fund.id);
-        if (fundCash < totalDist) continue;
-        setFundCashById(fund.id, fundCash - totalDist);
-        const members = getFundMemberships(fund.id);
-        for (const m of members) {
-          if (!m.shares || m.shares <= 0) continue;
-          // Only credit online players — no offline accumulation
-          if (!playerSockets.has(m.player_id)) continue;
-          const share = m.shares / totalShares;
-          const payout_amt = Math.round(totalDist * share * 100) / 100;
-          if (payout_amt < 0.01) continue;
-          const mp = getPlayer(m.player_id); if (!mp) continue;
-          mp.cash = Math.round((mp.cash + payout_amt) * 100) / 100;
-          savePlayerFn(mp);
-          const mSockets = playerSockets.get(m.player_id);
-          if (mSockets && mSockets.size > 0) {
-            const msg = JSON.stringify({ type:'income', data:{ base:payout_amt, bonus:0, total:payout_amt, text:`+Ƒ${payout_amt} guild fund share (${fund.name})` }});
-            for (const ws of mSockets) { try { if(ws.readyState===1) ws.send(msg); } catch(_) {} }
-          }
-        }
-        logFundActivity(fund.id, 'distribution', null, null, null, null, totalDist, `30-min profit share distributed to ${members.length} members`);
-        const snap = fundDetailSnapshot(fund.id, null);
-        broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+        const spp         = totalShares > 0 && nav > 0 ? nav / totalShares : 1;
+        recordFundNAV(fund.id, nav, spp, totalShares);
       }
-    } catch(e) { console.error('[Guild dist error]', e); }
+    } catch(e) { console.error('[Fund NAV snapshot error]', e); }
 
     // ── President passive income ──────────────────────────────────────────────
     if (president && playerSockets.has(president.id)) {
@@ -5431,7 +5641,10 @@ setInterval(()=>{
   try{const n=revokeExpiredPatreon();if(n>0)console.log(`[Patreon] Revoked ${n} expired memberships`);}catch(e){}
 }, 60*60*1000);
 
-// Fund savings interest — hourly
+// Fund savings interest — DISABLED (v1.0.2.4). Capital Houses earn through
+// trading performance (reflected in the NAV/share P&L), not minted passive yield.
+// Loop left in place but inert in case a baseline yield is reintroduced later.
+/*
 setInterval(()=>{
   try {
     const total = applyFundSavingsInterest();
@@ -5445,6 +5658,7 @@ setInterval(()=>{
     }
   } catch(e) { console.error('[Funds savings error]', e); }
 }, 60 * 60 * 1000);
+*/
 
 // ─── Galaxy: Hourly tension tick + conquest resolution ────────────────────────
 function runGalaxyTick() {

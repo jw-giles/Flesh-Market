@@ -60,7 +60,7 @@
 <div class="tab active" data-tab="market">Market</div>
 <div class="tab" data-tab="heat">🔥 Heat</div>
 <div class="tab" data-tab="pnl">P&amp;L</div>
-<div class="tab" data-tab="casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none">⚖ Guild</div><div class="tab" data-tab="store">Store</div><div class="tab" data-tab="galactic">⬡ Galaxy</div><div class="tab" data-tab="mining">⛏ Mining</div><div class="tab" data-tab="bugs">🐛 Bugs</div>
+<div class="tab" data-tab="casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none">⚖ Capital Houses</div><div class="tab" data-tab="store">Store</div><div class="tab" data-tab="galactic">⬡ Galaxy</div><div class="tab" data-tab="mining">⛏ Mining</div><div class="tab" data-tab="bugs">🐛 Bugs</div>
 </div>
 <div id="marketTab">
 <canvas id="chart"></canvas>
@@ -423,16 +423,16 @@ window.storeSubTab=storeSubTab;
   <!-- DIRECTORY VIEW -->
   <div id="guild-dir">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;opacity:.55">Hedge Funds</div>
+      <div style="font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;opacity:.55">Capital Houses</div>
       <button class="btn" id="g-create-btn" style="padding:4px 14px;font-size:.8rem">+ Create Fund</button>
     </div>
     <div id="guild-fund-list" style="display:flex;flex-direction:column;gap:6px"></div>
-    <div id="guild-dir-empty" style="display:none;text-align:center;padding:24px;opacity:.4;font-size:.85rem">No funds yet. Create one for Ƒ10,000,000.</div>
+    <div id="guild-dir-empty" style="display:none;text-align:center;padding:24px;opacity:.4;font-size:.85rem">No Capital Houses yet. Found one for Ƒ10,000,000.</div>
   </div>
 
   <!-- CREATE FUND FORM -->
   <div id="guild-create-form" style="display:none;background:#060504;border:1px solid #2a1a04;border-radius:8px;padding:14px;margin-bottom:12px">
-    <div style="font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin-bottom:10px">New Hedge Fund — Cost: Ƒ10,000,000</div>
+    <div style="font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin-bottom:10px">New Capital House — Cost: Ƒ10,000,000</div>
     <input id="g-new-name" class="input" placeholder="Fund name (3–40 chars)" style="width:100%;margin-bottom:7px;box-sizing:border-box"/>
     <textarea id="g-new-desc" class="input" placeholder="Description (optional)" rows="2" style="width:100%;resize:none;margin-bottom:7px;box-sizing:border-box"></textarea>
     <div style="display:flex;gap:8px">
@@ -443,132 +443,195 @@ window.storeSubTab=storeSubTab;
   </div>
 
   <!-- FUND DETAIL VIEW -->
+  <!-- FUND DETAIL VIEW -->
   <div id="guild-detail" style="display:none">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <button class="btn" id="g-back-btn" style="padding:3px 10px;font-size:.8rem">← Back</button>
       <span id="g-detail-name" style="font-size:1rem;font-weight:700;color:#ffb547"></span>
       <span id="g-detail-type-badge" style="font-size:.75rem;padding:2px 8px;border-radius:10px;border:1px solid #333"></span>
     </div>
-    <div id="g-detail-desc" style="font-size:.8rem;opacity:.6;margin-bottom:10px"></div>
+    <div id="g-detail-desc" style="font-size:.8rem;opacity:.6;margin-bottom:8px"></div>
 
-    <!-- Stats row -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
-      <div class="guild-stat"><div class="gs-label">NAV</div><div class="gs-val" id="g-d-nav"></div></div>
-      <div class="guild-stat"><div class="gs-label">Cash</div><div class="gs-val" id="g-d-cash"></div></div>
-      <div class="guild-stat"><div class="gs-label">My Value</div><div class="gs-val" id="g-d-myval"></div></div>
+    <!-- Sub-tab nav -->
+    <div id="g-subtabs" style="display:flex;gap:2px;border-bottom:1px solid #2a1a04;margin-bottom:10px">
+      <div class="g-stab" data-gpane="overview"  style="padding:5px 12px;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-bottom:2px solid #ffb547;color:#ffb547">Overview</div>
+      <div class="g-stab" data-gpane="portfolio" style="padding:5px 12px;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-bottom:2px solid transparent;color:#6a5a3a">Portfolio</div>
+      <div class="g-stab" data-gpane="governance" style="padding:5px 12px;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-bottom:2px solid transparent;color:#6a5a3a">Governance</div>
+      <div class="g-stab" data-gpane="manage" id="g-stab-manage" style="padding:5px 12px;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-bottom:2px solid transparent;color:#6a5a3a">Manage</div>
     </div>
 
-    <!-- Savings rate badge -->
-    <div id="g-savings-badge" style="font-size:.75rem;opacity:.6;margin-bottom:10px">
-      💰 <span id="g-savings-rate"></span>% hourly savings interest on idle cash
-    </div>
+    <!-- ═══ OVERVIEW ═══ -->
+    <div id="g-pane-overview" class="g-pane">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
+        <div class="guild-stat"><div class="gs-label">NAV</div><div class="gs-val" id="g-d-nav"></div></div>
+        <div class="guild-stat"><div class="gs-label">Cash</div><div class="gs-val" id="g-d-cash"></div></div>
+        <div class="guild-stat"><div class="gs-label">Per Share</div><div class="gs-val" id="g-d-spp"></div></div>
+        <div class="guild-stat"><div class="gs-label">My Value</div><div class="gs-val" id="g-d-myval"></div></div>
+      </div>
 
-    <!-- Deposit/Withdraw (members only) -->
-    <div id="g-dw-panel" style="display:none;margin-bottom:10px">
-      <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:5px">Deposit / Withdraw</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <input id="g-d-amount" class="input" type="number" min="1" placeholder="Deposit amt" style="max-width:130px"/>
-        <button class="btn" id="g-d-deposit-btn">Deposit</button>
-        <select id="g-d-withdraw-pct" class="input" style="max-width:90px">
-          <option value="0.25">25%</option><option value="0.5">50%</option><option value="1">100%</option>
-        </select>
-        <button class="btn" id="g-d-withdraw-btn" style="display:none">Withdraw</button>
+      <div id="g-perf-wrap" style="margin-bottom:12px;border:1px solid #2a1a04;border-radius:6px;background:#050403;padding:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+          <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">Performance</div>
+          <div id="g-perf-delta" style="font-size:.74rem;font-weight:700"></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:stretch;flex-wrap:wrap">
+          <canvas id="g-perf-donut" width="160" height="160" style="flex:0 0 160px;height:160px;border-radius:6px"></canvas>
+          <div id="g-perf-metrics" style="flex:1;min-width:210px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-content:center">
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Max Drawdown</div><div id="gm-drawdown" style="font-size:1rem;font-weight:700;color:#ff6b6b">—</div></div>
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Best Period</div><div id="gm-best" style="font-size:1rem;font-weight:700;color:#86ff6a">—</div></div>
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Worst Period</div><div id="gm-worst" style="font-size:1rem;font-weight:700;color:#ff6b6b">—</div></div>
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Volatility</div><div id="gm-vol" style="font-size:1rem;font-weight:700;color:#ffb547">—</div></div>
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Win Rate</div><div id="gm-winrate" style="font-size:1rem;font-weight:700;color:#4ecdc4">—</div></div>
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Total Return</div><div id="gm-return" style="font-size:1rem;font-weight:700;color:#c8a86a">—</div></div>
+          </div>
+        </div>
+        <div id="g-perf-empty" style="display:none;font-size:.74rem;opacity:.4;text-align:center;padding:10px 0">Performance metrics fill in as the house trades — tracking began at deploy.</div>
       </div>
-      <div id="g-dw-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
-    </div>
 
-    <!-- Owner controls: withdraw + assign cash to member -->
-    <div id="g-owner-panel" style="display:none;margin-bottom:10px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
-      <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Owner Controls</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
-        <select id="g-d-withdraw-pct-owner" class="input" style="max-width:90px">
-          <option value="0.25">25%</option><option value="0.5">50%</option><option value="1">100%</option>
-        </select>
-        <button class="btn" id="g-owner-withdraw-btn">Withdraw</button>
-        <span style="font-size:.72rem;opacity:.5">— withdraw your share from fund</span>
+      <div id="g-dw-panel" style="display:none;margin-bottom:10px">
+        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:5px">Deposit / Withdraw</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <input id="g-d-amount" class="input" type="number" min="1" placeholder="Deposit amt" style="max-width:130px"/>
+          <button class="btn" id="g-d-deposit-btn">Deposit</button>
+          <select id="g-d-withdraw-pct" class="input" style="max-width:90px">
+            <option value="0.25">25%</option><option value="0.5">50%</option><option value="1">100%</option>
+          </select>
+          <button class="btn" id="g-d-withdraw-btn" style="display:none">Withdraw</button>
+        </div>
+        <div id="g-dw-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <input id="g-assign-name" class="input" placeholder="Member name" style="max-width:120px" maxlength="32"/>
-        <input id="g-assign-amt" class="input" type="number" min="1" placeholder="Amount Ƒ" style="max-width:110px"/>
-        <button class="btn" id="g-assign-btn" style="border-color:#86ff6a;color:#86ff6a">Assign Cash</button>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
-        <input id="g-invite-name" class="input" placeholder="Player name" style="max-width:140px" maxlength="32"/>
-        <button class="btn" id="g-invite-btn" style="border-color:#4ecdc4;color:#4ecdc4">Invite Member</button>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #1a1a0a">
-        <button class="btn" id="g-edit-btn" onclick="window._fmEditFund()" style="border-color:#e6c27a;color:#e6c27a;font-size:.72rem;padding:3px 10px">Edit Name/Desc (Ƒ250k)</button>
-        <button class="btn" id="g-delete-btn" onclick="window._fmDeleteFund()" style="border-color:#ff4444;color:#ff4444;font-size:.72rem;padding:3px 10px">Disband Fund (Refund Ƒ5M)</button>
-      </div>
-      <div id="g-owner-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
-    </div>
 
-    <!-- Join button (non-members) -->
-    <div id="g-join-panel" style="display:none;margin-bottom:10px">
-      <button class="btn" id="g-join-btn" style="border-color:#2ecc71;color:#2ecc71">Join Fund</button>
-      <span style="font-size:.78rem;opacity:.5;margin-left:8px">Free to join, deposit anytime</span>
-    </div>
-
-    <!-- Buy slots (owner only) -->
-    <div id="g-slots-panel" style="display:none;margin-bottom:10px;font-size:.8rem">
-      <span id="g-slots-info" style="opacity:.6"></span>
-      <button class="btn" id="g-buy-slot-btn" style="padding:3px 10px;font-size:.78rem;margin-left:8px">+1 Slot (Ƒ100k)</button>
-    </div>
-
-    <!-- Trade panel (owner / dev / guild tier) -->
-    <div id="g-trade-panel" style="display:none;margin-bottom:10px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
-      <div style="font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Fund Trade</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <select id="g-t-side" class="input" style="max-width:80px"><option value="buy">BUY</option><option value="sell">SELL</option></select>
-        <input id="g-t-sym" class="input" placeholder="Symbol" style="max-width:90px" maxlength="5"/>
-        <input id="g-t-qty" class="input" type="number" min="1" placeholder="Qty" style="max-width:90px"/>
-        <button class="btn" id="g-t-exec-btn">Execute</button>
+      <div id="g-join-panel" style="display:none;margin-bottom:10px">
+        <button class="btn" id="g-join-btn" style="border-color:#2ecc71;color:#2ecc71">Join Fund</button>
+        <span style="font-size:.78rem;opacity:.5;margin-left:8px">Free to join, deposit anytime</span>
       </div>
-      <div id="g-trade-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
-    </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <!-- Holdings -->
-      <div>
-        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Portfolio</div>
-        <div id="g-d-holdings" style="font-size:.8rem;max-height:110px;overflow:auto"></div>
-      </div>
-      <!-- Members -->
-      <div>
+      <div style="margin-top:4px">
         <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Members <span id="g-member-count" style="opacity:.5"></span></div>
         <div id="g-guild-bonus-bar" style="font-size:.75rem;color:#2ecc71;margin-bottom:6px;min-height:16px"></div>
-        <div id="g-d-members" style="font-size:.8rem;max-height:110px;overflow:auto"></div>
+        <div id="g-d-members" style="font-size:.8rem;max-height:140px;overflow:auto"></div>
       </div>
     </div>
 
-    <!-- Activity log -->
-    <div style="margin-top:10px">
+    <!-- ═══ PORTFOLIO ═══ -->
+    <div id="g-pane-portfolio" class="g-pane" style="display:none">
+      <div id="g-trade-panel" style="display:none;margin-bottom:10px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+        <div style="font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Fund Trade</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <select id="g-t-side" class="input" style="max-width:80px"><option value="buy">BUY</option><option value="sell">SELL</option></select>
+          <input id="g-t-sym" class="input" placeholder="Symbol" style="max-width:90px" maxlength="5"/>
+          <input id="g-t-qty" class="input" type="number" min="1" placeholder="Qty" style="max-width:90px"/>
+          <button class="btn" id="g-t-exec-btn">Execute</button>
+        </div>
+        <div id="g-trade-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
+      </div>
+
+      <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Portfolio</div>
+      <div id="g-d-holdings" style="font-size:.8rem;max-height:200px;overflow:auto;margin-bottom:12px"></div>
+
       <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Activity</div>
-      <div id="g-d-activity" style="font-size:.75rem;opacity:.65;max-height:100px;overflow:auto"></div>
+      <div id="g-d-activity" style="font-size:.75rem;opacity:.65;max-height:160px;overflow:auto"></div>
     </div>
 
-    <!-- Polls -->
-    <div style="margin-top:10px" id="g-polls-section">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">Member Polls</div>
-        <button class="btn" id="g-create-poll-btn" style="padding:2px 10px;font-size:.72rem">+ New Poll</button>
-      </div>
-      <!-- Create poll form -->
-      <div id="g-poll-form" style="display:none;background:#060504;border:1px solid #2a1a04;border-radius:6px;padding:10px;margin-bottom:8px">
-        <input id="g-poll-question" class="input" placeholder="Poll question…" style="width:100%;margin-bottom:5px;box-sizing:border-box" maxlength="200"/>
-        <div id="g-poll-options-list">
-          <input class="input g-poll-opt" placeholder="Option 1" style="width:100%;margin-bottom:4px;box-sizing:border-box"/>
-          <input class="input g-poll-opt" placeholder="Option 2" style="width:100%;margin-bottom:4px;box-sizing:border-box"/>
+    <!-- ═══ GOVERNANCE ═══ -->
+    <div id="g-pane-governance" class="g-pane" style="display:none">
+      <div id="g-gov-mode-badge" style="font-size:.8rem;margin-bottom:10px"></div>
+
+      <!-- Owner: set governance mode -->
+      <div id="g-gov-owner" style="display:none;margin-bottom:12px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Governance Mode</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <select id="g-gov-select" class="input" style="max-width:200px">
+            <option value="executive">Executive — owner trades</option>
+            <option value="vote">Majority Vote — members decide</option>
+            <option value="council">Council — vote + owner veto</option>
+          </select>
+          <select id="g-gov-weight" class="input" style="max-width:150px">
+            <option value="equal">One member, one vote</option>
+            <option value="shares">Share-weighted</option>
+          </select>
+          <select id="g-gov-duration" class="input" style="max-width:130px" title="Voting window">
+            <option value="1800000">30 min</option>
+            <option value="3600000">1 hour</option>
+            <option value="21600000">6 hours</option>
+            <option value="86400000">24 hours</option>
+            <option value="259200000">3 days</option>
+          </select>
+          <button class="btn" id="g-gov-save-btn">Save</button>
         </div>
-        <button class="btn" id="g-poll-add-opt" style="padding:2px 8px;font-size:.72rem;margin-bottom:6px">+ Option</button>
-        <div style="display:flex;gap:6px">
-          <button class="btn" id="g-poll-submit">Create Poll</button>
-          <button class="btn" id="g-poll-cancel" style="border-color:#333;color:#666">Cancel</button>
-        </div>
-        <div id="g-poll-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
+        <div id="g-gov-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
       </div>
-      <!-- Active polls -->
-      <div id="g-polls-list" style="font-size:.8rem;max-height:200px;overflow:auto"></div>
+
+      <!-- Propose a trade (vote / council) -->
+      <div id="g-propose-panel" style="display:none;margin-bottom:12px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Propose Trade</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <select id="g-pr-side" class="input" style="max-width:80px"><option value="buy">BUY</option><option value="sell">SELL</option></select>
+          <input id="g-pr-sym" class="input" placeholder="Symbol" style="max-width:90px" maxlength="5"/>
+          <input id="g-pr-qty" class="input" type="number" min="1" placeholder="Qty" style="max-width:90px"/>
+          <input id="g-pr-reason" class="input" placeholder="Reason (optional)" style="max-width:180px" maxlength="200"/>
+          <button class="btn" id="g-pr-submit">Propose</button>
+        </div>
+        <div id="g-pr-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
+      </div>
+
+      <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Open Proposals</div>
+      <div id="g-proposals-list" style="font-size:.8rem;max-height:240px;overflow:auto;margin-bottom:12px"></div>
+
+      <!-- Member polls (non-binding) -->
+      <div style="margin-top:6px" id="g-polls-section">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">Member Polls</div>
+          <button class="btn" id="g-create-poll-btn" style="padding:2px 10px;font-size:.72rem">+ New Poll</button>
+        </div>
+        <div id="g-poll-form" style="display:none;background:#060504;border:1px solid #2a1a04;border-radius:6px;padding:10px;margin-bottom:8px">
+          <input id="g-poll-question" class="input" placeholder="Poll question…" style="width:100%;margin-bottom:5px;box-sizing:border-box" maxlength="200"/>
+          <div id="g-poll-options-list">
+            <input class="input g-poll-opt" placeholder="Option 1" style="width:100%;margin-bottom:4px;box-sizing:border-box"/>
+            <input class="input g-poll-opt" placeholder="Option 2" style="width:100%;margin-bottom:4px;box-sizing:border-box"/>
+          </div>
+          <button class="btn" id="g-poll-add-opt" style="padding:2px 8px;font-size:.72rem;margin-bottom:6px">+ Option</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn" id="g-poll-submit">Create Poll</button>
+            <button class="btn" id="g-poll-cancel" style="border-color:#333;color:#666">Cancel</button>
+          </div>
+          <div id="g-poll-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
+        </div>
+        <div id="g-polls-list" style="font-size:.8rem;max-height:200px;overflow:auto"></div>
+      </div>
+    </div>
+
+    <!-- ═══ MANAGE (owner) ═══ -->
+    <div id="g-pane-manage" class="g-pane" style="display:none">
+      <div id="g-slots-panel" style="display:none;margin-bottom:10px;font-size:.8rem">
+        <span id="g-slots-info" style="opacity:.6"></span>
+        <button class="btn" id="g-buy-slot-btn" style="padding:3px 10px;font-size:.78rem;margin-left:8px">+1 Slot (Ƒ100k)</button>
+      </div>
+
+      <div id="g-owner-panel" style="display:none;margin-bottom:10px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Owner Controls</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+          <select id="g-d-withdraw-pct-owner" class="input" style="max-width:90px">
+            <option value="0.25">25%</option><option value="0.5">50%</option><option value="1">100%</option>
+          </select>
+          <button class="btn" id="g-owner-withdraw-btn">Withdraw</button>
+          <span style="font-size:.72rem;opacity:.5">— withdraw your share from fund</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <input id="g-assign-name" class="input" placeholder="Member name" style="max-width:120px" maxlength="32"/>
+          <input id="g-assign-amt" class="input" type="number" min="1" placeholder="Amount Ƒ" style="max-width:110px"/>
+          <button class="btn" id="g-assign-btn" style="border-color:#86ff6a;color:#86ff6a">Assign Cash</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+          <input id="g-invite-name" class="input" placeholder="Player name" style="max-width:140px" maxlength="32"/>
+          <button class="btn" id="g-invite-btn" style="border-color:#4ecdc4;color:#4ecdc4">Invite Member</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #1a1a0a">
+          <button class="btn" id="g-edit-btn" onclick="window._fmEditFund()" style="border-color:#e6c27a;color:#e6c27a;font-size:.72rem;padding:3px 10px">Edit Name/Desc (Ƒ250k)</button>
+          <button class="btn" id="g-delete-btn" onclick="window._fmDeleteFund()" style="border-color:#ff4444;color:#ff4444;font-size:.72rem;padding:3px 10px">Disband Fund (Refund Ƒ5M)</button>
+        </div>
+        <div id="g-owner-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
+      </div>
     </div>
   </div>
 </div>

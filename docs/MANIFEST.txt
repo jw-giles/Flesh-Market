@@ -1,4 +1,4 @@
-# FleshMarket v1.0.2.3 — MANIFEST
+# FleshMarket v1.0.2.4 — MANIFEST
 
 ## Structure
 
@@ -114,6 +114,7 @@ See `CHANGELOG.md` for full details.
 
 | Version | Key Change |
 |---|---|
+| v1.0.2.4 | Capital Houses guild redesign: rename, passive faucets removed, per-share performance P&L, four-pane house view, and governance/voting (Executive/Vote/Council, share-weighted, owner-set voting window) |
 | v1.0.2.3 | Fund disband pays NAV share value (not deposit), drone enemies spawn outside aggro range, SWT hard-locked flat at Ƒ4500, Patreon webhook email matching hardened |
 | v1.0.1.9 | Discord button in header, dividend eligibility requires 7 trading-day hold |
 | v1.0.1.8 | FLSH permanently pinned at Ƒ1B, removed stock split + chat broadcast |

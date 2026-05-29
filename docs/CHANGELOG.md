@@ -4,6 +4,34 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.2.4 (2026-05-29)
+
+**Capital Houses — guild redesign: rename, faucet removal, performance P&L, and governance/voting.**
+
+### Renamed to Capital Houses
+The player-fund system is now "Capital Houses" (tab, directory, create form). "Merchants Guild" now refers only to the Patreon tier and its chat channels, ending the three-way collision on the word "Guild." Internal `type`/route ids unchanged. The Merchants Guild "Join" button is now a "★ Become a Patron" CTA that opens patreon.com/FLSH instead of POSTing `/join`.
+
+### Passive faucets removed
+Both minted passive-income paths on funds are gone — houses earn through trading performance, not yield: hourly savings interest (`applyFundSavingsInterest`, cron disabled) and the 30-min profit distribution (`DIST_RATE`, removed; the loop now only snapshots NAV). Savings-rate UI badge removed.
+
+### Performance P&L
+New `fund_nav_history` table (`fund_id, nav, spp, total_shares, ts`, 1000-row cap) + `recordFundNAVFn` writer and `GET /api/funds/:id/history`. Funds are snapshotted on every trade/deposit/withdraw and on the 30-min loop. The house view shows an allocation donut (NAV composition, NAV in center) plus six metric cards (Max Drawdown, Best/Worst Period, Volatility, Win Rate, Total Return) computed from the value-per-share series — matching the player P&L. spp is the performance line (not raw NAV), so it reflects trading rather than deposits/withdrawals. History begins at deploy.
+
+### Four-pane house view
+The detail panel is restructured into sub-views: **Overview** (stats, performance, deposit/withdraw, members), **Portfolio** (holdings, direct trade, activity), **Governance** (mode, proposals, polls), **Manage** (owner: slots, withdraw, assign, invite, edit, disband). Single withdraw control; destructive actions isolated in Manage (owner-only tab).
+
+### Governance & voting
+Owner sets a per-house mode:
+- **Executive** — owner trades directly; members passive. (Default for player houses.)
+- **Majority Vote** — members propose; passes when yes-weight beats no-weight; direct trades blocked. (Default for the Merchants Guild.)
+- **Executive + Council** — members vote (advisory); owner holds final execute/veto and may trade directly.
+
+**Vote weight:** `equal` (one member, one vote) or `shares` (weighted by holdings). **Threshold:** majority of votes *cast*. A proposal resolves the moment every eligible member has voted (owner included; 0-weight members don't block it), otherwise on the owner-set **voting window** — a per-house dropdown of 30m / 1h / 6h / 24h / 3d (default 6h). Proposer auto-casts a yes.
+
+Schema: `house_proposals` + `house_votes` tables (fund-scoped); `governance`, `vote_weight`, `vote_duration_ms` columns on `funds` (lazy ALTER). Endpoints: `POST /api/funds/:id/governance` / `/propose` / `/vote` / `/proposal/:pid/resolve`. Trade execution unified in a shared `executeFundTrade` (direct trades, passed votes, owner overrides). A 60s tick resolves expired proposals; the legacy global-guild proposal system is untouched.
+
+---
+
 ## v1.0.2.3 (2026-05-29)
 
 **Weekend bugfix batch.**

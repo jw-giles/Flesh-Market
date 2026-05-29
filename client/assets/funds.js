@@ -5,7 +5,7 @@
 
 const _mfmt = n => 'Ƒ' + (Math.round(Number(n||0)*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
 const _TIER = {1:'★',2:'⚖',3:'♛'};
-const TYPE_LABEL  = { flsh:'FLSH', patreon:'Guild', player:'Player Fund' };
+const TYPE_LABEL  = { flsh:'FLSH', patreon:'Guild', player:'Capital House' };
 const TYPE_COLOR  = { flsh:'#ffd700', patreon:'#2ecc71', player:'#a0a0a0' };
 let __currentFundId = null;
 let __currentFundData = null;
@@ -87,7 +87,119 @@ async function openFund(fundId) {
     if (!d.ok) { alert(d.error); return; }
     __currentFundData = d.fund;
     renderFundDetail(d.fund);
+    setHousePane('overview');
+    renderFundPerformance(fundId);
   } catch(e) { console.warn('openFund error', e); }
+}
+
+// ── Performance chart: NAV-per-share over time ───────────────────
+// spp isolates trading performance from member cashflows. Series begins when
+// the server started snapshotting (v1.0.2.4), so new/old houses start sparse.
+// ── Performance: allocation donut + metrics (matches the player P&L) ─────
+const _GPAL = ['#4ecdc4','#e74c3c','#9b59b6','#2ecc71','#ffd700','#ff9a4a','#86ff6a','#c8a86a','#5dade2','#e59866'];
+
+function _gFmtC(v){ v=Number(v)||0; return v>=1e9?(v/1e9).toFixed(1)+'B':v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'k':v.toFixed(0); }
+
+// Allocation donut from the fund's current holdings + cash. Center = NAV.
+function renderFundDonut(f) {
+  const canvas = document.getElementById('g-perf-donut');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const S = 160;
+  canvas.width = canvas.height = S * dpr;
+  canvas.style.width = canvas.style.height = S + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle = '#0a0804'; ctx.fillRect(0,0,S,S);
+
+  const cx=S/2, cy=S/2, ro=S/2-10, ri=ro*0.58;
+  const slices = (f.holdings||[]).map((h,i)=>({ label:h.symbol, value:Math.max(0,h.value||0), color:_GPAL[i%_GPAL.length] }));
+  if ((f.cash||0) > 0) slices.push({ label:'CASH', value:f.cash, color:'rgba(212,184,122,0.7)' });
+  const total = slices.reduce((s,x)=>s+x.value,0) || 0;
+
+  if (total <= 0) {
+    ctx.beginPath(); ctx.arc(cx,cy,ro,0,Math.PI*2);
+    ctx.strokeStyle='rgba(255,180,50,0.12)'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='rgba(212,184,122,0.25)'; ctx.font='11px monospace';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('Empty house', cx, cy);
+    return;
+  }
+
+  const GAP=0.025; let ang=-Math.PI/2;
+  slices.forEach(s=>{
+    const sweep=(s.value/total)*(Math.PI*2)-GAP;
+    if (sweep<=0) return;
+    ctx.beginPath();
+    ctx.moveTo(cx+ri*Math.cos(ang+GAP/2), cy+ri*Math.sin(ang+GAP/2));
+    ctx.arc(cx,cy,ro,ang+GAP/2,ang+sweep);
+    ctx.arc(cx,cy,ri,ang+sweep,ang+GAP/2,true);
+    ctx.closePath(); ctx.fillStyle=s.color; ctx.fill();
+    if (s.value/total > 0.08) {
+      const midA=ang+sweep/2+GAP/2, lr=(ro+ri)/2;
+      ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.font='bold 8px monospace';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(s.label, cx+lr*Math.cos(midA), cy+lr*Math.sin(midA));
+    }
+    ang += sweep+GAP;
+  });
+  ctx.fillStyle='#0a0804'; ctx.beginPath(); ctx.arc(cx,cy,ri-2,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#d4b87a'; ctx.font='bold 13px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('Ƒ'+_gFmtC(f.nav), cx, cy-7);
+  ctx.fillStyle='rgba(212,184,122,0.4)'; ctx.font='12px monospace';
+  ctx.fillText('NAV', cx, cy+7);
+}
+
+function _gSetMetric(id, val, color){ const el=document.getElementById(id); if(el){ el.textContent=val; if(color) el.style.color=color; } }
+
+// Metrics from the value-per-share (spp) series — same math as the player P&L.
+async function renderFundPerformance(fundId) {
+  const empty = document.getElementById('g-perf-empty');
+  const delta = document.getElementById('g-perf-delta');
+  let series = [];
+  try {
+    const tok = window.FM_TOKEN;
+    const r = await fetch('/api/funds/'+fundId+'/history?limit=300', { headers: tok?{'Authorization':'Bearer '+tok}:{} });
+    const d = await r.json();
+    if (d.ok && Array.isArray(d.history)) series = d.history;
+  } catch(e) { /* leave empty */ }
+  if (fundId !== __currentFundId) return; // stale fetch
+
+  const spp = series.map(h=>Number(h.spp)).filter(v=>isFinite(v) && v>0);
+  const ids = ['gm-drawdown','gm-best','gm-worst','gm-vol','gm-winrate','gm-return'];
+
+  if (spp.length < 2) {
+    ids.forEach(id=>_gSetMetric(id,'—'));
+    if (delta) delta.textContent = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  const n=spp.length, first=spp[0], last=spp[n-1];
+  const totalReturn = first>0 ? ((last-first)/first*100) : 0;
+  _gSetMetric('gm-return', (totalReturn>=0?'+':'')+totalReturn.toFixed(1)+'%', totalReturn>=0?'#86ff6a':'#ff6b6b');
+  if (delta) { delta.textContent = (totalReturn>=0?'+':'')+totalReturn.toFixed(2)+'%'; delta.style.color = totalReturn>=0?'#2ecc71':'#e74c3c'; }
+
+  const returns=[];
+  for (let i=1;i<n;i++){ if (spp[i-1]>0) returns.push((spp[i]-spp[i-1])/spp[i-1]); }
+
+  let peak=spp[0], maxDD=0;
+  for (let i=1;i<n;i++){ if (spp[i]>peak) peak=spp[i]; const dd=(peak-spp[i])/peak; if (dd>maxDD) maxDD=dd; }
+  _gSetMetric('gm-drawdown', '-'+(maxDD*100).toFixed(1)+'%');
+
+  if (returns.length>0){
+    _gSetMetric('gm-best', '+'+(Math.max(...returns)*100).toFixed(2)+'%', '#86ff6a');
+    _gSetMetric('gm-worst', (Math.min(...returns)*100).toFixed(2)+'%', '#ff6b6b');
+    const wins = returns.filter(r=>r>0).length;
+    _gSetMetric('gm-winrate', (wins/returns.length*100).toFixed(0)+'%', '#4ecdc4');
+  }
+  if (returns.length>1){
+    const mean=returns.reduce((s,r)=>s+r,0)/returns.length;
+    const variance=returns.reduce((s,r)=>s+(r-mean)**2,0)/(returns.length-1);
+    _gSetMetric('gm-vol', (Math.sqrt(variance)*100).toFixed(2)+'%', '#ffb547');
+  }
 }
 
 function renderFundDetail(f) {
@@ -110,7 +222,7 @@ function renderFundDetail(f) {
     typeEl.style.color  = TYPE_COLOR[f.type] || '#aaa';
     typeEl.style.borderColor = TYPE_COLOR[f.type] || '#aaa';
   }
-  if (descEl) descEl.textContent = f.type === 'patreon' ? 'Passive income + hedge fund access. patreon.com/FLSH' : (f.description || '');
+  if (descEl) descEl.textContent = f.type === 'patreon' ? 'Patreon tier — Capital House access + member perks. patreon.com/FLSH' : (f.description || '');
 
   // Stats
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
@@ -118,7 +230,6 @@ function renderFundDetail(f) {
   set('g-d-cash',  _mfmt(f.cash));
   set('g-d-myval', _mfmt(f.myValue));
   set('g-d-spp',   _mfmt(f.spp));
-  set('g-savings-rate', (f.savingsRate*100).toFixed(3));
 
   // Holdings
   const hBox = document.getElementById('g-d-holdings');
@@ -198,7 +309,20 @@ function renderFundDetail(f) {
   }
 
   show('g-dw-panel',    f.isMember && f.type !== 'player');  // non-player funds: deposit only for members
+  // Join button: player funds are invite-only, flsh is dev. Patreon shows it as a
+  // "Become a Patron" CTA that links out (handled in the click listener).
   show('g-join-panel',  !f.isMember && f.type!=='player' && f.type!=='flsh');
+  const joinBtn = document.getElementById('g-join-btn');
+  const joinHint = joinBtn ? joinBtn.nextElementSibling : null;
+  if (joinBtn && f.type === 'patreon') {
+    joinBtn.textContent = '★ Become a Patron';
+    joinBtn.style.borderColor = '#c8a040';
+    joinBtn.style.color = '#c8a040';
+    if (joinHint) joinHint.textContent = 'Opens patreon.com/FLSH — membership unlocks the Guild';
+  } else if (joinBtn) {
+    joinBtn.textContent = 'Join Fund';
+    if (joinHint) joinHint.textContent = 'Free to join, deposit anytime';
+  }
   show('g-slots-panel', f.isOwner);
   show('g-owner-panel', f.isOwner && f.type==='player');  // owner controls for player funds
   // For player funds, members can deposit but only owner can withdraw
@@ -207,17 +331,31 @@ function renderFundDetail(f) {
     const wBtn = document.getElementById('g-d-withdraw-btn');
     if (wBtn) wBtn.style.display = f.isOwner ? 'inline-block' : 'none';
   }
-  show('g-trade-panel', f.isOwner || (isDevFund && __isDev_g) || (isPatreonFund && f.isMember));
-  // Trade panel label for player funds
-  const tradePanelTitle = document.querySelector('#g-trade-panel .god-section-title, #g-trade-panel div[style*="opacity:.5"]');
-  if (tradePanelTitle && f.type === 'player') tradePanelTitle.textContent = 'Fund Trade (Owner Only)';
 
-  // Show polls section only for player funds
+  // Trade panel: direct trades only in executive/council. Vote mode → propose instead.
+  const gov = f.governance || 'executive';
+  const canDirectTrade = (gov !== 'vote') &&
+    (f.isOwner || (isDevFund && __isDev_g) || (isPatreonFund && f.isMember && gov === 'executive'));
+  show('g-trade-panel', canDirectTrade);
+  const tradePanelTitle = document.querySelector('#g-trade-panel div[style*="opacity:.5"]');
+  if (tradePanelTitle) tradePanelTitle.textContent = gov === 'council' ? 'Fund Trade (Owner Override)' : 'Fund Trade';
+
+  // Manage tab is owner-only
+  const stabManage = document.getElementById('g-stab-manage');
+  if (stabManage) stabManage.style.display = f.isOwner ? 'block' : 'none';
+  if (!f.isOwner && __housePane === 'manage') setHousePane('overview');
+
+  // Governance (mode badge, owner selector, propose panel, proposals)
+  try { renderGovernance(f); } catch(_){}
+
+  // Polls visible to members of any house
   const pollsSection = document.getElementById('g-polls-section');
-  if (pollsSection) pollsSection.style.display = (f.type === 'player' && f.isMember) ? 'block' : 'none';
+  if (pollsSection) pollsSection.style.display = f.isMember ? 'block' : 'none';
 
   // Render polls
   renderFundPolls(f.polls || [], f.isOwner);
+  // Allocation donut (current NAV composition)
+  try { renderFundDonut(f); } catch(_){}
 
   const slotsInfo = document.getElementById('g-slots-info');
   if (slotsInfo) slotsInfo.textContent = `${f.memberCount}/${f.maxMembers} slots used`;
@@ -320,6 +458,97 @@ async function guildPost(path, body, hintId, successMsg) {
   }
 }
 
+// ── Sub-view panes ───────────────────────────────────────────
+let __housePane = 'overview';
+function setHousePane(name) {
+  __housePane = name;
+  ['overview','portfolio','governance','manage'].forEach(p => {
+    const pane = document.getElementById('g-pane-'+p);
+    if (pane) pane.style.display = (p === name) ? 'block' : 'none';
+  });
+  document.querySelectorAll('#g-subtabs .g-stab').forEach(t => {
+    const on = t.getAttribute('data-gpane') === name;
+    t.style.borderBottomColor = on ? '#ffb547' : 'transparent';
+    t.style.color = on ? '#ffb547' : '#6a5a3a';
+  });
+}
+
+function _gEsc(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// ── Governance render ────────────────────────────────────────
+function renderGovernance(f) {
+  const setDisp = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v ? 'block' : 'none'; };
+  const gov = f.governance || 'executive';
+  const weight = f.voteWeight || 'equal';
+  const wLabel = weight === 'shares' ? 'share-weighted' : 'one vote each';
+  const badge = document.getElementById('g-gov-mode-badge');
+  const label = gov === 'executive' ? 'Executive — owner trades directly'
+    : gov === 'vote' ? `Majority Vote — members decide (${wLabel})`
+    : `Council — members vote, owner has final say (${wLabel})`;
+  if (badge) badge.innerHTML = `<span style="opacity:.5">Mode:</span> <b style="color:#ffb547">${label}</b>`;
+
+  setDisp('g-gov-owner', f.isOwner);
+  if (f.isOwner) {
+    const sel = document.getElementById('g-gov-select'); if (sel) sel.value = gov;
+    const w   = document.getElementById('g-gov-weight'); if (w) w.value = weight;
+    const dur = document.getElementById('g-gov-duration'); if (dur) dur.value = String(f.voteDurationMs || 21600000);
+  }
+  setDisp('g-propose-panel', f.isMember && (gov === 'vote' || gov === 'council'));
+  renderProposals(f);
+}
+
+function renderProposals(f) {
+  const box = document.getElementById('g-proposals-list');
+  if (!box) return;
+  const props = f.proposals || [];
+  if (!props.length) { box.innerHTML = '<span style="opacity:.4">No open proposals</span>'; return; }
+  const gov = f.governance || 'executive';
+  box.innerHTML = props.map(p => {
+    const yes = Number(p.votes_yes||0), no = Number(p.votes_no||0), total = yes+no;
+    const pctYes = total > 0 ? Math.round(yes/total*100) : 0;
+    const open = p.status === 'open';
+    const statusTag = open ? '' : ` <span style="opacity:.5">[${String(p.status).replace('_',' ')}]</span>`;
+    const sideCol = p.side === 'buy' ? '#86ff6a' : '#ff8080';
+    const btn = (txt,col,call) => `<button onclick="${call}" style="font-size:.7rem;padding:2px 9px;background:none;border:1px solid ${col};color:${col};border-radius:4px;cursor:pointer">${txt}</button>`;
+    const voteBtns = (f.isMember && open && (gov==='vote'||gov==='council'))
+      ? btn('Yes','#2ecc71',`houseVote('${p.id}','yes')`) + btn('No','#e74c3c',`houseVote('${p.id}','no')`) : '';
+    const ownerBtns = (f.isOwner && gov==='council' && ['open','advisory_pass','advisory_fail'].includes(p.status))
+      ? btn('Execute','#86ff6a',`houseResolve('${p.id}','execute')`) + btn('Veto','#ff6b6b',`houseResolve('${p.id}','veto')`) : '';
+    let closes = '';
+    if (open && p.expires_at) {
+      const ms = p.expires_at - Date.now();
+      if (ms > 0) {
+        const h = Math.floor(ms/3600000), m = Math.floor((ms%3600000)/60000);
+        const rel = h > 0 ? `${h}h ${m}m` : `${m}m`;
+        closes = `<div style="font-size:.66rem;opacity:.4;margin-top:2px">closes in ${rel} · or when all eligible members vote</div>`;
+      }
+    }
+    return `<div style="border:1px solid #1a1409;border-radius:5px;padding:6px 8px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;gap:6px">
+        <span><b style="color:${sideCol}">${String(p.side).toUpperCase()}</b> ${p.qty}× ${_gEsc(p.symbol)}${statusTag}</span>
+        <span style="opacity:.5;font-size:.72rem">by ${_gEsc(p.proposer_name||'?')}</span>
+      </div>
+      ${p.reason?`<div style="opacity:.55;font-size:.72rem;margin:2px 0">${_gEsc(p.reason)}</div>`:''}
+      <div style="font-size:.72rem;opacity:.7;margin-top:3px">Yes ${yes} · No ${no} <span style="opacity:.5">(${pctYes}% yes)</span></div>
+      ${closes}
+      <div style="display:flex;gap:4px;margin-top:5px">${voteBtns}${ownerBtns}</div>
+    </div>`;
+  }).join('');
+}
+
+async function houseVote(proposalId, vote) {
+  if (!__currentFundId) return;
+  const d = await guildPost(`/api/funds/${__currentFundId}/vote`, {proposalId, vote});
+  if (d?.ok) openFund(__currentFundId);
+}
+async function houseResolve(proposalId, action) {
+  if (!__currentFundId) return;
+  const d = await guildPost(`/api/funds/${__currentFundId}/proposal/${proposalId}/resolve`, {action});
+  if (d?.ok) openFund(__currentFundId);
+}
+window.houseVote = houseVote;
+window.houseResolve = houseResolve;
+
 function initGuildUI() {
   // Back button
   document.getElementById('g-back-btn')?.addEventListener('click', () => {
@@ -376,6 +605,12 @@ function initGuildUI() {
   // Join fund
   document.getElementById('g-join-btn')?.addEventListener('click', async () => {
     if (!__currentFundId) return;
+    // Merchants Guild is Patreon-gated — you can't join via the API, you become a
+    // patron. Send the button to the Patreon page instead of a guaranteed 403.
+    if (__currentFundData?.type === 'patreon') {
+      window.open('https://www.patreon.com/FLSH', '_blank', 'noopener');
+      return;
+    }
     const d = await guildPost(`/api/funds/${__currentFundId}/join`, {}, 'g-dw-hint', '✓ Joined fund');
     if (d?.ok) openFund(__currentFundId);
   });
@@ -452,6 +687,34 @@ function initGuildUI() {
     const d = await guildPost(`/api/funds/${__currentFundId}/trade`, {side,symbol,qty}, 'g-trade-hint',
       `✓ ${side.toUpperCase()} ${qty}× ${symbol} executed`);
     if (d?.ok) openFund(__currentFundId);
+  });
+
+  // Sub-tab navigation
+  document.querySelectorAll('#g-subtabs .g-stab').forEach(tab => {
+    tab.addEventListener('click', () => setHousePane(tab.getAttribute('data-gpane')));
+  });
+
+  // Governance: owner saves mode + weight
+  document.getElementById('g-gov-save-btn')?.addEventListener('click', async () => {
+    if (!__currentFundId) return;
+    const governance = document.getElementById('g-gov-select')?.value;
+    const voteWeight = document.getElementById('g-gov-weight')?.value;
+    const voteDurationMs = document.getElementById('g-gov-duration')?.value;
+    const d = await guildPost(`/api/funds/${__currentFundId}/governance`, {governance, voteWeight, voteDurationMs}, 'g-gov-hint', '✓ Governance updated');
+    if (d?.ok) openFund(__currentFundId);
+  });
+
+  // Propose a trade (vote / council)
+  document.getElementById('g-pr-submit')?.addEventListener('click', async () => {
+    if (!__currentFundId) return;
+    const side   = document.getElementById('g-pr-side')?.value;
+    const symbol = document.getElementById('g-pr-sym')?.value?.toUpperCase().trim();
+    const qty    = parseInt(document.getElementById('g-pr-qty')?.value);
+    const reason = document.getElementById('g-pr-reason')?.value?.trim();
+    if (!symbol || !qty) { const h=document.getElementById('g-pr-hint'); if(h){h.textContent='Symbol and qty required';h.style.color='#ff6b6b';} return; }
+    const d = await guildPost(`/api/funds/${__currentFundId}/propose`, {side,symbol,qty,reason}, 'g-pr-hint',
+      `✓ Proposed ${side.toUpperCase()} ${qty}× ${symbol}`);
+    if (d?.ok) { document.getElementById('g-pr-sym').value=''; document.getElementById('g-pr-qty').value=''; document.getElementById('g-pr-reason').value=''; openFund(__currentFundId); }
   });
 }
 

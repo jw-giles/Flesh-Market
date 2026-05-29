@@ -92,11 +92,20 @@ export function initDB() {
       equity    REAL NOT NULL,
       ts        INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS fund_nav_history (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      fund_id     TEXT NOT NULL,
+      nav         REAL NOT NULL,
+      spp         REAL NOT NULL,
+      total_shares REAL NOT NULL,
+      ts          INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS market_state (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_nwh_player_ts ON net_worth_history(player_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_fnh_fund_ts ON fund_nav_history(fund_id, ts);
     CREATE INDEX IF NOT EXISTS idx_players_patreon_email ON players(patreon_email);
     CREATE INDEX IF NOT EXISTS idx_players_patreon_member ON players(patreon_member_id);
     CREATE TABLE IF NOT EXISTS colony_state (
@@ -245,6 +254,7 @@ export function initDB() {
 
 export let savePlayerFn;
 export let recordNetWorthFn;
+export let recordFundNAVFn;
 
 export function setupTransactions() {
   savePlayerFn = transaction((player) => {
@@ -276,6 +286,14 @@ export function setupTransactions() {
     stmt(`DELETE FROM net_worth_history WHERE player_id=? AND id NOT IN
           (SELECT id FROM net_worth_history WHERE player_id=? ORDER BY ts DESC LIMIT 1000)`)
       .run(playerId, playerId);
+  });
+
+  recordFundNAVFn = transaction((fundId, nav, spp, totalShares) => {
+    stmt('INSERT INTO fund_nav_history(fund_id,nav,spp,total_shares,ts) VALUES(?,?,?,?,?)')
+      .run(fundId, nav, spp, totalShares, Date.now());
+    stmt(`DELETE FROM fund_nav_history WHERE fund_id=? AND id NOT IN
+          (SELECT id FROM fund_nav_history WHERE fund_id=? ORDER BY ts DESC LIMIT 1000)`)
+      .run(fundId, fundId);
   });
 }
 
@@ -421,6 +439,15 @@ export function getNetWorthHistory(playerId, limit=200) {
   return stmt(`SELECT net_worth,cash,equity,ts FROM net_worth_history
                WHERE player_id=? ORDER BY ts DESC LIMIT ?`)
     .all(playerId,limit).reverse();
+}
+
+// ─── Fund NAV / NAV-per-share history ───────────────────────────────────────
+// spp (NAV per share) is the true performance line — it isolates the owner's
+// trading from member cashflows. nav tracks fund size, not performance.
+export function getFundNAVHistory(fundId, limit=300) {
+  return stmt(`SELECT nav,spp,total_shares,ts FROM fund_nav_history
+               WHERE fund_id=? ORDER BY ts DESC LIMIT ?`)
+    .all(fundId,limit).reverse();
 }
 
 // ─── Leaderboard ─────────────────────────────────────────────────────────────
@@ -801,7 +828,41 @@ export function initFundsSystem() {
       amount    REAL,
       note      TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS house_proposals (
+      id          TEXT PRIMARY KEY,
+      fund_id     TEXT NOT NULL REFERENCES funds(id) ON DELETE CASCADE,
+      proposer_id TEXT NOT NULL,
+      side        TEXT NOT NULL,
+      symbol      TEXT NOT NULL,
+      qty         INTEGER NOT NULL,
+      reason      TEXT,
+      created_at  INTEGER NOT NULL,
+      expires_at  INTEGER NOT NULL,
+      status      TEXT NOT NULL DEFAULT 'open',
+      votes_yes   REAL NOT NULL DEFAULT 0,
+      votes_no    REAL NOT NULL DEFAULT 0,
+      executed_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS house_votes (
+      proposal_id TEXT NOT NULL REFERENCES house_proposals(id) ON DELETE CASCADE,
+      player_id   TEXT NOT NULL,
+      vote        TEXT NOT NULL,
+      weight      REAL NOT NULL DEFAULT 1,
+      voted_at    INTEGER NOT NULL,
+      PRIMARY KEY (proposal_id, player_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_house_prop_fund ON house_proposals(fund_id, status);
   `);
+
+  // Lazy migration: governance mode + vote weight on existing funds tables.
+  // governance: 'executive' | 'vote' | 'council'   vote_weight: 'equal' | 'shares'
+  try { db.exec(`ALTER TABLE funds ADD COLUMN governance TEXT NOT NULL DEFAULT 'executive'`); } catch(_) {}
+  try { db.exec(`ALTER TABLE funds ADD COLUMN vote_weight TEXT NOT NULL DEFAULT 'equal'`); } catch(_) {}
+  try { db.exec(`ALTER TABLE funds ADD COLUMN vote_duration_ms INTEGER NOT NULL DEFAULT 21600000`); } catch(_) {}
+  // Patreon Merchants Guild defaults to majority vote (its historical behavior).
+  try { stmt(`UPDATE funds SET governance='vote' WHERE id='MERCHANTS_GUILD' AND governance='executive'`).run(); } catch(_) {}
 
   // Seed special funds if not present
   const now = Date.now();
@@ -1042,6 +1103,74 @@ export function getFundActivity(fundId, limit=30) {
 export function logFundActivity(fundId, type, playerId, symbol, qty, price, amount, note) {
   stmt('INSERT INTO fund_activity(fund_id,ts,type,player_id,symbol,qty,price,amount,note) VALUES(?,?,?,?,?,?,?,?,?)')
     .run(fundId, Date.now(), type, playerId||null, symbol||null, qty||null, price||null, amount||null, note||null);
+}
+
+// ── House governance + binding trade proposals ────────────────────────────────
+// governance: 'executive' (owner trades) | 'vote' (members decide) | 'council'
+//             (members vote, owner has final execute/veto). vote_weight: 'equal'|'shares'
+
+export const VOTE_DURATIONS = { '1800000':'30m', '3600000':'1h', '21600000':'6h', '86400000':'24h', '259200000':'3d' };
+
+export function setFundGovernance(fundId, governance, voteWeight, durationMs) {
+  const g = ['executive','vote','council'].includes(governance) ? governance : 'executive';
+  const w = ['equal','shares'].includes(voteWeight) ? voteWeight : 'equal';
+  const d = VOTE_DURATIONS[String(durationMs)] ? Number(durationMs) : 21600000; // valid options only, default 6h
+  stmt('UPDATE funds SET governance=?, vote_weight=?, vote_duration_ms=? WHERE id=?').run(g, w, d, fundId);
+}
+
+// Player IDs who have cast a vote on a proposal (for early-resolution turnout check).
+export function getHouseVoterIds(proposalId) {
+  return stmt('SELECT player_id FROM house_votes WHERE proposal_id=?').all(proposalId).map(r => r.player_id);
+}
+
+export function createHouseProposal(fundId, proposerId, side, symbol, qty, reason, durationMs) {
+  const id = Math.random().toString(36).slice(2,10).toUpperCase();
+  const now = Date.now();
+  stmt(`INSERT INTO house_proposals(id,fund_id,proposer_id,side,symbol,qty,reason,created_at,expires_at,status)
+        VALUES(?,?,?,?,?,?,?,?,?,'open')`)
+    .run(id, fundId, proposerId, side, symbol, qty, String(reason||'').slice(0,200), now, now + (durationMs||6*60*60*1000));
+  return id;
+}
+
+export function getHouseProposal(id) {
+  return stmt(`SELECT p.*, pl.name AS proposer_name FROM house_proposals p
+               LEFT JOIN players pl ON pl.id=p.proposer_id WHERE p.id=?`).get(id);
+}
+
+export function getOpenHouseProposals(fundId) {
+  return stmt(`SELECT p.*, pl.name AS proposer_name FROM house_proposals p
+               LEFT JOIN players pl ON pl.id=p.proposer_id
+               WHERE p.fund_id=? AND p.status IN ('open','advisory_pass','advisory_fail')
+               ORDER BY p.created_at DESC`).all(fundId);
+}
+
+// All open proposals (any fund) whose timer has elapsed — for the resolution tick.
+export function getDueHouseProposals(now) {
+  return stmt(`SELECT * FROM house_proposals WHERE status='open' AND expires_at<=?`).all(now || Date.now());
+}
+
+export function hasVotedHouse(proposalId, playerId) {
+  return !!stmt('SELECT 1 FROM house_votes WHERE proposal_id=? AND player_id=?').get(proposalId, playerId);
+}
+
+export function castHouseVote(proposalId, playerId, vote, weight) {
+  const w = Math.max(0, Number(weight) || 0);
+  stmt('INSERT OR REPLACE INTO house_votes(proposal_id,player_id,vote,weight,voted_at) VALUES(?,?,?,?,?)')
+    .run(proposalId, playerId, vote, w, Date.now());
+  // Recompute tallies from the votes table (idempotent, handles vote changes).
+  const yes = stmt(`SELECT COALESCE(SUM(weight),0) s FROM house_votes WHERE proposal_id=? AND vote='yes'`).get(proposalId).s;
+  const no  = stmt(`SELECT COALESCE(SUM(weight),0) s FROM house_votes WHERE proposal_id=? AND vote='no'`).get(proposalId).s;
+  stmt('UPDATE house_proposals SET votes_yes=?, votes_no=? WHERE id=?').run(yes, no, proposalId);
+  return getHouseProposal(proposalId);
+}
+
+export function getHouseVoteCount(proposalId) {
+  return stmt('SELECT COUNT(*) c FROM house_votes WHERE proposal_id=?').get(proposalId).c;
+}
+
+export function resolveHouseProposal(id, status, executed) {
+  stmt('UPDATE house_proposals SET status=?, executed_at=? WHERE id=?')
+    .run(status, executed ? Date.now() : null, id);
 }
 
 // ── Dev accounts ──────────────────────────────────────────────────────────────
