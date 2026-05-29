@@ -1346,9 +1346,21 @@ function buildChunk(cx, cy) {
     const canSpawnFriendly = playerShipFaction && playerShipFaction !== facKey;
     const FRIENDLY_SPAWN_RATE = 0.20;   // 20% of NPCs in rival sectors are allies
 
+    // Minimum spawn distance from the drone: enemies must appear OUTSIDE their own
+    // aggro range so they can't materialize on top of the player and one-shot the
+    // drone the instant a chunk loads. Scales with the same aggro boost.
+    const minSafeSpawn = ENEMY_AGGRO_BASE * aggroBoost * 1.25;
+
     for (let i = 0; i < count; i++) {
-      const ex = cx * CHUNK + rng() * CHUNK;
-      const ey = cy * CHUNK + rng() * CHUNK;
+      let ex, ey, tries = 0;
+      do {
+        ex = cx * CHUNK + rng() * CHUNK;
+        ey = cy * CHUNK + rng() * CHUNK;
+        tries++;
+      } while (state.drone && Math.hypot(ex - state.drone.x, ey - state.drone.y) < minSafeSpawn && tries < 8);
+      // Still too close after retries (chunk overlaps the drone) — skip this spawn
+      // rather than drop an enemy in the player's lap.
+      if (state.drone && Math.hypot(ex - state.drone.x, ey - state.drone.y) < minSafeSpawn) continue;
       // Pick ship class from band table — Dreadnoughts have a flat 1% chance at any band
       const shipClass = pickNpcClass(band, rng);
       const classDef = NPC_SHIP_CLASSES[shipClass];

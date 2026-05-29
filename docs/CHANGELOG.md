@@ -4,6 +4,24 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.2.3 (2026-05-29)
+
+**Weekend bugfix batch.**
+
+### Hedge fund disband payout
+`POST /api/funds/:id/delete` refunded each member their original `deposited` amount, ignoring any gains or losses on the fund's holdings — members effectively cashed out at cost basis. Disband now pays each non-owner member their **current share value** (`shares × NAV/totalShares`), with holdings valued at live ticker price. Owner still receives the flat Ƒ5M creation-cost rebate.
+
+### Drone-mining instant kills
+Enemies were placed at a uniform-random point inside each newly loaded chunk with no floor on distance to the drone. A chunk overlapping the drone could spawn a hostile on top of the player, one-shotting the drone the moment the chunk loaded. Spawns now reject any position inside `ENEMY_AGGRO_BASE × aggroBoost × 1.25` of the drone (up to 8 retries, then the spawn is skipped), guaranteeing enemies appear outside their own aggro range.
+
+### SWT hard-locked
+SWT ran through the beta-model tick with strong anchored mean-reversion around Ƒ4500. That produced a tight, predictable oscillation traders could exploit. SWT is now pinned flat at Ƒ4500 every tick (no drift, no noise, no reversion); a flat OHLC bar is still recorded so the chart renders a clean horizontal line.
+
+### Patreon webhook email matching
+The webhook read the patron email only from `included[type=user].attributes.email`. First-time activations match solely on email (no `patreon_member_id` stored yet), so a missing/oddly-cased field meant the role never assigned. The handler now reads the member resource email first, falls back to the included user email, and normalizes (trim + lowercase) to match the stored value (lookup is already `COLLATE NOCASE`).
+
+---
+
 ## v1.0.2.2 (2026-04-19)
 
 **NPC ship classes + friendly variants + class-scaled salvage.**

@@ -1646,7 +1646,12 @@ app.post('/api/patreon/webhook', async (req, res) => {
     const body    = JSON.parse(req.body.toString());
     const event   = req.headers['x-patreon-event'];
     const member  = body?.data;
-    const email   = body?.included?.find(i=>i.type==='user')?.attributes?.email || null;
+    // Patreon puts the patron email in different places depending on event/config.
+    // Check the member resource first, then the included user resource. Normalize so it
+    // matches the lowercased/trimmed email stored by /api/patreon/link.
+    const _memberEmail = member?.attributes?.email || null;
+    const _userEmail   = body?.included?.find(i=>i.type==='user')?.attributes?.email || null;
+    const email   = ((_memberEmail || _userEmail || '').trim().toLowerCase()) || null;
     const memberId = member?.id || null;
     console.log(`[Patreon] Event: ${event}, member: ${memberId}, email: ${email}`);
     if (event === 'members:pledge:delete' || event === 'members:delete') {
@@ -2301,16 +2306,22 @@ app.post('/api/funds/:id/delete', (req, res) => {
     if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
     if (fund.owner_id !== actor.id) return res.status(403).json({ ok:false, error:'not_owner' });
 
-    // Refund member deposits
-    const members = getFundMemberships(fund.id);
+    // Pay out members at CURRENT share value (NAV / total shares), not original deposit.
+    // Holdings are valued at live ticker price via the price map, so members keep gains/losses.
+    const members       = getFundMemberships(fund.id);
+    const priceMap      = buildPriceMap();
+    const nav           = getFundNAVById(fund.id, priceMap);
+    const totalShares   = getTotalFundSharesById(fund.id);
+    const pricePerShare = totalShares > 0 && nav > 0 ? nav / totalShares : 1;
     for (const m of members) {
-      if (m.deposited > 0 && m.player_id !== actor.id) {
-        const mp = getPlayer(m.player_id);
-        if (mp) {
-          mp.cash = Math.round((mp.cash + m.deposited) * 100) / 100;
-          savePlayerFn(mp);
-          broadcastToPlayer(mp.id, { type:'income', data:{ base:m.deposited, bonus:0, total:m.deposited, text:`+Ƒ${m.deposited.toLocaleString()} refund — hedge fund "${fund.name}" disbanded` }});
-        }
+      if (m.player_id === actor.id) continue; // owner handled by the creation-cost rebate below
+      const payout = Math.round((m.shares || 0) * pricePerShare * 100) / 100;
+      if (payout <= 0) continue;
+      const mp = getPlayer(m.player_id);
+      if (mp) {
+        mp.cash = Math.round((mp.cash + payout) * 100) / 100;
+        savePlayerFn(mp);
+        broadcastToPlayer(mp.id, { type:'income', data:{ base:payout, bonus:0, total:payout, text:`+Ƒ${payout.toLocaleString()} payout — hedge fund "${fund.name}" disbanded (current value)` }});
       }
     }
 
@@ -3102,6 +3113,23 @@ function stepMarket(){
   // ── Beta Model: each stock reacts to sector DELTA scaled by its beta ────
   companies.forEach(c=>{
     if (c._special) return;
+    // SWT — hard-locked flat at Ƒ4500. No drift, no noise, no mean-reversion.
+    // (Previously anchored via mean-reversion, which produced predictable oscillation.)
+    if (c.symbol === 'SWT') {
+      c.price = 4500;
+      c.lnP   = Math.log(4500);
+      // Keep a flat OHLC bar so the chart renders a clean horizontal line.
+      const BAR_MS_SWT = 5_000;
+      if (!c._bar) c._bar = { t: now, o: 4500, h: 4500, l: 4500, c: 4500, v: 0 };
+      c._bar.h = 4500; c._bar.l = 4500; c._bar.c = 4500;
+      if (now - c._bar.t >= BAR_MS_SWT) {
+        if (!Array.isArray(c.ohlc)) c.ohlc = [];
+        c.ohlc.push({ t: c._bar.t, o: 4500, h: 4500, l: 4500, c: 4500, v: 0 });
+        if (c.ohlc.length > 400) c.ohlc.shift();
+        c._bar = { t: now, o: 4500, h: 4500, l: 4500, c: 4500, v: 0 };
+      }
+      return;
+    }
     const S = SECTORS[c.sector||0];
 
     // 1. Sector delta: how much the sector moved THIS tick
