@@ -607,8 +607,8 @@ function resolveSmuggling(playerId) {
   const laneRisk = LANE_RISK[run.laneType] || LANE_RISK.grey;
   const cargo = CARGO_TYPES.find(c => c.id === run.cargoId) || CARGO_TYPES[0];
 
-  const fromState = getColonyState(run.from) || { tension:0, control_coalition:0, control_syndicate:0, control_void:0 };
-  const toState   = getColonyState(run.to)   || { tension:0, control_coalition:0, control_syndicate:0, control_void:0 };
+  const fromState = getColonyState(run.from) || { tension:0, control_coalition:0, control_syndicate:0, control_void:0, control_guild:0 };
+  const toState   = getColonyState(run.to)   || { tension:0, control_coalition:0, control_syndicate:0, control_void:0, control_guild:0 };
   const avgTension = ((fromState.tension||0) + (toState.tension||0)) / 2;
 
   // INVERTED: High tension = LESS risk for smuggling (chaos helps smugglers)
@@ -629,8 +629,8 @@ function resolveSmuggling(playerId) {
     if (fromCtrl >= 40) factionMod -= 0.02;
     if (toCtrl >= 40)   factionMod -= 0.02;
     // Enemy dominant colony: +3% risk
-    const fromLeading = ['coalition','syndicate','void'].reduce((b,f)=>(fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b,'coalition');
-    const toLeading   = ['coalition','syndicate','void'].reduce((b,f)=>(toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b,'coalition');
+    const fromLeading = ['coalition','syndicate','void','guild'].reduce((b,f)=>(fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b,'coalition');
+    const toLeading   = ['coalition','syndicate','void','guild'].reduce((b,f)=>(toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b,'coalition');
     if (fromLeading !== playerFaction && avgTension < 30) factionMod += 0.03;
     if (toLeading !== playerFaction && avgTension < 30)   factionMod += 0.03;
   }
@@ -638,8 +638,8 @@ function resolveSmuggling(playerId) {
   // Syndicate: no free rides — +5% risk on own turf (enforcers tax you), payout bonus applied later
   let syndicateRisk = 0;
   if (playerFaction === 'syndicate') {
-    const fromLeadS = ['coalition','syndicate','void'].reduce((b,f)=>(fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b,'coalition');
-    const toLeadS   = ['coalition','syndicate','void'].reduce((b,f)=>(toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b,'coalition');
+    const fromLeadS = ['coalition','syndicate','void','guild'].reduce((b,f)=>(fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b,'coalition');
+    const toLeadS   = ['coalition','syndicate','void','guild'].reduce((b,f)=>(toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b,'coalition');
     if (fromLeadS === 'syndicate') syndicateRisk += SYNDICATE_OWN_TURF_RISK;
     if (toLeadS === 'syndicate')   syndicateRisk += SYNDICATE_OWN_TURF_RISK;
   }
@@ -729,8 +729,8 @@ function resolveShipping(playerId) {
 
   const cargo = SHIPPING_CARGO.find(c => c.id === run.cargoId) || SHIPPING_CARGO[0];
 
-  const fromState = getColonyState(run.from) || { tension:0, control_coalition:0, control_syndicate:0, control_void:0 };
-  const toState   = getColonyState(run.to)   || { tension:0, control_coalition:0, control_syndicate:0, control_void:0 };
+  const fromState = getColonyState(run.from) || { tension:0, control_coalition:0, control_syndicate:0, control_void:0, control_guild:0 };
+  const toState   = getColonyState(run.to)   || { tension:0, control_coalition:0, control_syndicate:0, control_void:0, control_guild:0 };
   const avgTension = ((fromState.tension||0) + (toState.tension||0)) / 2;
 
   // Normal: High tension = MORE risk for shipping (war zones are dangerous)
@@ -748,8 +748,8 @@ function resolveShipping(playerId) {
     if (fromCtrl >= 40) factionMod -= 0.025;
     if (toCtrl >= 40)   factionMod -= 0.025;
     // Enemy territory: +4% risk per colony
-    const fromLeading = ['coalition','syndicate','void'].reduce((b,f)=>(fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b,'coalition');
-    const toLeading   = ['coalition','syndicate','void'].reduce((b,f)=>(toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b,'coalition');
+    const fromLeading = ['coalition','syndicate','void','guild'].reduce((b,f)=>(fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b,'coalition');
+    const toLeading   = ['coalition','syndicate','void','guild'].reduce((b,f)=>(toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b,'coalition');
     if (fromLeading !== playerFaction) factionMod += 0.04;
     if (toLeading !== playerFaction)   factionMod += 0.04;
   }
@@ -1493,10 +1493,11 @@ function buildFactionSectorBonus(playerFaction, colonyStates) {
       coalition: colony.control_coalition || 0,
       syndicate: colony.control_syndicate || 0,
       void:      colony.control_void      || 0,
+      guild:     colony.control_guild     || 0,
     };
     // fleshstation colony is always controlled by fleshstation — no bonuses granted here
     if (colony.faction === 'fleshstation') continue;
-    const leading = ['coalition','syndicate','void'].reduce((b,f)=>ctrl[f]>ctrl[b]?f:b,'coalition');
+    const leading = ['coalition','syndicate','void','guild'].reduce((b,f)=>ctrl[f]>ctrl[b]?f:b,'coalition');
     if (leading !== playerFaction) continue;  // must be the leading faction
 
     const bonuses = bonusTable[playerFaction];
@@ -2707,7 +2708,7 @@ app.post('/api/galaxy/fund', (req, res) => {
     if (p.cash < amt) return res.status(400).json({ ok: false, error: 'insufficient_funds' });
     const colony = getColonyState(colonyId);
     if (!colony) return res.status(404).json({ ok: false, error: 'colony_not_found' });
-    const VALID = ['coalition','syndicate','void'];
+    const VALID = ['coalition','syndicate','void','guild'];
     if (!VALID.includes(factionId)) return res.status(400).json({ ok: false, error: 'invalid_faction' });
 
     // Deduct cash
@@ -2720,22 +2721,39 @@ app.post('/api/galaxy/fund', (req, res) => {
     // Adjust control % — Ƒ100,000 = 1% control, capped at 12% per donation
     const boost = Math.min(12, Math.max(1, Math.round(amt / 100000)));
     const ctrl = {
-      coalition: colony.control_coalition,
-      syndicate: colony.control_syndicate,
-      void:      colony.control_void,
+      coalition: colony.control_coalition || 0,
+      syndicate: colony.control_syndicate || 0,
+      void:      colony.control_void      || 0,
+      guild:     colony.control_guild     || 0,
     };
-    ctrl[factionId] = Math.min(95, ctrl[factionId] + boost);
+    // Drain the boost proportionally from the other factions by their current
+    // share, so the four values always re-sum to 100 with no faction below 1.
     const others = VALID.filter(f => f !== factionId);
-    const half = Math.floor(boost / 2);
-    others.forEach((f, i) => {
-      ctrl[f] = Math.max(1, ctrl[f] - (i === 0 ? Math.ceil(boost/2) : half));
-    });
-    // Normalize to 100
-    const total = ctrl.coalition + ctrl.syndicate + ctrl.void;
-    if (total !== 100) {
-      const diff = 100 - total;
-      ctrl[factionId] = Math.min(99, ctrl[factionId] + diff);
+    const othersTotal = others.reduce((s,f) => s + ctrl[f], 0);
+    const target = Math.min(96, ctrl[factionId] + boost);
+    const actualBoost = target - ctrl[factionId];
+    ctrl[factionId] = target;
+    if (othersTotal > 0) {
+      let drained = 0;
+      others.forEach(f => {
+        const share = ctrl[f] / othersTotal;
+        const take = Math.min(ctrl[f] - 1 < 0 ? 0 : ctrl[f] - 1, Math.round(actualBoost * share));
+        ctrl[f] -= take; drained += take;
+      });
+      // Reconcile any rounding gap against the largest other faction.
+      let gap = actualBoost - drained;
+      while (gap !== 0) {
+        const pool = others.filter(f => gap > 0 ? ctrl[f] > 1 : true)
+                           .sort((a,b) => ctrl[b] - ctrl[a]);
+        if (!pool.length) break;
+        const f = pool[0];
+        const step = gap > 0 ? 1 : -1;
+        ctrl[f] -= step; gap -= step;
+      }
     }
+    // Final exact normalization to 100 (guard against any residual drift).
+    const total = ctrl.coalition + ctrl.syndicate + ctrl.void + ctrl.guild;
+    if (total !== 100) ctrl[factionId] = Math.min(97, Math.max(1, ctrl[factionId] + (100 - total)));
 
     // Update tension
     const newTension = Math.min(95, colony.tension + Math.round(boost * 1.8));
@@ -2760,6 +2778,7 @@ app.post('/api/galaxy/fund', (req, res) => {
       control_coalition: ctrl.coalition,
       control_syndicate: ctrl.syndicate,
       control_void:      ctrl.void,
+      control_guild:     ctrl.guild,
       tension:    newTension,
       contested,
       conquest_faction: conquestFaction || null,
@@ -3577,11 +3596,11 @@ function snapshotPortfolio(player){
   try {
     const pfd = getPlayerFactionData(player.id);
     const pFaction = pfd?.faction;
-    if (pFaction && ['coalition','syndicate','void'].includes(pFaction)) {
+    if (pFaction && ['coalition','syndicate','void','guild'].includes(pFaction)) {
       const colonies = getAllColonyStates().filter(c => {
         if (c.id === 'flesh_station') return false;
-        const ctrl = {coalition:c.control_coalition||0,syndicate:c.control_syndicate||0,void:c.control_void||0};
-        return ['coalition','syndicate','void'].reduce((b,f)=>ctrl[f]>ctrl[b]?f:b,'coalition') === pFaction;
+        const ctrl = {coalition:c.control_coalition||0,syndicate:c.control_syndicate||0,void:c.control_void||0,guild:c.control_guild||0};
+        return ['coalition','syndicate','void','guild'].reduce((b,f)=>ctrl[f]>ctrl[b]?f:b,'coalition') === pFaction;
       });
       const factionBonus = colonies.length * 15;
       if (factionBonus > 0) { passiveIncome.coalitionBonus = factionBonus; passiveIncome.total += factionBonus; }
@@ -5449,7 +5468,7 @@ const _passiveIncomeTick = () => {
     for (const c of colonyStates) {
       if (c.id === 'flesh_station') continue;
       const ctrl = {coalition:c.control_coalition||0,syndicate:c.control_syndicate||0,void:c.control_void||0};
-      const leading = ['coalition','syndicate','void'].reduce((b,f)=>ctrl[f]>ctrl[b]?f:b,'coalition');
+      const leading = ['coalition','syndicate','void','guild'].reduce((b,f)=>ctrl[f]>ctrl[b]?f:b,'coalition');
       if (ctrl[leading] > 0) factionColonyCounts[leading]++;
     }
 
@@ -5500,7 +5519,7 @@ const _passiveIncomeTick = () => {
             const col = colonyStates.find(c => c.id === nid);
             if (!col) return null;
             const ctrl = { coalition: col.control_coalition||0, syndicate: col.control_syndicate||0, void: col.control_void||0 };
-            return ['coalition','syndicate','void'].reduce((b,f) => ctrl[f] > ctrl[b] ? f : b, 'coalition');
+            return ['coalition','syndicate','void','guild'].reduce((b,f) => ctrl[f] > ctrl[b] ? f : b, 'coalition');
           });
           // All three must be the same faction
           const sovereign = (clusterLeaders[0] && clusterLeaders.every(l => l === clusterLeaders[0]))
@@ -5699,7 +5718,7 @@ function runGalaxyTick() {
     const now = Date.now();
     for (const c of colonies) {
       const ctrl = { coalition: c.control_coalition, syndicate: c.control_syndicate, void: c.control_void };
-      const leading = ['coalition','syndicate','void'].reduce((best, f) => ctrl[f] > ctrl[best] ? f : best, 'coalition');
+      const leading = ['coalition','syndicate','void','guild'].reduce((best, f) => ctrl[f] > ctrl[best] ? f : best, 'coalition');
       const contested = ctrl[leading] < 60 ? 1 : 0;
 
       // Check conquest timer
@@ -5721,7 +5740,7 @@ function runGalaxyTick() {
           vein_cluster:'Vein Cluster', aurora_prime:'Aurora Prime', null_point:'Null Point',
           flesh_station:'Flesh Station',
         };
-        const FACTION_NAMES = { coalition:'Coalition', syndicate:'Syndicate', void:'Void Collective', fleshstation:'Flesh Station' };
+        const FACTION_NAMES = { coalition:'Coalition', syndicate:'Syndicate', void:'Void Collective', guild:'Merchant Guild', fleshstation:'Flesh Station' };
         const cName = COLONY_NAMES[c.id] || c.id;
         const fName = FACTION_NAMES[newFaction] || newFaction;
         const oldName = FACTION_NAMES[oldFaction] || oldFaction;

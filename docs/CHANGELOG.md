@@ -20,6 +20,9 @@ New `fund_nav_history` table (`fund_id, nav, spp, total_shares, ts`, 1000-row ca
 ### Four-pane house view
 The detail panel is restructured into sub-views: **Overview** (stats, performance, deposit/withdraw, members), **Portfolio** (holdings, direct trade, activity), **Governance** (mode, proposals, polls), **Manage** (owner: slots, withdraw, assign, invite, edit, disband). Single withdraw control; destructive actions isolated in Manage (owner-only tab).
 
+### Merchants Guild as a 4th controlling faction
+The Merchants Guild is now a full galaxy faction alongside Coalition, Syndicate, and Void — fundable on the colony detail page and in the God Panel, able to contest and conquer colonies the same way. Added a `control_guild` column to `colony_state` (lazy ALTER for live DBs). The funding endpoint now redistributes control four ways with a proportional drain that always re-sums to 100, with no faction below 1%. The Guild starts holding **Eyejog** and **Dust Basin** as its territory; a one-time boot correction assigns those two to the Guild only if untouched (war_chest 0, no prior guild control), so it never clobbers live state. Removed Eyejog's old "Patreon-only / cannot be contested" sovereign lock — it is now a normal guild-held colony. Guild players earn the same per-colony passive and bonuses; conquest, leading-faction, and shipping/smuggling risk calcs all recognize the Guild. Also fixed a latent bug where one funding path sent `faction` instead of `factionId` and silently failed.
+
 ### Galaxy grey-lane visibility
 Grey-market shipping lanes used `#999`, which was nearly invisible against the dark space background. The newly-connected frontier colonies (Eyejog, Dust Basin, Nova Reach, Iron Shelf, Margin Call) link only via grey lanes, so they appeared orphaned even though the lanes were present and clickable. Brightened grey lanes to `#c8cdd6` and matched the map legend swatch.
 

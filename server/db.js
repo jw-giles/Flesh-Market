@@ -114,6 +114,7 @@ export function initDB() {
       control_coalition   INTEGER NOT NULL DEFAULT 0,
       control_syndicate   INTEGER NOT NULL DEFAULT 0,
       control_void        INTEGER NOT NULL DEFAULT 0,
+      control_guild       INTEGER NOT NULL DEFAULT 0,
       tension             INTEGER NOT NULL DEFAULT 0,
       contested           INTEGER NOT NULL DEFAULT 0,
       conquest_faction    TEXT,
@@ -871,6 +872,8 @@ export function initFundsSystem() {
   try { db.exec(`ALTER TABLE funds ADD COLUMN governance TEXT NOT NULL DEFAULT 'executive'`); } catch(_) {}
   try { db.exec(`ALTER TABLE funds ADD COLUMN vote_weight TEXT NOT NULL DEFAULT 'equal'`); } catch(_) {}
   try { db.exec(`ALTER TABLE funds ADD COLUMN vote_duration_ms INTEGER NOT NULL DEFAULT 21600000`); } catch(_) {}
+  // Merchants Guild as a 4th controlling faction in the galaxy.
+  try { db.exec(`ALTER TABLE colony_state ADD COLUMN control_guild INTEGER NOT NULL DEFAULT 0`); } catch(_) {}
   // Patreon Merchants Guild defaults to majority vote (its historical behavior).
   try { stmt(`UPDATE funds SET governance='vote' WHERE id='MERCHANTS_GUILD' AND governance='executive'`).run(); } catch(_) {}
 
@@ -1305,9 +1308,9 @@ export function initModerationTable() {
   for (const c of COLONY_DEFAULTS) {
     try {
       db.prepare(`INSERT OR IGNORE INTO colony_state
-        (id,faction,control_coalition,control_syndicate,control_void,tension,contested,war_chest)
-        VALUES(?,?,?,?,?,?,?,0)`)
-        .run(c.id, c.faction, c.control_coalition, c.control_syndicate, c.control_void, c.tension, c.contested);
+        (id,faction,control_coalition,control_syndicate,control_void,control_guild,tension,contested,war_chest)
+        VALUES(?,?,?,?,?,?,?,?,0)`)
+        .run(c.id, c.faction, c.control_coalition, c.control_syndicate, c.control_void, c.control_guild||0, c.tension, c.contested);
     } catch(_) {}
   }
 }
@@ -1408,27 +1411,27 @@ export function getModerationRecord(targetId) {
 
 // Default colony data — seeded on first access
 const COLONY_DEFAULTS = [
-  { id:'new_anchor',       faction:'coalition',    control_coalition:82, control_syndicate:12, control_void:6,  tension:18, contested:0 },
-  { id:'cascade_station',  faction:'coalition',    control_coalition:68, control_syndicate:20, control_void:12, tension:32, contested:1 },
-  { id:'frontier_outpost', faction:'coalition',    control_coalition:51, control_syndicate:38, control_void:11, tension:49, contested:1 },
-  { id:'the_hollow',       faction:'syndicate',    control_coalition:15, control_syndicate:74, control_void:11, tension:26, contested:0 },
-  { id:'vein_cluster',     faction:'syndicate',    control_coalition:8,  control_syndicate:71, control_void:21, tension:29, contested:0 },
-  { id:'aurora_prime',     faction:'coalition',    control_coalition:76, control_syndicate:10, control_void:14, tension:24, contested:0 },
-  { id:'null_point',       faction:'void',         control_coalition:5,  control_syndicate:22, control_void:73, tension:22, contested:0 },
-  { id:'flesh_station',    faction:'fleshstation', control_coalition:0,  control_syndicate:0,  control_void:0,  tension:0,  contested:0 },
-  { id:'limbosis',         faction:'contested',    control_coalition:34, control_syndicate:33, control_void:33, tension:88, contested:1 },
-  { id:'lustandia',        faction:'syndicate',    control_coalition:10, control_syndicate:62, control_void:28, tension:55, contested:0 },
-  { id:'gluttonis',        faction:'contested',    control_coalition:28, control_syndicate:42, control_void:30, tension:74, contested:1 },
-  { id:'abaddon',          faction:'contested',    control_coalition:20, control_syndicate:40, control_void:40, tension:95, contested:1 },
-  { id:'eyejog',           faction:'coalition',    control_coalition:64, control_syndicate:21, control_void:15, tension:30, contested:0 },
-  { id:'dust_basin',       faction:'syndicate',    control_coalition:22, control_syndicate:58, control_void:20, tension:40, contested:0 },
-  { id:'nova_reach',       faction:'coalition',    control_coalition:70, control_syndicate:18, control_void:12, tension:26, contested:0 },
-  { id:'iron_shelf',       faction:'syndicate',    control_coalition:18, control_syndicate:60, control_void:22, tension:44, contested:0 },
-  { id:'the_ledger',       faction:'contested',    control_coalition:30, control_syndicate:38, control_void:32, tension:70, contested:1 },
-  { id:'signal_run',       faction:'contested',    control_coalition:35, control_syndicate:35, control_void:30, tension:60, contested:1 },
-  { id:'scrub_yard',       faction:'syndicate',    control_coalition:14, control_syndicate:68, control_void:18, tension:48, contested:0 },
-  { id:'the_escrow',       faction:'void',         control_coalition:20, control_syndicate:25, control_void:55, tension:50, contested:0 },
-  { id:'margin_call',      faction:'syndicate',    control_coalition:12, control_syndicate:66, control_void:22, tension:52, contested:0 },
+  { id:'new_anchor',       faction:'coalition',    control_coalition:82, control_syndicate:12, control_void:6,  control_guild:0,  tension:18, contested:0 },
+  { id:'cascade_station',  faction:'coalition',    control_coalition:68, control_syndicate:20, control_void:12, control_guild:0,  tension:32, contested:1 },
+  { id:'frontier_outpost', faction:'coalition',    control_coalition:51, control_syndicate:38, control_void:11, control_guild:0,  tension:49, contested:1 },
+  { id:'the_hollow',       faction:'syndicate',    control_coalition:15, control_syndicate:74, control_void:11, control_guild:0,  tension:26, contested:0 },
+  { id:'vein_cluster',     faction:'syndicate',    control_coalition:8,  control_syndicate:71, control_void:21, control_guild:0,  tension:29, contested:0 },
+  { id:'aurora_prime',     faction:'coalition',    control_coalition:76, control_syndicate:10, control_void:14, control_guild:0,  tension:24, contested:0 },
+  { id:'null_point',       faction:'void',         control_coalition:5,  control_syndicate:22, control_void:73, control_guild:0,  tension:22, contested:0 },
+  { id:'flesh_station',    faction:'fleshstation', control_coalition:0,  control_syndicate:0,  control_void:0,  control_guild:0,  tension:0,  contested:0 },
+  { id:'limbosis',         faction:'contested',    control_coalition:34, control_syndicate:33, control_void:33, control_guild:0,  tension:88, contested:1 },
+  { id:'lustandia',        faction:'syndicate',    control_coalition:10, control_syndicate:62, control_void:28, control_guild:0,  tension:55, contested:0 },
+  { id:'gluttonis',        faction:'contested',    control_coalition:28, control_syndicate:42, control_void:30, control_guild:0,  tension:74, contested:1 },
+  { id:'abaddon',          faction:'contested',    control_coalition:20, control_syndicate:40, control_void:40, control_guild:0,  tension:95, contested:1 },
+  { id:'eyejog',           faction:'guild',        control_coalition:14, control_syndicate:11, control_void:7,  control_guild:68, tension:30, contested:0 },
+  { id:'dust_basin',       faction:'guild',        control_coalition:12, control_syndicate:20, control_void:8,  control_guild:60, tension:40, contested:0 },
+  { id:'nova_reach',       faction:'coalition',    control_coalition:70, control_syndicate:18, control_void:12, control_guild:0,  tension:26, contested:0 },
+  { id:'iron_shelf',       faction:'syndicate',    control_coalition:18, control_syndicate:60, control_void:22, control_guild:0,  tension:44, contested:0 },
+  { id:'the_ledger',       faction:'contested',    control_coalition:30, control_syndicate:38, control_void:32, control_guild:0,  tension:70, contested:1 },
+  { id:'signal_run',       faction:'contested',    control_coalition:35, control_syndicate:35, control_void:30, control_guild:0,  tension:60, contested:1 },
+  { id:'scrub_yard',       faction:'syndicate',    control_coalition:14, control_syndicate:68, control_void:18, control_guild:0,  tension:48, contested:0 },
+  { id:'the_escrow',       faction:'void',         control_coalition:20, control_syndicate:25, control_void:55, control_guild:0,  tension:50, contested:0 },
+  { id:'margin_call',      faction:'syndicate',    control_coalition:12, control_syndicate:66, control_void:22, control_guild:0,  tension:52, contested:0 },
 ];
 
 export function seedColoniesIfEmpty() {
@@ -1440,12 +1443,26 @@ export function seedColoniesIfEmpty() {
     const before = stmt('SELECT 1 FROM colony_state WHERE id=?').get(c.id);
     if (before) continue;
     stmt(`INSERT OR IGNORE INTO colony_state
-      (id,faction,control_coalition,control_syndicate,control_void,tension,contested,war_chest)
-      VALUES(?,?,?,?,?,?,?,0)`)
-      .run(c.id, c.faction, c.control_coalition, c.control_syndicate, c.control_void, c.tension, c.contested);
+      (id,faction,control_coalition,control_syndicate,control_void,control_guild,tension,contested,war_chest)
+      VALUES(?,?,?,?,?,?,?,?,0)`)
+      .run(c.id, c.faction, c.control_coalition, c.control_syndicate, c.control_void, c.control_guild||0, c.tension, c.contested);
     added++;
   }
   if (added > 0) console.log(`[Galaxy] Colony state seeded (${added} colon${added===1?'y':'ies'})`);
+
+  // One-time correction: eyejog + dust_basin were seeded as coalition/syndicate
+  // before the Guild became a controlling faction. Hand them to the Guild as its
+  // starting territory — but only if no player funding has shifted them yet
+  // (war_chest still 0), so we never overwrite live contested state.
+  for (const c of COLONY_DEFAULTS) {
+    if (c.faction !== 'guild') continue;
+    const row = stmt('SELECT faction, war_chest, control_guild FROM colony_state WHERE id=?').get(c.id);
+    if (row && row.faction !== 'guild' && (row.war_chest||0) === 0 && (row.control_guild||0) === 0) {
+      stmt(`UPDATE colony_state SET faction=?, control_coalition=?, control_syndicate=?, control_void=?, control_guild=?, tension=?, contested=? WHERE id=?`)
+        .run(c.faction, c.control_coalition, c.control_syndicate, c.control_void, c.control_guild, c.tension, c.contested, c.id);
+      console.log(`[Galaxy] ${c.id} assigned to Merchants Guild (starting territory)`);
+    }
+  }
 }
 
 export function getAllColonyStates() {

@@ -1337,8 +1337,8 @@ function spUpdateHUDPrices(colonyId){
 // ── HUD: Control bars ─────────────────────────────────────────────────────────
 function spUpdateHUDControl(colonyId, f, s){
   var el = document.getElementById('spCtrlBars'); if(!el) return;
-  var ctrl = {coalition:s.control_coalition||0, syndicate:s.control_syndicate||0, void:s.control_void||0};
-  var fundFactions = ['coalition','syndicate','void'];
+  var ctrl = {coalition:s.control_coalition||0, syndicate:s.control_syndicate||0, void:s.control_void||0, guild:s.control_guild||0};
+  var fundFactions = ['coalition','syndicate','void','guild'];
   el.innerHTML = fundFactions.map(function(fid){
     var fc = FACTIONS[fid]; var p = ctrl[fid]||0;
     return '<div class="sp-ctrl-bar-wrap">'
@@ -1351,8 +1351,8 @@ function spUpdateHUDControl(colonyId, f, s){
 // ── HUD: Fund buttons ─────────────────────────────────────────────────────────
 function spBuildFundButtons(colonyId, f, s){
   var el = document.getElementById('spFundBtns'); if(!el) return;
-  var ctrl = {coalition:s.control_coalition||0, syndicate:s.control_syndicate||0, void:s.control_void||0};
-  el.innerHTML = ['coalition','syndicate','void'].map(function(fid){
+  var ctrl = {coalition:s.control_coalition||0, syndicate:s.control_syndicate||0, void:s.control_void||0, guild:s.control_guild||0};
+  el.innerHTML = ['coalition','syndicate','void','guild'].map(function(fid){
     var fc = FACTIONS[fid];
     return '<div class="sp-fund-row" id="spFR_'+colonyId+'_'+fid+'">'
       +'<button class="sp-fund-btn" style="border-color:'+fc.dim+';color:'+fc.color
@@ -1379,7 +1379,7 @@ window.spDoFund = function(cid, fid){
   if(!amt||amt<1000){ if(typeof gToast==='function') gToast('Minimum: Ƒ 1,000','#e74c3c'); return; }
   if(!gToken){ if(typeof gToast==='function') gToast('Log in to fund factions','#e74c3c'); return; }
   fetch(apiBase()+'/api/galaxy/fund',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({colonyId:cid,faction:fid,amount:amt,token:gToken})})
+    body:JSON.stringify({colonyId:cid,factionId:fid,amount:amt,token:gToken})})
     .then(function(r){return r.json();}).then(function(d){
       if(d.ok){
         if(typeof gToast==='function') gToast('Funded '+FACTIONS[fid].short,'#4ecdc4');
@@ -1784,7 +1784,7 @@ window.gShipTrafficStop = function() {
 })();
 function galaxyFetch(){
   // Pre-seed Eyejog as guild-controlled (sovereign, not server-tracked)
-  if(!gState['eyejog']) gState['eyejog'] = {id:'eyejog', faction:'guild', control_guild:100, control_coalition:0, control_syndicate:0, control_void:0, contested:false};
+  if(!gState['eyejog']) gState['eyejog'] = {id:'eyejog', faction:'guild', control_guild:68, control_coalition:14, control_syndicate:11, control_void:7, contested:false};
   spShowSpinner();
   fetch(apiBase()+'/api/galaxy/state').then(function(r){return r.json();}).then(function(d){
     spHideSpinner(); spFadeNebula();
@@ -1851,7 +1851,7 @@ function onGalaxyOpen(){
 
 function gRenderAll(){
   // Ensure eyejog always shows as guild sovereign
-  if(!gState['eyejog']) gState['eyejog'] = {id:'eyejog', faction:'guild', control_guild:100, control_coalition:0, control_syndicate:0, control_void:0, contested:false};
+  if(!gState['eyejog']) gState['eyejog'] = {id:'eyejog', faction:'guild', control_guild:68, control_coalition:14, control_syndicate:11, control_void:7, contested:false};
   renderLanes(); renderMap();
 }
 
@@ -1895,12 +1895,13 @@ function blendHex(hexA, hexB, t){
 // Get faction dominance for a colony (returns faction id or null if contested/neutral)
 function colonyDominant(id){
   var s=gState[id]; if(!s) return null;
-  var co=s.control_coalition||0, sy=s.control_syndicate||0, vo=s.control_void||0;
-  var total=co+sy+vo; if(total<10) return null;  // barely contested, treat as neutral
+  var co=s.control_coalition||0, sy=s.control_syndicate||0, vo=s.control_void||0, gu=s.control_guild||0;
+  var total=co+sy+vo+gu; if(total<10) return null;  // barely contested, treat as neutral
   var thresh=total*0.45;  // must hold 45% to be considered dominant
-  if(co>thresh && co>sy && co>vo) return 'coalition';
-  if(sy>thresh && sy>co && sy>vo) return 'syndicate';
-  if(vo>thresh && vo>co && vo>sy) return 'void';
+  if(co>thresh && co>sy && co>vo && co>gu) return 'coalition';
+  if(sy>thresh && sy>co && sy>vo && sy>gu) return 'syndicate';
+  if(vo>thresh && vo>co && vo>sy && vo>gu) return 'void';
+  if(gu>thresh && gu>co && gu>sy && gu>vo) return 'guild';
   return null;  // genuinely contested
 }
 
@@ -2021,8 +2022,8 @@ function getLeadingFaction(s){
   if(!s) return 'coalition';
   if(s.faction==='fleshstation') return 'fleshstation';
   if(s.faction==='guild') return 'guild';
-  var ctrl={coalition:s.control_coalition||0,syndicate:s.control_syndicate||0,void:s.control_void||0};
-  return ['coalition','syndicate','void'].reduce(function(b,f){ return ctrl[f]>ctrl[b]?f:b; },'coalition');
+  var ctrl={coalition:s.control_coalition||0,syndicate:s.control_syndicate||0,void:s.control_void||0,guild:s.control_guild||0};
+  return ['coalition','syndicate','void','guild'].reduce(function(b,f){ return ctrl[f]>ctrl[b]?f:b; },'coalition');
 }
 
 // Render colony nodes (star systems) — add small planet rings around each
@@ -2271,7 +2272,6 @@ function renderDetail(id){
 
   if(contested) h+='<div style="border:1px solid #f39c12;color:#f39c12;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9888; CONTESTED — Faction war active</div>';
   if(isFlesh)   h+='<div style="border:1px solid #ffd70066;color:#ffd700;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9889; HOME OF MR. FLESH — Cannot be contested or funded</div>';
-  if(isEyejog)  h+='<div style="border:1px solid #2ecc7166;color:#2ecc71;font-size:.72rem;padding:4px 8px;margin-bottom:10px">⬢ MERCHANT GUILD SOVEREIGN — <a href="https://www.patreon.com" target="_blank" style="color:#2ecc71">PATREON ONLY</a></div>';
 
   // Space Asset: landscape banner
   var banner = COLONY_BANNER[id];
@@ -2333,11 +2333,10 @@ function renderDetail(id){
   }
 
   // Control bars (not for flesh station)
-  if(!isFlesh && !isEyejog){
+  if(!isFlesh){
     if(wc>0) h+='<div style="font-size:.68rem;color:#555;letter-spacing:.08em;margin-bottom:2px">WAR CHEST</div><div style="font-size:.82rem;color:#f39c12;margin-bottom:10px">&#401;'+Math.round(wc).toLocaleString()+'</div>';
     h+='<div style="margin-bottom:12px"><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">Faction Control</div>';
-    var detailFactions=['coalition','syndicate','void'];
-    if(ctrl.guild||0) detailFactions.push('guild');
+    var detailFactions=['coalition','syndicate','void','guild'];
     detailFactions.forEach(function(fid){
       var fc=FACTIONS[fid]; var p2=ctrl[fid]||0;
       h+='<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:.70rem;margin-bottom:2px"><span style="color:'+fc.color+'">'+fc.short+'</span><span style="color:#555">'+p2+'%</span></div>';
@@ -2350,20 +2349,12 @@ function renderDetail(id){
     if(m.companies.length>4) h+='<div style="font-size:.68rem;color:#444;padding-top:3px">+'+(m.companies.length-4)+' more</div>';
     h+='</div>';
 
-    if(isEyejog){
-      h+='<div style="margin-top:10px;padding:10px 12px;border:1px solid #2ecc71aa;border-radius:4px;background:#061a0d">'
-       +'<div style="font-size:.72rem;color:#2ecc71;letter-spacing:.1em;margin-bottom:6px">⬢ MERCHANT GUILD SOVEREIGN TERRITORY</div>'
-       +'<div style="font-size:.68rem;color:#1a8c4a;line-height:1.6">Eyejog cannot be contested or captured. The Merchant Guild holds permanent sovereignty. Patreon supporters may align with the Guild across all contested colonies.</div>'
-       +'<div style="margin-top:8px"><a href="https://www.patreon.com" target="_blank" style="font-size:.68rem;color:#2ecc71;letter-spacing:.08em;text-decoration:none;border:1px solid #2ecc7166;padding:3px 10px;border-radius:2px">⬢ JOIN THE GUILD →</a></div>'
-       +'</div>';
-    } else if(!isFlesh){
-      h+='<div><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase">Fund a Faction</div>';
-      ['coalition','syndicate','void'].forEach(function(fid){
-        var fc=FACTIONS[fid];
-        h+='<div style="margin-bottom:5px" id="gFR_'+id+'_'+fid+'"><button onclick="window.gShowFund(\''+id+'\',\''+fid+'\')" style="width:100%;background:transparent;border:1px solid '+fc.dim+';color:'+fc.color+';padding:5px 8px;cursor:pointer;font-size:.73rem;letter-spacing:.06em;font-family:inherit;text-align:left">'+fc.name+' — '+(ctrl[fid]||0)+'% ctrl</button></div>';
-      });
-      h+='</div>';
-    }
+    h+='<div><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase">Fund a Faction</div>';
+    ['coalition','syndicate','void','guild'].forEach(function(fid){
+      var fc=FACTIONS[fid];
+      h+='<div style="margin-bottom:5px" id="gFR_'+id+'_'+fid+'"><button onclick="window.gShowFund(\''+id+'\',\''+fid+'\')" style="width:100%;background:transparent;border:1px solid '+fc.dim+';color:'+fc.color+';padding:5px 8px;cursor:pointer;font-size:.73rem;letter-spacing:.06em;font-family:inherit;text-align:left">'+fc.name+' — '+(ctrl[fid]||0)+'% ctrl</button></div>';
+    });
+    h+='</div>';
   } else {
     // Flesh Station: show companies, no funding
     h+='<div><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">Core Systems</div>';
@@ -2376,7 +2367,7 @@ function renderDetail(id){
   if(COLONY_PLANET[id]) setTimeout(function(){ spStartDetailAnim(id); }, 0);
 
   // ── Append Galaxy Systems panels (smuggling, blockade, contracts) ──
-  if (!isFlesh && !isEyejog) {
+  if (!isFlesh) {
     var sysDiv = document.createElement('div');
     sysDiv.id = 'gSysPanels_'+id;
     sysDiv.style.cssText = 'margin-top:14px;border-top:1px solid #1a1a2e;padding-top:10px';
@@ -2475,6 +2466,7 @@ window.gDoFund=function(cid,fid){
         gState[cid].control_coalition=d.newControl.coalition;
         gState[cid].control_syndicate=d.newControl.syndicate;
         gState[cid].control_void=d.newControl.void;
+        gState[cid].control_guild=d.newControl.guild;
         gState[cid].war_chest=(gState[cid].war_chest||0)+amt;
       }
       gToast('\u0192'+Number(amt).toLocaleString()+' deployed to '+FACTIONS[fid].name,FACTIONS[fid].color);
@@ -4245,7 +4237,7 @@ window._gShipCalcRisk = function(){
     var ck='control_'+pFac;
     if((fromState[ck]||0)>=40) fMod-=0.025;
     if((toState[ck]||0)>=40) fMod-=0.025;
-    var facs=['coalition','syndicate','void'];
+    var facs=['coalition','syndicate','void','guild'];
     var fromLead=facs.reduce(function(b,f){return (fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b;},'coalition');
     var toLead=facs.reduce(function(b,f){return (toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b;},'coalition');
     if(fromLead!==pFac) fMod+=0.04;
@@ -4354,7 +4346,7 @@ window._gSmugCalcRisk = function(){
     var ck='control_'+pFac;
     if((fromState[ck]||0)>=40) fMod-=0.02;
     if((toState[ck]||0)>=40) fMod-=0.02;
-    var facs=['coalition','syndicate','void'];
+    var facs=['coalition','syndicate','void','guild'];
     var fromLead=facs.reduce(function(b,f){return (fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b;},'coalition');
     var toLead=facs.reduce(function(b,f){return (toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b;},'coalition');
     if(fromLead!==pFac&&avgT<30) fMod+=0.03;
@@ -4363,7 +4355,7 @@ window._gSmugCalcRisk = function(){
   // Syndicate: +5% risk on own turf, no risk reduction
   var syndRisk=0;
   if(isSynd){
-    var facs2=['coalition','syndicate','void'];
+    var facs2=['coalition','syndicate','void','guild'];
     var fL=facs2.reduce(function(b,f){return (fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b;},'coalition');
     var tL=facs2.reduce(function(b,f){return (toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b;},'coalition');
     if(fL==='syndicate') syndRisk+=0.05;
