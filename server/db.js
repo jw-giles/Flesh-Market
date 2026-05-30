@@ -1420,18 +1420,32 @@ const COLONY_DEFAULTS = [
   { id:'lustandia',        faction:'syndicate',    control_coalition:10, control_syndicate:62, control_void:28, tension:55, contested:0 },
   { id:'gluttonis',        faction:'contested',    control_coalition:28, control_syndicate:42, control_void:30, tension:74, contested:1 },
   { id:'abaddon',          faction:'contested',    control_coalition:20, control_syndicate:40, control_void:40, tension:95, contested:1 },
+  { id:'eyejog',           faction:'coalition',    control_coalition:64, control_syndicate:21, control_void:15, tension:30, contested:0 },
+  { id:'dust_basin',       faction:'syndicate',    control_coalition:22, control_syndicate:58, control_void:20, tension:40, contested:0 },
+  { id:'nova_reach',       faction:'coalition',    control_coalition:70, control_syndicate:18, control_void:12, tension:26, contested:0 },
+  { id:'iron_shelf',       faction:'syndicate',    control_coalition:18, control_syndicate:60, control_void:22, tension:44, contested:0 },
+  { id:'the_ledger',       faction:'contested',    control_coalition:30, control_syndicate:38, control_void:32, tension:70, contested:1 },
+  { id:'signal_run',       faction:'contested',    control_coalition:35, control_syndicate:35, control_void:30, tension:60, contested:1 },
+  { id:'scrub_yard',       faction:'syndicate',    control_coalition:14, control_syndicate:68, control_void:18, tension:48, contested:0 },
+  { id:'the_escrow',       faction:'void',         control_coalition:20, control_syndicate:25, control_void:55, tension:50, contested:0 },
+  { id:'margin_call',      faction:'syndicate',    control_coalition:12, control_syndicate:66, control_void:22, tension:52, contested:0 },
 ];
 
 export function seedColoniesIfEmpty() {
-  const count = (stmt('SELECT COUNT(*) as c FROM colony_state').get()||{c:0}).c;
-  if (count > 0) return;
+  // Per-colony backfill: INSERT OR IGNORE every default so colonies added after
+  // the initial seed (e.g. the lower cluster) get inserted on the next boot
+  // without disturbing existing rows' live control/tension values.
+  let added = 0;
   for (const c of COLONY_DEFAULTS) {
+    const before = stmt('SELECT 1 FROM colony_state WHERE id=?').get(c.id);
+    if (before) continue;
     stmt(`INSERT OR IGNORE INTO colony_state
       (id,faction,control_coalition,control_syndicate,control_void,tension,contested,war_chest)
       VALUES(?,?,?,?,?,?,?,0)`)
       .run(c.id, c.faction, c.control_coalition, c.control_syndicate, c.control_void, c.tension, c.contested);
+    added++;
   }
-  console.log('[Galaxy] Colony state seeded');
+  if (added > 0) console.log(`[Galaxy] Colony state seeded (${added} colon${added===1?'y':'ies'})`);
 }
 
 export function getAllColonyStates() {

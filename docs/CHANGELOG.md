@@ -20,6 +20,9 @@ New `fund_nav_history` table (`fund_id, nav, spp, total_shares, ts`, 1000-row ca
 ### Four-pane house view
 The detail panel is restructured into sub-views: **Overview** (stats, performance, deposit/withdraw, members), **Portfolio** (holdings, direct trade, activity), **Governance** (mode, proposals, polls), **Manage** (owner: slots, withdraw, assign, invite, edit, disband). Single withdraw control; destructive actions isolated in Manage (owner-only tab).
 
+### Galaxy faction-control fix
+The lower-cluster colonies (Eyejog, Dust Basin, Nova Reach, Iron Shelf, The Ledger, Signal Run, Scrub Yard, The Escrow, Margin Call) were rendered on the map but never seeded into `colony_state`, so funding faction control on them returned "colony not found." Added all nine to the colony defaults, and made the seeder backfill per-colony on boot (INSERT OR IGNORE each, instead of bailing whenever any rows already exist) so existing servers pick up the missing colonies without resetting live control/tension on the others.
+
 ### Portfolio dividends
 Capital Houses (and the Merchants Guild) now earn dividends on the shares they hold, paid into fund cash on the same 2h cycle and base sector rates as players (full rate on Finance/Insurance/Energy/Tech, base rate elsewhere). Funds use the same continuous-holding eligibility as players via a parallel `fund_holding_snapshots` table — no faction/guild bonuses (player-only). A house must hold a position through the eligibility window before it pays, so dividends begin a few cycles after deploy.
 
