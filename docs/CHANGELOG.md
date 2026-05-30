@@ -20,6 +20,9 @@ New `fund_nav_history` table (`fund_id, nav, spp, total_shares, ts`, 1000-row ca
 ### Four-pane house view
 The detail panel is restructured into sub-views: **Overview** (stats, performance, deposit/withdraw, members), **Portfolio** (holdings, direct trade, activity), **Governance** (mode, proposals, polls), **Manage** (owner: slots, withdraw, assign, invite, edit, disband). Single withdraw control; destructive actions isolated in Manage (owner-only tab).
 
+### Galaxy grey-lane visibility
+Grey-market shipping lanes used `#999`, which was nearly invisible against the dark space background. The newly-connected frontier colonies (Eyejog, Dust Basin, Nova Reach, Iron Shelf, Margin Call) link only via grey lanes, so they appeared orphaned even though the lanes were present and clickable. Brightened grey lanes to `#c8cdd6` and matched the map legend swatch.
+
 ### Galaxy faction-control fix
 The lower-cluster colonies (Eyejog, Dust Basin, Nova Reach, Iron Shelf, The Ledger, Signal Run, Scrub Yard, The Escrow, Margin Call) were rendered on the map but never seeded into `colony_state`, so funding faction control on them returned "colony not found." Added all nine to the colony defaults, and made the seeder backfill per-colony on boot (INSERT OR IGNORE each, instead of bailing whenever any rows already exist) so existing servers pick up the missing colonies without resetting live control/tension on the others.
 

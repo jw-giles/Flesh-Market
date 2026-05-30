@@ -330,7 +330,7 @@ var LANES=[
   {from:'signal_run',      to:'aurora_prime',     vol:'medium',type:'grey'},
   {from:'signal_run',      to:'vein_cluster',     vol:'low',   type:'grey'},
 ];
-var LANE_COLOR={corporate:'#4ecdc4',grey:'#999',dark:'#9b59b6',contested:'#f39c12'};
+var LANE_COLOR={corporate:'#4ecdc4',grey:'#c8cdd6',dark:'#9b59b6',contested:'#f39c12'};
 window._FM_LANES = LANES;  // exposed for smuggling/blockade/contract panels
 
 // Matches COLONY_BONUSES on server
@@ -2796,7 +2796,7 @@ document.addEventListener('fm_ws_msg',function(e){
 });
 
 // ── Lane Shares Market Table ──────────────────────────────────────────────────
-var LANE_TYPE_COLOR = {corporate:'#4ecdc4',grey:'#999',dark:'#9b59b6',contested:'#f39c12'};
+var LANE_TYPE_COLOR = {corporate:'#4ecdc4',grey:'#c8cdd6',dark:'#9b59b6',contested:'#f39c12'};
 var LANE_RISK = {corporate:{intercept:0.15},grey:{intercept:0.28},contested:{intercept:0.40},dark:{intercept:0.55}};
 var VOL_LABEL = {high:'HIGH',medium:'MED',low:'LOW'};
 var SHARE_DIVIDEND_CLIENT = {high:50,medium:20,low:8};
