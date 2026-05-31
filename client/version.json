@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3.0d",
+  "version": "1.0.3.0e",
   "built": "2026-05-29T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.3.0d",
-  "notes": "Fix: multi-hop routing now passes through non-market colonies (like Abaddon) as fly-through waypoints. The Abaddon cluster (Limbosis/Lustandia/Gluttonis) is only reachable via Abaddon, which the waypoint filter was wrongly blocking, causing \"no route\". Ships fly through without trading there."
+  "patch": "1.0.3.0e",
+  "notes": "Route risk preview: the Shipping Console now shows the route, hop count, transit time, and color-coded interception risk live as you pick commodity/origin/destination, before you commit. New /api/cargo/quote endpoint mirrors the ship math without executing."
 }

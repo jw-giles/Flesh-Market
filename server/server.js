@@ -3656,6 +3656,44 @@ app.post('/api/ships/buy', (req, res) => {
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
 
+// Quote a shipment WITHOUT executing it: route, hops, time, and interception risk.
+// Lets the console show risk before the player commits. Mirrors the ship endpoint math.
+app.get('/api/cargo/quote', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const p = tok ? getPlayer(tok) : null;
+    const from = String(req.query.from||'');
+    const to = String(req.query.to||'');
+    const commodityId = String(req.query.commodityId||'');
+    const qty = Math.max(1, Math.floor(Number(req.query.qty)||1));
+    const com = COMMODITY_BY_ID[commodityId];
+    if (!com) return res.json({ ok:false, error:'unknown_commodity' });
+    if (from === to) return res.json({ ok:false, error:'same_colony' });
+    const route = findRoute(from, to);
+    if (!route) return res.json({ ok:false, error:'no_lane' });
+    const hops = route.lanes.length;
+    const riskOrder = { corporate:0, grey:1, contested:2, dark:3 };
+    const routeLaneType = route.lanes.reduce((w,l)=> (riskOrder[l.type]||0)>(riskOrder[w]||0)?l.type:w, 'corporate');
+    // Unit cost: player's avg at origin if held, else current price.
+    let unitCost = getCommodityPrice(from, commodityId)?.price || com.basePrice;
+    if (p) { const cr = getPlayerCargo(p.id).find(r => r.commodity_id===commodityId && r.colony_id===from); if (cr) unitCost = cr.avg_cost; }
+    const flyByRisk = (hops - 1) * 0.05;
+    const ship = p ? shipClassFor(p.id) : null;
+    const shipMod = ship ? (ship.riskMod||0) : 0;
+    // If we have a player, use their faction-aware risk; otherwise base estimate.
+    let interceptChance;
+    if (p) interceptChance = cargoShipmentInterceptChance(p.id, from, to, routeLaneType, qty, unitCost);
+    else   interceptChance = cargoShipmentInterceptChance('', from, to, routeLaneType, qty, unitCost);
+    interceptChance = Math.min(0.70, Math.max(0.02, interceptChance + shipMod + flyByRisk));
+    const totalMs = SHIPMENT_TOTAL_MS * hops;
+    res.json({ ok:true, hops, route: route.path, laneType: routeLaneType,
+      durSec: Math.round(totalMs/1000), durMin: Math.round(totalMs/60000),
+      interceptChance: Math.round(interceptChance*100),
+      flyByRisk: Math.round(flyByRisk*100),
+      hasShip: !!ship, shipName: ship?ship.name:null });
+  } catch(e) { res.json({ ok:false, error:String(e) }); }
+});
+
 // Ship cargo from one colony to another through a lane (arbitrage shipping).
 app.post('/api/cargo/ship', (req, res) => {
   try {

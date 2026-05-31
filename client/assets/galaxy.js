@@ -2018,15 +2018,16 @@ function renderMarketsTab(){
       +'<div style="font-size:.66rem;color:#666;margin-bottom:8px">Buy a commodity at a colony, then ship it to another to sell at the spread. Shipping takes time and can be intercepted.</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
         +'<div style="flex:1;min-width:130px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">Commodity</div>'
-          +'<input id="gShipConCom" list="gShipConComList" placeholder="Type to search\u2026" autocomplete="off" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"><datalist id="gShipConComList">'+_comDatalist+'</datalist></div>'
+          +'<input id="gShipConCom" list="gShipConComList" placeholder="Type to search\u2026" autocomplete="off" oninput="window.gShipQuote()" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"><datalist id="gShipConComList">'+_comDatalist+'</datalist></div>'
         +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">From</div>'
-          +'<select id="gShipConFrom" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
+          +'<select id="gShipConFrom" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
         +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">To</div>'
-          +'<select id="gShipConTo" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
+          +'<select id="gShipConTo" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
         +'<div style="flex:0 0 80px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">Qty</div>'
-          +'<input id="gShipConQty" type="number" min="1" value="10" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"></div>'
+          +'<input id="gShipConQty" type="number" min="1" value="10" oninput="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"></div>'
         +'<button onclick="window.gShipConsoleGo()" style="flex:0 0 auto;background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:7px 16px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">SHIP</button>'
       +'</div>'
+      +'<div id="gShipConPreview" style="font-size:.68rem;color:#888;margin-top:8px;min-height:15px;padding:6px 8px;background:#070710;border:1px solid #14141f;border-radius:3px">Select a commodity and two colonies to preview the route and risk.</div>'
       +'<div id="gShipConHint" style="font-size:.66rem;color:#888;margin-top:6px;min-height:13px"></div>'
       +'</div>';
 
@@ -2224,6 +2225,44 @@ window.gMktSell = function(colonyId, comId){
     }).catch(function(){ var hint=document.getElementById('gMktHint'); if(hint){hint.textContent='\u2717 Sell failed';hint.style.color='#ff6b6b';} });
 };
 
+// Live route+risk preview for the shipping console (no commitment).
+window.gShipQuote = function(){
+  if(window._gShipQuoteT) clearTimeout(window._gShipQuoteT);
+  window._gShipQuoteT = setTimeout(function(){
+    var prev=document.getElementById('gShipConPreview');
+    if(!prev) return;
+    var com=document.getElementById('gShipConCom');
+    var from=document.getElementById('gShipConFrom');
+    var to=document.getElementById('gShipConTo');
+    var qtyI=document.getElementById('gShipConQty');
+    if(!com||!from||!to) return;
+    var comId=(window._gShipComNameToId||{})[(com.value||'').trim().toLowerCase()];
+    if(!comId){ prev.innerHTML='<span style="color:#777">Pick a commodity to preview the route.</span>'; return; }
+    if(from.value===to.value){ prev.innerHTML='<span style="color:#c0392b">Origin and destination must differ.</span>'; return; }
+    var qty=Math.max(1,Math.floor(Number(qtyI&&qtyI.value)||1));
+    var nm=window._gColNameOf||function(x){return x;};
+    prev.innerHTML='<span style="color:#666">Calculating route\u2026</span>';
+    var qs='commodityId='+encodeURIComponent(comId)+'&from='+encodeURIComponent(from.value)+'&to='+encodeURIComponent(to.value)+'&qty='+qty+(gToken?'&token='+encodeURIComponent(gToken):'');
+    fetch('/api/cargo/quote?'+qs).then(function(r){return r.json();}).then(function(d){
+      if(!d.ok){
+        var msg=d.error==='no_lane'?'No route exists between those colonies.':d.error==='same_colony'?'Pick two different colonies.':(d.error||'No route.');
+        prev.innerHTML='<span style="color:#c0392b">\u26d4 '+msg+'</span>'; return;
+      }
+      var risk=d.interceptChance;
+      var rc = risk>=45?'#e74c3c':risk>=25?'#f39c12':'#2ecc71';
+      var routeStr=(d.route||[]).map(nm).join(' \u2192 ');
+      var hopStr=d.hops>1?(d.hops+' hops'):'direct';
+      var html='<span style="color:#9ab">Route:</span> <span style="color:#ccc">'+routeStr+'</span> '
+        +'<span style="color:#555">('+hopStr+')</span><br>'
+        +'<span style="color:#9ab">Time:</span> <span style="color:#ccc">~'+d.durMin+' min</span> '
+        +'&nbsp;&nbsp;<span style="color:#9ab">Risk:</span> <span style="color:'+rc+';font-weight:700">'+risk+'%</span>'
+        +(d.flyByRisk>0?' <span style="color:#777">(+'+d.flyByRisk+'% fly-by)</span>':'')
+        +(d.hasShip?'':' <span style="color:#e74c3c">\u2014 no ship yet</span>');
+      prev.innerHTML=html;
+    }).catch(function(){ prev.innerHTML='<span style="color:#777">Could not load route preview.</span>'; });
+  }, 250);
+};
+
 // Standalone shipping console: read dropdowns, launch a timed shipping run.
 window.gShipConsoleGo = function(){
   if(!gToken){ gToast('Log in to ship','#e74c3c'); return; }
@@ -2275,6 +2314,7 @@ window.gMktShipRow = function(comId, fromCol, toCol){
   }
   var hint=document.getElementById('gShipConHint');
   if(hint){ hint.textContent='Ready to ship \u2014 set quantity and press SHIP (you must hold the cargo first).'; hint.style.color='#888'; }
+  try{ window.gShipQuote(); }catch(_){}
 };
 
 function hookShowTab(){

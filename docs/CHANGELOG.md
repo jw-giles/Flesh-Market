@@ -4,6 +4,14 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.0e (2026-05-30) — route risk preview
+
+You can now gauge a shipment's risk BEFORE committing. The Shipping Console shows a live preview as you change the commodity, origin, destination, or quantity:
+- **Route** (full hop path) and **hop count**, **transit time**, and **interception risk**, color-coded (green <25%, amber 25-45%, red 45%+), including the fly-by surcharge for multi-hop routes.
+- Flags when you don't own a ship yet, and when no route exists.
+- Per-row SHIP buttons also trigger the preview after pre-filling.
+- New `GET /api/cargo/quote` endpoint runs the same routing + risk math as the ship endpoint without executing it.
+
 ## v1.0.3.0d (2026-05-30) — routing fix: cluster gateways
 
 Multi-hop routing wrongly refused to pass through non-market colonies, which made the entire Abaddon cluster (Limbosis / Lustandia / Gluttonis) unreachable — their only link to the galaxy is the gluttonis/lustandia/limbosis <-> abaddon lanes, and Abaddon is a non-market anchor. Shipping to any cluster colony returned "no route". Fixed: a ship can fly THROUGH any colony as a transit waypoint (it just can't buy/sell at a non-market one). Endpoints are still validated as market colonies. Example now works: Nova Reach -> Gluttonis routes in 4 hops through Abaddon.
