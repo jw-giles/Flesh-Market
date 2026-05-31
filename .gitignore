@@ -1,0 +1,13 @@
+# Live + dev databases — NEVER commit these
+*.db
+*.sqlite
+*.sqlite3
+server/fleshmarket.db
+
+# Env / secrets
+.env
+
+# Deps / noise
+node_modules/
+npm-debug.log*
+*.log
