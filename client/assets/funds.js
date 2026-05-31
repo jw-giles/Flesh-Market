@@ -253,7 +253,7 @@ function renderFundDetail(f) {
     const own = m.isOwner ? ' 👑' : '';
     const role = _officerByName[m.name];
     const roleTag = role ? ` <span style="font-size:.58rem;color:${_roleBadge[role]||'#aaa'};border:1px solid ${_roleBadge[role]||'#aaa'}55;padding:0 4px;border-radius:3px;text-transform:uppercase;letter-spacing:.05em">${role}</span>` : '';
-    const goldTag = (f.goldenHolder && f.goldenHolder===m.name) ? ' <span title="Golden share" style="color:#e6c27a">★</span>' : '';
+    const goldTag = m.isGolden ? ' <span title="Golden share" style="color:#e6c27a">★</span>' : '';
     const kickBtn = (f.isOwner && !m.isOwner && isPlayerFund)
       ? `<button onclick="kickMember('${m.name}')" style="font-size:.65rem;padding:1px 5px;background:#2a0d0d;border:1px solid #4a1a1a;color:#ff8080;border-radius:4px;cursor:pointer;margin-left:4px">kick</button>`
       : '';

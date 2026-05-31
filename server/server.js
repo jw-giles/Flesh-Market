@@ -2475,6 +2475,7 @@ function fundDetailSnapshot(fundId, playerId) {
       pct: totalShares>0?(m.shares/totalShares*100).toFixed(1):'0.0',
       patreon_tier:m.patreon_tier,
       isOwner: m.player_id === fund.owner_id,
+      isGolden: !!(fund.golden_holder && m.player_id === fund.golden_holder),
     })),
     holdings: portfolio.map(h=>{
       const c=companies.find(x=>x.symbol===h.symbol);

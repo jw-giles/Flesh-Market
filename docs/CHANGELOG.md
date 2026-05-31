@@ -4,6 +4,10 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.7 (2026-05-31) — fix: golden-share badge shown on wrong member
+
+The golden-share ★ in the member list was rendered by matching the holder's name against each member's name (f.goldenHolder===m.name). Name collisions (or a treasurer/other officer whose name matched) could show the badge on the wrong person. The members array didn't expose player_id to the client, so a name match was the only thing available. Fixed by computing an isGolden boolean per member server-side off player_id and badging on that. Purely cosmetic — both veto endpoints already gate on getGoldenHolder()===actor.id, so the share's actual authority was never mis-assigned; only the badge was wrong.
+
 ## v1.0.3.6 (2026-05-31) — fix: smuggling countdown froze (real fix)
 
 v1.0.3.5 anchored the smuggling countdown to resolveTs but updated the wrong element: the RUN IN PROGRESS panel renders its timer into #gShipCountdownTimer (a shipping-named id it reuses), while the interval was writing to #gSmugStatus. So the visible number never moved. Replaced both with one shared ticker (_smugTick / _ensureSmugTicker / _stopSmugTicker) that recomputes from resolveTs each second and writes to whichever countdown element is present, re-armed at the end of renderShippingTab so tab switches and re-renders keep it live. Known minor gap: a full page refresh mid-run doesn't restore the run panel (no smuggling_status client handler yet) — separate follow-up.
