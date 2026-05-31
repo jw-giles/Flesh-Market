@@ -541,7 +541,7 @@ const SHIPPING_CARGO = [
   { id:'premium_goods',    name:'Premium Goods',     mult:1.25, riskMod:0.05 },
   { id:'luxury_supplies',  name:'Luxury Supplies',   mult:1.35, riskMod:0.12 },
 ];
-const SHIPPING_BASE_RISK = 0.18;
+const SHIPPING_BASE_RISK = 0.05;
 const SHIPPING_DUR_SEC = 30;
 
 // ─── COMMODITIES ──────────────────────────────────────────────────────────────
@@ -1172,8 +1172,8 @@ function cargoShipmentInterceptChance(playerId, from, to, laneType, qty, unitVal
     if ((toState[ck]||0)   >= 40) factionMod -= 0.025;
     const fromLead = ['coalition','syndicate','void','guild'].reduce((b,f)=>(fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b,'coalition');
     const toLead   = ['coalition','syndicate','void','guild'].reduce((b,f)=>(toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b,'coalition');
-    if (fromLead !== playerFaction) factionMod += 0.04;
-    if (toLead   !== playerFaction) factionMod += 0.04;
+    if (fromLead !== playerFaction) factionMod += 0.02;
+    if (toLead   !== playerFaction) factionMod += 0.02;
   }
   // Cargo value scaling: bigger hauls draw more attention (mirrors shippingBetRisk).
   const cargoValue = qty * unitValue;

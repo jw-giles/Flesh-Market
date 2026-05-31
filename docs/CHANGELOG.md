@@ -4,6 +4,14 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.0a (2026-05-30) — shipping risk rebalance
+
+Commodity shipment interception was too punishing for legitimate trade. The base shipping risk was a flat 18% on every run before any modifiers, stacking to ~41% on an ordinary grey-lane haul. Lowered:
+- `SHIPPING_BASE_RISK` 0.18 -> 0.05.
+- Faction-away penalty (shipping through colonies your faction doesn't control) halved from +0.04 to +0.02 per endpoint.
+
+Result: corporate lane ~14% (was 27%), grey lane ~24% (was 41%), while contested/dark lanes with big cargo stay 44-51%. The risk gradient is preserved; legitimate shipping is now viable. Smuggling uses a separate risk path and is unchanged (contraband stays dangerous).
+
 ## v1.0.3.0 (2026-05-30) — The Commodity Economy Update
 
 The largest single update to FleshMarket: a full inter-colony trade economy layered on
