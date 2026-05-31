@@ -2005,14 +2005,20 @@ function renderMarketsTab(){
     h+='</div></div>';
 
     // ── Shipping Console (self-contained; no sector map needed) ──
-    var _colOpts = grid.colonies.map(function(c){ return '<option value="'+c.id+'">'+nameOf(c.id)+'</option>'; }).join('');
-    var _comOpts = grid.commodities.map(function(c){ return '<option value="'+c.id+'">'+c.name+'</option>'; }).join('');
+    var _colOpts = grid.colonies.slice().sort(function(a,b){ return nameOf(a.id).localeCompare(nameOf(b.id)); }).map(function(c){ return '<option value="'+c.id+'">'+nameOf(c.id)+'</option>'; }).join('');
+    var _comsSorted = grid.commodities.slice().sort(function(a,b){ return a.name.localeCompare(b.name); });
+    // Searchable commodity field: type to filter (a <select> of 120 is unscrollable).
+    var _comDatalist = _comsSorted.map(function(c){ return '<option value="'+c.name.replace(/"/g,'&quot;')+'">'; }).join('');
+    // Name->id map so we can resolve the typed name back to a commodity id on submit.
+    window._gShipComNameToId = {};
+    window._gShipComIdToName = {};
+    _comsSorted.forEach(function(c){ window._gShipComNameToId[c.name.toLowerCase()] = c.id; window._gShipComIdToName[c.id] = c.name; });
     h+='<div id="gShipConsole" style="background:#0a0a14;border:1px solid #1a2a3a;border-radius:4px;padding:12px 14px;margin-bottom:16px">'
       +'<div style="font-size:.8rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">\uD83D\uDCE6 Ship Cargo</div>'
       +'<div style="font-size:.66rem;color:#666;margin-bottom:8px">Buy a commodity at a colony, then ship it to another to sell at the spread. Shipping takes time and can be intercepted.</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
         +'<div style="flex:1;min-width:130px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">Commodity</div>'
-          +'<select id="gShipConCom" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_comOpts+'</select></div>'
+          +'<input id="gShipConCom" list="gShipConComList" placeholder="Type to search\u2026" autocomplete="off" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"><datalist id="gShipConComList">'+_comDatalist+'</datalist></div>'
         +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">From</div>'
           +'<select id="gShipConFrom" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
         +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">To</div>'
@@ -2227,20 +2233,29 @@ window.gShipConsoleGo = function(){
   var qtyI=document.getElementById('gShipConQty');
   var hint=document.getElementById('gShipConHint');
   if(!com||!from||!to||!qtyI) return;
+  // The commodity field holds a typed name; resolve it to an id.
+  var comId=(window._gShipComNameToId||{})[(com.value||'').trim().toLowerCase()];
+  if(!comId){ if(hint){hint.textContent='\u2717 Pick a commodity from the list';hint.style.color='#ff6b6b';} return; }
   var qty=Math.max(1,Math.floor(Number(qtyI.value)||0));
   if(from.value===to.value){ if(hint){hint.textContent='\u2717 Pick two different colonies';hint.style.color='#ff6b6b';} return; }
   fetch('/api/cargo/ship',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({token:gToken,commodityId:com.value,from:from.value,to:to.value,qty:qty})})
+    body:JSON.stringify({token:gToken,commodityId:comId,from:from.value,to:to.value,qty:qty})})
     .then(function(r){return r.json();}).then(function(d){
       if(!d.ok){
         var msg=d.error==='no_ship'?'Commission a ship first (Shipyard below)':
           d.error==='insufficient_cargo'?('You only hold '+(d.have||0)+' \u2014 buy it first'):
+          d.error==='insufficient_cargo_at_origin'?('You only hold '+(d.have||0)+' there \u2014 buy it at the origin first'):
           d.error==='over_capacity'?('Over capacity: '+d.shipName+' holds '+d.capacity):
-          d.error==='no_lane'?'No lane between those colonies':
+          d.error==='no_lane'?'No route between those colonies':
           d.error==='same_colony'?'Pick two different colonies':(d.error||'Ship failed');
         if(hint){hint.textContent='\u2717 '+msg;hint.style.color='#ff6b6b';} return;
       }
-      if(hint){hint.textContent='\u2713 Shipment launched \u2014 track it in the In Transit panel above';hint.style.color='#2ecc71';}
+      if(hint){
+        var nm=window._gColNameOf||function(x){return x;};
+        var routeStr=(d.route&&d.route.length)?d.route.map(nm).join(' \u2192 '):'';
+        var hopInfo=(d.hops>1)?(' via '+(d.hops-1)+' hop'+(d.hops>2?'s':'')+' ('+routeStr+'), ~'+Math.round(d.durSec/60)+'min, '+d.interceptChance+'% risk'):(' ~'+Math.round(d.durSec/60)+'min, '+d.interceptChance+'% risk');
+        hint.textContent='\u2713 Shipment launched'+hopInfo+' \u2014 track it above';hint.style.color='#2ecc71';
+      }
       renderMarketsTab();
     }).catch(function(){ if(hint){hint.textContent='\u2717 Ship failed';hint.style.color='#ff6b6b';} });
 };
@@ -2250,7 +2265,7 @@ window.gMktShipRow = function(comId, fromCol, toCol){
   var com=document.getElementById('gShipConCom');
   var from=document.getElementById('gShipConFrom');
   var to=document.getElementById('gShipConTo');
-  if(com) com.value=comId;
+  if(com) com.value=(window._gShipComIdToName||{})[comId]||comId;
   if(from) from.value=fromCol;
   if(to) to.value=toCol;
   var con=document.getElementById('gShipConsole');

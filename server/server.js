@@ -815,6 +815,41 @@ function findLane(from, to) {
   );
 }
 
+// Multi-hop routing: BFS over the lane graph for the fewest-hops path from->to.
+// Returns { path:[colonyId,...], lanes:[lane,...] } or null if unreachable.
+// Only routes through market colonies as waypoints (no stopping at non-market anchors).
+function findRoute(from, to) {
+  if (from === to) return null;
+  const direct = findLane(from, to);
+  if (direct) return { path:[from, to], lanes:[direct] };
+  // Build adjacency once per call (graph is small, ~30 edges).
+  const adj = {};
+  for (const l of LANES_SERVER) {
+    (adj[l.from] = adj[l.from] || []).push({ to:l.to, lane:l });
+    (adj[l.to]   = adj[l.to]   || []).push({ to:l.from, lane:l });
+  }
+  const queue = [from];
+  const prev = { [from]: null };       // colonyId -> { from, lane }
+  while (queue.length) {
+    const cur = queue.shift();
+    if (cur === to) break;
+    for (const edge of (adj[cur] || [])) {
+      if (prev[edge.to] !== undefined) continue;
+      // Don't route THROUGH a non-market colony (can still be an endpoint).
+      const wpState = getColonyState(edge.to);
+      if (edge.to !== to && !isMarketColony(wpState)) continue;
+      prev[edge.to] = { from:cur, lane:edge.lane };
+      queue.push(edge.to);
+    }
+  }
+  if (prev[to] === undefined) return null; // unreachable
+  // Reconstruct path back to front.
+  const path = [to]; const lanes = [];
+  let node = to;
+  while (prev[node]) { lanes.unshift(prev[node].lane); path.unshift(prev[node].from); node = prev[node].from; }
+  return { path, lanes };
+}
+
 function resolveSmuggling(playerId) {
   const run = activeSmuggling.get(playerId);
   if (!run) return;
@@ -1244,12 +1279,16 @@ function stepCargoShipments() {
   for (const s of active) {
     try {
       const elapsed = now - s.created_at;
-      // Determine which phase index elapsed time puts us in.
+      // Per-shipment total (multi-hop runs are longer). Derive from stored timestamps
+      // so phase boundaries stretch across the whole journey.
+      const shipTotal = Math.max(1, (s.resolve_ts || (s.created_at + SHIPMENT_TOTAL_MS)) - s.created_at);
+      const scale = shipTotal / SHIPMENT_TOTAL_MS;
+      // Determine which phase index elapsed time puts us in (offsets scaled to this run).
       let idx = 0;
       for (let i = 0; i < SHIPMENT_PHASES.length; i++) {
-        if (elapsed >= SHIPMENT_PHASE_OFFSETS[i]) idx = i;
+        if (elapsed >= SHIPMENT_PHASE_OFFSETS[i] * scale) idx = i;
       }
-      const completed = elapsed >= SHIPMENT_TOTAL_MS;
+      const completed = elapsed >= shipTotal;
       // Advance through any phases we've newly entered, rolling risk for each.
       let curIdx = s.phase_idx;
       let intercepted = (s.status === 'intercepted');
@@ -3631,8 +3670,12 @@ app.post('/api/cargo/ship', (req, res) => {
     if (from === to) return res.status(400).json({ ok:false, error:'same_colony' });
     const fromColony = getColonyState(from), toColony = getColonyState(to);
     if (!fromColony || !toColony) return res.status(404).json({ ok:false, error:'colony_not_found' });
-    const lane = findLane(from, to);
-    if (!lane) return res.status(400).json({ ok:false, error:'no_lane' });
+    const route = findRoute(from, to);
+    if (!route) return res.status(400).json({ ok:false, error:'no_lane' });
+    const hops = route.lanes.length;            // 1 = direct, 2+ = multi-hop
+    // The lane type used for risk is the RISKIEST lane on the whole route.
+    const riskOrder = { corporate:0, grey:1, contested:2, dark:3 };
+    const routeLaneType = route.lanes.reduce((worst,l)=> (riskOrder[l.type]||0) > (riskOrder[worst]||0) ? l.type : worst, 'corporate');
 
     const held = getCargoQty(p.id, commodityId, from);
     if (held < qty) return res.status(400).json({ ok:false, error:'insufficient_cargo_at_origin', have:held });
@@ -3664,19 +3707,25 @@ app.post('/api/cargo/ship', (req, res) => {
     // Escrow the units out of the origin colony's hold now.
     removeCargo(p.id, commodityId, qty, from);
 
-    // Interception chance, plus the ship-class risk modifier.
-    let interceptChance = cargoShipmentInterceptChance(p.id, from, to, lane.type, qty, unitCost);
-    interceptChance = Math.min(0.60, Math.max(0.02, interceptChance + (ship.riskMod || 0)));
+    // Interception chance, plus the ship-class risk modifier. Multi-hop adds a small
+    // fly-by risk per extra hop (5% each) for skipping past colonies without docking.
+    const flyByRisk = (hops - 1) * 0.05;
+    let interceptChance = cargoShipmentInterceptChance(p.id, from, to, routeLaneType, qty, unitCost);
+    interceptChance = Math.min(0.70, Math.max(0.02, interceptChance + (ship.riskMod || 0) + flyByRisk));
     const now = Date.now();
-    const resolveTs = now + SHIPMENT_TOTAL_MS; // 10-min flat run, phases stepped by the tick
+    // Each hop is a full leg, so total transit scales with hop count
+    // (3 hops = 30 min, not 10). Phases still step across the whole journey.
+    const totalMs = SHIPMENT_TOTAL_MS * hops;
+    const resolveTs = now + totalMs;
     const id = 'CS' + Math.random().toString(36).slice(2, 10).toUpperCase();
     createCargoShipment({ id, playerId:p.id, commodityId, qty, buyCost,
-      from, to, laneType:lane.type, insured:wantInsurance, insurancePaid,
+      from, to, laneType:routeLaneType, insured:wantInsurance, insurancePaid,
       interceptChance, createdAt:now, resolveTs,
-      phase:'loading', phaseIdx:0, shipClass:ship.id, sellValue:0 });
+      phase:'loading', phaseIdx:0, shipClass:ship.id, sellValue:0, totalMs, hops });
     // No per-shipment setTimeout — stepCargoShipments() advances phases on its tick.
 
-    res.json({ ok:true, id, qty, from, to, laneType:lane.type, durSec:Math.round(SHIPMENT_TOTAL_MS/1000), resolveTs,
+    res.json({ ok:true, id, qty, from, to, laneType:routeLaneType, hops,
+      route: route.path, durSec:Math.round(totalMs/1000), resolveTs,
       insured:wantInsurance, insurancePaid, returnCost, ship:ship.name,
       interceptChance:Math.round(interceptChance*100),
       cash:p.cash, cargo:cargoSnapshot(p.id) });

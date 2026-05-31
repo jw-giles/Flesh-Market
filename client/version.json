@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3.0a",
+  "version": "1.0.3.0c",
   "built": "2026-05-29T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.3.0a",
-  "notes": "Balance: lowered commodity shipment interception risk. Base shipping risk 18%->5% and the penalty for shipping through colonies your faction does not control was halved. A simple corporate-lane run is now ~14% (was 27%); a grey-lane run ~24% (was 41%). Dangerous contested/dark lanes stay high-risk. Smuggling risk is unchanged."
+  "patch": "1.0.3.0c",
+  "notes": "Multi-hop auto-routing: shipping between colonies with no direct lane now auto-routes the shortest path through intermediate colonies. Transit time scales per hop (3 hops = 30min, not 3 separate runs) and each extra hop adds 5% fly-by interception risk. Route risk uses the riskiest lane on the path. Still one shipment, one delivery."
 }

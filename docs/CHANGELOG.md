@@ -4,6 +4,21 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.0c (2026-05-30) — multi-hop auto-routing
+
+Shipping to a colony with no direct lane now **auto-routes** the shortest path through intermediate colonies (BFS over the lane graph) instead of returning "no lane." It stays one shipment with one delivery at the final destination — a simple auto-queue, not manual leg-chaining.
+
+- **Transit time scales per hop:** a 3-hop route takes ~30 min (3 × the 10-min leg), not three separate runs. Phase tracker stretches across the whole journey.
+- **Fly-by risk:** each extra hop adds +5% interception chance (skipping past colonies without docking). A 3-hop run carries +10%.
+- **Route risk** is based on the riskiest lane type anywhere on the path, so routing through a dark lane is appropriately dangerous.
+- Routes only pass THROUGH market colonies as waypoints; non-market anchors can still be endpoints but aren't used as transit stops.
+- The launch confirmation shows the hop count, the full route, the time, and the risk.
+
+## v1.0.3.0b (2026-05-30) — Shipping Console UX
+
+- Commodity picker in the Shipping Console is now a **searchable type-to-filter** field (datalist) instead of a 120-item scroll `<select>` — type a few letters to narrow it.
+- The commodity list and both colony dropdowns (From / To) are now sorted **alphabetically**.
+
 ## v1.0.3.0a (2026-05-30) — shipping risk rebalance
 
 Commodity shipment interception was too punishing for legitimate trade. The base shipping risk was a flat 18% on every run before any modifiers, stacking to ~41% on an ordinary grey-lane haul. Lowered:
