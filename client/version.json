@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3.2",
+  "version": "1.0.3.3",
   "built": "2026-05-31T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.3.2",
-  "notes": "Fund deposit/withdraw reworked to raw cash amounts. Withdraw pulls a cash amount out of the fund's liquid cash, capped only by available fund cash (positions stay locked) and gated by owner/governance. The percentage dropdown is gone. Shares/contributions are now a display-only lifetime-contribution metric, not a redemption claim."
+  "patch": "1.0.3.3",
+  "notes": "Governance expansion (God Complex set, part 1): tenure-weighted voting (elders out-vote newcomers) and the Golden Share — a transferable per-fund veto token, held by the owner at creation, that can kill any open proposal regardless of the vote and be handed to any member."
 }

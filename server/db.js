@@ -964,6 +964,9 @@ export function initFundsSystem() {
   try { db.exec(`ALTER TABLE funds ADD COLUMN governance TEXT NOT NULL DEFAULT 'executive'`); } catch(_) {}
   try { db.exec(`ALTER TABLE funds ADD COLUMN vote_weight TEXT NOT NULL DEFAULT 'equal'`); } catch(_) {}
   try { db.exec(`ALTER TABLE funds ADD COLUMN vote_duration_ms INTEGER NOT NULL DEFAULT 21600000`); } catch(_) {}
+  // Golden share: one transferable veto token per fund; defaults to the owner.
+  try { db.exec(`ALTER TABLE funds ADD COLUMN golden_holder TEXT`); } catch(_) {}
+  try { stmt(`UPDATE funds SET golden_holder=owner_id WHERE golden_holder IS NULL AND owner_id IS NOT NULL`).run(); } catch(_) {}
   // Merchants Guild as a 4th controlling faction in the galaxy.
   try { db.exec(`ALTER TABLE colony_state ADD COLUMN control_guild INTEGER NOT NULL DEFAULT 0`); } catch(_) {}
   // Patreon Merchants Guild defaults to majority vote (its historical behavior).
@@ -1004,9 +1007,9 @@ export function getFundByName(name) {
 }
 export function createFund(id, name, ownerId, description, maxMembers) {
   const now = Date.now();
-  stmt(`INSERT INTO funds(id,name,type,owner_id,description,max_members,slot_cost,savings_rate,cash,created_at)
-        VALUES(?,?,'player',?,?,?,100000,0.0004,0,?)`)
-    .run(id, name, ownerId, description||'', maxMembers||FUND_BASE_SLOTS, now);
+  stmt(`INSERT INTO funds(id,name,type,owner_id,description,max_members,slot_cost,savings_rate,cash,created_at,golden_holder)
+        VALUES(?,?,'player',?,?,?,100000,0.0004,0,?,?)`)
+    .run(id, name, ownerId, description||'', maxMembers||FUND_BASE_SLOTS, now, ownerId);
   // Owner auto-joins
   stmt('INSERT INTO fund_memberships(fund_id,player_id,shares,deposited,joined_at) VALUES(?,?,0,0,?)')
     .run(id, ownerId, now);
@@ -1226,9 +1229,18 @@ export const VOTE_DURATIONS = { '1800000':'30m', '3600000':'1h', '21600000':'6h'
 
 export function setFundGovernance(fundId, governance, voteWeight, durationMs) {
   const g = ['executive','vote','council'].includes(governance) ? governance : 'executive';
-  const w = ['equal','shares'].includes(voteWeight) ? voteWeight : 'equal';
+  const w = ['equal','shares','tenure'].includes(voteWeight) ? voteWeight : 'equal';
   const d = VOTE_DURATIONS[String(durationMs)] ? Number(durationMs) : 21600000; // valid options only, default 6h
   stmt('UPDATE funds SET governance=?, vote_weight=?, vote_duration_ms=? WHERE id=?').run(g, w, d, fundId);
+}
+
+// ── Golden share (transferable per-fund veto token) ───────────────────────────
+export function getGoldenHolder(fundId) {
+  const r = stmt('SELECT golden_holder FROM funds WHERE id=?').get(fundId);
+  return r?.golden_holder || null;
+}
+export function setGoldenHolder(fundId, playerId) {
+  stmt('UPDATE funds SET golden_holder=? WHERE id=?').run(playerId, fundId);
 }
 
 // Player IDs who have cast a vote on a proposal (for early-resolution turnout check).

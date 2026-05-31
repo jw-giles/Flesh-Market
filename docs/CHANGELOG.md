@@ -4,6 +4,14 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.3 (2026-05-31) — governance: tenure voting + golden share
+
+First half of the God-Complex governance set. Concentration levers — the counterweight (coup / no-confidence) is a separate follow-up.
+
+- **Tenure-weighted voting**: new vote-weight option alongside equal and share-weighted. Weight = 1 on join, +1 per full day in the fund. Entrenched elders out-vote rich newcomers — a different tyranny than buying control with shares.
+- **Golden Share**: a single transferable veto token per fund. The owner holds it at creation. The holder can veto ANY open proposal — it dies regardless of the vote tally — and can hand the token to any member (permanent, instant). It's the purest God-Complex artifact and, because it's transferable, the prime target of a future coup.
+- New endpoints: POST /api/funds/:id/golden/veto and /golden/transfer. New funds.golden_holder column (lazy migration on boot, backfilled to owner). Governance panel shows the holder, veto buttons appear on open proposals for the holder, and a hand-over control for transfers.
+
 ## v1.0.3.2 (2026-05-31) — fund deposit/withdraw is cash, not shares
 
 Deposit and withdraw now work in raw cash amounts. The percentage dropdown is gone — one Amount field, Deposit moves that cash player to fund, Withdraw pulls that cash fund to player.

@@ -547,6 +547,7 @@ window.storeSubTab=storeSubTab;
           <select id="g-gov-weight" class="input" style="max-width:150px">
             <option value="equal">One member, one vote</option>
             <option value="shares">Share-weighted</option>
+            <option value="tenure">Tenure-weighted (elders rule)</option>
           </select>
           <select id="g-gov-duration" class="input" style="max-width:130px" title="Voting window">
             <option value="1800000">30 min</option>
@@ -558,6 +559,19 @@ window.storeSubTab=storeSubTab;
           <button class="btn" id="g-gov-save-btn">Save</button>
         </div>
         <div id="g-gov-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
+      </div>
+
+      <div id="g-golden-box" style="margin-bottom:12px;padding:8px 10px;border:1px solid #4a3a14;border-radius:6px;background:#0a0805">
+        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:#e6c27a;margin-bottom:4px">Golden Share</div>
+        <div id="g-golden-holder" style="font-size:.78rem;opacity:.8;margin-bottom:6px"></div>
+        <div id="g-golden-controls" style="display:none">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <input id="g-golden-target" class="input" placeholder="Member name" style="max-width:140px" maxlength="32"/>
+            <button class="btn" id="g-golden-transfer-btn" style="border-color:#e6c27a;color:#e6c27a">Hand Over Golden Share</button>
+          </div>
+          <div style="font-size:.68rem;opacity:.45;margin-top:3px">You can veto any open proposal below. Transferring is permanent and instant.</div>
+        </div>
+        <div id="g-golden-hint" style="font-size:.78rem;min-height:14px;margin-top:4px"></div>
       </div>
 
       <!-- Propose a trade (vote / council) -->

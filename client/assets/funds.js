@@ -484,7 +484,7 @@ function renderGovernance(f) {
   const setDisp = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v ? 'block' : 'none'; };
   const gov = f.governance || 'executive';
   const weight = f.voteWeight || 'equal';
-  const wLabel = weight === 'shares' ? 'share-weighted' : 'one vote each';
+  const wLabel = weight === 'shares' ? 'share-weighted' : weight === 'tenure' ? 'tenure-weighted' : 'one vote each';
   const badge = document.getElementById('g-gov-mode-badge');
   const label = gov === 'executive' ? 'Executive — owner trades directly'
     : gov === 'vote' ? `Majority Vote — members decide (${wLabel})`
@@ -498,6 +498,15 @@ function renderGovernance(f) {
     const dur = document.getElementById('g-gov-duration'); if (dur) dur.value = String(f.voteDurationMs || 21600000);
   }
   setDisp('g-propose-panel', f.isMember && (gov === 'vote' || gov === 'council'));
+
+  // Golden share
+  const ghEl = document.getElementById('g-golden-holder');
+  if (ghEl) ghEl.innerHTML = f.goldenHolder
+    ? `Held by <b style="color:#e6c27a">${_gEsc(f.goldenHolder)}</b>${f.iHoldGolden?' (you)':''}`
+    : '<span style="opacity:.5">Unassigned</span>';
+  const gc = document.getElementById('g-golden-controls');
+  if (gc) gc.style.display = f.iHoldGolden ? 'block' : 'none';
+
   renderProposals(f);
 }
 
@@ -518,6 +527,7 @@ function renderProposals(f) {
       ? btn('Yes','#2ecc71',`houseVote('${p.id}','yes')`) + btn('No','#e74c3c',`houseVote('${p.id}','no')`) : '';
     const ownerBtns = (f.isOwner && gov==='council' && ['open','advisory_pass','advisory_fail'].includes(p.status))
       ? btn('Execute','#86ff6a',`houseResolve('${p.id}','execute')`) + btn('Veto','#ff6b6b',`houseResolve('${p.id}','veto')`) : '';
+    const goldenBtn = (f.iHoldGolden && open) ? btn('Veto (Golden)','#e6c27a',`goldenVeto('${p.id}')`) : '';
     let closes = '';
     if (open && p.expires_at) {
       const ms = p.expires_at - Date.now();
@@ -535,7 +545,7 @@ function renderProposals(f) {
       ${p.reason?`<div style="opacity:.55;font-size:.72rem;margin:2px 0">${_gEsc(p.reason)}</div>`:''}
       <div style="font-size:.72rem;opacity:.7;margin-top:3px">Yes ${yes} · No ${no} <span style="opacity:.5">(${pctYes}% yes)</span></div>
       ${closes}
-      <div style="display:flex;gap:4px;margin-top:5px">${voteBtns}${ownerBtns}</div>
+      <div style="display:flex;gap:4px;margin-top:5px">${voteBtns}${ownerBtns}${goldenBtn}</div>
     </div>`;
   }).join('');
 }
@@ -552,6 +562,14 @@ async function houseResolve(proposalId, action) {
 }
 window.houseVote = houseVote;
 window.houseResolve = houseResolve;
+
+async function goldenVeto(proposalId) {
+  if (!__currentFundId) return;
+  if (!confirm('Veto this proposal with the golden share? It dies regardless of the vote.')) return;
+  const d = await guildPost(`/api/funds/${__currentFundId}/golden/veto`, {proposalId}, 'g-golden-hint', '✓ Vetoed');
+  if (d?.ok) openFund(__currentFundId);
+}
+window.goldenVeto = goldenVeto;
 
 function initGuildUI() {
   // Back button
@@ -707,6 +725,16 @@ function initGuildUI() {
     const voteWeight = document.getElementById('g-gov-weight')?.value;
     const voteDurationMs = document.getElementById('g-gov-duration')?.value;
     const d = await guildPost(`/api/funds/${__currentFundId}/governance`, {governance, voteWeight, voteDurationMs}, 'g-gov-hint', '✓ Governance updated');
+    if (d?.ok) openFund(__currentFundId);
+  });
+
+  // Hand over the golden share (holder only)
+  document.getElementById('g-golden-transfer-btn')?.addEventListener('click', async () => {
+    if (!__currentFundId) return;
+    const targetName = document.getElementById('g-golden-target')?.value?.trim();
+    if (!targetName) { const h=document.getElementById('g-golden-hint'); if(h){h.textContent='Enter a member name';h.style.color='#ff6b6b';} return; }
+    if (!confirm(`Hand the golden share to ${targetName}? This is permanent — they get full veto power and you lose it.`)) return;
+    const d = await guildPost(`/api/funds/${__currentFundId}/golden/transfer`, {targetName}, 'g-golden-hint', '✓ Golden share transferred');
     if (d?.ok) openFund(__currentFundId);
   });
 

@@ -52,6 +52,7 @@ import {
   fundDepositFn, fundWithdrawFn,
   getFundActivity, logFundActivity,
   setFundGovernance, createHouseProposal, getHouseProposal, getOpenHouseProposals,
+  getGoldenHolder, setGoldenHolder,
   getDueHouseProposals, hasVotedHouse, castHouseVote, getHouseVoteCount, resolveHouseProposal,
   getHouseVoterIds, VOTE_DURATIONS,
   getColonyCommodityPrices, getAllCommodityPrices, getCommodityPrice, upsertCommodityPrice,
@@ -173,9 +174,16 @@ function houseOwner(fund, actor) {
 }
 // Vote weight for an actor under the house's vote_weight setting.
 function houseVoteWeight(fund, playerId) {
-  if ((fund.vote_weight||'equal') === 'shares') {
+  const w = fund.vote_weight || 'equal';
+  if (w === 'shares') {
     const m = getFundMembership(fund.id, playerId);
     return Math.max(0, m?.shares || 0);
+  }
+  if (w === 'tenure') {
+    const m = getFundMembership(fund.id, playerId);
+    if (!m) return 0;
+    // 1 vote on join, +1 per full day in the fund — elders out-weigh newcomers.
+    return 1 + Math.floor((Date.now() - (m.joined_at || Date.now())) / 86400000);
   }
   return 1;
 }
@@ -2473,6 +2481,8 @@ function fundDetailSnapshot(fundId, playerId) {
     myDeposited: myMember?.deposited || 0,
     withdrawable: cash,
     lockedInPositions: equity,
+    goldenHolder: (fund.golden_holder && members.find(m=>m.player_id===fund.golden_holder)?.name) || null,
+    iHoldGolden: !!(playerId && fund.golden_holder === playerId),
     isOwner:   fund.owner_id === playerId,
   };
 }
@@ -2668,6 +2678,42 @@ app.post('/api/funds/:id/withdraw', (req, res) => {
       if (fresh) broadcastToPlayer(actor.id, { type:'portfolio', data: snapshotPortfolio(fresh) });
     } catch(_) {}
     res.json({ ok:true, cashOut });
+  } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
+});
+
+// Golden share — veto an open proposal (holder only). Kills it regardless of votes.
+app.post('/api/funds/:id/golden/veto', (req, res) => {
+  try {
+    const tok = tokenFrom(req); const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund = getFund(req.params.id); if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (getGoldenHolder(fund.id) !== actor.id) return res.status(403).json({ ok:false, error:'not_golden_holder' });
+    const prop = getHouseProposal(String(req.body?.proposalId || ''));
+    if (!prop || prop.fund_id !== fund.id || prop.status !== 'open')
+      return res.status(400).json({ ok:false, error:'no_open_proposal' });
+    resolveHouseProposal(prop.id, 'vetoed', false);
+    logFundActivity(fund.id, 'veto', actor.id, null, null, null, null, `${actor.name} vetoed a proposal with the golden share`);
+    broadcastHouseUpdate(fund.id);
+    res.json({ ok:true });
+  } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
+});
+
+// Golden share — transfer to another member (holder only). The coup target / trust gamble.
+app.post('/api/funds/:id/golden/transfer', (req, res) => {
+  try {
+    const tok = tokenFrom(req); const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund = getFund(req.params.id); if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (getGoldenHolder(fund.id) !== actor.id) return res.status(403).json({ ok:false, error:'not_golden_holder' });
+    const targetName = String(req.body?.targetName || '').trim();
+    const target = targetName ? getPlayerByName(targetName) : null;
+    if (!target) return res.status(404).json({ ok:false, error:'player_not_found' });
+    if (!isInFund(fund.id, target.id)) return res.status(400).json({ ok:false, error:'not_a_member' });
+    setGoldenHolder(fund.id, target.id);
+    logFundActivity(fund.id, 'golden_transfer', actor.id, null, null, null, null, `${actor.name} handed the golden share to ${target.name}`);
+    broadcastToPlayer(target.id, { type:'system_message', data:{ text:`You now hold the golden share in "${fund.name}" — you can veto any proposal.`, color:'#e6c27a' }});
+    broadcastHouseUpdate(fund.id);
+    res.json({ ok:true });
   } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
 });
 
