@@ -4,6 +4,16 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.2 (2026-05-31) — fund deposit/withdraw is cash, not shares
+
+Deposit and withdraw now work in raw cash amounts. The percentage dropdown is gone — one Amount field, Deposit moves that cash player to fund, Withdraw pulls that cash fund to player.
+
+- Withdraw is capped only by the fund's liquid cash. Positions stay locked. If the fund holds Ƒ300k cash against a Ƒ2M NAV, only the Ƒ300k is withdrawable; the rest is tied up in trades until governance votes to sell. Intended harshness.
+- No per-member ceiling. Governance is the gate (owner-controlled / executive). A withdrawal that exceeds available cash caps to what's there rather than erroring blind.
+- Shares are now display-only. The "My Value" card became "Contributed" (lifetime gross deposited, never decreases). Per Share / NAV / drawdown stay as house performance, not a personal claim.
+- Shares are still burned to match cash pulled so the per-share line stays honest; pulling beyond your own stake (allowed) zeroes your shares and visibly drags spp for everyone.
+- A withdrawable/locked hint shows under the panel so the liquidity cap is transparent.
+
 ## v1.0.3.1 (2026-05-31) — item scrapping
 
 Slot-machine items can now be scrapped from the bag for a flat Ƒ500, same payout for every rarity. It's a clutter sink, not a fair-value buyback — the point is to give players a one-click way to dump junk instead of listing it on Ƒbay forever.

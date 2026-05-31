@@ -466,7 +466,7 @@ window.storeSubTab=storeSubTab;
         <div class="guild-stat"><div class="gs-label">NAV</div><div class="gs-val" id="g-d-nav"></div></div>
         <div class="guild-stat"><div class="gs-label">Cash</div><div class="gs-val" id="g-d-cash"></div></div>
         <div class="guild-stat"><div class="gs-label">Per Share</div><div class="gs-val" id="g-d-spp"></div></div>
-        <div class="guild-stat"><div class="gs-label">My Value</div><div class="gs-val" id="g-d-myval"></div></div>
+        <div class="guild-stat"><div class="gs-label">Contributed</div><div class="gs-val" id="g-d-myval"></div></div>
       </div>
 
       <div id="g-perf-wrap" style="margin-bottom:12px;border:1px solid #2a1a04;border-radius:6px;background:#050403;padding:10px">
@@ -491,13 +491,11 @@ window.storeSubTab=storeSubTab;
       <div id="g-dw-panel" style="display:none;margin-bottom:10px">
         <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:5px">Deposit / Withdraw</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <input id="g-d-amount" class="input" type="number" min="1" placeholder="Deposit amt" style="max-width:130px"/>
+          <input id="g-d-amount" class="input" type="number" min="1" placeholder="Amount" style="max-width:130px"/>
           <button class="btn" id="g-d-deposit-btn">Deposit</button>
-          <select id="g-d-withdraw-pct" class="input" style="max-width:90px">
-            <option value="0.25">25%</option><option value="0.5">50%</option><option value="1">100%</option>
-          </select>
           <button class="btn" id="g-d-withdraw-btn" style="display:none">Withdraw</button>
         </div>
+        <div id="g-d-withdrawable" style="font-size:.68rem;opacity:.5;margin-top:4px"></div>
         <div id="g-dw-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
       </div>
 
@@ -611,11 +609,9 @@ window.storeSubTab=storeSubTab;
       <div id="g-owner-panel" style="display:none;margin-bottom:10px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
         <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Owner Controls</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
-          <select id="g-d-withdraw-pct-owner" class="input" style="max-width:90px">
-            <option value="0.25">25%</option><option value="0.5">50%</option><option value="1">100%</option>
-          </select>
+          <input id="g-owner-withdraw-amt" class="input" type="number" min="1" placeholder="Amount Ƒ" style="max-width:110px"/>
           <button class="btn" id="g-owner-withdraw-btn">Withdraw</button>
-          <span style="font-size:.72rem;opacity:.5">— withdraw your share from fund</span>
+          <span style="font-size:.72rem;opacity:.5">— pull cash from fund (capped at fund cash)</span>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <input id="g-assign-name" class="input" placeholder="Member name" style="max-width:120px" maxlength="32"/>

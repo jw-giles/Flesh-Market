@@ -1170,21 +1170,29 @@ export function setupFundDepositWithdraw() {
     return newShares;
   });
 
-  fundWithdrawFn = transaction((fundId, playerId, pct, currentNAV) => {
+  // Cash-based withdrawal (model B): pulls a raw cash AMOUNT out of the fund's
+  // liquid cash, capped only by available fund cash — NOT by the member's own
+  // stake. Governance is the gate (owner-only / executive enforced at the route).
+  // Shares are burned to match the cash pulled so the per-share performance line
+  // stays honest; if a member pulls MORE than their own shares are worth (allowed
+  // under B), their shares zero out and the excess cash leaving without matching
+  // shares correctly drags spp down for everyone — the drain is visible, not hidden.
+  fundWithdrawFn = transaction((fundId, playerId, amount, currentNAV) => {
     const member = getFundMembership(fundId, playerId); if (!member) throw new Error('not_a_member');
-    const shares = member.shares * Math.min(1, Math.max(0.01, pct));
-    if (shares <= 0) throw new Error('no_shares');
-    const totalShares  = getTotalFundSharesById(fundId);
+    const fundCash = getFundCashById(fundId);
+    if (fundCash <= 0) throw new Error('no_fund_cash');
+    const actual = Math.min(Math.max(0, Number(amount) || 0), fundCash);
+    if (actual <= 0) throw new Error('invalid_amount');
+    const totalShares   = getTotalFundSharesById(fundId);
     const pricePerShare = totalShares > 0 && currentNAV > 0 ? currentNAV / totalShares : 1;
-    const cashValue    = shares * pricePerShare;
-    const fundCash     = getFundCashById(fundId);
-    if (fundCash < cashValue) throw new Error('insufficient_fund_liquidity');
-    stmt('UPDATE funds SET cash=cash-? WHERE id=?').run(cashValue, fundId);
-    stmt('UPDATE players SET cash=cash+?,updated_at=? WHERE id=?').run(cashValue, Date.now(), playerId);
-    stmt('UPDATE fund_memberships SET shares=shares-? WHERE fund_id=? AND player_id=?').run(shares, fundId, playerId);
+    const sharesToBurn  = pricePerShare > 0 ? Math.min(member.shares, actual / pricePerShare) : 0;
+    stmt('UPDATE funds SET cash=cash-? WHERE id=?').run(actual, fundId);
+    stmt('UPDATE players SET cash=cash+?,updated_at=? WHERE id=?').run(actual, Date.now(), playerId);
+    if (sharesToBurn > 0)
+      stmt('UPDATE fund_memberships SET shares=shares-? WHERE fund_id=? AND player_id=?').run(sharesToBurn, fundId, playerId);
     stmt('INSERT INTO fund_activity(fund_id,ts,type,player_id,amount,note) VALUES(?,?,?,?,?,?)')
-      .run(fundId, Date.now(), 'withdraw', playerId, cashValue, `Withdrew ${(pct*100).toFixed(0)}% of shares`);
-    return cashValue;
+      .run(fundId, Date.now(), 'withdraw', playerId, actual, `Withdrew \u0192${actual.toFixed(2)} cash`);
+    return actual;
   });
 }
 

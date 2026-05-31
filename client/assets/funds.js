@@ -228,8 +228,12 @@ function renderFundDetail(f) {
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
   set('g-d-nav',   _mfmt(f.nav));
   set('g-d-cash',  _mfmt(f.cash));
-  set('g-d-myval', _mfmt(f.myValue));
+  set('g-d-myval', _mfmt(f.myDeposited || 0));
   set('g-d-spp',   _mfmt(f.spp));
+
+  // Withdrawable hint: only liquid fund cash can be pulled; positions are locked.
+  const wbEl = document.getElementById('g-d-withdrawable');
+  if (wbEl) wbEl.textContent = `Withdrawable: ${_mfmt(f.withdrawable||0)} fund cash · ${_mfmt(f.lockedInPositions||0)} locked in positions`;
 
   // Holdings
   const hBox = document.getElementById('g-d-holdings');
@@ -594,11 +598,12 @@ function initGuildUI() {
     if (d?.ok) openFund(__currentFundId);
   });
 
-  // Withdraw
+  // Withdraw (raw cash amount, capped at fund liquidity)
   document.getElementById('g-d-withdraw-btn')?.addEventListener('click', async () => {
     if (!__currentFundId) return;
-    const pct = parseFloat(document.getElementById('g-d-withdraw-pct')?.value);
-    const d = await guildPost(`/api/funds/${__currentFundId}/withdraw`, {pct}, 'g-dw-hint');
+    const amt = parseFloat(document.getElementById('g-d-amount')?.value);
+    if (!amt || amt < 1) { const h=document.getElementById('g-dw-hint'); if(h) h.textContent='Enter an amount to withdraw'; return; }
+    const d = await guildPost(`/api/funds/${__currentFundId}/withdraw`, {amount:amt}, 'g-dw-hint');
     if (d?.ok) { document.getElementById('g-dw-hint').textContent = `✓ Withdrew ${_mfmt(d.cashOut)}`; openFund(__currentFundId); }
   });
 
@@ -622,11 +627,12 @@ function initGuildUI() {
     if (d?.ok) openFund(__currentFundId);
   });
 
-  // Owner withdraw
+  // Owner withdraw (raw cash amount, capped at fund liquidity)
   document.getElementById('g-owner-withdraw-btn')?.addEventListener('click', async () => {
     if (!__currentFundId) return;
-    const pct = parseFloat(document.getElementById('g-d-withdraw-pct-owner')?.value);
-    const d = await guildPost(`/api/funds/${__currentFundId}/withdraw`, {pct}, 'g-owner-hint');
+    const amt = parseFloat(document.getElementById('g-owner-withdraw-amt')?.value);
+    if (!amt || amt < 1) { const h=document.getElementById('g-owner-hint'); if(h) h.textContent='Enter an amount to withdraw'; return; }
+    const d = await guildPost(`/api/funds/${__currentFundId}/withdraw`, {amount:amt}, 'g-owner-hint');
     if (d?.ok) { document.getElementById('g-owner-hint').textContent = `✓ Withdrew ${_mfmt(d.cashOut)}`; openFund(__currentFundId); }
   });
 

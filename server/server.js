@@ -2470,6 +2470,9 @@ function fundDetailSnapshot(fundId, playerId) {
     isMember:  playerId ? isInFund(fundId, playerId) : false,
     myShares:  myMember?.shares || 0,
     myValue:   (myMember?.shares||0) * spp,
+    myDeposited: myMember?.deposited || 0,
+    withdrawable: cash,
+    lockedInPositions: equity,
     isOwner:   fund.owner_id === playerId,
   };
 }
@@ -2652,10 +2655,11 @@ app.post('/api/funds/:id/withdraw', (req, res) => {
     // For player funds: only the owner can withdraw
     if (fund.type === 'player' && fund.owner_id !== actor.id)
       return res.status(403).json({ ok:false, error:'owner_only_withdraw' });
-    const pct = Math.min(1, Math.max(0.01, Number(req.body?.pct)||0));
+    const amount = Math.max(0, Number(req.body?.amount) || 0);
+    if (amount <= 0) return res.status(400).json({ ok:false, error:'invalid_amount' });
     const priceMap = buildPriceMap();
     const nav = getFundNAVById(fund.id, priceMap);
-    const cashOut = fundWithdrawFn(fund.id, actor.id, pct, nav);
+    const cashOut = fundWithdrawFn(fund.id, actor.id, amount, nav);
     snapshotFund(fund.id);
     const snap    = fundDetailSnapshot(fund.id, actor.id);
     broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
@@ -2681,11 +2685,15 @@ app.post('/api/funds/:id/kick', (req, res) => {
     const target     = targetName ? getPlayerByName(targetName) : null;
     if (!target) return res.status(404).json({ ok:false, error:'player_not_found' });
     if (target.id === actor.id) return res.status(400).json({ ok:false, error:'cannot_kick_self' });
-    // Withdraw their shares first so they get their money back
+    // Refund their full current stake value in cash before removing them
     try {
       const priceMap = buildPriceMap();
       const nav = getFundNAVById(fund.id, priceMap);
-      fundWithdrawFn(fund.id, target.id, 1.0, nav);
+      const tShares = getTotalFundSharesById(fund.id);
+      const spp = tShares > 0 ? nav / tShares : 1;
+      const tMember = getFundMembership(fund.id, target.id);
+      const stakeValue = (tMember?.shares || 0) * spp;
+      if (stakeValue > 0) fundWithdrawFn(fund.id, target.id, stakeValue, nav);
     } catch(_) {} // ok if no shares
     kickFundMember(fund.id, target.id);
     logFundActivity(fund.id, 'kick', actor.id, null, null, null, null, `${target.name} kicked by owner`);

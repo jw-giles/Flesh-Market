@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3.1",
+  "version": "1.0.3.2",
   "built": "2026-05-31T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.3.1",
-  "notes": "Item scrapping: every slot-machine item can be scrapped from the bag for a flat Ƒ500 regardless of rarity. A clutter sink so Ƒbay doesn't fill with junk listings. Equipped or listed items can't be scrapped. New POST /api/items/scrap endpoint."
+  "patch": "1.0.3.2",
+  "notes": "Fund deposit/withdraw reworked to raw cash amounts. Withdraw pulls a cash amount out of the fund's liquid cash, capped only by available fund cash (positions stay locked) and gated by owner/governance. The percentage dropdown is gone. Shares/contributions are now a display-only lifetime-contribution metric, not a redemption claim."
 }
