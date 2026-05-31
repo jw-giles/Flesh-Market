@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3.4",
+  "version": "1.0.3.5",
   "built": "2026-05-31T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.3.4",
-  "notes": "Governance expansion (God Complex set, part 2): officer roles. The owner can appoint a Treasurer (move fund cash), a Trader (trade directly without a vote, in any governance mode), or a Whip (force-call open votes to resolve immediately). Delegated powers, revocable at the owner's whim. Role badges shown in the member list."
+  "patch": "1.0.3.5",
+  "notes": "Fix: smuggling run countdown drifted and desynced from the actual arrival time. It was decrementing a local per-tick counter instead of recomputing from the run's resolve timestamp, so background-tab throttling made the displayed time wrong. Now anchored to resolveTs like the shipping countdown, with the interval properly cleared on resolve and before a new run."
 }

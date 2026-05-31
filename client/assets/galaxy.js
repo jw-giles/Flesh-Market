@@ -3132,6 +3132,7 @@ document.addEventListener('fm_ws_msg',function(e){
       gToast(lostMsg+' \u2014 '+d.cargo+' seized','#e74c3c');
     }
     window._activeSmugRun=null;
+    window._smugCountdownIv && clearInterval(window._smugCountdownIv); window._smugCountdownIv=null;
     if(gMapActive) renderLanes();
     window._shippingAddLog(d);
     try{ window.renderShippingTab(); }catch(_){}
@@ -3146,16 +3147,22 @@ document.addEventListener('fm_ws_msg',function(e){
     gToast('Smuggling run launched — '+d2.cargo+' via '+d2.laneType+' lane','#e74c3c');
     window._activeSmugRun={from:d2.from,to:d2.to,cargo:d2.cargo,stake:d2.stake,resolveTs:d2.resolveTs,durSec:d2.durSec,type:'smuggling'};
     if(gMapActive) renderLanes();
-    var ss2=document.getElementById('gSmugStatus');
-    if(ss2){
-      var secLeft=d2.durSec;
-      ss2.innerHTML='<span style="color:#e74c3c">EN ROUTE — '+secLeft+'s remaining...</span>';
-      var _smgIv=setInterval(function(){
-        secLeft--;
-        if(secLeft<=0){ clearInterval(_smgIv); ss2.innerHTML='<span style="color:#555">Resolving...</span>'; window._activeSmugRun=null; if(gMapActive) renderLanes(); return; }
-        ss2.innerHTML='<span style="color:#e74c3c">EN ROUTE — '+secLeft+'s remaining...</span>';
-      },1000);
-    }
+    // Countdown anchored to resolveTs (recomputed each tick) so it stays correct even
+    // when the tab is backgrounded and setInterval throttles — a local secLeft-- drifts.
+    window._smugCountdownIv && clearInterval(window._smugCountdownIv);
+    var _paintSmug=function(){
+      var ss2=document.getElementById('gSmugStatus');
+      if(!ss2) return;
+      var left=window._activeSmugRun?Math.max(0,Math.ceil((window._activeSmugRun.resolveTs-Date.now())/1000)):0;
+      ss2.innerHTML=left>0?'<span style="color:#e74c3c">EN ROUTE — '+left+'s remaining...</span>':'<span style="color:#555">Resolving...</span>';
+    };
+    _paintSmug();
+    window._smugCountdownIv=setInterval(function(){
+      if(!window._activeSmugRun){ clearInterval(window._smugCountdownIv); window._smugCountdownIv=null; return; }
+      var left=Math.max(0,Math.ceil((window._activeSmugRun.resolveTs-Date.now())/1000));
+      _paintSmug();
+      if(left<=0){ clearInterval(window._smugCountdownIv); window._smugCountdownIv=null; window._activeSmugRun=null; if(gMapActive) renderLanes(); }
+    },1000);
   }
   if(msg.type==='smuggling_error') gToast(msg.error||'Smuggling error','#e74c3c');
 

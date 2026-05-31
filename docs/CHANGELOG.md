@@ -4,6 +4,10 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.5 (2026-05-31) — fix: smuggling countdown drift
+
+The smuggling run timer counted down a local `secLeft--` once per `setInterval` tick instead of recomputing from the run's resolve timestamp. Background-tab throttling and interval drift made the displayed time desync from the real arrival, and the interval wasn't cleared on resolve or before a new run (so they could stack). Rewrote it to mirror the shipping countdown: recompute remaining time from `resolveTs` every tick, store the interval on window, and clear it on resolve and before starting a new one.
+
 ## v1.0.3.4 (2026-05-31) — governance: officer roles
 
 Second half of the God-Complex set. The owner can delegate specific powers to members — concentrated authority that an officer can use (or abuse) until it's revoked.
