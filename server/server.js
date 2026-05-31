@@ -53,6 +53,7 @@ import {
   getFundActivity, logFundActivity,
   setFundGovernance, createHouseProposal, getHouseProposal, getOpenHouseProposals,
   getGoldenHolder, setGoldenHolder,
+  setFundOfficer, removeFundOfficer, getFundOfficerRole, getFundOfficers,
   getDueHouseProposals, hasVotedHouse, castHouseVote, getHouseVoteCount, resolveHouseProposal,
   getHouseVoterIds, VOTE_DURATIONS,
   getColonyCommodityPrices, getAllCommodityPrices, getCommodityPrice, upsertCommodityPrice,
@@ -171,6 +172,12 @@ function houseOwner(fund, actor) {
   if (fund.type==='flsh')    return isDevAccount(actor.id);
   if (fund.type==='patreon') return isOwnerAccount(actor.id); // only prime owner runs the guild
   return fund.owner_id === actor.id;
+}
+// Officer role this actor holds in the fund ('treasurer'|'trader'|'whip'|null).
+// The owner implicitly holds every power, so callers check `houseOwner || role==='x'`.
+function fundRole(fund, actor) {
+  if (!actor) return null;
+  try { return getFundOfficerRole(fund.id, actor.id); } catch(_) { return null; }
 }
 // Vote weight for an actor under the house's vote_weight setting.
 function houseVoteWeight(fund, playerId) {
@@ -2483,6 +2490,8 @@ function fundDetailSnapshot(fundId, playerId) {
     lockedInPositions: equity,
     goldenHolder: (fund.golden_holder && members.find(m=>m.player_id===fund.golden_holder)?.name) || null,
     iHoldGolden: !!(playerId && fund.golden_holder === playerId),
+    officers: (()=>{ try { return getFundOfficers(fundId).map(o=>({name:o.name,role:o.role})); } catch(_) { return []; } })(),
+    myRole: (()=>{ try { return playerId ? getFundOfficerRole(fundId, playerId) : null; } catch(_) { return null; } })(),
     isOwner:   fund.owner_id === playerId,
   };
 }
@@ -2662,9 +2671,9 @@ app.post('/api/funds/:id/withdraw', (req, res) => {
     if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
     const fund  = getFund(req.params.id);
     if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
-    // For player funds: only the owner can withdraw
-    if (fund.type === 'player' && fund.owner_id !== actor.id)
-      return res.status(403).json({ ok:false, error:'owner_only_withdraw' });
+    // For player funds: only the owner or an appointed Treasurer can move cash out
+    if (fund.type === 'player' && fund.owner_id !== actor.id && fundRole(fund, actor) !== 'treasurer')
+      return res.status(403).json({ ok:false, error:'owner_or_treasurer_only' });
     const amount = Math.max(0, Number(req.body?.amount) || 0);
     if (amount <= 0) return res.status(400).json({ ok:false, error:'invalid_amount' });
     const priceMap = buildPriceMap();
@@ -2713,6 +2722,62 @@ app.post('/api/funds/:id/golden/transfer', (req, res) => {
     logFundActivity(fund.id, 'golden_transfer', actor.id, null, null, null, null, `${actor.name} handed the golden share to ${target.name}`);
     broadcastToPlayer(target.id, { type:'system_message', data:{ text:`You now hold the golden share in "${fund.name}" — you can veto any proposal.`, color:'#e6c27a' }});
     broadcastHouseUpdate(fund.id);
+    res.json({ ok:true });
+  } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
+});
+
+// Appoint an officer (owner only). role: treasurer | trader | whip
+app.post('/api/funds/:id/officer/appoint', (req, res) => {
+  try {
+    const tok = tokenFrom(req); const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund = getFund(req.params.id); if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (fund.owner_id !== actor.id) return res.status(403).json({ ok:false, error:'owner_only' });
+    const role = String(req.body?.role || '').toLowerCase();
+    if (!['treasurer','trader','whip'].includes(role)) return res.status(400).json({ ok:false, error:'invalid_role' });
+    const targetName = String(req.body?.targetName || '').trim();
+    const target = targetName ? getPlayerByName(targetName) : null;
+    if (!target) return res.status(404).json({ ok:false, error:'player_not_found' });
+    if (!isInFund(fund.id, target.id)) return res.status(400).json({ ok:false, error:'not_a_member' });
+    if (target.id === fund.owner_id) return res.status(400).json({ ok:false, error:'owner_already_has_all_powers' });
+    setFundOfficer(fund.id, target.id, role);
+    logFundActivity(fund.id, 'officer', actor.id, null, null, null, null, `${target.name} appointed ${role}`);
+    broadcastToPlayer(target.id, { type:'system_message', data:{ text:`You were appointed ${role} of "${fund.name}".`, color:'#4ecdc4' }});
+    broadcastHouseUpdate(fund.id);
+    res.json({ ok:true });
+  } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
+});
+
+// Revoke an officer (owner only)
+app.post('/api/funds/:id/officer/revoke', (req, res) => {
+  try {
+    const tok = tokenFrom(req); const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund = getFund(req.params.id); if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (fund.owner_id !== actor.id) return res.status(403).json({ ok:false, error:'owner_only' });
+    const targetName = String(req.body?.targetName || '').trim();
+    const target = targetName ? getPlayerByName(targetName) : null;
+    if (!target) return res.status(404).json({ ok:false, error:'player_not_found' });
+    removeFundOfficer(fund.id, target.id);
+    logFundActivity(fund.id, 'officer', actor.id, null, null, null, null, `${target.name} stripped of office`);
+    broadcastHouseUpdate(fund.id);
+    res.json({ ok:true });
+  } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
+});
+
+// Whip (or owner) force-resolves an open proposal early — closes voting and tallies now.
+app.post('/api/funds/:id/proposal/:pid/force', (req, res) => {
+  try {
+    const tok = tokenFrom(req); const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund = getFund(req.params.id); if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (fund.owner_id !== actor.id && fundRole(fund, actor) !== 'whip')
+      return res.status(403).json({ ok:false, error:'owner_or_whip_only' });
+    const prop = getHouseProposal(req.params.pid);
+    if (!prop || prop.fund_id !== fund.id || prop.status !== 'open')
+      return res.status(400).json({ ok:false, error:'no_open_proposal' });
+    resolveHouseProposalDecision(fund, prop);
+    logFundActivity(fund.id, 'force_vote', actor.id, null, null, null, null, `${actor.name} force-called a vote`);
     res.json({ ok:true });
   } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
 });
@@ -2780,8 +2845,8 @@ app.post('/api/funds/:id/assign', (req, res) => {
     if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
     const fund  = getFund(req.params.id);
     if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
-    if (fund.owner_id !== actor.id)
-      return res.status(403).json({ ok:false, error:'owner_only' });
+    if (fund.owner_id !== actor.id && fundRole(fund, actor) !== 'treasurer')
+      return res.status(403).json({ ok:false, error:'owner_or_treasurer_only' });
     const targetName = String(req.body?.targetName || '').trim();
     const amount     = Math.max(1, Math.floor(Number(req.body?.amount)||0));
     const target     = targetName ? getPlayerByName(targetName) : null;
@@ -2861,14 +2926,19 @@ app.post('/api/funds/:id/trade', (req, res) => {
     if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
     const fund  = getFund(req.params.id);
     if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
-    if (fund.type==='player'  && fund.owner_id !== actor.id) return res.status(403).json({ ok:false, error:'owner_only' });
+    const isTrader = fundRole(fund, actor) === 'trader';
+    if (fund.type==='player'  && fund.owner_id !== actor.id && !isTrader) return res.status(403).json({ ok:false, error:'owner_or_trader_only' });
     if (fund.type==='flsh'    && !isDevAccount(actor.id))    return res.status(403).json({ ok:false, error:'dev_only' });
     if (fund.type==='patreon' && !isGuildEligible(actor))    return res.status(403).json({ ok:false, error:'guild_only' });
-    // Governance: direct trades only in executive or council (owner override). In
-    // vote mode, all trades must go through proposals.
+    // Direct-trade authority (owner or appointed Trader) bypasses governance gating —
+    // that delegated power is the whole point of the Trader role. Everyone else follows
+    // the fund's mode: vote mode requires a proposal; council allows only owner override.
     const gov = fund.governance || 'executive';
-    if (gov === 'vote') return res.status(403).json({ ok:false, error:'vote_mode_requires_proposal' });
-    if (gov === 'council' && !houseOwner(fund, actor)) return res.status(403).json({ ok:false, error:'council_owner_only_direct' });
+    const canDirect = houseOwner(fund, actor) || isTrader;
+    if (!canDirect) {
+      if (gov === 'vote') return res.status(403).json({ ok:false, error:'vote_mode_requires_proposal' });
+      if (gov === 'council') return res.status(403).json({ ok:false, error:'council_owner_only_direct' });
+    }
     const { side, symbol, qty } = req.body || {};
     if (!['buy','sell'].includes(side)) return res.status(400).json({ ok:false, error:'invalid_side' });
     const sym = String(symbol||'').toUpperCase();

@@ -4,6 +4,17 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.4 (2026-05-31) — governance: officer roles
+
+Second half of the God-Complex set. The owner can delegate specific powers to members — concentrated authority that an officer can use (or abuse) until it's revoked.
+
+- **Treasurer** — can move fund cash: withdraw from the fund and assign cash to members, same as the owner.
+- **Trader** — can execute trades directly, bypassing the fund's governance mode entirely (even vote mode, where everyone else must propose). Trade-without-a-vote is the role's whole point.
+- **Whip** — can force-call any open proposal: voting closes immediately and the current tally decides it. Owner can do this too.
+- Owner appoints/revokes from the Manage panel (name + role). One role per member; the owner implicitly holds every power. Role badges (and the golden-share ★) now show in the member list.
+- New endpoints: officer/appoint, officer/revoke, proposal/:pid/force. New fund_officers table (created on boot). Gates updated on the trade, withdraw, and assign endpoints to admit the relevant officer.
+- NOTE: still no coup. Officers add more delegable owner power to an owner who cannot yet be removed. The seize / no-confidence proposal is the outstanding counterweight.
+
 ## v1.0.3.3 (2026-05-31) — governance: tenure voting + golden share
 
 First half of the God-Complex governance set. Concentration levers — the counterweight (coup / no-confidence) is a separate follow-up.

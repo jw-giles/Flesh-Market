@@ -637,6 +637,18 @@ window.storeSubTab=storeSubTab;
           <button class="btn" id="g-invite-btn" style="border-color:#4ecdc4;color:#4ecdc4">Invite Member</button>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #1a1a0a">
+          <input id="g-officer-name" class="input" placeholder="Member name" style="max-width:120px" maxlength="32"/>
+          <select id="g-officer-role" class="input" style="max-width:120px">
+            <option value="treasurer">Treasurer (cash)</option>
+            <option value="trader">Trader (trades)</option>
+            <option value="whip">Whip (force votes)</option>
+          </select>
+          <button class="btn" id="g-officer-appoint-btn" style="border-color:#4ecdc4;color:#4ecdc4">Appoint</button>
+          <button class="btn" id="g-officer-revoke-btn" style="border-color:#ff8080;color:#ff8080">Revoke</button>
+          <span style="font-size:.68rem;opacity:.45">— delegate a power. They can use it until you revoke it.</span>
+        </div>
+        <div id="g-officer-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #1a1a0a">
           <button class="btn" id="g-edit-btn" onclick="window._fmEditFund()" style="border-color:#e6c27a;color:#e6c27a;font-size:.72rem;padding:3px 10px">Edit Name/Desc (Ƒ250k)</button>
           <button class="btn" id="g-delete-btn" onclick="window._fmDeleteFund()" style="border-color:#ff4444;color:#ff4444;font-size:.72rem;padding:3px 10px">Disband Fund (Refund Ƒ5M)</button>
         </div>

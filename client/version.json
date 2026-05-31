@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3.3",
+  "version": "1.0.3.4",
   "built": "2026-05-31T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.3.3",
-  "notes": "Governance expansion (God Complex set, part 1): tenure-weighted voting (elders out-vote newcomers) and the Golden Share — a transferable per-fund veto token, held by the owner at creation, that can kill any open proposal regardless of the vote and be handed to any member."
+  "patch": "1.0.3.4",
+  "notes": "Governance expansion (God Complex set, part 2): officer roles. The owner can appoint a Treasurer (move fund cash), a Trader (trade directly without a vote, in any governance mode), or a Whip (force-call open votes to resolve immediately). Delegated powers, revocable at the owner's whim. Role badges shown in the member list."
 }

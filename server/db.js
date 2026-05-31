@@ -957,6 +957,15 @@ export function initFundsSystem() {
       PRIMARY KEY (proposal_id, player_id)
     );
     CREATE INDEX IF NOT EXISTS idx_house_prop_fund ON house_proposals(fund_id, status);
+
+    CREATE TABLE IF NOT EXISTS fund_officers (
+      fund_id      TEXT NOT NULL REFERENCES funds(id) ON DELETE CASCADE,
+      player_id    TEXT NOT NULL,
+      role         TEXT NOT NULL,
+      appointed_at INTEGER NOT NULL,
+      PRIMARY KEY (fund_id, player_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_fund_officers ON fund_officers(fund_id);
   `);
 
   // Lazy migration: governance mode + vote weight on existing funds tables.
@@ -1241,6 +1250,27 @@ export function getGoldenHolder(fundId) {
 }
 export function setGoldenHolder(fundId, playerId) {
   stmt('UPDATE funds SET golden_holder=? WHERE id=?').run(playerId, fundId);
+}
+
+// ── Fund officers (delegated owner powers) ────────────────────────────────────
+// role: 'treasurer' (move cash) | 'trader' (trade without a vote) | 'whip' (force-call votes)
+const FUND_OFFICER_ROLES = ['treasurer','trader','whip'];
+export function setFundOfficer(fundId, playerId, role) {
+  if (!FUND_OFFICER_ROLES.includes(role)) throw new Error('invalid_role');
+  stmt(`INSERT INTO fund_officers(fund_id,player_id,role,appointed_at) VALUES(?,?,?,?)
+        ON CONFLICT(fund_id,player_id) DO UPDATE SET role=excluded.role, appointed_at=excluded.appointed_at`)
+    .run(fundId, playerId, role, Date.now());
+}
+export function removeFundOfficer(fundId, playerId) {
+  stmt('DELETE FROM fund_officers WHERE fund_id=? AND player_id=?').run(fundId, playerId);
+}
+export function getFundOfficerRole(fundId, playerId) {
+  const r = stmt('SELECT role FROM fund_officers WHERE fund_id=? AND player_id=?').get(fundId, playerId);
+  return r?.role || null;
+}
+export function getFundOfficers(fundId) {
+  return stmt(`SELECT o.player_id, o.role, p.name FROM fund_officers o
+               LEFT JOIN players p ON p.id=o.player_id WHERE o.fund_id=?`).all(fundId);
 }
 
 // Player IDs who have cast a vote on a proposal (for early-resolution turnout check).

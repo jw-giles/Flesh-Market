@@ -246,13 +246,18 @@ function renderFundDetail(f) {
   const cntEl = document.getElementById('g-member-count');
   if (cntEl) cntEl.textContent = `(${f.memberCount}/${f.maxMembers})`;
   const isPlayerFund = f.type === 'player';
+  const _roleBadge = { treasurer:'#86ff6a', trader:'#4ecdc4', whip:'#e6c27a' };
+  const _officerByName = {}; (f.officers||[]).forEach(o=>{ _officerByName[o.name]=o.role; });
   if (mBox) mBox.innerHTML = (f.members||[]).map(m=>{
     const g = _TIER[m.patreon_tier]||'';
     const own = m.isOwner ? ' 👑' : '';
+    const role = _officerByName[m.name];
+    const roleTag = role ? ` <span style="font-size:.58rem;color:${_roleBadge[role]||'#aaa'};border:1px solid ${_roleBadge[role]||'#aaa'}55;padding:0 4px;border-radius:3px;text-transform:uppercase;letter-spacing:.05em">${role}</span>` : '';
+    const goldTag = (f.goldenHolder && f.goldenHolder===m.name) ? ' <span title="Golden share" style="color:#e6c27a">★</span>' : '';
     const kickBtn = (f.isOwner && !m.isOwner && isPlayerFund)
       ? `<button onclick="kickMember('${m.name}')" style="font-size:.65rem;padding:1px 5px;background:#2a0d0d;border:1px solid #4a1a1a;color:#ff8080;border-radius:4px;cursor:pointer;margin-left:4px">kick</button>`
       : '';
-    return `<div class="ticker"><span>${g} ${m.name}${own}${kickBtn}</span><span>${_mfmt(m.deposited||0)} <span style="opacity:.4">deposited</span></span></div>`;
+    return `<div class="ticker"><span>${g} ${m.name}${own}${goldTag}${roleTag}${kickBtn}</span><span>${_mfmt(m.deposited||0)} <span style="opacity:.4">deposited</span></span></div>`;
   }).join('') || '<span style="opacity:.4">No members</span>';
 
   // Guild bonus bar — EXCLUSIVE to Merchants Guild (patreon fund only)
@@ -329,17 +334,18 @@ function renderFundDetail(f) {
   }
   show('g-slots-panel', f.isOwner);
   show('g-owner-panel', f.isOwner && f.type==='player');  // owner controls for player funds
-  // For player funds, members can deposit but only owner can withdraw
+  // For player funds, members can deposit; owner OR treasurer can withdraw
   if (f.isMember && f.type === 'player') {
     show('g-dw-panel', true);
     const wBtn = document.getElementById('g-d-withdraw-btn');
-    if (wBtn) wBtn.style.display = f.isOwner ? 'inline-block' : 'none';
+    if (wBtn) wBtn.style.display = (f.isOwner || f.myRole==='treasurer') ? 'inline-block' : 'none';
   }
 
-  // Trade panel: direct trades only in executive/council. Vote mode → propose instead.
+  // Trade panel: owner and appointed Trader can trade directly in any mode; others
+  // only in executive/council per the existing rules.
   const gov = f.governance || 'executive';
-  const canDirectTrade = (gov !== 'vote') &&
-    (f.isOwner || (isDevFund && __isDev_g) || (isPatreonFund && f.isMember && gov === 'executive'));
+  const canDirectTrade = (f.isOwner || f.myRole==='trader') ||
+    ((gov !== 'vote') && ((isDevFund && __isDev_g) || (isPatreonFund && f.isMember && gov === 'executive')));
   show('g-trade-panel', canDirectTrade);
   const tradePanelTitle = document.querySelector('#g-trade-panel div[style*="opacity:.5"]');
   if (tradePanelTitle) tradePanelTitle.textContent = gov === 'council' ? 'Fund Trade (Owner Override)' : 'Fund Trade';
@@ -528,6 +534,7 @@ function renderProposals(f) {
     const ownerBtns = (f.isOwner && gov==='council' && ['open','advisory_pass','advisory_fail'].includes(p.status))
       ? btn('Execute','#86ff6a',`houseResolve('${p.id}','execute')`) + btn('Veto','#ff6b6b',`houseResolve('${p.id}','veto')`) : '';
     const goldenBtn = (f.iHoldGolden && open) ? btn('Veto (Golden)','#e6c27a',`goldenVeto('${p.id}')`) : '';
+    const whipBtn = ((f.isOwner || f.myRole==='whip') && open && (gov==='vote'||gov==='council')) ? btn('Force Call','#c8a86a',`forceVote('${p.id}')`) : '';
     let closes = '';
     if (open && p.expires_at) {
       const ms = p.expires_at - Date.now();
@@ -545,7 +552,7 @@ function renderProposals(f) {
       ${p.reason?`<div style="opacity:.55;font-size:.72rem;margin:2px 0">${_gEsc(p.reason)}</div>`:''}
       <div style="font-size:.72rem;opacity:.7;margin-top:3px">Yes ${yes} · No ${no} <span style="opacity:.5">(${pctYes}% yes)</span></div>
       ${closes}
-      <div style="display:flex;gap:4px;margin-top:5px">${voteBtns}${ownerBtns}${goldenBtn}</div>
+      <div style="display:flex;gap:4px;margin-top:5px">${voteBtns}${ownerBtns}${goldenBtn}${whipBtn}</div>
     </div>`;
   }).join('');
 }
@@ -570,6 +577,14 @@ async function goldenVeto(proposalId) {
   if (d?.ok) openFund(__currentFundId);
 }
 window.goldenVeto = goldenVeto;
+
+async function forceVote(proposalId) {
+  if (!__currentFundId) return;
+  if (!confirm('Force-call this vote now? Voting closes immediately and the current tally decides it.')) return;
+  const d = await guildPost(`/api/funds/${__currentFundId}/proposal/${proposalId}/force`, {}, 'g-gov-hint', '✓ Vote force-called');
+  if (d?.ok) openFund(__currentFundId);
+}
+window.forceVote = forceVote;
 
 function initGuildUI() {
   // Back button
@@ -735,6 +750,23 @@ function initGuildUI() {
     if (!targetName) { const h=document.getElementById('g-golden-hint'); if(h){h.textContent='Enter a member name';h.style.color='#ff6b6b';} return; }
     if (!confirm(`Hand the golden share to ${targetName}? This is permanent — they get full veto power and you lose it.`)) return;
     const d = await guildPost(`/api/funds/${__currentFundId}/golden/transfer`, {targetName}, 'g-golden-hint', '✓ Golden share transferred');
+    if (d?.ok) openFund(__currentFundId);
+  });
+
+  // Appoint / revoke officers (owner only)
+  document.getElementById('g-officer-appoint-btn')?.addEventListener('click', async () => {
+    if (!__currentFundId) return;
+    const targetName = document.getElementById('g-officer-name')?.value?.trim();
+    const role = document.getElementById('g-officer-role')?.value;
+    if (!targetName) { const h=document.getElementById('g-officer-hint'); if(h){h.textContent='Enter a member name';h.style.color='#ff6b6b';} return; }
+    const d = await guildPost(`/api/funds/${__currentFundId}/officer/appoint`, {targetName, role}, 'g-officer-hint', `✓ Appointed ${role}`);
+    if (d?.ok) openFund(__currentFundId);
+  });
+  document.getElementById('g-officer-revoke-btn')?.addEventListener('click', async () => {
+    if (!__currentFundId) return;
+    const targetName = document.getElementById('g-officer-name')?.value?.trim();
+    if (!targetName) { const h=document.getElementById('g-officer-hint'); if(h){h.textContent='Enter a member name';h.style.color='#ff6b6b';} return; }
+    const d = await guildPost(`/api/funds/${__currentFundId}/officer/revoke`, {targetName}, 'g-officer-hint', '✓ Office revoked');
     if (d?.ok) openFund(__currentFundId);
   });
 
