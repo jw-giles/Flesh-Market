@@ -164,6 +164,70 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS idx_fhs_cycle ON fund_holding_snapshots(cycle);
     CREATE INDEX IF NOT EXISTS idx_fhs_fund_symbol ON fund_holding_snapshots(fund_id, symbol);
 
+    CREATE TABLE IF NOT EXISTS commodity_prices (
+      colony_id    TEXT NOT NULL,
+      commodity_id TEXT NOT NULL,
+      price        REAL NOT NULL,
+      supply       REAL NOT NULL DEFAULT 0,
+      updated_at   INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (colony_id, commodity_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cprice_colony ON commodity_prices(colony_id);
+
+    CREATE TABLE IF NOT EXISTS player_cargo (
+      player_id    TEXT NOT NULL,
+      commodity_id TEXT NOT NULL,
+      colony_id    TEXT NOT NULL DEFAULT '',
+      qty          INTEGER NOT NULL DEFAULT 0,
+      avg_cost     REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (player_id, commodity_id, colony_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pcargo_player ON player_cargo(player_id);
+
+    CREATE TABLE IF NOT EXISTS cargo_shipments (
+      id           TEXT PRIMARY KEY,
+      player_id    TEXT NOT NULL,
+      commodity_id TEXT NOT NULL,
+      qty          INTEGER NOT NULL,
+      buy_cost     REAL NOT NULL,
+      from_colony  TEXT NOT NULL,
+      to_colony    TEXT NOT NULL,
+      lane_type    TEXT NOT NULL DEFAULT 'grey',
+      insured      INTEGER NOT NULL DEFAULT 0,
+      insurance_paid REAL NOT NULL DEFAULT 0,
+      intercept_chance REAL NOT NULL DEFAULT 0,
+      created_at   INTEGER NOT NULL,
+      resolve_ts   INTEGER NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'in_transit',
+      phase        TEXT NOT NULL DEFAULT 'loading',
+      phase_idx    INTEGER NOT NULL DEFAULT 0,
+      ship_class   TEXT NOT NULL DEFAULT 'courier',
+      sell_value   REAL NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_cship_player ON cargo_shipments(player_id, status);
+    CREATE INDEX IF NOT EXISTS idx_cship_resolve ON cargo_shipments(status, resolve_ts);
+
+    -- Shipping contracts (options): house-written, cash-settled right to capture a
+    -- lane's commodity spread by expiry. No cargo, no ship. status: open|exercised|expired.
+    CREATE TABLE IF NOT EXISTS shipping_contracts (
+      id            TEXT PRIMARY KEY,
+      player_id     TEXT NOT NULL,
+      commodity_id  TEXT NOT NULL,
+      from_colony   TEXT NOT NULL,
+      to_colony     TEXT NOT NULL,
+      lane_type     TEXT NOT NULL DEFAULT 'grey',
+      strike_spread REAL NOT NULL,
+      premium_paid  REAL NOT NULL,
+      size          INTEGER NOT NULL,
+      created_at    INTEGER NOT NULL,
+      expires_at    INTEGER NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'open',
+      settled_at    INTEGER,
+      payout        REAL NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_contract_player ON shipping_contracts(player_id, status);
+    CREATE INDEX IF NOT EXISTS idx_contract_expiry ON shipping_contracts(status, expires_at);
+
     -- Mining: permanent account-wide upgrades purchased via the Mining Store.
     -- upgrades is a JSON blob of the form {"guard_drone":true,"ion_engines":true,...}.
     -- Missing rows indicate no upgrades owned.
@@ -196,6 +260,30 @@ export function initDB() {
     );
   `);
 
+  // Migration: player_cargo gained a colony_id (cargo is now located per-colony).
+  // If an older DB has the 2-column primary key, rebuild the table with the new key.
+  try {
+    const pcCols = new Set(db.prepare('PRAGMA table_info(player_cargo)').all().map(r => r.name));
+    if (pcCols.size && !pcCols.has('colony_id')) {
+      db.exec(`
+        ALTER TABLE player_cargo RENAME TO player_cargo_old;
+        CREATE TABLE player_cargo (
+          player_id    TEXT NOT NULL,
+          commodity_id TEXT NOT NULL,
+          colony_id    TEXT NOT NULL DEFAULT '',
+          qty          INTEGER NOT NULL DEFAULT 0,
+          avg_cost     REAL NOT NULL DEFAULT 0,
+          PRIMARY KEY (player_id, commodity_id, colony_id)
+        );
+        INSERT INTO player_cargo(player_id,commodity_id,colony_id,qty,avg_cost)
+          SELECT player_id, commodity_id, '', qty, avg_cost FROM player_cargo_old;
+        DROP TABLE player_cargo_old;
+        CREATE INDEX IF NOT EXISTS idx_pcargo_player ON player_cargo(player_id);
+      `);
+      console.log('[DB] Migrated: player_cargo now keyed by colony');
+    }
+  } catch (e) { console.error('[DB] player_cargo migration error', e); }
+
   // Migration: safely add new columns if they don't exist yet (upgrade from older DB)
   const _existingCols = new Set(
     db.prepare('PRAGMA table_info(players)').all().map(r => r.name)
@@ -212,6 +300,7 @@ export function initDB() {
     ['void_president_escaped', 'INTEGER NOT NULL DEFAULT 0'],
     ['owned_titles',          "TEXT NOT NULL DEFAULT '[]'"],
     ['tutorial_seen',         'INTEGER NOT NULL DEFAULT 0'],
+    ['ship_class',            "TEXT NOT NULL DEFAULT ''"],
   ];
   for (const [col, def] of _migrations) {
     if (!_existingCols.has(col)) {
@@ -350,6 +439,7 @@ function hydratePlayer(row) {
     faction: row.faction||null,
     holdings, basisC,
     tutorial_seen: row.tutorial_seen || 0,
+    shipClass: row.ship_class || '',
     createdAt:row.created_at, updatedAt:row.updated_at, lastSeen:row.last_seen,
   };
 }
@@ -373,6 +463,8 @@ export function isNameAvailable(name) {
 export function touchPlayer(id) { stmt('UPDATE players SET last_seen=? WHERE id=?').run(Date.now(),id); }
 export function renamePlayer(id,newName) { stmt('UPDATE players SET name=?,updated_at=? WHERE id=?').run(newName.trim(),Date.now(),id); }
 export function markTutorialSeen(id) { stmt('UPDATE players SET tutorial_seen=1,updated_at=? WHERE id=?').run(Date.now(),id); }
+export function setPlayerShipClass(id, shipClass) { stmt('UPDATE players SET ship_class=?,updated_at=? WHERE id=?').run(shipClass, Date.now(), id); }
+export function getPlayerShipClass(id) { const r = stmt('SELECT ship_class FROM players WHERE id=?').get(id); return r ? (r.ship_class||'') : ''; }
 export function countCEOs() { return (stmt('SELECT COUNT(*) as n FROM players WHERE patreon_tier=3').get()||{n:0}).n; }
 
 // ─── Patreon tier management ──────────────────────────────────────────────────
@@ -1186,7 +1278,117 @@ export function resolveHouseProposal(id, status, executed) {
     .run(status, executed ? Date.now() : null, id);
 }
 
-// ── Dev accounts ──────────────────────────────────────────────────────────────
+// ── Commodity price grid ──────────────────────────────────────────────────────
+export function getColonyCommodityPrices(colonyId) {
+  return stmt('SELECT commodity_id, price, supply FROM commodity_prices WHERE colony_id=?').all(colonyId);
+}
+export function getAllCommodityPrices() {
+  return stmt('SELECT colony_id, commodity_id, price, supply FROM commodity_prices').all();
+}
+export function getCommodityPrice(colonyId, commodityId) {
+  return stmt('SELECT colony_id, commodity_id, price, supply FROM commodity_prices WHERE colony_id=? AND commodity_id=?').get(colonyId, commodityId) || null;
+}
+export function upsertCommodityPrice(colonyId, commodityId, price, supply) {
+  stmt(`INSERT INTO commodity_prices(colony_id,commodity_id,price,supply,updated_at)
+        VALUES(?,?,?,?,?)
+        ON CONFLICT(colony_id,commodity_id) DO UPDATE SET price=excluded.price, supply=excluded.supply, updated_at=excluded.updated_at`)
+    .run(colonyId, commodityId, price, supply, Date.now());
+}
+
+// ── Player cargo hold ─────────────────────────────────────────────────────────
+export function getPlayerCargo(playerId) {
+  return stmt('SELECT commodity_id, colony_id, qty, avg_cost FROM player_cargo WHERE player_id=? AND qty>0').all(playerId);
+}
+// Qty of a commodity at a SPECIFIC colony (location-enforced sell uses this).
+export function getCargoQty(playerId, commodityId, colonyId) {
+  if (colonyId === undefined) {
+    // Back-compat: total across all colonies.
+    const r = stmt('SELECT COALESCE(SUM(qty),0) q FROM player_cargo WHERE player_id=? AND commodity_id=?').get(playerId, commodityId);
+    return r ? r.q : 0;
+  }
+  const r = stmt('SELECT qty FROM player_cargo WHERE player_id=? AND commodity_id=? AND colony_id=?').get(playerId, commodityId, colonyId);
+  return r ? r.qty : 0;
+}
+export function getCargoTotal(playerId) {
+  const r = stmt('SELECT COALESCE(SUM(qty),0) t FROM player_cargo WHERE player_id=?').get(playerId);
+  return r ? r.t : 0;
+}
+// Add qty at a given unit cost AT A COLONY, updating weighted average cost there.
+export function addCargo(playerId, commodityId, qty, unitCost, colonyId) {
+  const loc = colonyId || '';
+  const cur = stmt('SELECT qty, avg_cost FROM player_cargo WHERE player_id=? AND commodity_id=? AND colony_id=?').get(playerId, commodityId, loc);
+  if (cur && cur.qty > 0) {
+    const newQty = cur.qty + qty;
+    const newAvg = (cur.qty * cur.avg_cost + qty * unitCost) / newQty;
+    stmt('UPDATE player_cargo SET qty=?, avg_cost=? WHERE player_id=? AND commodity_id=? AND colony_id=?')
+      .run(newQty, Math.round(newAvg * 100) / 100, playerId, commodityId, loc);
+  } else {
+    stmt(`INSERT INTO player_cargo(player_id,commodity_id,colony_id,qty,avg_cost) VALUES(?,?,?,?,?)
+          ON CONFLICT(player_id,commodity_id,colony_id) DO UPDATE SET qty=excluded.qty, avg_cost=excluded.avg_cost`)
+      .run(playerId, commodityId, loc, qty, Math.round(unitCost * 100) / 100);
+  }
+}
+// Remove qty AT A COLONY (clamped to held there). Returns qty actually removed.
+export function removeCargo(playerId, commodityId, qty, colonyId) {
+  const loc = colonyId || '';
+  const cur = stmt('SELECT qty FROM player_cargo WHERE player_id=? AND commodity_id=? AND colony_id=?').get(playerId, commodityId, loc);
+  if (!cur || cur.qty <= 0) return 0;
+  const take = Math.min(qty, cur.qty);
+  stmt('UPDATE player_cargo SET qty=qty-? WHERE player_id=? AND commodity_id=? AND colony_id=?').run(take, playerId, commodityId, loc);
+  return take;
+}
+
+// ── Cargo shipments (goods in transit, escrowed) ──────────────────────────────
+export function createCargoShipment(s) {
+  stmt(`INSERT INTO cargo_shipments
+    (id,player_id,commodity_id,qty,buy_cost,from_colony,to_colony,lane_type,insured,insurance_paid,intercept_chance,created_at,resolve_ts,status,phase,phase_idx,ship_class,sell_value)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'in_transit',?,?,?,?)`)
+    .run(s.id, s.playerId, s.commodityId, s.qty, s.buyCost, s.from, s.to, s.laneType,
+         s.insured?1:0, s.insurancePaid||0, s.interceptChance||0, s.createdAt, s.resolveTs,
+         s.phase||'loading', s.phaseIdx||0, s.shipClass||'courier', s.sellValue||0);
+}
+export function getCargoShipment(id) {
+  return stmt('SELECT * FROM cargo_shipments WHERE id=?').get(id) || null;
+}
+export function getPlayerCargoShipments(playerId, status='in_transit') {
+  return stmt('SELECT * FROM cargo_shipments WHERE player_id=? AND status=? ORDER BY resolve_ts ASC').all(playerId, status);
+}
+export function getDueCargoShipments(now) {
+  return stmt("SELECT * FROM cargo_shipments WHERE status='in_transit' AND resolve_ts<=?").all(now || Date.now());
+}
+// All active shipments (for phase stepping regardless of final resolve time).
+export function getActiveCargoShipments() {
+  return stmt("SELECT * FROM cargo_shipments WHERE status='in_transit'").all();
+}
+export function setCargoShipmentPhase(id, phase, phaseIdx) {
+  stmt('UPDATE cargo_shipments SET phase=?, phase_idx=? WHERE id=?').run(phase, phaseIdx, id);
+}
+export function setCargoShipmentStatus(id, status) {
+  stmt('UPDATE cargo_shipments SET status=? WHERE id=?').run(status, id);
+}
+
+// ── Shipping contracts (options) ──────────────────────────────────────────────
+export function createShippingContract(c) {
+  stmt(`INSERT INTO shipping_contracts
+    (id,player_id,commodity_id,from_colony,to_colony,lane_type,strike_spread,premium_paid,size,created_at,expires_at,status,payout)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,'open',0)`)
+    .run(c.id, c.playerId, c.commodityId, c.from, c.to, c.laneType,
+         c.strikeSpread, c.premiumPaid, c.size, c.createdAt, c.expiresAt);
+}
+export function getShippingContract(id) {
+  return stmt('SELECT * FROM shipping_contracts WHERE id=?').get(id) || null;
+}
+export function getPlayerShippingContracts(playerId, status='open') {
+  return stmt('SELECT * FROM shipping_contracts WHERE player_id=? AND status=? ORDER BY expires_at ASC').all(playerId, status);
+}
+export function getExpiredOpenContracts(now) {
+  return stmt("SELECT * FROM shipping_contracts WHERE status='open' AND expires_at<=?").all(now || Date.now());
+}
+export function settleShippingContract(id, status, payout, settledAt) {
+  stmt('UPDATE shipping_contracts SET status=?, payout=?, settled_at=? WHERE id=?')
+    .run(status, payout || 0, settledAt || Date.now(), id);
+}
+
 
 export function setDevAccount(playerId, isDev) {
   // ── OWNER LOCK: MrFlesh/is_prime account cannot have dev status altered ──

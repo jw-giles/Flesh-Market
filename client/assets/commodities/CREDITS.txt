@@ -1,0 +1,8 @@
+Commodity icons from CraftPix.net free pixel-art icon packs (all icons used):
+- Tech/Industrial: "Free Cyberpunk Resource Pixel Art 32x32 Icons"
+- Medical: "Medicine and Thematic Things Pixel Art 32x32 Icon Pack"
+- Agricultural: "Vegetation Icons 32x32 Pixel Art"
+
+CraftPix free license: usable in commercial/non-commercial projects; attribution
+required; raw asset packs may not be redistributed. Icons here are renamed copies
+for in-game use. See https://craftpix.net/file-licenses/

@@ -4,6 +4,134 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.0 (2026-05-30) — The Commodity Economy Update
+
+The largest single update to FleshMarket: a full inter-colony trade economy layered on
+top of the stock market. Everything below ships as one release.
+
+### Commodity market
+- **120 commodities** across Tech, Med, and Agri, each with pixel art, priced
+  independently at every one of the 19 market colonies. Per-colony, per-commodity
+  affinity means each colony is cheap in some goods and dear in others — 2,280 live
+  prices, real arbitrage, routes that span the galaxy.
+- **Arbitrage Board** in the Markets tab surfaces the best buy-low/sell-high spread per
+  good, with class filters (Tech/Med/Agri) and name search.
+- **Live ticker prices.** Prices update in place like a stock ticker — no page jump —
+  flashing green/red as player trades, NPC trades, and ambient drift move them.
+
+### Shipping & logistics
+- **Ship-based shipping.** Commodity trade requires a ship (Courier / Freighter /
+  Hauler, bought in the Shipyard). Cargo is **located** — it physically sits at the
+  colony where you bought it. To profit from a spread you must run a real, timed,
+  phased shipment (loading → undocking → transit → dropoff → return) to another colony
+  and sell it there. You can only sell where your cargo actually is — no instant
+  cross-colony arbitrage.
+- **Shipping Console** in the Markets tab: pick commodity, origin, destination, and
+  quantity from dropdowns and launch a run without touching the sector map. A per-row
+  SHIP button pre-fills it from the board.
+- **Domino-style in-transit tracker** shows each shipment advancing through its phases.
+- Shipments can be **intercepted** en route (cargo lost, ship survives); whole-route
+  insurance optional.
+
+### Server NPC trade fleet
+- Up to **17 server-authoritative NPC haulers** travel real lanes carrying 1–3 real
+  commodities each, buying at origin and selling at destination — they genuinely move
+  prices, and every player sees the same fleet. Click any ship for its manifest.
+
+### Shipping Contracts (options)
+- A financial layer on the commodity market: **cash-settled options on lane spreads.**
+  Pay a premium for the right to capture a spread by expiry (1h/4h/8h); profit if it
+  widens past your strike, lose only the premium if not. No ship needed — an
+  entry-level commodity play. Priced with a verified ~12% house edge; blockades raise
+  premiums; lane shareholders earn a kickback on contract profits.
+
+### Smuggling & Guards
+- The legacy freight bet is retired; the tab is now a dedicated **💀 Smuggling**
+  operation. Stake on contraband runs for up to ×3 payouts. A new **Guard escort**
+  system replaces insurance: pay for muscle to cut interception odds, but the fee is
+  lost if you're caught — a spend-to-lower-odds bet, not a safety net.
+
+### Supporting work
+- Commodity trading consolidated entirely into the Markets tab (removed from the planet
+  details panel, closing an instant buy/sell exploit).
+- Tutorial rewritten with Commodity Market, Shipping Contracts, and Smuggling & Guards
+  slides. Galaxy tab renamed to 💀 Smuggling.
+- **Database:** additive only — one new column on players (`ship_class`) and four new
+  tables (commodity_prices, player_cargo, cargo_shipments, shipping_contracts);
+  player_cargo is keyed per-colony. No existing profile data is modified. Back up the DB
+  before the first restart.
+
+## v1.0.2.9a (2026-05-30) — gating + tab order
+
+Players no longer start with a free Courier — you must commission a ship (Courier now ƒ150,000) before you can buy, sell, or ship commodities. All three commodity actions are gated server-side on ship ownership (`no_ship`), with client prompts pointing to the Shipyard. Reordered the Galaxy tabs: Sector Map → Markets → Shipping → Contracts → Factions.
+
+## v1.0.2.9 (2026-05-30)
+
+**Shipping V2 — stages A+B: logistics phases + buyable ships.**
+
+Cargo shipping is no longer an instant action with a hidden end-roll. A run now takes **10 minutes flat**, split across five visible phases — Loading → Undocking → Transit → Drop-off → Returning — with risk weighted toward Transit (it carries ~65% of the interception chance; loading/undocking/dropoff/return are low). The interception roll is distributed: each phase rolls its share as the shipment enters it. On interception, **cargo is lost but the ship survives** and finishes the return phase empty. Insurance is bought at launch, whole-route, value-scaled (unchanged model). A per-run **fuel/return cost** is charged up front, scaling with ship size and cargo value, so long hauls on big ships cost real credits.
+
+A Domino's-style **phase tracker** shows each in-transit shipment's current phase (pips), live ETA, and risk on the Markets tab. Phase changes and outcomes push over WebSocket (`cargo_phase`, `cargo_ship_result`).
+
+**Buyable ships.** Three classes set your cargo capacity per run: **Courier** (free starter, 10,000u), **Freighter** (ƒ1,500,000, 35,000u, +2% risk), **Hauler** (ƒ5,000,000, 70,000u, +4% risk). Bought from the new Shipyard on the Markets tab. Capacity caps how much you can ship in one run. Everyone starts with a Courier. Ship class persists per player (new `ship_class` column).
+
+Shipments persist in `cargo_shipments` (new phase/ship columns) and resume correctly across a restart — the phase stepper advances them by elapsed time on a 3s tick instead of per-shipment timers. Verified: boot clean, phase math (fracs + risk shares both sum to 1.0, transit is the long dangerous stretch), ship purchase/capacity, restart resume.
+
+## v1.0.2.8b (2026-05-30) — UI
+
+Markets tab arbitrage board is now actionable: each row has BUY (purchases at the cheapest colony shown) and SELL (offloads at the dearest, when held) buttons, with an inline result line — no need to leave for the Sector Map to trade. Reduced the per-colony commodity panel font back down (the 1.0.2.8a bump was too large and wrapped the buttons).
+
+## v1.0.2.8a (2026-05-30) — UI tweak
+
+Markets tab moved to sit directly after Sector Map (was after Shipping) for quick back-and-forth between the arbitrage board and the map. Bumped font sizes up across the Markets tab and the per-colony commodity panel — the prior sizing was too small to read comfortably.
+
+## v1.0.2.8 (2026-05-30)
+
+**Commodity market — dedicated Markets tab.**
+
+Trading was only reachable by opening each colony's detail panel, which made the galaxy-wide arbitrage invisible. Added a Markets tab to the Galaxy view (sibling to Sector Map / Factions / Shipping / Contracts). It shows your cargo hold, in-transit shipments, and an Arbitrage Board: for every commodity, the cheapest buy colony vs the dearest sell colony and the spread % right now — so profitable routes are visible at a glance. Buy/sell/ship still happen on a colony (open it from the Sector Map); the per-colony market panel from stage 2 remains.
+
+New endpoint `GET /api/commodities-grid` returns the full colony×commodity price grid in one call. Verified live: grid returns 12 commodities × 20 colonies with control-driven prices.
+
+## v1.0.2.7a (2026-05-30) — hotfix
+
+Fix a fatal crash introduced in 1.0.2.7: while inserting the arbitrage-shipping block, the `const SHARE_MAX_SLOTS = 100;` definition for the Lane Shares system was accidentally dropped. The first WebSocket message that hit the lane-share path threw `ReferenceError: SHARE_MAX_SLOTS is not defined` and killed the server process (connection-refused for everything after). Restored the definition. Verified the server now boots clean and seeds commodity prices.
+
+## v1.0.2.7 (2026-05-30)
+
+**Commodity market — stage 3: arbitrage shipping (the payoff).**
+
+Buy a commodity cheap at one colony, ship it through a lane, sell it dear at another. Each held commodity in the market panel now has a SHIP button: pick a connected destination + lane, optionally insure, and launch. Shipments reuse the existing lane/risk/blockade model — corporate lanes are safe and slow-cheap, dark lanes fast-risky; tension, enemy territory, blockades, and haul value all push intercept odds up; your faction controlling the route lowers them.
+
+Cargo is escrowed out of your hold on launch and persisted in a new `cargo_shipments` table, so shipments survive a server restart (in-flight runs are rescheduled on boot; overdue ones resolve immediately). On delivery the goods land in your hold at the destination, ready to sell at its live price. On interception the units are lost — insurance refunds the buy cost (premium scales with value); uninsured losses feed the Void raiding kickback like other shipping. A 10s sweep is a safety net for missed timers.
+
+Endpoints: `POST /api/cargo/ship`, `GET /api/cargo/transit`. In-transit shipments show under the market with destination, risk %, and ETA. Verified the full escrow→deliver / escrow→loss lifecycle and the double-resolve guard.
+
+This completes the commodity arc: control sets prices (stage 1), players trade locally (stage 2), and now they move goods between colonies to exploit control-driven spreads (stage 3).
+
+---
+## v1.0.2.6 (2026-05-30)
+
+**Commodity market — stage 2: local buy/sell + cargo hold.**
+
+Players can now trade commodities at a colony. The colony detail panel has a Commodity Market section listing all 12 goods with live buy/sell prices (Guild tithe shown where it applies) and BUY/SELL buttons. Bought goods go into a persistent cargo hold (`player_cargo` table, survives disconnect) tracked with weighted-average cost. Selling requires holding the good; over-selling clamps to what you have.
+
+Trading moves the local market: buying tightens local supply and nudges the price up, selling floods it and nudges the price down (scaled by lot size, eased toward a supply-adjusted target, and decaying back over the 5-min tick). No inter-colony shipping yet — buy and sell happen at the same colony. Stage 3 adds arbitrage shipping (buy cheap here, ship through the lane/risk/insurance system, sell dear there).
+
+Endpoints: `POST /api/commodities/buy`, `POST /api/commodities/sell`, `GET /api/cargo/me`. Verified: weighted-avg cost, over-sell clamp, and supply-driven price movement.
+
+---
+## v1.0.2.5 (2026-05-30)
+
+**Commodity market — stage 1: control-driven price grid (backend).**
+
+First piece of the new shipping/commodity economy. 12 commodities across three classes (Tech/Industrial, Medical, Agricultural), each tied to a market sector. Every colony has a live price per commodity that floats on which faction leads it: Coalition subsidizes medical (cheap), Syndicate gouges it (dear), Void has cheap tech but dear agriculture (can't farm), Guild keeps narrow efficient spreads plus a small buy-side tithe. Prices mean-revert toward a control-driven target on a 5-min tick with per-faction volatility, clamped to a sane band. Contested colonies carry a scarcity premium.
+
+New `commodity_prices` table (colony × commodity grid). Read endpoints: `GET /api/commodities` (definitions) and `GET /api/commodities/:colonyId` (live grid with buy/sell prices, Guild tithe applied to buys). Prices seed on boot and lazily on first colony read. No trading or shipping yet — that's stage 2 (buy/sell + cargo) and stage 3 (arbitrage shipping). Verified: medical arbitrage spread Coalition→Syndicate ~58%.
+
+Also fixed a leftover 3-faction control object in `runGalaxyTick` (now includes Guild).
+
+---
 ## v1.0.2.4 (2026-05-29)
 
 **Capital Houses — guild redesign: rename, faucet removal, performance P&L, and governance/voting.**

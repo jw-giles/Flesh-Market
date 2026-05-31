@@ -1435,6 +1435,9 @@ function apiBase(){ return location.origin; }
     },{passive:false});
     svg.addEventListener('mousedown', function(e){
       if(e.button!==0) return;
+      // Don't hijack clicks that land on interactive elements (ships, colonies):
+      // calling preventDefault() here would suppress their click events.
+      if(e.target && e.target.closest && e.target.closest('.fm-clickable')) return;
       isPanning=true; startX=e.clientX; startY=e.clientY;
       svg.style.cursor='grabbing'; e.preventDefault();
     });
@@ -1557,6 +1560,7 @@ function spawnShip(lane, typeKey, reversed) {
   // Group element to hold ship + thrust together
   var grp = document.createElementNS(svgNS, 'g');
   grp.setAttribute('opacity', '0');  // fade in
+  grp.setAttribute('class', 'fm-clickable');
 
   // Engine glow — visible even at tiny scale
   var glowCol = def.traversal ? '#f39c12' : (Math.random() < 0.5 ? '#4ecdc4' : '#9b59b6');
@@ -1608,12 +1612,99 @@ function spawnShip(lane, typeKey, reversed) {
   };
   gShipList.push(ship);
 
-  // Make ship clickable — open manifest modal
+  // Make ship clickable — open manifest modal (pointerdown handles moving ships)
   grp.style.cursor = 'pointer';
-  grp.addEventListener('click', function(e) {
-    e.stopPropagation();
+  grp.style.pointerEvents = 'all';
+  grp.addEventListener('pointerdown', function(e) {
+    e.stopPropagation(); e.preventDefault();
     if (window.openShipManifest) window.openShipManifest(ship);
   });
+}
+
+// ── Server-authoritative NPC ships ────────────────────────────────────────────
+// These come from the server fleet (real manifests, shared across all clients).
+var gServerShips = {}; // npcId -> ship object
+function spawnServerShip(npc) {
+  if (gServerShips[npc.id]) return; // already rendered
+  var g = document.getElementById('gShips'); if (!g) return;
+  var meta = COLONY_META;
+  var a = meta[npc.from], b = meta[npc.to];
+  if (!a || !b) return;
+  var typeKey = npc.variant || 'v1';
+  var def = SHIP_TYPES[typeKey]; if (!def) return;
+  var dx = b.x - a.x, dy = b.y - a.y;
+  var angle = Math.atan2(dy, dx);
+
+  var grp = document.createElementNS(svgNS, 'g');
+  grp.setAttribute('opacity', '0');
+  grp.setAttribute('class', 'fm-clickable');
+  grp.style.pointerEvents = 'all';
+  // Invisible hit-rect FIRST so the whole ship area is a reliable click target,
+  // regardless of sprite transparency. In group-local space the ship body spans
+  // (0,0)..(w,h), so center the padded rect on (w/2, h/2).
+  var pad = 12;
+  var hitEl = document.createElementNS(svgNS, 'rect');
+  hitEl.setAttribute('x', String(-pad)); hitEl.setAttribute('y', String(-pad));
+  hitEl.setAttribute('width', String(def.w + pad*2)); hitEl.setAttribute('height', String(def.h + pad*2));
+  hitEl.setAttribute('fill', '#000'); hitEl.setAttribute('opacity', '0.001');
+  hitEl.style.pointerEvents = 'all';
+  grp.appendChild(hitEl);
+  var glowCol = def.traversal ? '#f39c12' : '#4ecdc4';
+  var glowR = def.traversal ? 3.5 : 2;
+  var glowEl = document.createElementNS(svgNS, 'ellipse');
+  glowEl.setAttribute('rx', String(glowR)); glowEl.setAttribute('ry', String(glowR*0.6));
+  glowEl.setAttribute('fill', glowCol); glowEl.setAttribute('opacity', '0.85');
+  glowEl.setAttribute('cx','0'); glowEl.setAttribute('cy',(def.h/2).toFixed(1));
+  grp.appendChild(glowEl);
+  var thrustEl=null, thrustBotEl=null;
+  if (def.thrust)  { thrustEl = mkImg(def.thrust[0], def.thrustW, def.thrustH); grp.appendChild(thrustEl); }
+  if (def.thrustB) { thrustEl = mkImg(def.thrustB[0], def.thrustW, def.thrustH); grp.appendChild(thrustEl); }
+  if (def.thrustBot){ thrustBotEl = mkImg(def.thrustBot[0], def.thrustBotW, def.thrustBotH); grp.appendChild(thrustBotEl); }
+  var bodyEl = mkImg(def.body[0], def.w, def.h);
+  grp.appendChild(bodyEl);
+  g.appendChild(grp);
+
+  var ship = {
+    grp:grp, bodyEl:bodyEl, glowEl:glowEl, thrustEl:thrustEl, thrustBotEl:thrustBotEl,
+    def:def, typeKey:typeKey, fromId:npc.from, toId:npc.to,
+    ax:a.x, ay:a.y, bx:b.x, by:b.y, angle:angle,
+    t:Math.max(0,Math.min(1,npc.progress||0)), frameIdx:0, frameTick:0, done:false, opacity:0,
+    serverDriven:true, startTs:npc.startTs, arriveTs:npc.arriveTs,
+    npc:{ id:npc.id, cargo:npc.cargo||[], from:npc.from, to:npc.to, variant:typeKey }
+  };
+  gShipList.push(ship);
+  gServerShips[npc.id] = ship;
+  grp.style.cursor='pointer';
+  grp.style.pointerEvents='all';
+  // Open the manifest on pointerdown (moving ships rarely fire a clean 'click').
+  // Bind on both the group and the hit-rect for reliability.
+  var openFn = function(e){
+    try { e.stopPropagation(); e.preventDefault(); } catch(_){}
+    if (window.openShipManifest) window.openShipManifest(ship);
+  };
+  grp.addEventListener('pointerdown', openFn);
+  hitEl.addEventListener('pointerdown', openFn);
+  grp.addEventListener('click', openFn); // fallback for environments where pointer events differ
+}
+
+function removeServerShip(npcId) {
+  var ship = gServerShips[npcId]; if(!ship) return;
+  if (ship.grp && ship.grp.parentNode) ship.grp.parentNode.removeChild(ship.grp);
+  var i = gShipList.indexOf(ship); if(i>=0) gShipList.splice(i,1);
+  delete gServerShips[npcId];
+}
+// Expose for the WS message handler (which lives outside this IIFE scope).
+window._spawnServerShip = function(npc){ if(gShipActive) spawnServerShip(npc); };
+window._removeServerShip = removeServerShip;
+
+// Pull the current server fleet and render it.
+function syncServerFleet() {
+  fetch(apiBase()+'/api/npc-fleet').then(function(r){return r.json();}).then(function(d){
+    if(!d.ok||!d.fleet) return;
+    var seen={};
+    d.fleet.forEach(function(npc){ seen[npc.id]=1; spawnServerShip(npc); });
+    Object.keys(gServerShips).forEach(function(id){ if(!seen[id]) removeServerShip(id); });
+  }).catch(function(){});
 }
 
 // ── Position one ship ─────────────────────────────────────────────────────────
@@ -1622,12 +1713,20 @@ function positionShip(ship, dt) {
   var dist = Math.sqrt(Math.pow(ship.bx-ship.ax,2) + Math.pow(ship.by-ship.ay,2));
   if (dist < 1) { ship.done = true; return; }
 
-  // Advance journey
-  var speed = def.speed / dist; // fraction of journey per second
-  ship.t = Math.min(1, ship.t + speed * dt * 0.001);
+  if (ship.serverDriven && ship.startTs && ship.arriveTs) {
+    // Journey progress comes from server timestamps so all clients agree.
+    var now = Date.now();
+    ship.t = Math.max(0, Math.min(1, (now - ship.startTs) / (ship.arriveTs - ship.startTs)));
+  } else {
+    // Local decorative ship: integrate speed.
+    var speed = def.speed / dist; // fraction of journey per second
+    ship.t = Math.min(1, ship.t + speed * dt * 0.001);
+  }
 
   // Fade in first 5% of journey, fade out last 5%
   ship.opacity = ship.t < 0.05 ? ship.t / 0.05 : ship.t > 0.95 ? (1 - ship.t) / 0.05 : 1;
+  // Server ships stay clearly visible (and clickable) the whole journey.
+  if (ship.serverDriven) ship.opacity = Math.max(0.55, ship.opacity);
   ship.grp.setAttribute('opacity', ship.opacity.toFixed(2));
 
   if (ship.t >= 1) { ship.done = true; return; }
@@ -1697,6 +1796,14 @@ function shipTick(t) {
     var ship = gShipList[i];
     positionShip(ship, dt);
     if (ship.done) {
+      // Server-driven ships are removed by the server's npc_arrive event, not locally.
+      // Keep them parked at the destination (visible, clickable) until then.
+      if (ship.serverDriven) {
+        ship.done = false;        // don't churn
+        ship.t = 1;
+        ship.grp.setAttribute('opacity', '0.85');
+        continue;
+      }
       if (ship.grp.parentNode) ship.grp.parentNode.removeChild(ship.grp);
       gShipList.splice(i, 1);
     }
@@ -1754,31 +1861,22 @@ window.gShipTrafficStart = function() {
   if (gShipActive) return;
   gShipActive  = true;
   gShipLastT   = null;
-  // Seed a few ships immediately at random points on their journeys
-  var seeds = [
-    {lane: LANES[0], type:'v1', rev:false},
-    {lane: LANES[3], type:'v2', rev:true},
-    {lane: LANES[6], type:'v1', rev:false},
-    {lane: TRAVERSAL_ROUTES[0], type:'v3', rev:false},
-    {lane: TRAVERSAL_ROUTES[2], type:'v3', rev:true},
-  ];
-  seeds.forEach(function(s){
-    spawnShip(s.lane, s.type, s.rev);
-    // Advance them mid-journey so map isn't empty on open
-    var ship = gShipList[gShipList.length-1];
-    if (ship) ship.t = 0.1 + Math.random() * 0.7;
-  });
+  // Server-authoritative: pull the shared NPC fleet and render it. No local spawns.
+  syncServerFleet();
+  if (window._npcSyncIv) clearInterval(window._npcSyncIv);
+  window._npcSyncIv = setInterval(syncServerFleet, 8000); // reconcile fleet periodically
   gShipRAF = requestAnimationFrame(shipTick);
-  scheduleNextSpawn();
 };
 
 window.gShipTrafficStop = function() {
   gShipActive = false;
   if (gShipRAF)       { cancelAnimationFrame(gShipRAF); gShipRAF = null; }
   if (gShipSpawnTimer){ clearTimeout(gShipSpawnTimer);   gShipSpawnTimer = null; }
+  if (window._npcSyncIv){ clearInterval(window._npcSyncIv); window._npcSyncIv=null; }
   var g = document.getElementById('gShips');
   if (g) g.innerHTML = '';
   gShipList = [];
+  gServerShips = {};
 };
 
 })();
@@ -1805,16 +1903,364 @@ function initSubTabs(){
       var fp=document.getElementById('gFactionsPane');
       var sp=document.getElementById('gShippingPane');
       var cp=document.getElementById('gContractsPane');
+      var kp=document.getElementById('gMarketsPane');
       if(mp) mp.style.display=t==='map'?'flex':'none';
       if(fp) fp.style.display=t==='factions'?'block':'none';
       if(sp) sp.style.display=t==='shipping'?'block':'none';
       if(cp) cp.style.display=t==='contracts'?'block':'none';
+      if(kp) kp.style.display=t==='markets'?'block':'none';
+      if(t!=='markets') stopShipmentTicker();
       if(t==='factions') renderFactionList();
       if(t==='contracts') renderContractsTable();
       if(t==='shipping') window.renderShippingTab();
+      if(t==='markets') renderMarketsTab();
     });
   });
 }
+
+// ── Shipment phase tracker (Domino's-style) ───────────────────────────────────
+var SHIPMENT_PHASE_LABELS = { loading:'Loading', undocking:'Undocking', transit:'In Transit', dropoff:'Drop-off', return:'Returning' };
+function renderShipmentTracker(s, phaseList, nameOf){
+  var now=Date.now();
+  var secs=Math.max(0,Math.round((s.resolveTs-now)/1000));
+  var mins=Math.floor(secs/60), rem=secs%60;
+  var eta = secs>0 ? (mins+'m '+(rem<10?'0':'')+rem+'s') : 'arriving';
+  var phases = phaseList && phaseList.length ? phaseList : ['loading','undocking','transit','dropoff','return'];
+  var curIdx = (typeof s.phaseIdx==='number') ? s.phaseIdx : phases.indexOf(s.phase);
+  var intercepted = !!s.intercepted;
+  // Phase pips
+  var pips = phases.map(function(pid,i){
+    var active = i===curIdx, done = i<curIdx;
+    var c = intercepted ? '#e74c3c' : (done?'#2ecc71':active?'#f39c12':'#333');
+    return '<span title="'+(SHIPMENT_PHASE_LABELS[pid]||pid)+'" style="flex:1;height:3px;background:'+c+';border-radius:1px"></span>';
+  }).join('<span style="width:2px"></span>');
+  var label = intercepted ? 'CARGO LOST \u2014 ship returning empty' : (SHIPMENT_PHASE_LABELS[s.phase]||s.phase);
+  var labelColor = intercepted ? '#ff6b6b' : (s.phase==='transit'?'#f39c12':'#9ab');
+  return '<div class="fmShipTrack" data-resolve="'+s.resolveTs+'" style="padding:5px 0;border-bottom:1px solid #111">'
+    +'<div style="display:flex;justify-content:space-between;font-size:.72rem;color:#9ab;margin-bottom:3px">'
+      +'<span>'+s.qty+'\u00d7 '+s.commodity+' \u2192 '+nameOf(s.to)+'</span>'
+      +'<span class="fmShipEta" style="color:#667">'+(intercepted?'':eta)+'</span></div>'
+    +'<div style="display:flex;gap:0;margin-bottom:3px">'+pips+'</div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:.62rem">'
+      +'<span class="fmShipPhase" style="color:'+labelColor+'">'+label+'</span>'
+      +'<span style="color:#555">'+s.interceptChance+'% risk'+(s.insured?' \u00b7 insured':'')+'</span></div>'
+    +'</div>';
+}
+
+// Live tick: advance ETA labels every second; full refetch happens on phase-change WS.
+var _fmTrackTimer=null;
+function startShipmentTicker(){
+  if(_fmTrackTimer) return;
+  _fmTrackTimer=setInterval(function(){
+    var now=Date.now();
+    document.querySelectorAll('.fmShipTrack').forEach(function(el){
+      var rt=Number(el.getAttribute('data-resolve'))||0;
+      var etaEl=el.querySelector('.fmShipEta');
+      if(etaEl && etaEl.textContent!==''){
+        var secs=Math.max(0,Math.round((rt-now)/1000));
+        var m=Math.floor(secs/60), r=secs%60;
+        etaEl.textContent = secs>0 ? (m+'m '+(r<10?'0':'')+r+'s') : 'arriving';
+      }
+    });
+  },1000);
+}
+function stopShipmentTicker(){ if(_fmTrackTimer){ clearInterval(_fmTrackTimer); _fmTrackTimer=null; } }
+
+// ── Markets tab: galaxy-wide commodity arbitrage view ─────────────────────────
+function renderMarketsTab(){
+  var box = document.getElementById('gMarketsInner'); if(!box) return;
+  box.innerHTML = '<div style="color:#555;font-size:.74rem">Loading market grid\u2026</div>';
+  var clsCol = {tech:'#4ecdc4', med:'#ff6b6b', agri:'#86ff6a'};
+  Promise.all([
+    fetch('/api/commodities-grid').then(function(r){return r.json();}),
+    gToken ? fetch('/api/cargo/me?token='+encodeURIComponent(gToken)).then(function(r){return r.json();}) : Promise.resolve({ok:true,cargo:{items:[],total:0}}),
+    gToken ? fetch('/api/cargo/transit?token='+encodeURIComponent(gToken)).then(function(r){return r.json();}) : Promise.resolve({ok:true,shipments:[]}),
+    fetch('/api/ships'+(gToken?('?token='+encodeURIComponent(gToken)):'')).then(function(r){return r.json();})
+  ]).then(function(res){
+    var grid=res[0], cg=res[1], tr=res[2], sh=res[3];
+    if(!grid || !grid.ok){ box.innerHTML='<div style="color:#e74c3c">Market grid unavailable</div>'; return; }
+    var nameOf=function(cid){ return (COLONY_META[cid]||{name:cid}).name; };
+
+    var h='';
+    // Cargo hold summary
+    h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
+    h+='<div style="flex:1;min-width:200px;background:#0a0a14;border:1px solid #1a1a2e;border-radius:4px;padding:10px 12px">'
+      +'<div style="font-size:.78rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Cargo Hold</div>';
+    if(cg && cg.ok && cg.cargo && cg.cargo.items.length){
+      var _icoMap={}; (grid.commodities||[]).forEach(function(c){ _icoMap[c.id]=c.icon; });
+      h+=cg.cargo.items.map(function(it){
+        var ico=_icoMap[it.id]?'<img src="assets/'+_icoMap[it.id]+'" style="width:16px;height:16px;vertical-align:middle;margin-right:5px;image-rendering:pixelated" onerror="this.style.display=\'none\'">':'';
+        var loc=it.colonyName?(' <span style="color:#3498db">@ '+it.colonyName+'</span>'):'';
+        return '<div style="font-size:.8rem;color:#aaa;padding:2px 0">'+ico+it.qty+'\u00d7 '+it.name+loc+' <span style="color:#666">(avg \u0192'+Math.round(it.avgCost).toLocaleString()+')</span></div>';
+      }).join('');
+    } else { h+='<div style="font-size:.78rem;color:#666">Empty \u2014 buy commodities from a colony</div>'; }
+    h+='</div>';
+    // In-transit phase tracker (Domino's style)
+    h+='<div style="flex:1;min-width:240px;background:#0a0a14;border:1px solid #1a1a2e;border-radius:4px;padding:10px 12px">'
+      +'<div style="font-size:.78rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">In Transit</div>';
+    if(tr && tr.ok && tr.shipments && tr.shipments.length){
+      var phaseList = (tr.phases||[]).map(function(p){return p.id;});
+      h+=tr.shipments.map(function(s){ return renderShipmentTracker(s, phaseList, nameOf); }).join('');
+    } else { h+='<div style="font-size:.78rem;color:#666">No active shipments</div>'; }
+    h+='</div></div>';
+
+    // ── Shipping Console (self-contained; no sector map needed) ──
+    var _colOpts = grid.colonies.map(function(c){ return '<option value="'+c.id+'">'+nameOf(c.id)+'</option>'; }).join('');
+    var _comOpts = grid.commodities.map(function(c){ return '<option value="'+c.id+'">'+c.name+'</option>'; }).join('');
+    h+='<div id="gShipConsole" style="background:#0a0a14;border:1px solid #1a2a3a;border-radius:4px;padding:12px 14px;margin-bottom:16px">'
+      +'<div style="font-size:.8rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">\uD83D\uDCE6 Ship Cargo</div>'
+      +'<div style="font-size:.66rem;color:#666;margin-bottom:8px">Buy a commodity at a colony, then ship it to another to sell at the spread. Shipping takes time and can be intercepted.</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
+        +'<div style="flex:1;min-width:130px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">Commodity</div>'
+          +'<select id="gShipConCom" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_comOpts+'</select></div>'
+        +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">From</div>'
+          +'<select id="gShipConFrom" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
+        +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">To</div>'
+          +'<select id="gShipConTo" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
+        +'<div style="flex:0 0 80px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">Qty</div>'
+          +'<input id="gShipConQty" type="number" min="1" value="10" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"></div>'
+        +'<button onclick="window.gShipConsoleGo()" style="flex:0 0 auto;background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:7px 16px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">SHIP</button>'
+      +'</div>'
+      +'<div id="gShipConHint" style="font-size:.66rem;color:#888;margin-top:6px;min-height:13px"></div>'
+      +'</div>';
+
+    var heldMap = {};       // comId -> total qty held anywhere
+    var heldLoc = {};        // comId -> { colonyId, colonyName, qty } of the largest lot (where to sell)
+    if(cg && cg.ok && cg.cargo) cg.cargo.items.forEach(function(it){
+      heldMap[it.id]=(heldMap[it.id]||0)+it.qty;
+      if(it.colonyId && (!heldLoc[it.id] || it.qty>heldLoc[it.id].qty)) heldLoc[it.id]={colonyId:it.colonyId,colonyName:it.colonyName,qty:it.qty};
+    });
+    window._gCommHeld = heldMap;
+    window._gCommHeldLoc = heldLoc;
+    // Cache the grid so commodity_tick can patch prices in place (no re-render/scroll jump).
+    window._gGridCache = grid;
+    window._gColNameOf = nameOf;
+
+    // Arbitrage board: per commodity, cheapest buy vs dearest sell across colonies
+    h+='<div style="font-size:.82rem;color:#999;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Arbitrage Board <span style="color:#666;text-transform:none;letter-spacing:0">\u2014 best spread per commodity right now</span></div>';
+    // Class filter (the catalog is large; let players narrow by class).
+    var curFilter = window._gMktFilter || 'all';
+    var fbtn=function(key,label,c){ var on=curFilter===key; return '<button onclick="window.gMktFilter(\''+key+'\')" style="background:'+(on?c:'#0a0a14')+';border:1px solid '+c+';color:'+(on?'#0a0a14':c)+';padding:3px 12px;cursor:pointer;font-size:.66rem;font-family:inherit;border-radius:2px;margin-right:5px;letter-spacing:.06em">'+label+'</button>'; };
+    h+='<div style="margin-bottom:10px">'
+      +fbtn('all','ALL','#9aa')
+      +fbtn('tech','TECH','#4ecdc4')
+      +fbtn('med','MED','#ff6b6b')
+      +fbtn('agri','AGRI','#86ff6a')
+      +'<input id="gMktSearch" placeholder="filter by name..." value="'+(window._gMktSearch||'')+'" oninput="window.gMktSearchInput(this.value)" style="background:#0a0a14;border:1px solid #1a1a2e;color:#bbb;padding:3px 8px;font-size:.66rem;font-family:inherit;border-radius:2px;margin-left:6px;width:140px">'
+      +'</div>';
+    h+='<table style="width:100%;border-collapse:collapse;font-size:.8rem">';
+    h+='<tr style="color:#666;text-align:left"><th style="padding:6px 8px">Commodity</th><th style="padding:6px 8px">Buy cheapest</th><th style="padding:6px 8px">Sell dearest</th><th style="padding:6px 8px;text-align:right">Spread</th><th style="padding:6px 8px;text-align:right">Act</th></tr>';
+    grid.commodities.forEach(function(com){
+      // Apply class + name filters.
+      if(curFilter!=='all' && com.cls!==curFilter) return;
+      var srch=(window._gMktSearch||'').trim().toLowerCase();
+      if(srch && com.name.toLowerCase().indexOf(srch)<0) return;
+      var best=null, worst=null;
+      grid.colonies.forEach(function(col){
+        var pr=col.prices[com.id]; if(!pr) return;
+        if(!best || pr.buy<best.buy) best={buy:pr.buy,col:col.id};
+        if(!worst || pr.sell>worst.sell) worst={sell:pr.sell,col:col.id};
+      });
+      if(!best||!worst) return;
+      var spread=worst.sell-best.buy;
+      var pct=best.buy>0?Math.round(spread/best.buy*100):0;
+      var col=clsCol[com.cls]||'#aaa';
+      var profit=spread>0;
+      var held=heldMap[com.id]||0;
+      var loc=heldLoc[com.id]||null;
+      var buyBtn='<button onclick="window.gMktBuy(\''+best.col+'\',\''+com.id+'\')" style="background:#0d2818;border:1px solid #2ecc71;color:#2ecc71;padding:2px 7px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px">BUY</button>';
+      var sellBtn = loc
+        ? '<button onclick="window.gMktSell(\''+loc.colonyId+'\',\''+com.id+'\')" title="Sell at '+loc.colonyName+' (where your cargo is)" style="background:#2d1414;border:1px solid #e74c3c;color:#ff6b6b;padding:2px 7px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px;margin-left:3px">SELL</button>'
+        : '<button disabled title="You hold none here \u2014 buy, then ship to sell elsewhere" style="background:#2d1414;border:1px solid #333;color:#444;padding:2px 7px;cursor:default;font-size:.7rem;font-family:inherit;border-radius:2px;margin-left:3px">SELL</button>';
+      var shipBtn='<button onclick="window.gMktShipRow(\''+com.id+'\',\''+(loc?loc.colonyId:best.col)+'\',\''+worst.col+'\')" title="Ship '+com.name+' to '+nameOf(worst.col)+'" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:2px 7px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px;margin-left:3px">SHIP</button>';
+      var icoHtml = com.icon ? '<img src="assets/'+com.icon+'" style="width:20px;height:20px;vertical-align:middle;margin-right:7px;image-rendering:pixelated" onerror="this.style.display=\'none\'">' : '';
+      h+='<tr style="border-top:1px solid #14141f" data-com="'+com.id+'">'
+        +'<td style="padding:6px 8px;color:'+col+'">'+icoHtml+com.name+(held>0?' <span style="color:#777">\u00d7'+held+(loc?' @ '+loc.colonyName:'')+'</span>':'')+'</td>'
+        +'<td style="padding:6px 8px;color:#bbb" id="mb_'+com.id+'">\u0192'+Math.round(best.buy).toLocaleString()+' <span style="color:#666">@ '+nameOf(best.col)+'</span></td>'
+        +'<td style="padding:6px 8px;color:#bbb" id="ms_'+com.id+'">\u0192'+Math.round(worst.sell).toLocaleString()+' <span style="color:#666">@ '+nameOf(worst.col)+'</span></td>'
+        +'<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+(profit?'#2ecc71':'#888')+'" id="mp_'+com.id+'">'+(profit?'+':'')+pct+'%</td>'
+        +'<td style="padding:6px 8px;text-align:right;white-space:nowrap">'+buyBtn+sellBtn+shipBtn+'</td>'
+        +'</tr>';
+    });
+    h+='</table>';
+    h+='<div id="gMktHint" style="font-size:.72rem;color:#888;margin-top:8px;min-height:14px"></div>';
+    h+='<div style="font-size:.72rem;color:#555;margin-top:4px">BUY purchases at the cheapest colony (cargo stays there). To profit from a spread you must SHIP it to another colony, then SELL where it lands. You can only sell where your cargo physically is.</div>';
+
+    // Shipyard
+    if(sh && sh.ok && sh.classes){
+      h+='<div style="font-size:.82rem;color:#999;letter-spacing:.1em;text-transform:uppercase;margin:16px 0 10px">Shipyard <span style="color:#666;text-transform:none;letter-spacing:0">\u2014 your hauler sets cargo capacity per run</span></div>';
+      h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+      h+=sh.classes.map(function(c){
+        var owned = c.id===sh.owned;
+        var canBuy = !owned && c.price>0;
+        return '<div style="flex:1;min-width:180px;background:#0a0a14;border:1px solid '+(owned?'#2ecc71':'#1a1a2e')+';border-radius:4px;padding:10px 12px">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+            +'<span style="font-size:.82rem;color:'+(owned?'#2ecc71':'#ccc')+'">'+c.name+'</span>'
+            +(owned?'<span style="font-size:.62rem;color:#2ecc71;letter-spacing:.08em">ACTIVE</span>':'')+'</div>'
+          +'<div style="font-size:.68rem;color:#778;margin-bottom:6px">'+c.desc+'</div>'
+          +'<div style="font-size:.68rem;color:#9ab;margin-bottom:2px">Capacity: <span style="color:#ccc">'+c.capacity.toLocaleString()+'u</span></div>'
+          +'<div style="font-size:.68rem;color:#9ab;margin-bottom:8px">Risk: <span style="color:#ccc">'+(c.riskMod>0?'+'+Math.round(c.riskMod*100)+'%':'baseline')+'</span></div>'
+          +(owned
+              ? '<div style="font-size:.66rem;color:#555;text-align:center;padding:4px">In service</div>'
+              : (canBuy
+                  ? '<button onclick="window.gBuyShip(\''+c.id+'\')" style="width:100%;background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:5px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px">Commission \u2014 \u0192'+c.price.toLocaleString()+'</button>'
+                  : '<div style="font-size:.66rem;color:#555;text-align:center;padding:4px">Starter ship</div>'))
+          +'</div>';
+      }).join('');
+      h+='</div>';
+      h+='<div id="gShipyardHint" style="font-size:.72rem;color:#888;margin-top:8px;min-height:14px"></div>';
+    }
+
+    box.innerHTML=h;
+    startShipmentTicker();
+  }).catch(function(){ box.innerHTML='<div style="color:#e74c3c">Market load failed</div>'; });
+}
+
+// Buy/commission a ship class, then refresh the Markets tab.
+window.gBuyShip = function(classId){
+  if(!gToken){ gToast('Log in to commission a ship','#e74c3c'); return; }
+  fetch('/api/ships/buy',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:gToken,classId:classId})})
+    .then(function(r){return r.json();}).then(function(d){
+      var hint=document.getElementById('gShipyardHint');
+      if(!d.ok){ if(hint){hint.textContent='\u2717 '+(d.error==='insufficient_funds'?('Need \u0192'+Math.round(d.need).toLocaleString()):(d.error||'Purchase failed'));hint.style.color='#ff6b6b';} return; }
+      gToast('Commissioned \u2014 capacity now '+d.capacity.toLocaleString()+'u','#2ecc71');
+      renderMarketsTab();
+    }).catch(function(){ var hint=document.getElementById('gShipyardHint'); if(hint){hint.textContent='\u2717 Purchase failed';hint.style.color='#ff6b6b';} });
+};
+
+// Markets board filters (catalog is large).
+window.gMktFilter = function(key){ window._gMktFilter = key; renderMarketsTab(); };
+window.gMktSearchInput = function(val){
+  window._gMktSearch = val;
+  // Debounced re-render that preserves the search box focus + caret.
+  if(window._gSrchT) clearTimeout(window._gSrchT);
+  window._gSrchT = setTimeout(function(){
+    renderMarketsTab();
+    var s=document.getElementById('gMktSearch'); if(s){ s.focus(); var v=s.value; s.value=''; s.value=v; }
+  }, 250);
+};
+
+// Live in-place price update for the Markets board. Patches just the affected
+// commodity's cells from the cached grid so prices fluctuate like a stock ticker
+// WITHOUT re-rendering the pane (which would reset scroll position).
+window.gMktApplyTick = function(colonyId, commodityId, price){
+  var grid = window._gGridCache; if(!grid) return;
+  var nameOf = window._gColNameOf || function(x){return x;};
+  // Update the cached price for this colony/commodity.
+  var col = grid.colonies.find(function(c){ return c.id===colonyId; });
+  if(col && col.prices[commodityId]){
+    var tithe = col.tithe||0;
+    col.prices[commodityId] = { buy: Math.round(price*(1+tithe)*100)/100, sell: Math.round(price*100)/100 };
+  } else { return; }
+  // Recompute best buy / worst sell for this commodity across colonies.
+  var best=null, worst=null;
+  grid.colonies.forEach(function(c){
+    var pr=c.prices[commodityId]; if(!pr) return;
+    if(!best || pr.buy<best.buy) best={buy:pr.buy,col:c.id};
+    if(!worst || pr.sell>worst.sell) worst={sell:pr.sell,col:c.id};
+  });
+  if(!best||!worst) return;
+  var spread=worst.sell-best.buy;
+  var pct=best.buy>0?Math.round(spread/best.buy*100):0;
+  var profit=spread>0;
+  var mb=document.getElementById('mb_'+commodityId);
+  var ms=document.getElementById('ms_'+commodityId);
+  var mp=document.getElementById('mp_'+commodityId);
+  if(!mb||!ms||!mp) return; // board not currently shown
+  var flash=function(el,up){
+    el.style.transition='none';
+    el.style.background = up ? 'rgba(46,204,113,0.22)' : 'rgba(231,76,60,0.22)';
+    setTimeout(function(){ el.style.transition='background 0.6s'; el.style.background='transparent'; }, 30);
+  };
+  var newBuy='\u0192'+Math.round(best.buy).toLocaleString()+' <span style="color:#666">@ '+nameOf(best.col)+'</span>';
+  var newSell='\u0192'+Math.round(worst.sell).toLocaleString()+' <span style="color:#666">@ '+nameOf(worst.col)+'</span>';
+  var newPct=(profit?'+':'')+pct+'%';
+  // Flash direction based on sell price change vs displayed.
+  var prevSell=parseFloat((ms.textContent||'').replace(/[^0-9.]/g,''))||0;
+  if(Math.round(worst.sell)!==Math.round(prevSell)) flash(ms, worst.sell>prevSell);
+  mb.innerHTML=newBuy; ms.innerHTML=newSell;
+  mp.textContent=newPct; mp.style.color = profit?'#2ecc71':'#888';
+};
+
+
+// Board actions: buy at the cheapest colony / sell at the dearest, then refresh board.
+window.gMktBuy = function(colonyId, comId){
+  if(!gToken){ gToast('Log in to trade','#e74c3c'); return; }
+  var v = prompt('Buy how many units? (at cheapest colony)','10');
+  if(v===null) return;
+  var qty = Math.max(1, Math.floor(Number(v)||0));
+  fetch('/api/commodities/buy',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:gToken,colonyId:colonyId,commodityId:comId,qty:qty})})
+    .then(function(r){return r.json();}).then(function(d){
+      var hint=document.getElementById('gMktHint');
+      if(!d.ok){ if(hint){hint.textContent='\u2717 '+(d.error==='no_ship'?'Commission a ship first (Shipyard below)':d.error==='insufficient_funds'?'Not enough cash':(d.error||'Buy failed'));hint.style.color='#ff6b6b';} return; }
+      if(hint){hint.textContent='\u2713 Bought '+d.bought+' @ \u0192'+Math.round(d.unitPrice).toLocaleString();hint.style.color='#2ecc71';}
+      renderMarketsTab();
+    }).catch(function(){ var hint=document.getElementById('gMktHint'); if(hint){hint.textContent='\u2717 Buy failed';hint.style.color='#ff6b6b';} });
+};
+
+window.gMktSell = function(colonyId, comId){
+  if(!gToken){ gToast('Log in to trade','#e74c3c'); return; }
+  var loc = (window._gCommHeldLoc && window._gCommHeldLoc[comId]) || null;
+  var held = loc ? loc.qty : 0;
+  if(held<=0){ gToast('You hold none at a sellable colony','#e74c3c'); return; }
+  var v = prompt('Sell how many? (at '+(loc.colonyName||colonyId)+', holding '+held+' there)', String(held));
+  if(v===null) return;
+  var qty = Math.min(held, Math.max(1, Math.floor(Number(v)||0)));
+  fetch('/api/commodities/sell',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:gToken,colonyId:colonyId,commodityId:comId,qty:qty})})
+    .then(function(r){return r.json();}).then(function(d){
+      var hint=document.getElementById('gMktHint');
+      if(!d.ok){ if(hint){hint.textContent='\u2717 '+(d.error==='no_ship'?'Commission a ship first (Shipyard below)':d.error==='no_cargo_here'?'No cargo at that colony \u2014 ship it there first':(d.error||'Sell failed'));hint.style.color='#ff6b6b';} return; }
+      if(hint){hint.textContent='\u2713 Sold '+d.sold+' @ \u0192'+Math.round(d.unitPrice).toLocaleString()+' (+\u0192'+Math.round(d.proceeds).toLocaleString()+')';hint.style.color='#2ecc71';}
+      renderMarketsTab();
+    }).catch(function(){ var hint=document.getElementById('gMktHint'); if(hint){hint.textContent='\u2717 Sell failed';hint.style.color='#ff6b6b';} });
+};
+
+// Standalone shipping console: read dropdowns, launch a timed shipping run.
+window.gShipConsoleGo = function(){
+  if(!gToken){ gToast('Log in to ship','#e74c3c'); return; }
+  var com=document.getElementById('gShipConCom');
+  var from=document.getElementById('gShipConFrom');
+  var to=document.getElementById('gShipConTo');
+  var qtyI=document.getElementById('gShipConQty');
+  var hint=document.getElementById('gShipConHint');
+  if(!com||!from||!to||!qtyI) return;
+  var qty=Math.max(1,Math.floor(Number(qtyI.value)||0));
+  if(from.value===to.value){ if(hint){hint.textContent='\u2717 Pick two different colonies';hint.style.color='#ff6b6b';} return; }
+  fetch('/api/cargo/ship',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:gToken,commodityId:com.value,from:from.value,to:to.value,qty:qty})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(!d.ok){
+        var msg=d.error==='no_ship'?'Commission a ship first (Shipyard below)':
+          d.error==='insufficient_cargo'?('You only hold '+(d.have||0)+' \u2014 buy it first'):
+          d.error==='over_capacity'?('Over capacity: '+d.shipName+' holds '+d.capacity):
+          d.error==='no_lane'?'No lane between those colonies':
+          d.error==='same_colony'?'Pick two different colonies':(d.error||'Ship failed');
+        if(hint){hint.textContent='\u2717 '+msg;hint.style.color='#ff6b6b';} return;
+      }
+      if(hint){hint.textContent='\u2713 Shipment launched \u2014 track it in the In Transit panel above';hint.style.color='#2ecc71';}
+      renderMarketsTab();
+    }).catch(function(){ if(hint){hint.textContent='\u2717 Ship failed';hint.style.color='#ff6b6b';} });
+};
+
+// Per-row SHIP: pre-fill the console with this commodity + cheapest origin + dearest dest.
+window.gMktShipRow = function(comId, fromCol, toCol){
+  var com=document.getElementById('gShipConCom');
+  var from=document.getElementById('gShipConFrom');
+  var to=document.getElementById('gShipConTo');
+  if(com) com.value=comId;
+  if(from) from.value=fromCol;
+  if(to) to.value=toCol;
+  var con=document.getElementById('gShipConsole');
+  if(con){ con.scrollIntoView({behavior:'smooth',block:'center'});
+    con.style.transition='none'; con.style.boxShadow='0 0 0 2px #3498db';
+    setTimeout(function(){ con.style.transition='box-shadow 0.8s'; con.style.boxShadow='none'; }, 40);
+  }
+  var hint=document.getElementById('gShipConHint');
+  if(hint){ hint.textContent='Ready to ship \u2014 set quantity and press SHIP (you must hold the cargo first).'; hint.style.color='#888'; }
+};
 
 function hookShowTab(){
   var orig=window.showTab; if(!orig) return;
@@ -2380,7 +2826,7 @@ function renderDetail(id){
     var sh = '';
     // ── SHIPPING/SMUGGLING — moved to Shipping tab ──
     sh += '<div style="margin-bottom:14px">';
-    sh += '<div style="font-size:.66rem;color:#3498db;padding:8px;border:1px solid #1a1a2e;border-radius:3px;text-align:center;cursor:pointer" onclick="document.querySelector(\'[data-gstab=shipping]\').click()">📦 Open Shipping &amp; Smuggling Tab →</div>';
+    sh += '<div style="font-size:.66rem;color:#e74c3c;padding:8px;border:1px solid #2a1a1a;border-radius:3px;text-align:center;cursor:pointer" onclick="document.querySelector(\'[data-gstab=shipping]\').click()">💀 Open Smuggling Tab →</div>';
     sh += '<div id="gSmugStatus" style="font-size:.66rem;color:#555;margin-top:6px"></div>';
     sh += '</div>';
 
@@ -2432,6 +2878,7 @@ function renderDetail(id){
     el.appendChild(sysDiv);
   }
 }
+
 
 window.gShowFund=function(cid,fid){
   var fc=FACTIONS[fid]; var row=document.getElementById('gFR_'+cid+'_'+fid); if(!row) return;
@@ -2625,11 +3072,14 @@ document.addEventListener('fm_ws_msg',function(e){
     if(d.success){
       gToast('Smuggling cleared! +\u0192'+Number(d.payout).toLocaleString()+' ('+d.cargo+')','#2ecc71');
     } else {
-      gToast('INTERCEPTED! Lost \u0192'+Number(d.stake).toLocaleString()+' — '+d.cargo+' cargo seized','#e74c3c');
+      var lostMsg='INTERCEPTED! Lost \u0192'+Number(d.stake).toLocaleString();
+      if(d.guardsLost && d.guardFee) lostMsg+=' + \u0192'+Number(d.guardFee).toLocaleString()+' guards';
+      gToast(lostMsg+' \u2014 '+d.cargo+' seized','#e74c3c');
     }
     window._activeSmugRun=null;
     if(gMapActive) renderLanes();
     window._shippingAddLog(d);
+    try{ window.renderShippingTab(); }catch(_){}
     var ss=document.getElementById('gSmugStatus');
     if(ss) ss.innerHTML = d.success
       ? '<span style="color:#2ecc71">\u2713 Delivered '+d.cargo+' — \u0192'+Number(d.payout).toLocaleString()+' earned ('+d.interceptChance+'% risk)</span>'
@@ -2689,6 +3139,44 @@ document.addEventListener('fm_ws_msg',function(e){
     try{ window.renderShippingTab(); }catch(_){}
   }
   if(msg.type==='shipping_error') gToast(msg.error||'Shipping error','#e74c3c');
+  // Server NPC fleet events
+  if(msg.type==='npc_spawn'&&msg.data){
+    if(typeof window._spawnServerShip==='function') window._spawnServerShip(msg.data);
+  }
+  if(msg.type==='npc_arrive'&&msg.data){
+    if(typeof window._removeServerShip==='function') window._removeServerShip(msg.data.id);
+  }
+  if(msg.type==='commodity_tick'&&msg.data){
+    // Live price move (player or NPC). Patch the board in place \u2014 no re-render,
+    // so the page doesn't jump to the top while scrolling.
+    var mkP=document.getElementById('gMarketsPane');
+    if(mkP && mkP.style.display!=='none' && window.gMktApplyTick){
+      window.gMktApplyTick(msg.data.colonyId, msg.data.commodityId, msg.data.price);
+    }
+  }
+  // Commodity cargo shipments (phased arbitrage shipping)
+  if(msg.type==='cargo_phase'&&msg.data){
+    // A shipment advanced a phase — refresh the Markets tracker if it's open.
+    var mkOpen=document.getElementById('gMarketsPane');
+    if(mkOpen && mkOpen.style.display!=='none') renderMarketsTab();
+  }
+  if(msg.type==='contract_settled'&&msg.data){
+    var cs=msg.data;
+    if(typeof cs.cash==='number' && typeof _gSyncCash==='function') _gSyncCash(cs.cash);
+    if(cs.status==='exercised' && cs.payout>0){ gToast('Contract paid out: \u0192'+Math.round(cs.payout).toLocaleString()+' ('+cs.commodity+')','#2ecc71'); }
+    else if(cs.reason==='expired'){ gToast('Contract expired: '+cs.commodity+' spread didn\u2019t beat strike','#888'); }
+    var cp=document.getElementById('gContractsPane');
+    if(cp && cp.style.display!=='none'){ try{ renderShippingContracts(); }catch(_){} }
+  }
+  if(msg.type==='cargo_ship_result'&&msg.data){
+    var cd=msg.data;
+    if(typeof cd.cash==='number') _gSyncCash(cd.cash);
+    if(cd.success){ gToast('Cargo delivered: '+cd.qty+'\u00d7 '+cd.commodity+' at destination','#2ecc71'); }
+    else if(cd.insured){ gToast('Cargo lost but INSURED \u2014 claim paid \u0192'+Number(cd.refund||0).toLocaleString(),'#f39c12'); }
+    else { gToast('CARGO SEIZED: '+cd.qty+'\u00d7 '+cd.commodity+' lost (ship survives)','#e74c3c'); }
+    var mkOpen2=document.getElementById('gMarketsPane');
+    if(mkOpen2 && mkOpen2.style.display!=='none') renderMarketsTab();
+  }
   if(msg.type==='shipping_status'){
     window._activeShipRun=msg.data||null;
     try{ window.renderShippingTab(); }catch(_){}
@@ -2850,6 +3338,10 @@ function renderContractsTable(){
 
   var h = '';
 
+  // ── Shipping Contracts (options) — house-written bet board ──
+  h += '<div id="gShipContracts" style="margin-bottom:18px"></div>';
+  // (populated async by renderShippingContracts; rendered here so it sits atop lane shares)
+
   if(myShare){
     var mLk = myShare.laneKey;
     var mSh = shares[mLk]||{supply:0};
@@ -2925,7 +3417,82 @@ function renderContractsTable(){
 
   h += '</div>';
   el.innerHTML = h;
+  try { renderShippingContracts(); } catch(_){}
 }
+
+// ── Shipping Contracts (options) board + my positions ─────────────────────────
+function renderShippingContracts(){
+  var box = document.getElementById('gShipContracts');
+  if(!box) return;
+  Promise.all([
+    fetch('/api/contracts/offers').then(function(r){return r.json();}),
+    gToken ? fetch('/api/contracts/mine?token='+encodeURIComponent(gToken)).then(function(r){return r.json();}) : Promise.resolve({ok:true,open:[]})
+  ]).then(function(res){
+    var off=res[0], mine=res[1];
+    var nameOf=function(cid){ return (COLONY_META[cid]||{name:cid}).name; };
+    var h='<div style="font-size:.82rem;color:#f39c12;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Shipping Contracts <span style="color:#666;text-transform:none;letter-spacing:0">\u2014 buy the right to a lane\u2019s spread. No ship, no cargo. Profit if the spread widens past your strike before expiry.</span></div>';
+    // My open positions first
+    if(mine && mine.ok && mine.open && mine.open.length){
+      h+='<div style="font-size:.8rem;color:#9ab;margin-bottom:5px">Your open contracts</div>';
+      h+=mine.open.map(function(c){
+        var itm=c.inTheMoney;
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;margin-bottom:3px;background:#0a0a14;border:1px solid '+(itm?'#2ecc71':'#1a1a2e')+';border-radius:3px;font-size:.8rem">'
+          +'<span style="flex:1;color:#ccc">'+c.size+'u '+c.commodity+' <span style="color:#666">'+nameOf(c.from)+'\u2192'+nameOf(c.to)+'</span></span>'
+          +'<span style="color:#778">strike \u0192'+Math.round(c.strikeSpread).toLocaleString()+'</span>'
+          +'<span style="color:'+(itm?'#2ecc71':'#888')+'">now \u0192'+Math.round(c.curSpread).toLocaleString()+' ('+(itm?'+':'')+Math.round(c.intrinsic).toLocaleString()+')</span>'
+          +'<span style="color:#666">'+c.expiresInMin+'m</span>'
+          +'<button onclick="window.gExerciseContract(\''+c.id+'\')" style="background:'+(itm?'#0d2818':'#1a1a1a')+';border:1px solid '+(itm?'#2ecc71':'#444')+';color:'+(itm?'#2ecc71':'#777')+';padding:2px 8px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">EXERCISE</button>'
+          +'</div>';
+      }).join('');
+      h+='<div style="height:10px"></div>';
+    }
+    // Offer board
+    h+='<div style="font-size:.8rem;color:#9ab;margin-bottom:5px">Available contracts <span style="color:#555">(reshuffles periodically)</span></div>';
+    if(off && off.ok && off.offers && off.offers.length){
+      h+='<table style="width:100%;border-collapse:collapse;font-size:.82rem">';
+      h+='<tr style="color:#666;text-align:left"><th style="padding:4px 6px">Commodity</th><th style="padding:4px 6px">Lane</th><th style="padding:4px 6px;text-align:right">Strike</th><th style="padding:4px 6px;text-align:right">Premium</th><th style="padding:4px 6px;text-align:right">Expiry</th><th></th></tr>';
+      h+=off.offers.map(function(o){
+        var ico=o.icon?'<img src="assets/'+o.icon+'" style="width:18px;height:18px;vertical-align:middle;margin-right:5px;image-rendering:pixelated" onerror="this.style.display=\'none\'">':'';
+        return '<tr style="border-top:1px solid #14141f">'
+          +'<td style="padding:4px 6px;color:#ccc">'+ico+o.size+'u '+o.commodityName+'</td>'
+          +'<td style="padding:4px 6px;color:#889">'+nameOf(o.from)+'\u2192'+nameOf(o.to)+(o.blockaded?' <span style="color:#e74c3c">\u26d4</span>':'')+'</td>'
+          +'<td style="padding:4px 6px;text-align:right;color:#aaa">\u0192'+Math.round(o.strikeSpread).toLocaleString()+'</td>'
+          +'<td style="padding:4px 6px;text-align:right;color:#f39c12">\u0192'+Math.round(o.premiumTotal).toLocaleString()+'</td>'
+          +'<td style="padding:4px 6px;text-align:right;color:#778">'+o.expiresInMin+'m</td>'
+          +'<td style="padding:4px 6px;text-align:right"><button onclick="window.gBuyContract(\''+o.offerId+'\')" style="background:#1a1408;border:1px solid #f39c12;color:#f39c12;padding:2px 8px;cursor:pointer;font-size:.64rem;font-family:inherit;border-radius:2px">BUY</button></td>'
+          +'</tr>';
+      }).join('');
+      h+='</table>';
+    } else { h+='<div style="font-size:.7rem;color:#666">No contracts on offer right now</div>'; }
+    h+='<div id="gContractHint" style="font-size:.68rem;color:#888;margin-top:6px;min-height:13px"></div>';
+    box.innerHTML=h;
+  }).catch(function(){ box.innerHTML='<div style="color:#e74c3c;font-size:.7rem">Contracts unavailable</div>'; });
+}
+
+window.gBuyContract = function(offerId){
+  if(!gToken){ gToast('Log in to trade contracts','#e74c3c'); return; }
+  fetch('/api/contracts/buy',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:gToken,offerId:offerId})})
+    .then(function(r){return r.json();}).then(function(d){
+      var hint=document.getElementById('gContractHint');
+      if(!d.ok){ if(hint){hint.textContent='\u2717 '+(d.error==='insufficient_funds'?('Need \u0192'+Math.round(d.need).toLocaleString()):d.error==='offer_expired'?'That contract just reshuffled off the board':(d.error||'Buy failed'));hint.style.color='#ff6b6b';} return; }
+      gToast('Contract bought \u2014 premium \u0192'+Math.round(d.premiumPaid).toLocaleString(),'#f39c12');
+      if(typeof _gSyncCash==='function') _gSyncCash(d.cash);
+      renderShippingContracts();
+    }).catch(function(){ var hint=document.getElementById('gContractHint'); if(hint){hint.textContent='\u2717 Buy failed';hint.style.color='#ff6b6b';} });
+};
+
+window.gExerciseContract = function(id){
+  fetch('/api/contracts/exercise',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:gToken,id:id})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(!d.ok){ gToast(d.error||'Exercise failed','#e74c3c'); return; }
+      if(d.payout>0) gToast('Exercised \u2014 paid \u0192'+Math.round(d.payout).toLocaleString(),'#2ecc71');
+      else gToast('Contract closed \u2014 spread didn\u2019t beat your strike','#888');
+      if(typeof _gSyncCash==='function') _gSyncCash(d.cash);
+      renderShippingContracts();
+    }).catch(function(){ gToast('Exercise failed','#e74c3c'); });
+};
 
 window._gBuyShare = function(from, to){
   if(!gToken){ gToast('Log in first','#e74c3c'); return; }
@@ -3008,7 +3575,7 @@ window._gSelectLane = function(from, to){
   } else {
     h += '<button onclick="window._gBuyShare(\''+from+'\',\''+to+'\')" style="width:100%;margin-bottom:10px;background:#0a1020;border:1px solid #3498db;color:#3498db;padding:6px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">BUY SHARE (\u0192'+Number(buyP).toLocaleString()+')</button>';
   }
-  h += '<div style="margin-top:10px;font-size:.66rem;color:#3498db;padding:8px;border:1px solid #1a1a2e;border-radius:3px;text-align:center;cursor:pointer;margin-bottom:10px" onclick="document.querySelector(\'[data-gstab=shipping]\').click()">📦 Ship / Smuggle this lane →</div>';
+  h += '<div style="margin-top:10px;font-size:.66rem;color:#e74c3c;padding:8px;border:1px solid #2a1a1a;border-radius:3px;text-align:center;cursor:pointer;margin-bottom:10px" onclick="document.querySelector(\'[data-gstab=shipping]\').click()">💀 Smuggle this lane →</div>';
   h += '<div style="margin-top:10px;font-size:.68rem;color:#f39c12;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\u26D4 BLOCKADE</div>';
   h += '<div style="display:flex;gap:4px"><input id="gLaneBlkAmt" type="number" placeholder="Fund (\u0192)" style="flex:1;background:#0a0a14;border:1px solid #f39c1244;color:#ccc;padding:4px;font-size:.64rem;font-family:inherit;outline:none;border-radius:2px">'
     +'<button onclick="window._gLaneBlkFund(\''+from+'\',\''+to+'\')" style="background:#2d1a00;border:1px solid #f39c12;color:#f39c12;padding:4px 8px;cursor:pointer;font-size:.58rem;font-family:inherit;border-radius:2px">FUND</button>'
@@ -3887,16 +4454,18 @@ function closeManifest() {
 }
 
 window.openShipManifest = function(ship) {
-  injectManifestModal();
+  try {
+    injectManifestModal();
 
-  var modal   = document.getElementById('ship-manifest-modal');
-  var fromId  = ship.fromId || 'flesh_station';
-  var toId    = ship.toId   || 'new_anchor';
-  var typeKey = ship.typeKey || 'v1';
+    var modal   = document.getElementById('ship-manifest-modal');
+    if (!modal) return;
+    var fromId  = ship.fromId || 'flesh_station';
+    var toId    = ship.toId   || 'new_anchor';
+    var typeKey = ship.typeKey || 'v1';
 
-  // Seed from route + journey progress so each visible ship is unique
-  var seed = (fromId.charCodeAt(0) * 17 + toId.charCodeAt(0) * 31 + Math.floor(ship.t * 100)) || 42;
-  var manifest = generateManifest(fromId, toId, typeKey, seed);
+    // Seed from route + journey progress so each visible ship is unique
+    var seed = ((fromId.charCodeAt(0)||65) * 17 + (toId.charCodeAt(0)||65) * 31 + Math.floor((ship.t||0) * 100)) || 42;
+    var manifest = generateManifest(fromId, toId, typeKey, seed);
 
   // Header
   document.getElementById('smm-header').textContent =
@@ -3916,9 +4485,18 @@ window.openShipManifest = function(ship) {
 
   // Cargo
   var cargoBox = document.getElementById('smm-cargo');
-  cargoBox.innerHTML = manifest.cargo.map(function(item, i) {
-    return '<div class="smm-cargo-item"><span class="smm-cargo-idx">' + (i+1).toString().padStart(2,'0') + '</span><span>' + item + '</span></div>';
-  }).join('');
+  if (ship.npc) {
+    // Real server NPC: show its actual manifest (one row per commodity carried).
+    var cargo = ship.npc.cargo || [];
+    if (!cargo.length && ship.npc.commodityName) cargo = [{commodityName:ship.npc.commodityName, qty:ship.npc.qty}];
+    cargoBox.innerHTML = cargo.map(function(line, i){
+      return '<div class="smm-cargo-item"><span class="smm-cargo-idx">'+(i+1).toString().padStart(2,'0')+'</span><span>'+line.qty+'\u00d7 '+line.commodityName+'</span></div>';
+    }).join('') || '<div class="smm-cargo-item"><span class="smm-cargo-idx">--</span><span>Empty hold</span></div>';
+  } else {
+    cargoBox.innerHTML = manifest.cargo.map(function(item, i) {
+      return '<div class="smm-cargo-item"><span class="smm-cargo-idx">' + (i+1).toString().padStart(2,'0') + '</span><span>' + item + '</span></div>';
+    }).join('');
+  }
 
   // Crew
   document.getElementById('smm-crew').textContent =
@@ -3932,6 +4510,9 @@ window.openShipManifest = function(ship) {
   // Ship animation
   var shipCanvas = document.getElementById('smm-ship-canvas');
   startShipAnim(shipCanvas, typeKey);
+  } catch(err) {
+    console.error('[manifest] openShipManifest error:', err);
+  }
 };
 
 // ─── SHIPPING TAB ────────────────────────────────────────────────────────────
@@ -3945,247 +4526,157 @@ window.renderShippingTab = function(){
   var el=document.getElementById('gShippingInner');
   if(!el) return;
 
-  // Request config if we don't have it yet
-  if(!window._FM_TRADE_CONFIG){
-    window._galaxy.send({type:'trade_config_request'});
+  if(!window._FM_TRADE_CONFIG){ window._galaxy.send({type:'trade_config_request'}); }
+  // Fetch smuggling config (guards + cargo) once.
+  if(!window._FM_SMUG_CONFIG){
+    fetch('/api/smuggling/config').then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok){ window._FM_SMUG_CONFIG=d; try{window.renderShippingTab();}catch(_){} }
+    }).catch(function(){});
   }
 
   var LANES = window._FM_LANES || [];
   var cfg = window._FM_TRADE_CONFIG || {};
   var pFac = cfg.playerFaction || window._galaxy.faction || '';
   var isSynd = pFac === 'syndicate';
-  var isVoid = pFac === 'void';
+  var smug = window._FM_SMUG_CONFIG || {guards:[],cargo:[]};
 
-  // Build unique route list
-  var routes = [];
-  var seen = {};
-  LANES.forEach(function(l){
-    var key = l.from+'|'+l.to;
-    if(!seen[key]){ seen[key]=1; routes.push(l); }
-  });
+  var routes=[]; var seen={};
+  LANES.forEach(function(l){ var key=l.from+'|'+l.to; if(!seen[key]){seen[key]=1;routes.push(l);} });
 
-  // Active run status
-  var activeSmug = null;
-  var activeShip = window._activeShipRun || null;
-  // Check smuggling status
-  var smugStatus = document.getElementById('gSmugStatus');
-
-  var h = '';
-
-  // ── CSS ──
+  var h='';
   h += '<style>';
   h += '#gShipTab{font-family:"Courier New","Lucida Console",monospace;font-size:.82rem}';
-  h += '.ship-mode-btn{padding:10px 22px;font-size:.82rem;letter-spacing:.1em;cursor:pointer;border:1px solid #333;background:#0a0a14;color:#555;text-transform:uppercase;font-family:inherit;transition:all .15s}';
-  h += '.ship-mode-btn.active-ship{border-color:#3498db;color:#3498db;background:#0a1a2d}';
-  h += '.ship-mode-btn.active-smug{border-color:#e74c3c;color:#e74c3c;background:#2d0a0a}';
-  h += '.ship-section{margin-top:14px;padding:14px;border:1px solid #1a1a2e;border-radius:4px;background:#07070e}';
-  h += '.ship-label{font-size:.74rem;letter-spacing:.12em;color:#888;text-transform:uppercase;margin-bottom:6px}';
-  h += '.ship-select,.ship-input{width:100%;background:#0a0a14;border:1px solid #333;color:#ccc;padding:8px 10px;font-size:.82rem;font-family:inherit;margin-bottom:8px;border-radius:2px}';
+  h += '.ship-section{margin-top:14px;padding:14px;border:1px solid #2a0f0f;border-radius:4px;background:#0c0707}';
+  h += '.ship-label{font-size:.74rem;letter-spacing:.12em;color:#a06b6b;text-transform:uppercase;margin-bottom:6px}';
+  h += '.ship-select,.ship-input{width:100%;background:#0a0a14;border:1px solid #3a2222;color:#ccc;padding:8px 10px;font-size:.82rem;font-family:inherit;margin-bottom:8px;border-radius:2px}';
   h += '.ship-risk-bar{height:8px;background:#1a1a2e;border-radius:4px;overflow:hidden;margin:6px 0 10px}';
   h += '.ship-risk-fill{height:100%;border-radius:4px;transition:width .3s}';
   h += '.ship-run-btn{width:100%;padding:12px;font-size:.88rem;letter-spacing:.1em;cursor:pointer;font-family:inherit;border-radius:3px;text-transform:uppercase;transition:all .15s;margin-top:10px}';
-  h += '.ship-run-btn:hover{filter:brightness(1.2)}';
-  h += '.ship-run-btn:disabled{opacity:.3;cursor:not-allowed}';
+  h += '.ship-run-btn:hover{filter:brightness(1.2)} .ship-run-btn:disabled{opacity:.3;cursor:not-allowed}';
   h += '.ship-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.78rem;margin-top:10px}';
-  h += '.ship-info-cell{padding:8px 10px;background:#0a0a14;border:1px solid #1a1a2e;border-radius:2px}';
+  h += '.ship-info-cell{padding:8px 10px;background:#0a0a14;border:1px solid #2a1a1a;border-radius:2px}';
   h += '.ship-info-cell .lbl{color:#888;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase}';
   h += '.ship-info-cell .val{color:#e6c27a;font-size:.88rem;font-weight:bold;margin-top:3px}';
-  h += '.ship-log-entry{padding:6px 8px;border-bottom:1px solid #0f0f1a;font-size:.76rem;display:flex;justify-content:space-between}';
+  h += '.ship-log-entry{padding:6px 8px;border-bottom:1px solid #0f0f1a;font-size:.76rem;display:flex;justify-content:space-between;gap:6px}';
   h += '.ship-faction-tip{padding:12px;border:1px solid #1a1a2e;border-radius:3px;font-size:.74rem;color:#888;line-height:1.8;margin-top:12px}';
-  h += '.ship-active-run{padding:14px;border:2px solid;border-radius:6px;text-align:center;margin-bottom:12px}';
-  h += '.ins-checkbox{margin-right:8px;accent-color:#3498db;width:16px;height:16px}';
+  h += '.guard-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid #2a1a1a;border-radius:3px;margin-bottom:5px;cursor:pointer;font-size:.74rem}';
+  h += '.guard-opt.sel{border-color:#e6c27a;background:#1a1408}';
   h += '</style>';
 
   h += '<div id="gShipTab">';
+  h += '<div style="font-size:.9rem;color:#e74c3c;letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px">\u2620 Smuggling Operations</div>';
+  h += '<div style="font-size:.72rem;color:#666;margin-bottom:10px">Stake credits on a contraband run. Hire guards to cut the odds \u2014 but if the run is caught, the guards die with the cargo. No refunds.</div>';
 
-  // ── Mode toggle ──
-  h += '<div style="display:flex;gap:0;margin-bottom:4px">';
-  h += '<button class="ship-mode-btn active-ship" id="gShipModeShip" onclick="window._gShipMode(\'ship\')">🚢 Shipping Lanes</button>';
-  h += '<button class="ship-mode-btn" id="gShipModeSmug" onclick="window._gShipMode(\'smug\')">📦 Smuggling Runs</button>';
-  h += '</div>';
-
-  // ── Active run display ──
-  if(activeShip){
-    var secLeft = Math.max(0,Math.ceil((activeShip.resolveTs - Date.now())/1000));
-    h += '<div class="ship-active-run" style="border-color:#3498db;background:#0a1a2d">';
-    h += '<div style="font-size:.82rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">SHIPPING IN TRANSIT</div>';
-    h += '<div style="color:#aaa;font-size:.78rem">'+activeShip.cargo+(activeShip.insured?' 🛡 Insured':' ⚠ Uninsured')+'</div>';
-    h += '<div style="color:#e6c27a;font-size:.9rem;font-weight:bold;margin-top:4px" id="gShipTimer">'+secLeft+'s</div>';
+  // Active smuggling run
+  var ar = window._activeSmugRun || null;
+  if(ar){
+    var arLeft=Math.max(0,Math.ceil(((ar.resolveTs||0)-Date.now())/1000));
+    var arFrom=(window._galaxy.meta[ar.from]||{name:ar.from}).name;
+    var arTo=(window._galaxy.meta[ar.to]||{name:ar.to}).name;
+    h += '<div class="ship-section" style="border-color:#e74c3c;text-align:center">';
+    h += '<div style="color:#e74c3c;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">\ud83d\udce6 Run In Progress</div>';
+    h += '<div style="color:#ccc;font-size:.78rem;margin-bottom:4px">'+arFrom+' \u2192 '+arTo+' ('+ar.cargo+')</div>';
+    h += '<div style="color:#aaa;font-size:.76rem">Stake: \u0192'+Number(ar.stake).toLocaleString()+(ar.guardFee?' \u00b7 Guards \u0192'+Number(ar.guardFee).toLocaleString():'')+'</div>';
+    h += '<div id="gShipCountdownTimer" style="color:#e74c3c;font-size:.88rem;font-weight:bold;margin-top:8px">'+(arLeft>0?'EN ROUTE \u2014 '+arLeft+'s...':'Resolving...')+'</div>';
     h += '</div>';
   }
 
-  // ── SHIPPING MODE PANE ──
-  h += '<div id="gShipPane">';
-
-  // Route selector
-  h += '<div class="ship-section">';
-  h += '<div class="ship-label">Select Route</div>';
-  h += '<select class="ship-select" id="gShipRoute" onchange="window._gShipCalcRisk()">';
-  routes.forEach(function(l){
-    var fn=(window._galaxy.meta[l.from]||{name:l.from}).name;
-    var tn=(window._galaxy.meta[l.to]||{name:l.to}).name;
-    var lk=[l.from,l.to].sort().join('|');
-    var blk=(window._FM_BLOCKADES||{})[lk];
-    var blkLabel=blk&&blk.active?' ⛔ BLOCKADED':'';
-    h += '<option value="'+l.from+'|'+l.to+'|'+l.type+'">'+fn+' → '+tn+' ('+l.type+')'+blkLabel+'</option>';
-  });
-  h += '</select>';
-
-  // Cargo selector
-  h += '<div class="ship-label">Cargo Type</div>';
-  h += '<select class="ship-select" id="gShipCargo" onchange="window._gShipCalcRisk()">';
-  h += '<option value="standard_freight">Standard Freight (×1.15 / +0% risk)</option>';
-  h += '<option value="premium_goods">Premium Goods (×1.25 / +5% risk)</option>';
-  h += '<option value="luxury_supplies">Luxury Supplies (×1.35 / +12% risk)</option>';
-  h += '</select>';
-
-  // Stake + Insurance
-  h += '<div class="ship-label">Cargo Value (Stake)</div>';
-  h += '<input class="ship-input" type="number" id="gShipStake" placeholder="Ƒ amount" min="100" onchange="window._gShipCalcRisk()" oninput="window._gShipCalcRisk()"/>';
-  h += '<div style="display:flex;align-items:center;margin-bottom:8px">';
-  h += '<input type="checkbox" class="ins-checkbox" id="gShipInsure" onchange="window._gShipCalcRisk()"/>';
-  h += '<label for="gShipInsure" style="font-size:.78rem;color:#3498db;cursor:pointer">🛡 Insure cargo (5–12% premium — refunds stake if lost)</label>';
-  h += '</div>';
-
-  // Risk display
-  h += '<div class="ship-label">Estimated Risk</div>';
-  h += '<div class="ship-risk-bar"><div class="ship-risk-fill" id="gShipRiskFill" style="width:8%;background:#2ecc71"></div></div>';
-  h += '<div style="display:flex;justify-content:space-between;font-size:.76rem">';
-  h += '<span style="color:#555" id="gShipRiskPct">~8%</span>';
-  h += '<span style="color:#555" id="gShipRiskDetail">base rate</span>';
-  h += '</div>';
-
-  // Info grid
-  h += '<div class="ship-info-grid" id="gShipInfoGrid">';
-  h += '<div class="ship-info-cell"><div class="lbl">Potential Profit</div><div class="val" id="gShipProfit">—</div></div>';
-  h += '<div class="ship-info-cell"><div class="lbl">Insurance Cost</div><div class="val" id="gShipInsCost">—</div></div>';
-  h += '<div class="ship-info-cell"><div class="lbl">Total Cost</div><div class="val" id="gShipTotalCost">—</div></div>';
-  h += '<div class="ship-info-cell"><div class="lbl">EV / Run</div><div class="val" id="gShipEV">—</div></div>';
-  h += '</div>';
-
-  // RUN button
-  h += '<button class="ship-run-btn" id="gShipRunBtn" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db" onclick="window._gStartShipping()">🚢 Launch Shipping Run</button>';
-  h += '</div>'; // close ship-section
-  h += '</div>'; // close gShipPane
-
-  // ── SMUGGLING MODE PANE ──
-  h += '<div id="gSmugPane" style="display:none">';
   h += '<div class="ship-section">';
   h += '<div class="ship-label">Select Route</div>';
   h += '<select class="ship-select" id="gSmugRoute" onchange="window._gSmugCalcRisk()">';
   routes.forEach(function(l){
     var fn=(window._galaxy.meta[l.from]||{name:l.from}).name;
     var tn=(window._galaxy.meta[l.to]||{name:l.to}).name;
-    h += '<option value="'+l.from+'|'+l.to+'|'+l.type+'">'+fn+' → '+tn+' ('+l.type+')</option>';
+    h += '<option value="'+l.from+'|'+l.to+'|'+l.type+'">'+fn+' \u2192 '+tn+' ('+l.type+')</option>';
   });
   h += '</select>';
 
-  // Contraband selector
   h += '<div class="ship-label">Contraband</div>';
   h += '<select class="ship-select" id="gSmugCargo2" onchange="window._gSmugCalcRisk()">';
-  h += '<option value="data_cores">Data Cores (×1.5 / +5% risk)</option>';
-  h += '<option value="rare_minerals">Rare Minerals (×1.6 / +8% risk)</option>';
-  h += '<option value="synth_organs">Synth Organs (×1.8 / +10% risk)</option>';
-  h += '<option value="contraband_arms">Contraband Arms (×2.2 / +15% risk)</option>';
-  h += '<option value="black_market_tech">Black Market Tech (×2.5 / +18% risk)</option>';
-  h += '<option value="sweet_wine">S\'weet Wine (×3.0 / +20% risk)</option>';
+  var cargoList = (smug.cargo&&smug.cargo.length)?smug.cargo:[
+    {id:'data_cores',name:'Data Cores',baseMult:1.5,riskMod:0.05},
+    {id:'rare_minerals',name:'Rare Minerals',baseMult:1.6,riskMod:0.08},
+    {id:'synth_organs',name:'Synth Organs',baseMult:1.8,riskMod:0.10},
+    {id:'contraband_arms',name:'Contraband Arms',baseMult:2.2,riskMod:0.15},
+    {id:'black_market_tech',name:'Black Market Tech',baseMult:2.5,riskMod:0.18},
+    {id:'sweet_wine',name:"S'weet Wine",baseMult:3.0,riskMod:0.20}
+  ];
+  cargoList.forEach(function(c){
+    h += '<option value="'+c.id+'">'+c.name+' (\u00d7'+c.baseMult+' / +'+Math.round(c.riskMod*100)+'% risk)</option>';
+  });
   h += '</select>';
 
-  // Stake
   h += '<div class="ship-label">Stake</div>';
-  h += '<input class="ship-input" type="number" id="gSmugStake2" placeholder="Ƒ amount" min="100" onchange="window._gSmugCalcRisk()" oninput="window._gSmugCalcRisk()"/>';
+  h += '<input class="ship-input" type="number" id="gSmugStake2" placeholder="\u0192 amount" min="100" onchange="window._gSmugCalcRisk()" oninput="window._gSmugCalcRisk()"/>';
 
-  if(isSynd){
-    h += '<div style="font-size:.74rem;color:#e74c3c;margin-bottom:6px">💀 Syndicate: +15% payout bonus · +5% risk on own turf · No free rides</div>';
-  }
+  // ── Guards (escort) selector ──
+  h += '<div class="ship-label">Guard Escort <span style="color:#666;text-transform:none;letter-spacing:0">\u2014 cuts risk, fee lost if caught</span></div>';
+  var guards = (smug.guards&&smug.guards.length)?smug.guards:[
+    {id:'none',name:'No Escort',feeFrac:0,riskCut:0,desc:'Run it cold.'},
+    {id:'light',name:'Light Escort',feeFrac:0.04,riskCut:0.08,desc:'A couple of hired guns.'},
+    {id:'medium',name:'Armed Convoy',feeFrac:0.10,riskCut:0.16,desc:'Serious muscle.'},
+    {id:'heavy',name:'Private Army',feeFrac:0.22,riskCut:0.26,desc:'Overwhelming force.'}
+  ];
+  if(!window._gSmugGuard) window._gSmugGuard='none';
+  h += '<div id="gSmugGuards">';
+  guards.forEach(function(g){
+    var sel=window._gSmugGuard===g.id;
+    h += '<div class="guard-opt'+(sel?' sel':'')+'" onclick="window._gSmugSetGuard(\''+g.id+'\')">';
+    h += '<span style="flex:0 0 110px;color:'+(sel?'#e6c27a':'#bbb')+'">'+g.name+'</span>';
+    h += '<span style="flex:1;color:#777">'+g.desc+'</span>';
+    h += '<span style="color:#2ecc71">-'+Math.round(g.riskCut*100)+'% risk</span>';
+    h += '<span style="color:#e6c27a;flex:0 0 70px;text-align:right">'+(g.feeFrac>0?(Math.round(g.feeFrac*100)+'% fee'):'free')+'</span>';
+    h += '</div>';
+  });
+  h += '</div>';
 
-  // Risk display
-  h += '<div class="ship-label">Estimated Risk</div>';
+  if(isSynd){ h += '<div style="font-size:.74rem;color:#e74c3c;margin:6px 0">\ud83d\udc80 Syndicate: +15% payout \u00b7 +5% risk on own turf</div>'; }
+
+  h += '<div class="ship-label" style="margin-top:8px">Estimated Risk</div>';
   h += '<div class="ship-risk-bar"><div class="ship-risk-fill" id="gSmugRiskFill" style="width:18%;background:#e74c3c"></div></div>';
-  h += '<div style="display:flex;justify-content:space-between;font-size:.76rem">';
-  h += '<span style="color:#555" id="gSmugRiskPct">~18%</span>';
-  h += '<span style="color:#555" id="gSmugRiskDetail">base + cargo</span>';
+  h += '<div style="display:flex;justify-content:space-between;font-size:.76rem"><span style="color:#999" id="gSmugRiskPct">~18%</span><span style="color:#555" id="gSmugRiskDetail">base + cargo</span></div>';
+
+  h += '<div class="ship-info-grid">';
+  h += '<div class="ship-info-cell"><div class="lbl">Potential Payout</div><div class="val" id="gSmugPayout">\u2014</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">Guard Fee</div><div class="val" id="gSmugGuardFee">\u01920</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">Total At Risk</div><div class="val" id="gSmugAtRisk">\u2014</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">EV / Run</div><div class="val" id="gSmugEV">\u2014</div></div>';
   h += '</div>';
 
-  // Info grid
-  h += '<div class="ship-info-grid" id="gSmugInfoGrid">';
-  h += '<div class="ship-info-cell"><div class="lbl">Potential Payout</div><div class="val" id="gSmugPayout">—</div></div>';
-  h += '<div class="ship-info-cell"><div class="lbl">Bet-Size Penalty</div><div class="val" id="gSmugBetPenalty">+0%</div></div>';
-  h += '<div class="ship-info-cell"><div class="lbl">Faction Mod</div><div class="val" id="gSmugFacMod">—</div></div>';
-  h += '<div class="ship-info-cell"><div class="lbl">EV / Run</div><div class="val" id="gSmugEV">—</div></div>';
+  h += '<button class="ship-run-btn" id="gSmugRunBtn" style="background:#2d0a0a;border:1px solid #e74c3c;color:#e74c3c" onclick="window._gStartSmuggling2()">\ud83d\udce6 Launch Smuggling Run</button>';
   h += '</div>';
 
-  // RUN button
-  h += '<button class="ship-run-btn" id="gSmugRunBtn" style="background:#2d0a0a;border:1px solid #e74c3c;color:#e74c3c" onclick="window._gStartSmuggling2()">📦 Launch Smuggling Run</button>';
-  h += '</div>'; // close ship-section
-  h += '</div>'; // close gSmugPane
-
-  // ── Faction tips ──
   h += '<div class="ship-faction-tip">';
-  h += '<div style="color:#4ecdc4;margin-bottom:6px;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase">How Factions Affect Trade</div>';
-  h += '<div><span style="color:#4ecdc4">Coalition</span> — Stable colonies reduce shipping risk. Control both endpoints for -5% risk.</div>';
-  h += '<div><span style="color:#e74c3c">Syndicate</span> — +15% payout on smuggling, but +5% risk on own turf. No free rides.</div>';
-  h += '<div><span style="color:#9b59b6">Void</span> — Earn 2% of all intercepted cargo (shipping & smuggling) as raid income.</div>';
-  h += '<div style="margin-top:4px"><span style="color:#f39c12">Tension</span> — High tension helps smugglers, hurts shippers. Low tension is the opposite.</div>';
-  h += '<div><span style="color:#e74c3c">Blockades</span> — Block shipping entirely. Smuggling still works at +10% risk.</div>';
-  h += '<div><span style="color:#3498db">Lane Shares</span> — Shareholders earn 1-2% of all trade profit on their lane.</div>';
+  h += '<div style="color:#4ecdc4;margin-bottom:6px;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase">How Factions Affect Smuggling</div>';
+  h += '<div><span style="color:#e74c3c">Syndicate</span> \u2014 +15% payout, but +5% risk on own turf. No free rides.</div>';
+  h += '<div><span style="color:#9b59b6">Void</span> \u2014 Earns 2% of all intercepted cargo as raid income.</div>';
+  h += '<div><span style="color:#f39c12">Tension</span> \u2014 High tension HELPS smugglers (chaos is cover).</div>';
+  h += '<div><span style="color:#e74c3c">Blockades</span> \u2014 Smuggling still runs, +10% risk.</div>';
+  h += '<div><span style="color:#e6c27a">Guards</span> \u2014 Cut interception odds, but the fee is gone if you\u2019re caught.</div>';
+  h += '<div><span style="color:#3498db">Lane Shares</span> \u2014 Shareholders earn a cut of your profit.</div>';
   h += '</div>';
 
-  // ── Run History ──
   h += '<div class="ship-section" style="margin-top:10px">';
   h += '<div class="ship-label">Run History</div>';
   h += '<div id="gShipLog" style="max-height:120px;overflow-y:auto">';
-  if(window._shippingLog.length===0){
-    h += '<div style="font-size:.74rem;color:#444;text-align:center;padding:12px">No runs yet</div>';
-  } else {
-    window._shippingLog.forEach(function(entry){
-      var col = entry.success?'#2ecc71':(entry.insured?'#f39c12':'#e74c3c');
-      var label = entry.success?'DELIVERED':(entry.insured?'INSURED LOSS':'LOST');
-      h += '<div class="ship-log-entry"><span style="color:'+col+'">'+label+'</span><span style="color:#555">'+entry.cargo+'</span>';
-      h += '<span style="color:#aaa">\u0192'+(entry.success?Number(entry.payout||0).toLocaleString():'-'+Number(entry.stake).toLocaleString())+'</span>';
-      h += '<span style="color:#444">'+entry.risk+'%</span></div>';
-    });
-  }
+  if(window._shippingLog.length===0){ h += '<div style="font-size:.74rem;color:#444;text-align:center;padding:12px">No runs yet</div>'; }
+  else { window._shippingLog.forEach(function(entry){
+    var col=entry.success?'#2ecc71':'#e74c3c';
+    var label=entry.success?'CLEARED':'SEIZED';
+    h += '<div class="ship-log-entry"><span style="color:'+col+'">'+label+'</span><span style="color:#555">'+entry.cargo+'</span>';
+    h += '<span style="color:#aaa">\u0192'+(entry.success?Number(entry.payout||0).toLocaleString():'-'+Number(entry.stake).toLocaleString())+'</span>';
+    h += '<span style="color:#444">'+entry.risk+'%</span></div>';
+  }); }
   h += '</div></div>';
 
-  // ── Active run countdown ──
-  if(window._activeShipRun || window._activeSmugRun){
-    var ar = window._activeShipRun || window._activeSmugRun;
-    var arLeft = Math.max(0, Math.ceil(((ar.resolveTs || 0) - Date.now()) / 1000));
-    var arColor = ar.type === 'shipping' ? '#3498db' : '#e74c3c';
-    var arLabel = ar.type === 'shipping' ? '🚢 SHIPPING' : '📦 SMUGGLING';
-    var arFrom = (window._galaxy.meta[ar.from]||{name:ar.from}).name;
-    var arTo = (window._galaxy.meta[ar.to]||{name:ar.to}).name;
-    h += '<div class="ship-section" style="border-color:'+arColor+';text-align:center;margin-bottom:10px">';
-    h += '<div style="color:'+arColor+';font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">'+arLabel+' RUN ACTIVE</div>';
-    h += '<div style="color:#ccc;font-size:.78rem;margin-bottom:4px">'+arFrom+' → '+arTo+' ('+ar.cargo+')</div>';
-    h += '<div style="color:#aaa;font-size:.76rem">Stake: \u0192'+Number(ar.stake).toLocaleString()+(ar.insured?' · Insured':'')+'</div>';
-    h += '<div id="gShipCountdownTimer" style="color:'+arColor+';font-size:.88rem;font-weight:bold;margin-top:8px">'+(arLeft>0?'EN ROUTE — '+arLeft+'s remaining...':'Resolving...')+'</div>';
-    h += '</div>';
-  }
-
-  // ── Cooldown timer ──
   h += '<div style="text-align:center;margin-top:8px;font-size:.76rem;color:#666" id="gShipCooldown"></div>';
+  h += '</div>';
+  el.innerHTML=h;
 
-  h += '</div>'; // close gShipTab
-  el.innerHTML = h;
-
-  // Start timer for active run
-  if(activeShip){
-    var tmEl=document.getElementById('gShipTimer');
-    if(tmEl){
-      var _stIv=setInterval(function(){
-        var sl=Math.max(0,Math.ceil((activeShip.resolveTs-Date.now())/1000));
-        if(sl<=0){ clearInterval(_stIv); tmEl.textContent='Resolving...'; window._activeShipRun=null; return; }
-        tmEl.textContent=sl+'s';
-      },500);
-    }
-  }
-
-  // Initial risk calc
-  try{ window._gShipCalcRisk(); }catch(_){}
   try{ window._gSmugCalcRisk(); }catch(_){}
 };
+
+window._gSmugSetGuard = function(id){ window._gSmugGuard=id; try{window.renderShippingTab();}catch(_){} };
 
 // ── Mode toggle ──
 window._gShipMode = function(mode){
@@ -4367,7 +4858,13 @@ window._gSmugCalcRisk = function(){
   var blk=(window._FM_BLOCKADES||{})[lk];
   var blockadeMod=(blk&&blk.active)?0.10:0;
 
-  var totalRisk=Math.min(0.85,Math.max(0.05, baseRisk+cd.r+betExtra+tensionMod+fMod+syndRisk+blockadeMod));
+  // Guard escort cut (mirrors server). Fee = feeFrac * stake, lost if intercepted.
+  var guardMap={none:{cut:0,fee:0},light:{cut:0.08,fee:0.04},medium:{cut:0.16,fee:0.10},heavy:{cut:0.26,fee:0.22}};
+  var gsel=guardMap[window._gSmugGuard||'none']||guardMap.none;
+  var guardCut=gsel.cut;
+  var guardFee=stake>0?Math.round(stake*gsel.fee):0;
+
+  var totalRisk=Math.min(0.85,Math.max(0.05, baseRisk+cd.r+betExtra+tensionMod+fMod+syndRisk+blockadeMod-guardCut));
   var riskPct=Math.round(totalRisk*100);
   var syndPayMult=isSynd?1.15:1;
   var payout=stake>0?Math.round(stake*cd.m*payMult*syndPayMult):0;
@@ -4380,28 +4877,26 @@ window._gSmugCalcRisk = function(){
     rFill.style.width=Math.min(100,riskPct)+'%';
     rFill.style.background=riskPct>40?'#e74c3c':riskPct>25?'#f39c12':'#2ecc71';
   }
-  if(rPctEl) rPctEl.textContent=riskPct+'%'+(blockadeMod?' +10% blockade':'');
+  if(rPctEl) rPctEl.textContent=riskPct+'%'+(blockadeMod?' +blockade':'')+(guardCut>0?' (\u2212'+Math.round(guardCut*100)+'% guards)':'');
   var details=[];
   if(betExtra>0) details.push('bet-size +'+Math.round(betExtra*100)+'%');
   if(tensionMod<-0.005) details.push('tension '+Math.round(tensionMod*100)+'%');
   if(fMod!==0) details.push('faction '+(fMod>0?'+':'')+Math.round(fMod*100)+'%');
   if(syndRisk>0) details.push('synd turf +'+Math.round(syndRisk*100)+'%');
-  if(isSynd) details.push('+15% payout');
+  if(guardCut>0) details.push('guards -'+Math.round(guardCut*100)+'%');
   if(rDetail) rDetail.textContent=details.length?details.join(', '):'base + cargo';
 
   var payEl=document.getElementById('gSmugPayout');
-  var betPen=document.getElementById('gSmugBetPenalty');
-  var facMod=document.getElementById('gSmugFacMod');
+  var feeEl=document.getElementById('gSmugGuardFee');
+  var atRiskEl=document.getElementById('gSmugAtRisk');
   var evEl=document.getElementById('gSmugEV');
   if(payEl) payEl.textContent='\u0192'+payout.toLocaleString()+(isSynd?' (+15%)':'');
-  if(betPen) betPen.textContent='+'+(Math.round(betExtra*100))+'%';
-  if(facMod){
-    var fm=Math.round((fMod+syndRisk)*100);
-    facMod.textContent=(fm>0?'+':'')+fm+'%';
-    facMod.style.color=fm<0?'#2ecc71':fm>0?'#e74c3c':'#555';
-  }
+  if(feeEl){ feeEl.textContent='\u0192'+guardFee.toLocaleString(); feeEl.style.color=guardFee>0?'#e6c27a':'#666'; }
+  if(atRiskEl) atRiskEl.textContent='\u0192'+(stake+guardFee).toLocaleString();
   if(evEl){
-    var ev=stake>0?Math.round((1-totalRisk)*(payout-stake)-totalRisk*stake):0;
+    // EV: win => payout - stake - guardFee ; lose => -(stake + guardFee).
+    // (guard fee is spent either way; on win you still net payout-stake-fee)
+    var ev=stake>0?Math.round((1-totalRisk)*(payout-stake-guardFee)-totalRisk*(stake+guardFee)):0;
     evEl.textContent=(ev>=0?'+':'')+'\u0192'+ev.toLocaleString();
     evEl.style.color=ev>=0?'#2ecc71':'#e74c3c';
   }
@@ -4431,7 +4926,7 @@ window._gStartSmuggling2 = function(){
   var parts=routeSel.value.split('|');
   var stake=Number(stakeInp.value)||0;
   if(!stake||stake<100){ window._galaxy.toast('Min stake: \u0192100','#e74c3c'); return; }
-  window._galaxy.send({type:'smuggling_start',from:parts[0],to:parts[1],cargoId:cargoSel?cargoSel.value:'synth_organs',stake:stake});
+  window._galaxy.send({type:'smuggling_start',from:parts[0],to:parts[1],cargoId:cargoSel?cargoSel.value:'synth_organs',stake:stake,guardTier:window._gSmugGuard||'none'});
 };
 
 })();

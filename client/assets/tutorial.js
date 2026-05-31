@@ -61,7 +61,7 @@
   const SLIDES = [
     {
       heading: 'TERMINAL ACTIVATED',
-      text: `Welcome to the Flesh Market trading network. Your account has been provisioned with an opening balance of <em>Ƒ1,000 Social Credits</em>. This terminal provides access to live stock trading, inter-colony shipping, faction warfare, casino operations, and an item marketplace. All features are available immediately.<span class="tut-cursor"></span>`,
+      text: `Welcome to the Flesh Market trading network. Your account has been provisioned with an opening balance of <em>Ƒ1,000 Social Credits</em>. This terminal provides access to live stock trading, a <em>120-commodity market</em> with real shipping, shipping contracts, smuggling, faction warfare, casino operations, and an item marketplace. All features are available immediately.<span class="tut-cursor"></span>`,
       callout: 'OBJECTIVE: Accumulate Social Credits, build influence, and climb the network leaderboard.',
       tab: 'market',
     },
@@ -104,9 +104,23 @@
       galaxySub: 'factions',
     },
     {
-      heading: 'SHIPPING LANES',
-      text: `Move cargo between colonies for profit two ways. <em style="color:#3498db">Shipping</em> is legal commerce — choose a route, pick a cargo tier (Standard ×1.15, Premium ×1.25, Luxury ×1.35), and stake your credits. <em>Insurance</em> costs 5–12% but refunds your stake if cargo is lost. <em style="color:#e74c3c">Smuggling</em> is high-risk contraband with massive payouts up to ×3. Base risk ranges from 15% to 55% depending on lane type. <strong>Lane Shares</strong> let you buy permanent equity in any lane on a bonding curve — dividends flow every 30 minutes. All runs share a <strong>15-minute cooldown</strong>.`,
-      callout: 'Blockaded lanes block shipping entirely. Smuggling still works but at +10% extra risk.',
+      heading: 'COMMODITY MARKET',
+      text: `The <em>Markets</em> tab is the heart of trade: <em>120 commodities</em> across Tech, Med, and Agri, each priced differently at every colony based on who controls it and local demand. The <em>Arbitrage Board</em> shows the best spread per commodity right now — where to buy cheapest and sell dearest. Buy a ship in the <em>Shipyard</em> (commodity trade requires one), buy goods at a cheap colony, then <em>Ship</em> them to a dear one. Shipments run in real time through phases — loading, undocking, transit, dropoff — and can be intercepted en route. NPC trade fleets move prices too, so the board is always shifting. Prices update live like a stock ticker.`,
+      callout: 'Filter the board by class or search by name. Watch NPC ships — each one moves the markets it trades.',
+      tab: 'galactic',
+      galaxySub: 'markets',
+    },
+    {
+      heading: 'SHIPPING CONTRACTS',
+      text: `On the <em>Contracts</em> tab, above Lane Shares, the house lists <em>shipping contracts</em> — options on a lane's commodity spread. You pay a <em>premium</em> for the right to capture a spread by an expiry (1h/4h/8h). If the spread <strong>widens past your strike</strong> before expiry, you exercise for profit; if not, it expires and you lose only the premium. <strong>No ship or cargo needed</strong>, so it's a way into the commodity game before you can afford a hauler. Blockaded lanes carry pricier premiums but bigger swings. <em>Lane Shares</em> still let you buy permanent equity in a lane on a bonding curve, earning a cut of all trade — including contract profits.`,
+      callout: 'Contracts are pure market plays. Premiums are priced with a house edge, but players win about half.',
+      tab: 'galactic',
+      galaxySub: 'contracts',
+    },
+    {
+      heading: 'SMUGGLING & GUARDS',
+      text: `The <em>💀 Smuggling</em> tab is the high-risk gamble. Stake credits on a <em>contraband</em> run between colonies (payouts up to ×3), pick a route, and launch. Interception risk runs <strong>15% to 55%+</strong> by lane type, raised by big stakes and lowered by tension (chaos is cover for smugglers). Hire a <em>Guard escort</em> to cut the odds — four tiers from Light to <em>Private Army</em>, cutting risk up to <strong>26%</strong> for a fee of up to 22% of your stake. <span class="warn">The guard fee is paid up front and lost if you're caught — guards die with the cargo. No refund.</span> It's a spend-to-lower-odds bet, not insurance. Runs share a <strong>15-minute cooldown</strong> with nothing else.`,
+      callout: 'Blockaded lanes still allow smuggling at +10% risk. Syndicate gets +15% payout but +5% on home turf.',
       tab: 'galactic',
       galaxySub: 'shipping',
     },
@@ -136,7 +150,7 @@
     },
     {
       heading: 'ORIENTATION COMPLETE',
-      text: `All systems reviewed. The key principles: <em>holding pays dividends</em>, <em>shipping builds steady income</em>, <em>smuggling is a gamble</em>, <em>scalping gets taxed</em>, and <em>shorts bleed fees</em>. Use the <em>★ Watchlist</em> to track stocks, set <em>Price Alerts</em> for targets, check the <em>🔥 Heatmap</em> for market-wide moves, and review <em>P&L</em> for your performance metrics. Report bugs through the 🐛 tab. This tutorial replays via the <em>? Tutorial</em> button in the header.<span class="tut-cursor"></span>`,
+      text: `All systems reviewed. The key principles: <em>holding pays dividends</em>, <em>commodity arbitrage rewards a good eye for spreads</em>, <em>contracts let you trade those spreads without a ship</em>, <em>smuggling is a gamble guards can tilt</em>, <em>scalping gets taxed</em>, and <em>shorts bleed fees</em>. Use the <em>★ Watchlist</em> to track stocks, set <em>Price Alerts</em> for targets, check the <em>🔥 Heatmap</em> for market-wide moves, and review <em>P&L</em> for your performance metrics. Report bugs through the 🐛 tab. This tutorial replays via the <em>? Tutorial</em> button in the header.<span class="tut-cursor"></span>`,
       callout: 'UNIT-7: Orientation complete. Your terminal is fully operational. Begin when ready.',
       tab: 'market',
     },

@@ -54,6 +54,11 @@ import {
   setFundGovernance, createHouseProposal, getHouseProposal, getOpenHouseProposals,
   getDueHouseProposals, hasVotedHouse, castHouseVote, getHouseVoteCount, resolveHouseProposal,
   getHouseVoterIds, VOTE_DURATIONS,
+  getColonyCommodityPrices, getAllCommodityPrices, getCommodityPrice, upsertCommodityPrice,
+  getPlayerCargo, getCargoQty, getCargoTotal, addCargo, removeCargo,
+  createCargoShipment, getCargoShipment, getPlayerCargoShipments, getDueCargoShipments, setCargoShipmentStatus,
+  getActiveCargoShipments, setCargoShipmentPhase, setPlayerShipClass, getPlayerShipClass,
+  createShippingContract, getShippingContract, getPlayerShippingContracts, getExpiredOpenContracts, settleShippingContract,
   kickFundMember, deleteFund, updateFundInfo,
   initFundPolls, createFundPoll, getFundPolls, voteFundPoll, closeFundPoll, expireOldFundPolls,
   setDevAccount, isDevAccount, syncDevAccounts,
@@ -504,6 +509,27 @@ function smuggleBetRisk(amt) {
   for (const t of SMUGGLE_BET_TIERS) { if (amt <= t.max) return t.extra; }
   return 0.28;
 }
+
+// ─── Guards (smuggling escort) ────────────────────────────────────────────────
+// Paid risk reduction, priced as a % of the stake. Each tier cuts interception
+// chance more for a higher fee. The fee is paid up front AND LOST if the run is
+// intercepted — guards die fighting, no reimbursement. This makes guards a real
+// spend-to-lower-odds bet, not an insurance safety net.
+const GUARD_TIERS = [
+  { id:'none',   name:'No Escort',      feeFrac:0.00, riskCut:0.00, desc:'Run it cold. Cheapest, riskiest.' },
+  { id:'light',  name:'Light Escort',   feeFrac:0.04, riskCut:0.08, desc:'A couple of hired guns.' },
+  { id:'medium', name:'Armed Convoy',   feeFrac:0.10, riskCut:0.16, desc:'Serious muscle riding shotgun.' },
+  { id:'heavy',  name:'Private Army',   feeFrac:0.22, riskCut:0.26, desc:'Overwhelming force. Expensive insurance against the void.' },
+];
+const GUARD_BY_ID = Object.fromEntries(GUARD_TIERS.map(g => [g.id, g]));
+function guardFee(tierId, stake) {
+  const g = GUARD_BY_ID[tierId] || GUARD_TIERS[0];
+  return Math.round(stake * g.feeFrac * 100) / 100;
+}
+function guardRiskCut(tierId) {
+  const g = GUARD_BY_ID[tierId] || GUARD_TIERS[0];
+  return g.riskCut;
+}
 // Syndicate: no risk reduction — instead +15% payout multiplier, +5% risk on own turf
 const SYNDICATE_PAYOUT_BONUS = 0.15; // 15% extra payout on smuggling
 const SYNDICATE_OWN_TURF_RISK = 0.05; // +5% risk when smuggling through syndicate-controlled colonies
@@ -517,6 +543,199 @@ const SHIPPING_CARGO = [
 ];
 const SHIPPING_BASE_RISK = 0.18;
 const SHIPPING_DUR_SEC = 30;
+
+// ─── COMMODITIES ──────────────────────────────────────────────────────────────
+// Control-driven commodity market. Each commodity has a galaxy base price; its
+// price PER COLONY floats on which faction leads that colony (vs the commodity's
+// sector), local scarcity (mean-reverting random walk), and colony tension.
+// Sectors: 0 Finance,1 Biotech,2 Insurance,3 Manufacturing,4 Energy,5 Logistics,6 Tech,7 Misc
+const COMMODITIES = [
+  // Tech / Industrial (cyberpunk pack)
+  { id:'circuit_boards', name:'Circuit Boards', cls:'tech', sector:3, basePrice:1200, vol:0.08, icon:'commodities/tech/circuit_boards.png' },
+  { id:'power_cells', name:'Power Cells', cls:'tech', sector:4, basePrice:850, vol:0.07, icon:'commodities/tech/power_cells.png' },
+  { id:'fuel_rods', name:'Fuel Rods', cls:'tech', sector:6, basePrice:2600, vol:0.11, icon:'commodities/tech/fuel_rods.png' },
+  { id:'scrap_alloy', name:'Scrap Alloy', cls:'tech', sector:3, basePrice:300, vol:0.05, icon:'commodities/tech/scrap_alloy.png' },
+  { id:'data_chips', name:'Data Chips', cls:'tech', sector:4, basePrice:1900, vol:0.12, icon:'commodities/tech/data_chips.png' },
+  { id:'optic_cabling', name:'Optic Cabling', cls:'tech', sector:6, basePrice:540, vol:0.06, icon:'commodities/tech/optic_cabling.png' },
+  { id:'plasma_coils', name:'Plasma Coils', cls:'tech', sector:3, basePrice:3200, vol:0.13, icon:'commodities/tech/plasma_coils.png' },
+  { id:'servo_motors', name:'Servo Motors', cls:'tech', sector:4, basePrice:760, vol:0.07, icon:'commodities/tech/servo_motors.png' },
+  { id:'nano_filament', name:'Nano Filament', cls:'tech', sector:6, basePrice:4100, vol:0.15, icon:'commodities/tech/nano_filament.png' },
+  { id:'frayed_wiring', name:'Frayed Wiring', cls:'tech', sector:3, basePrice:210, vol:0.06, icon:'commodities/tech/frayed_wiring.png' },
+  { id:'mag_bearings', name:'Mag Bearings', cls:'tech', sector:4, basePrice:680, vol:0.07, icon:'commodities/tech/mag_bearings.png' },
+  { id:'ruby_emitters', name:'Ruby Emitters', cls:'tech', sector:6, basePrice:2400, vol:0.12, icon:'commodities/tech/ruby_emitters.png' },
+  { id:'tangle_looms', name:'Tangle Looms', cls:'tech', sector:3, basePrice:430, vol:0.09, icon:'commodities/tech/tangle_looms.png' },
+  { id:'rail_hooks', name:'Rail Hooks', cls:'tech', sector:4, basePrice:520, vol:0.06, icon:'commodities/tech/rail_hooks.png' },
+  { id:'breaker_lances', name:'Breaker Lances', cls:'tech', sector:6, basePrice:1450, vol:0.1, icon:'commodities/tech/breaker_lances.png' },
+  { id:'logic_slates', name:'Logic Slates', cls:'tech', sector:3, basePrice:1650, vol:0.09, icon:'commodities/tech/logic_slates.png' },
+  { id:'splice_harness', name:'Splice Harness', cls:'tech', sector:4, basePrice:390, vol:0.08, icon:'commodities/tech/splice_harness.png' },
+  { id:'shard_glass', name:'Shard Glass', cls:'tech', sector:6, basePrice:880, vol:0.11, icon:'commodities/tech/shard_glass.png' },
+  { id:'alloy_plating', name:'Alloy Plating', cls:'tech', sector:3, basePrice:640, vol:0.06, icon:'commodities/tech/alloy_plating.png' },
+  { id:'cobalt_ingots', name:'Cobalt Ingots', cls:'tech', sector:4, basePrice:970, vol:0.07, icon:'commodities/tech/cobalt_ingots.png' },
+  { id:'graphite_rods', name:'Graphite Rods', cls:'tech', sector:6, basePrice:360, vol:0.05, icon:'commodities/tech/graphite_rods.png' },
+  { id:'ignition_caps', name:'Ignition Caps', cls:'tech', sector:3, basePrice:740, vol:0.09, icon:'commodities/tech/ignition_caps.png' },
+  { id:'lens_arrays', name:'Lens Arrays', cls:'tech', sector:4, basePrice:2100, vol:0.11, icon:'commodities/tech/lens_arrays.png' },
+  { id:'damper_pins', name:'Damper Pins', cls:'tech', sector:6, basePrice:410, vol:0.06, icon:'commodities/tech/damper_pins.png' },
+  { id:'cipher_decks', name:'Cipher Decks', cls:'tech', sector:3, basePrice:2300, vol:0.13, icon:'commodities/tech/cipher_decks.png' },
+  { id:'beam_drills', name:'Beam Drills', cls:'tech', sector:4, basePrice:1850, vol:0.1, icon:'commodities/tech/beam_drills.png' },
+  { id:'torque_spindles', name:'Torque Spindles', cls:'tech', sector:6, basePrice:690, vol:0.07, icon:'commodities/tech/torque_spindles.png' },
+  { id:'relay_chips', name:'Relay Chips', cls:'tech', sector:3, basePrice:1550, vol:0.09, icon:'commodities/tech/relay_chips.png' },
+  { id:'coolant_tubes', name:'Coolant Tubes', cls:'tech', sector:4, basePrice:830, vol:0.08, icon:'commodities/tech/coolant_tubes.png' },
+  { id:'transistor_packs', name:'Transistor Packs', cls:'tech', sector:6, basePrice:470, vol:0.06, icon:'commodities/tech/transistor_packs.png' },
+  { id:'thruster_nozzles', name:'Thruster Nozzles', cls:'tech', sector:3, basePrice:2750, vol:0.12, icon:'commodities/tech/thruster_nozzles.png' },
+  { id:'pressure_canisters', name:'Pressure Canisters', cls:'tech', sector:4, basePrice:560, vol:0.07, icon:'commodities/tech/pressure_canisters.png' },
+  { id:'mesh_netting', name:'Mesh Netting', cls:'tech', sector:6, basePrice:290, vol:0.05, icon:'commodities/tech/mesh_netting.png' },
+  { id:'heat_grilles', name:'Heat Grilles', cls:'tech', sector:3, basePrice:610, vol:0.06, icon:'commodities/tech/heat_grilles.png' },
+  { id:'arc_lamps', name:'Arc Lamps', cls:'tech', sector:4, basePrice:780, vol:0.08, icon:'commodities/tech/arc_lamps.png' },
+  { id:'filter_stacks', name:'Filter Stacks', cls:'tech', sector:6, basePrice:520, vol:0.06, icon:'commodities/tech/filter_stacks.png' },
+  { id:'crystal_cores', name:'Crystal Cores', cls:'tech', sector:3, basePrice:4600, vol:0.16, icon:'commodities/tech/crystal_cores.png' },
+  { id:'gyro_rotors', name:'Gyro Rotors', cls:'tech', sector:4, basePrice:1250, vol:0.09, icon:'commodities/tech/gyro_rotors.png' },
+  { id:'molten_slag', name:'Molten Slag', cls:'tech', sector:6, basePrice:180, vol:0.07, icon:'commodities/tech/molten_slag.png' },
+  { id:'sentry_units', name:'Sentry Units', cls:'tech', sector:3, basePrice:3400, vol:0.13, icon:'commodities/tech/sentry_units.png' },
+  // Medical (medicine pack)
+  { id:'stimpacks', name:'Stimpacks', cls:'med', sector:1, basePrice:1800, vol:0.1, icon:'commodities/med/stimpacks.png' },
+  { id:'vaccine_vials', name:'Vaccine Vials', cls:'med', sector:2, basePrice:2200, vol:0.09, icon:'commodities/med/vaccine_vials.png' },
+  { id:'first_aid_kits', name:'First-Aid Kits', cls:'med', sector:1, basePrice:600, vol:0.06, icon:'commodities/med/first_aid_kits.png' },
+  { id:'synth_blood', name:'Synth-Blood', cls:'med', sector:2, basePrice:3400, vol:0.13, icon:'commodities/med/synth_blood.png' },
+  { id:'painkillers', name:'Painkillers', cls:'med', sector:1, basePrice:950, vol:0.08, icon:'commodities/med/painkillers.png' },
+  { id:'antitoxins', name:'Antitoxins', cls:'med', sector:2, basePrice:2700, vol:0.11, icon:'commodities/med/antitoxins.png' },
+  { id:'surgical_kits', name:'Surgical Kits', cls:'med', sector:1, basePrice:1500, vol:0.07, icon:'commodities/med/surgical_kits.png' },
+  { id:'gene_serum', name:'Gene Serum', cls:'med', sector:2, basePrice:5200, vol:0.16, icon:'commodities/med/gene_serum.png' },
+  { id:'bandage_packs', name:'Bandage Packs', cls:'med', sector:1, basePrice:320, vol:0.05, icon:'commodities/med/bandage_packs.png' },
+  { id:'capsule_packs', name:'Capsule Packs', cls:'med', sector:2, basePrice:540, vol:0.07, icon:'commodities/med/capsule_packs.png' },
+  { id:'red_tablets', name:'Red Tablets', cls:'med', sector:1, basePrice:430, vol:0.06, icon:'commodities/med/red_tablets.png' },
+  { id:'spore_pills', name:'Spore Pills', cls:'med', sector:2, basePrice:880, vol:0.09, icon:'commodities/med/spore_pills.png' },
+  { id:'blister_strips', name:'Blister Strips', cls:'med', sector:1, basePrice:360, vol:0.05, icon:'commodities/med/blister_strips.png' },
+  { id:'gel_caps', name:'Gel Caps', cls:'med', sector:2, basePrice:720, vol:0.07, icon:'commodities/med/gel_caps.png' },
+  { id:'tonic_bottles', name:'Tonic Bottles', cls:'med', sector:1, basePrice:610, vol:0.06, icon:'commodities/med/tonic_bottles.png' },
+  { id:'nerve_sticks', name:'Nerve Sticks', cls:'med', sector:2, basePrice:1100, vol:0.1, icon:'commodities/med/nerve_sticks.png' },
+  { id:'field_dressings', name:'Field Dressings', cls:'med', sector:1, basePrice:290, vol:0.05, icon:'commodities/med/field_dressings.png' },
+  { id:'remedy_kits', name:'Remedy Kits', cls:'med', sector:2, basePrice:840, vol:0.07, icon:'commodities/med/remedy_kits.png' },
+  { id:'medic_cases', name:'Medic Cases', cls:'med', sector:1, basePrice:980, vol:0.07, icon:'commodities/med/medic_cases.png' },
+  { id:'inhaler_units', name:'Inhaler Units', cls:'med', sector:2, basePrice:670, vol:0.08, icon:'commodities/med/inhaler_units.png' },
+  { id:'cold_packs', name:'Cold Packs', cls:'med', sector:1, basePrice:380, vol:0.05, icon:'commodities/med/cold_packs.png' },
+  { id:'trauma_kits', name:'Trauma Kits', cls:'med', sector:2, basePrice:1350, vol:0.08, icon:'commodities/med/trauma_kits.png' },
+  { id:'oxygen_pens', name:'Oxygen Pens', cls:'med', sector:1, basePrice:790, vol:0.08, icon:'commodities/med/oxygen_pens.png' },
+  { id:'patch_strips', name:'Patch Strips', cls:'med', sector:2, basePrice:450, vol:0.06, icon:'commodities/med/patch_strips.png' },
+  { id:'dossier_meds', name:'Ledger Meds', cls:'med', sector:1, basePrice:520, vol:0.06, icon:'commodities/med/dossier_meds.png' },
+  { id:'antibiotic_strips', name:'Antibiotic Strips', cls:'med', sector:2, basePrice:930, vol:0.09, icon:'commodities/med/antibiotic_strips.png' },
+  { id:'field_manuals', name:'Triage Manuals', cls:'med', sector:1, basePrice:340, vol:0.05, icon:'commodities/med/field_manuals.png' },
+  { id:'blue_tablets', name:'Blue Tablets', cls:'med', sector:2, basePrice:560, vol:0.07, icon:'commodities/med/blue_tablets.png' },
+  { id:'amber_globes', name:'Amber Globes', cls:'med', sector:1, basePrice:1450, vol:0.11, icon:'commodities/med/amber_globes.png' },
+  { id:'dose_syringes', name:'Dose Syringes', cls:'med', sector:2, basePrice:870, vol:0.08, icon:'commodities/med/dose_syringes.png' },
+  { id:'serum_flasks', name:'Serum Flasks', cls:'med', sector:1, basePrice:1250, vol:0.1, icon:'commodities/med/serum_flasks.png' },
+  { id:'injector_guns', name:'Injector Guns', cls:'med', sector:2, basePrice:1650, vol:0.09, icon:'commodities/med/injector_guns.png' },
+  { id:'reagent_cubes', name:'Reagent Cubes', cls:'med', sector:1, basePrice:2100, vol:0.12, icon:'commodities/med/reagent_cubes.png' },
+  { id:'micro_needles', name:'Micro-Needles', cls:'med', sector:2, basePrice:980, vol:0.08, icon:'commodities/med/micro_needles.png' },
+  { id:'vital_cells', name:'Vital Cells', cls:'med', sector:1, basePrice:740, vol:0.07, icon:'commodities/med/vital_cells.png' },
+  { id:'scalpels', name:'Scalpels', cls:'med', sector:2, basePrice:420, vol:0.06, icon:'commodities/med/scalpels.png' },
+  { id:'forceps', name:'Forceps', cls:'med', sector:1, basePrice:390, vol:0.05, icon:'commodities/med/forceps.png' },
+  { id:'spray_antiseptic', name:'Spray Antiseptic', cls:'med', sector:2, basePrice:610, vol:0.07, icon:'commodities/med/spray_antiseptic.png' },
+  { id:'suture_clamps', name:'Suture Clamps', cls:'med', sector:1, basePrice:680, vol:0.07, icon:'commodities/med/suture_clamps.png' },
+  { id:'cryo_vials', name:'Cryo Vials', cls:'med', sector:2, basePrice:3100, vol:0.14, icon:'commodities/med/cryo_vials.png' },
+  // Agricultural (vegetation pack)
+  { id:'hydro_greens', name:'Hydroponic Greens', cls:'agri', sector:5, basePrice:220, vol:0.06, icon:'commodities/agri/hydro_greens.png' },
+  { id:'exotic_spores', name:'Exotic Spores', cls:'agri', sector:7, basePrice:1500, vol:0.14, icon:'commodities/agri/exotic_spores.png' },
+  { id:'grain_bales', name:'Grain Bales', cls:'agri', sector:5, basePrice:180, vol:0.05, icon:'commodities/agri/grain_bales.png' },
+  { id:'medicinal_herbs', name:'Medicinal Herbs', cls:'agri', sector:7, basePrice:1100, vol:0.1, icon:'commodities/agri/medicinal_herbs.png' },
+  { id:'protein_yeast', name:'Protein Yeast', cls:'agri', sector:5, basePrice:410, vol:0.06, icon:'commodities/agri/protein_yeast.png' },
+  { id:'spice_pods', name:'Spice Pods', cls:'agri', sector:7, basePrice:2400, vol:0.15, icon:'commodities/agri/spice_pods.png' },
+  { id:'sweet_vine', name:'S\'weet Vine', cls:'agri', sector:5, basePrice:3100, vol:0.17, icon:'commodities/agri/sweet_vine.png' },
+  { id:'water_algae', name:'Water Algae', cls:'agri', sector:7, basePrice:150, vol:0.05, icon:'commodities/agri/water_algae.png' },
+  { id:'seed_stock', name:'Seed Stock', cls:'agri', sector:5, basePrice:680, vol:0.07, icon:'commodities/agri/seed_stock.png' },
+  { id:'sprout_pots', name:'Sprout Pots', cls:'agri', sector:7, basePrice:240, vol:0.06, icon:'commodities/agri/sprout_pots.png' },
+  { id:'root_clusters', name:'Root Clusters', cls:'agri', sector:5, basePrice:320, vol:0.07, icon:'commodities/agri/root_clusters.png' },
+  { id:'ringbloom', name:'Ringbloom', cls:'agri', sector:7, basePrice:520, vol:0.08, icon:'commodities/agri/ringbloom.png' },
+  { id:'leaf_saplings', name:'Leaf Saplings', cls:'agri', sector:5, basePrice:280, vol:0.06, icon:'commodities/agri/leaf_saplings.png' },
+  { id:'flower_trays', name:'Flower Trays', cls:'agri', sector:7, basePrice:460, vol:0.07, icon:'commodities/agri/flower_trays.png' },
+  { id:'cropwood', name:'Cropwood', cls:'agri', sector:5, basePrice:390, vol:0.06, icon:'commodities/agri/cropwood.png' },
+  { id:'redbud_stems', name:'Redbud Stems', cls:'agri', sector:7, basePrice:610, vol:0.08, icon:'commodities/agri/redbud_stems.png' },
+  { id:'cactus_fruit', name:'Cactus Fruit', cls:'agri', sector:5, basePrice:870, vol:0.1, icon:'commodities/agri/cactus_fruit.png' },
+  { id:'thornpear', name:'Thornpear', cls:'agri', sector:7, basePrice:540, vol:0.08, icon:'commodities/agri/thornpear.png' },
+  { id:'broadleaf', name:'Broadleaf', cls:'agri', sector:5, basePrice:300, vol:0.06, icon:'commodities/agri/broadleaf.png' },
+  { id:'mossbulb', name:'Mossbulb', cls:'agri', sector:7, basePrice:420, vol:0.07, icon:'commodities/agri/mossbulb.png' },
+  { id:'whiteblossom', name:'Whiteblossom', cls:'agri', sector:5, basePrice:760, vol:0.09, icon:'commodities/agri/whiteblossom.png' },
+  { id:'lily_shoots', name:'Lily Shoots', cls:'agri', sector:7, basePrice:680, vol:0.08, icon:'commodities/agri/lily_shoots.png' },
+  { id:'nightshade_pods', name:'Nightshade Pods', cls:'agri', sector:5, basePrice:1350, vol:0.12, icon:'commodities/agri/nightshade_pods.png' },
+  { id:'mudroot', name:'Mudroot', cls:'agri', sector:7, basePrice:260, vol:0.06, icon:'commodities/agri/mudroot.png' },
+  { id:'amber_ferns', name:'Amber Ferns', cls:'agri', sector:5, basePrice:590, vol:0.08, icon:'commodities/agri/amber_ferns.png' },
+  { id:'bluebulb_greens', name:'Bluebulb Greens', cls:'agri', sector:7, basePrice:450, vol:0.07, icon:'commodities/agri/bluebulb_greens.png' },
+  { id:'bloodvine', name:'Bloodvine', cls:'agri', sector:5, basePrice:1450, vol:0.13, icon:'commodities/agri/bloodvine.png' },
+  { id:'violet_sprigs', name:'Violet Sprigs', cls:'agri', sector:7, basePrice:830, vol:0.09, icon:'commodities/agri/violet_sprigs.png' },
+  { id:'goldflower', name:'Goldflower', cls:'agri', sector:5, basePrice:1100, vol:0.11, icon:'commodities/agri/goldflower.png' },
+  { id:'frostfronds', name:'Frostfronds', cls:'agri', sector:7, basePrice:940, vol:0.1, icon:'commodities/agri/frostfronds.png' },
+  { id:'soil_starts', name:'Soil Starts', cls:'agri', sector:5, basePrice:270, vol:0.06, icon:'commodities/agri/soil_starts.png' },
+  { id:'iceleaf', name:'Iceleaf', cls:'agri', sector:7, basePrice:720, vol:0.09, icon:'commodities/agri/iceleaf.png' },
+  { id:'cluster_grapes', name:'Cluster Grapes', cls:'agri', sector:5, basePrice:610, vol:0.08, icon:'commodities/agri/cluster_grapes.png' },
+  { id:'cloverstock', name:'Cloverstock', cls:'agri', sector:7, basePrice:330, vol:0.06, icon:'commodities/agri/cloverstock.png' },
+  { id:'reed_bundles', name:'Reed Bundles', cls:'agri', sector:5, basePrice:290, vol:0.06, icon:'commodities/agri/reed_bundles.png' },
+  { id:'splitleaf', name:'Splitleaf', cls:'agri', sector:7, basePrice:480, vol:0.07, icon:'commodities/agri/splitleaf.png' },
+  { id:'bloom_baskets', name:'Bloom Baskets', cls:'agri', sector:5, basePrice:870, vol:0.1, icon:'commodities/agri/bloom_baskets.png' },
+  { id:'autumn_fronds', name:'Autumn Fronds', cls:'agri', sector:7, basePrice:560, vol:0.08, icon:'commodities/agri/autumn_fronds.png' },
+  { id:'bonsai_stock', name:'Bonsai Stock', cls:'agri', sector:5, basePrice:2200, vol:0.14, icon:'commodities/agri/bonsai_stock.png' },
+  { id:'orchid_sprigs', name:'Orchid Sprigs', cls:'agri', sector:7, basePrice:1650, vol:0.13, icon:'commodities/agri/orchid_sprigs.png' },
+];
+const COMMODITY_BY_ID = Object.fromEntries(COMMODITIES.map(c => [c.id, c]));
+
+// Per-faction price personality by commodity class. Multiplier on base price for a
+// colony LED by that faction. <1 = cheap there, >1 = dear there. Guild rows are
+// near-1 (efficient/narrow spreads) — its edge is a small tithe on buys, not swings.
+const COMMODITY_FACTION_MOD = {
+  coalition: { tech:1.00, med:0.82, agri:0.95 }, // regulated/subsidized medical
+  syndicate: { tech:1.05, med:1.30, agri:1.10 }, // gouged medical, no regulation
+  void:      { tech:0.80, med:1.05, agri:1.35 }, // cheap tech, can't farm
+  guild:     { tech:0.98, med:0.98, agri:0.98 }, // narrow, efficient
+  contested: { tech:1.10, med:1.20, agri:1.15 }, // scarcity premium when no one leads
+  fleshstation:{ tech:1.0, med:1.0, agri:1.0 },
+};
+const COMMODITY_FACTION_VOL = { coalition:0.6, syndicate:1.5, void:1.3, guild:0.4, contested:1.4, fleshstation:1.0 };
+// Colonies that are NOT tradeable commodity markets (not real planets / dev-only).
+// Abaddon is the cluster's anchor, not a settled market — excluding it stops it
+// dominating the arbitrage board as an artificial high-tension price sink.
+const NO_MARKET_COLONIES = new Set(['flesh_station', 'abaddon']);
+function isMarketColony(c) {
+  if (!c) return false;
+  const id = typeof c === 'string' ? c : c.id;
+  const fac = typeof c === 'string' ? null : c.faction;
+  return !NO_MARKET_COLONIES.has(id) && fac !== 'fleshstation';
+}
+const GUILD_TITHE = 0.03;          // buy-side surcharge in Guild-led colonies
+const COMMODITY_TICK_MS = 5 * 60 * 1000;
+const COMMODITY_SUPPLY_DECAY = 0.04; // per tick, supply pressure relaxes toward 0
+
+// ─── SHIP CLASSES ─────────────────────────────────────────────────────────────
+// One owned hauler per player sets cargo capacity, transit risk, and (cosmetically)
+// the variant shown. Everyone starts with a Courier.
+const SHIP_CLASSES = {
+  courier:   { id:'courier',   name:'Courier',   variant:'v1', capacity:10000, price:150_000,   riskMod:0.00, desc:'Class-1 courier frame. Cheap, nimble, modest hold.' },
+  freighter: { id:'freighter', name:'Freighter', variant:'v2', capacity:35000, price:1_500_000, riskMod:0.02, desc:'Mid-bulk hauler. Bigger hold, a fatter target.' },
+  hauler:    { id:'hauler',    name:'Hauler',    variant:'v3', capacity:70000, price:5_000_000, riskMod:0.04, desc:'Heavy freight. Massive hold, slow and conspicuous.' },
+};
+// Returns the player's owned ship class, or null if they don't own one yet.
+function shipClassFor(playerId) {
+  let c = '';
+  try { c = getPlayerShipClass(playerId) || ''; } catch(_){}
+  return SHIP_CLASSES[c] || null;
+}
+
+// ─── SHIPMENT PHASES ──────────────────────────────────────────────────────────
+// A run is 10 minutes flat, split across phases. Risk is weighted toward transit.
+// The single interception roll is distributed: each phase carries a share of the
+// total intercept chance, rolled as the shipment ENTERS that phase.
+const SHIPMENT_TOTAL_MS = 10 * 60 * 1000; // 10 min flat
+const SHIPMENT_PHASES = [
+  { id:'loading',   label:'Loading supplies',   frac:0.15, riskShare:0.05 },
+  { id:'undocking', label:'Undocking',          frac:0.10, riskShare:0.10 },
+  { id:'transit',   label:'In transit',         frac:0.45, riskShare:0.65 },
+  { id:'dropoff',   label:'Drop-off',           frac:0.15, riskShare:0.15 },
+  { id:'return',    label:'Returning empty',    frac:0.15, riskShare:0.05 },
+];
+// Cumulative ms offset at which each phase STARTS (phase i begins at offset[i]).
+const SHIPMENT_PHASE_OFFSETS = (() => {
+  const out = []; let acc = 0;
+  for (const p of SHIPMENT_PHASES) { out.push(acc); acc += p.frac * SHIPMENT_TOTAL_MS; }
+  return out;
+})();
+
 
 // Shipping bet-size scaling: larger shipments = more risk (lighter than smuggling)
 const SHIPPING_BET_TIERS = [
@@ -649,8 +868,11 @@ function resolveSmuggling(playerId) {
   // Smuggling still available during blockade but +10% risk
   const blockadeMod = (blockade && blockade.active) ? 0.10 : 0;
 
+  // Guards (escort) cut interception risk. Fee already charged at launch; lost if caught.
+  const guardCut = guardRiskCut(run.guardTier);
+
   const interceptChance = Math.min(0.85, Math.max(0.05,
-    laneRisk.intercept + cargo.riskMod + betRisk + tensionMod + factionMod + syndicateRisk + blockadeMod
+    laneRisk.intercept + cargo.riskMod + betRisk + tensionMod + factionMod + syndicateRisk + blockadeMod - guardCut
   ));
   const intercepted = Math.random() < interceptChance;
 
@@ -689,6 +911,7 @@ function resolveSmuggling(playerId) {
     if (sockets) {
       const msg = JSON.stringify({ type:'smuggling_result', data:{
         success:false, stake:run.stake, cargo:cargo.name,
+        guardTier:run.guardTier||'none', guardFee:run.guardFee||0, guardsLost:(run.guardFee||0)>0,
         from:run.from, to:run.to, interceptChance:Math.round(interceptChance*100),
         cash: p.cash,
       }});
@@ -709,6 +932,7 @@ function resolveSmuggling(playerId) {
     if (sockets) {
       const msg = JSON.stringify({ type:'smuggling_result', data:{
         success:true, stake:run.stake, payout, cargo:cargo.name,
+        guardTier:run.guardTier||'none', guardFee:run.guardFee||0,
         from:run.from, to:run.to, interceptChance:Math.round(interceptChance*100),
         cash: p.cash,
       }});
@@ -928,6 +1152,138 @@ function fundCounterBlockade(laneKey, amount) {
   broadcast({ type:'blockade_update', data:{ laneKey, active:true, pool:blk.pool, faction:blk.faction } });
   return false;
 }
+
+// ─── COMMODITY ARBITRAGE SHIPPING ─────────────────────────────────────────────
+// Reuses the lane/risk/blockade model from abstract shipping, but the payload is
+// real cargo units escrowed out of the player's hold. Persisted in DB so a restart
+// doesn't strand goods. Interception seizes the units (insurance refunds buy cost).
+function cargoShipmentInterceptChance(playerId, from, to, laneType, qty, unitValue) {
+  const laneRisk = LANE_RISK[laneType] || LANE_RISK.grey;
+  const fromState = getColonyState(from) || {};
+  const toState   = getColonyState(to)   || {};
+  const avgTension = ((fromState.tension||0) + (toState.tension||0)) / 2;
+  const tensionMod = avgTension / 1500;
+  let factionMod = 0;
+  let playerFaction = null;
+  try { playerFaction = getPlayerFaction(playerId); } catch(_){}
+  if (playerFaction && playerFaction !== 'guild') {
+    const ck = 'control_' + playerFaction;
+    if ((fromState[ck]||0) >= 40) factionMod -= 0.025;
+    if ((toState[ck]||0)   >= 40) factionMod -= 0.025;
+    const fromLead = ['coalition','syndicate','void','guild'].reduce((b,f)=>(fromState['control_'+f]||0)>(fromState['control_'+b]||0)?f:b,'coalition');
+    const toLead   = ['coalition','syndicate','void','guild'].reduce((b,f)=>(toState['control_'+f]||0)>(toState['control_'+b]||0)?f:b,'coalition');
+    if (fromLead !== playerFaction) factionMod += 0.04;
+    if (toLead   !== playerFaction) factionMod += 0.04;
+  }
+  // Cargo value scaling: bigger hauls draw more attention (mirrors shippingBetRisk).
+  const cargoValue = qty * unitValue;
+  const valRisk = shippingBetRisk(cargoValue);
+  const blk = activeBlockades.get(getLaneKey(from, to));
+  const blockadeMod = (blk && blk.active) ? 0.10 : 0;
+  return Math.min(0.60, Math.max(0.02,
+    SHIPPING_BASE_RISK + laneRisk.intercept * 0.4 + tensionMod + factionMod + valRisk + blockadeMod));
+}
+
+// Apply an interception outcome (cargo lost; ship survives, returns empty).
+function applyCargoInterception(s) {
+  const p = getPlayer(s.player_id);
+  const com = COMMODITY_BY_ID[s.commodity_id];
+  const sockets = playerSockets.get(s.player_id);
+  const send = (type, data) => {
+    if (!sockets) return;
+    const msg = JSON.stringify({ type, data });
+    for (const ws of sockets) { try { if (ws.readyState===1) ws.send(msg); } catch(_){} }
+    if (p) { const pf = JSON.stringify({type:'portfolio',data:snapshotPortfolio(p)}); for (const ws of sockets){ try{ if(ws.readyState===1) ws.send(pf);}catch(_){} } }
+  };
+  if (s.insured && p) {
+    safeAddCash(p, s.buy_cost); savePlayer(p);
+    pushHeadline(`Cargo insured: ${com?com.name:s.commodity_id} lost on ${s.from_colony.replace(/_/g,' ')} → ${s.to_colony.replace(/_/g,' ')} — claim paid`, 'neutral', '🛡');
+    send('cargo_ship_result', { success:false, insured:true, id:s.id, commodity:com?com.name:s.commodity_id,
+      qty:s.qty, from:s.from_colony, to:s.to_colony, refund:s.buy_cost, cash:p?p.cash:0 });
+  } else {
+    pushHeadline(`Cargo seized: ${s.qty}× ${com?com.name:s.commodity_id} lost on ${s.from_colony.replace(/_/g,' ')} → ${s.to_colony.replace(/_/g,' ')}`, 'bad', '📦');
+    try {
+      const cut = Math.round(s.buy_cost * 0.02 * 100) / 100;
+      if (cut > 0) {
+        const voids = [];
+        for (const [pid] of playerSockets) { if (pid===s.player_id) continue; try { if (getPlayerFaction(pid)==='void') voids.push(pid); } catch(_){} }
+        if (voids.length) { const per = Math.round(cut/voids.length*100)/100;
+          for (const vid of voids) { const vp=getPlayer(vid); if(vp){ safeAddCash(vp,per); savePlayer(vp);
+            const vs=playerSockets.get(vid); if(vs){ const vm=JSON.stringify({type:'void_raid_income',data:{amount:per,source:'cargo_intercept',lane:s.from_colony+'→'+s.to_colony}}); for(const ws of vs){try{if(ws.readyState===1)ws.send(vm);}catch(_){}} } } }
+        }
+      }
+    } catch(_){}
+    send('cargo_ship_result', { success:false, insured:false, id:s.id, commodity:com?com.name:s.commodity_id,
+      qty:s.qty, from:s.from_colony, to:s.to_colony, cash:p?p.cash:0 });
+  }
+  // Ship survives — mark intercepted but let it finish the return phase empty.
+  setCargoShipmentStatus(s.id, 'intercepted');
+}
+
+function deliverCargoShipment(s) {
+  const p = getPlayer(s.player_id);
+  const com = COMMODITY_BY_ID[s.commodity_id];
+  addCargo(s.player_id, s.commodity_id, s.qty, Math.round((s.buy_cost / s.qty) * 100) / 100, s.to_colony);
+  setCargoShipmentStatus(s.id, 'delivered');
+  pushHeadline(`Cargo delivered: ${s.qty}× ${com?com.name:s.commodity_id} reached ${s.to_colony.replace(/_/g,' ')}`, 'good', '📦');
+  const sockets = playerSockets.get(s.player_id);
+  if (sockets) {
+    const msg = JSON.stringify({ type:'cargo_ship_result', data:{ success:true, id:s.id, commodity:com?com.name:s.commodity_id,
+      qty:s.qty, from:s.from_colony, to:s.to_colony, destination:s.to_colony, cash:p?p.cash:0, cargo: cargoSnapshot(s.player_id) }});
+    for (const ws of sockets) { try { if (ws.readyState===1) ws.send(msg); } catch(_){} }
+  }
+}
+
+// Phase stepper: advance every active shipment to the phase its elapsed time implies.
+// As a shipment ENTERS a new phase, roll that phase's share of the intercept chance.
+// Intercepted runs keep stepping (ship returns empty) but won't deliver cargo.
+function stepCargoShipments() {
+  const now = Date.now();
+  let active;
+  try { active = getActiveCargoShipments(); } catch(e) { console.error('[CargoStep]', e); return; }
+  for (const s of active) {
+    try {
+      const elapsed = now - s.created_at;
+      // Determine which phase index elapsed time puts us in.
+      let idx = 0;
+      for (let i = 0; i < SHIPMENT_PHASES.length; i++) {
+        if (elapsed >= SHIPMENT_PHASE_OFFSETS[i]) idx = i;
+      }
+      const completed = elapsed >= SHIPMENT_TOTAL_MS;
+      // Advance through any phases we've newly entered, rolling risk for each.
+      let curIdx = s.phase_idx;
+      let intercepted = (s.status === 'intercepted');
+      while (curIdx < idx && !intercepted) {
+        curIdx++;
+        const phase = SHIPMENT_PHASES[curIdx];
+        // This shipment just entered `phase` — roll its share of total risk.
+        const phaseChance = (s.intercept_chance || 0) * phase.riskShare;
+        if (Math.random() < phaseChance) {
+          applyCargoInterception(s);
+          intercepted = true;
+        }
+      }
+      if (curIdx !== s.phase_idx) {
+        setCargoShipmentPhase(s.id, SHIPMENT_PHASES[curIdx].id, curIdx);
+        // Notify client of phase change for the tracker.
+        const sockets = playerSockets.get(s.player_id);
+        if (sockets) { const m = JSON.stringify({ type:'cargo_phase', data:{ id:s.id, phase:SHIPMENT_PHASES[curIdx].id, phaseIdx:curIdx }}); for (const ws of sockets){ try{ if(ws.readyState===1) ws.send(m);}catch(_){} } }
+      }
+      // On completion: deliver if it was never intercepted; otherwise just close it.
+      if (completed) {
+        const fresh = getCargoShipment(s.id);
+        if (fresh && fresh.status === 'in_transit') deliverCargoShipment(fresh);
+        else if (fresh && fresh.status === 'intercepted') setCargoShipmentStatus(s.id, 'lost');
+      }
+    } catch(e) { console.error('[CargoStep]', s.id, e); }
+  }
+}
+
+// Kept for the boot-recovery path: resolve anything already past its full duration.
+function sweepCargoShipments() {
+  stepCargoShipments();
+}
+
 
 // ─── Lane Shares System (Bonding Curve) ───────────────────────────────────────
 // Each lane has up to 100 shares. Price follows a bonding curve: base × (1 + N²/100).
@@ -2696,6 +3052,635 @@ app.post('/api/galaxy/join-faction', (req, res) => {
     broadcastToPlayer(p.id, { type: 'faction_joined', data: { faction: factionId } });
     res.json({ ok: true, faction: factionId });
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ─── COMMODITY MARKET (read) ──────────────────────────────────────────────────
+// Definitions + (optionally) the live price grid for one colony.
+// Full price grid across all colonies (for the Markets tab arbitrage view).
+app.get('/api/commodities-grid', (req, res) => {
+  try {
+    const colonies = getAllColonyStates().filter(isMarketColony);
+    const all = getAllCommodityPrices();
+    const byColony = {};
+    for (const r of all) { (byColony[r.colony_id] = byColony[r.colony_id] || {})[r.commodity_id] = r; }
+    const colonyList = colonies.map(c => {
+      const leading = colonyLeadingFaction(c);
+      const tithe = leading === 'guild' ? GUILD_TITHE : 0;
+      let pm = byColony[c.id];
+      if (!pm) { // lazy seed this colony
+        pm = {};
+        for (const com of COMMODITIES) {
+          const price = Math.round(commodityTargetPrice(com, leading, c.tension, 0, c.id) * 100) / 100;
+          upsertCommodityPrice(c.id, com.id, price, 0);
+          pm[com.id] = { price, supply: 0 };
+        }
+      }
+      const prices = {};
+      for (const com of COMMODITIES) {
+        const r = pm[com.id] || { price: com.basePrice };
+        prices[com.id] = { buy: Math.round(r.price * (1 + tithe) * 100) / 100, sell: Math.round(r.price * 100) / 100 };
+      }
+      return { id: c.id, leading, tithe, prices };
+    });
+    res.json({ ok:true,
+      commodities: COMMODITIES.map(c => ({ id:c.id, name:c.name, cls:c.cls, basePrice:c.basePrice, icon:c.icon })),
+      colonies: colonyList });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+app.get('/api/commodities', (req, res) => {
+  try {
+    const defs = COMMODITIES.map(c => ({ id:c.id, name:c.name, cls:c.cls, sector:c.sector, sectorName:SECTOR_NAMES[c.sector], basePrice:c.basePrice, icon:c.icon }));
+    res.json({ ok:true, commodities:defs, guildTithe:GUILD_TITHE });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Price grid at a colony, with computed buy/sell prices (buy includes Guild tithe).
+app.get('/api/commodities/:colonyId', (req, res) => {
+  try {
+    const colonyId = req.params.colonyId;
+    const colony = getColonyState(colonyId);
+    if (!colony) return res.status(404).json({ ok:false, error:'colony_not_found' });
+    if (!isMarketColony(colony)) return res.status(403).json({ ok:false, error:'no_market_here' });
+    const leading = colonyLeadingFaction(colony);
+    const tithe = leading === 'guild' ? GUILD_TITHE : 0;
+    let rows = getColonyCommodityPrices(colonyId);
+    // If this colony has no prices yet (e.g. before first tick), seed at target now.
+    if (!rows.length) {
+      for (const com of COMMODITIES) {
+        const price = Math.round(commodityTargetPrice(com, leading, colony.tension, 0, colony.id) * 100) / 100;
+        upsertCommodityPrice(colonyId, com.id, price, 0);
+      }
+      rows = getColonyCommodityPrices(colonyId);
+    }
+    const priceMap = Object.fromEntries(rows.map(r => [r.commodity_id, r]));
+    const list = COMMODITIES.map(com => {
+      const r = priceMap[com.id] || { price: com.basePrice, supply: 0 };
+      const buy  = Math.round(r.price * (1 + tithe) * 100) / 100;
+      const sell = Math.round(r.price * 100) / 100;
+      return { id:com.id, name:com.name, cls:com.cls, icon:com.icon, sectorName:SECTOR_NAMES[com.sector],
+               price:sell, buyPrice:buy, sellPrice:sell, supply:r.supply };
+    });
+    res.json({ ok:true, colonyId, leading, guildTithe:tithe, prices:list });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Current cargo hold snapshot, valued at the player's colony's sell prices if known.
+function cargoSnapshot(playerId) {
+  const rows = getPlayerCargo(playerId);
+  const total = getCargoTotal(playerId);
+  return {
+    total,
+    items: rows.map(r => {
+      const com = COMMODITY_BY_ID[r.commodity_id];
+      return { id:r.commodity_id, name:com?com.name:r.commodity_id, cls:com?com.cls:'?',
+               icon:com?com.icon:null, qty:r.qty, avgCost:r.avg_cost,
+               colonyId:r.colony_id||'', colonyName:(r.colony_id?r.colony_id.replace(/_/g,' '):'In Transit') };
+    }),
+  };
+}
+
+// Move a colony's price for one commodity by adjusting its supply pressure, then
+// recompute that single cell immediately so buy/sell feels responsive.
+function nudgeCommoditySupply(colony, commodityId, deltaSupply) {
+  const com = COMMODITY_BY_ID[commodityId];
+  if (!com) return null;
+  const row = getCommodityPrice(colony.id, commodityId);
+  let supply = (row ? row.supply : 0) + deltaSupply;
+  supply = Math.max(-0.4, Math.min(0.4, supply));
+  const leading = colonyLeadingFaction(colony);
+  const target = commodityTargetPrice(com, leading, colony.tension, supply, colony.id);
+  // Ease current price 60% toward the new supply-adjusted target.
+  const cur = row ? row.price : target;
+  const price = Math.round((cur + (target - cur) * 0.6) * 100) / 100;
+  upsertCommodityPrice(colony.id, commodityId, price, Math.round(supply * 1e4) / 1e4);
+  return price;
+}
+
+// Nudge a colony's price AND push the change live to all clients.
+function nudgeAndBroadcast(colony, commodityId, deltaSupply, source) {
+  const price = nudgeCommoditySupply(colony, commodityId, deltaSupply);
+  if (price != null) {
+    broadcast({ type:'commodity_tick', data:{ colonyId:colony.id, commodityId, price, source:source||'trade' } });
+  }
+  return price;
+}
+
+// ─── SERVER-AUTHORITATIVE NPC TRADE FLEET ─────────────────────────────────────
+// NPC ships are real economic actors. Each carries a manifest (commodity + qty),
+// buys at origin (pushing that price up) on spawn, travels a lane over real time,
+// and sells at destination (pushing that price down) on arrival. The fleet lives on
+// the server and is broadcast so every client renders the SAME ships moving.
+// NPC volume is conservative: small loads, ~half a player trade's price impact.
+const NPC_FLEET = new Map();           // id -> ship state
+const NPC_MAX_SHIPS = 17;              // concurrent NPC ships in the galaxy
+const NPC_SPAWN_MS = 6000;             // attempt a spawn this often (if under cap)
+const NPC_TICK_MS = 1000;              // movement/arrival tick
+const NPC_VARIANTS = ['v1','v2','v3']; // visual classes (small/mid/hauler)
+const NPC_TRAVERSAL_MIN_MS = 90_000;   // long hauler routes take longer
+const NPC_SHORT_MIN_MS = 40_000;
+
+// Pick a weighted random lane (busier lanes spawn more traffic).
+function npcPickLane() {
+  const weighted = [];
+  for (const l of LANES_SERVER) {
+    const w = l.vol === 'high' ? 4 : l.vol === 'medium' ? 2 : 1;
+    for (let i = 0; i < w; i++) weighted.push(l);
+  }
+  return weighted[Math.floor(Math.random() * weighted.length)];
+}
+
+// Build a believable manifest: prefer a commodity that's CHEAP at origin (an NPC
+// would buy where it's cheap and sell where dear) — this makes NPC flow naturally
+// push prices toward equilibrium, which players can read and front-run.
+function npcBuildManifest(fromId, toId) {
+  const fromState = getColonyState(fromId), toState = getColonyState(toId);
+  if (!fromState || !toState) return null;
+  // Rank all commodities by origin→dest spread; an NPC loads the best few.
+  const ranked = [];
+  for (const com of COMMODITIES) {
+    const fp = getCommodityPrice(fromId, com.id); const tp = getCommodityPrice(toId, com.id);
+    if (!fp || !tp) continue;
+    const spread = (tp.price - fp.price) / fp.price;
+    ranked.push({ com, spread });
+  }
+  if (!ranked.length) return null;
+  ranked.sort((a,b) => b.spread - a.spread);
+  // Carry 1–3 commodities (weighted toward the best spreads).
+  const lines = 1 + Math.floor(Math.random() * 3);
+  const picks = ranked.slice(0, lines);
+  return picks.map(p => ({
+    commodityId: p.com.id,
+    commodityName: p.com.name,
+    qty: 10 + Math.floor(Math.random() * 71), // small loads, 10–80u each
+  }));
+}
+
+function npcSpawn() {
+  if (NPC_FLEET.size >= NPC_MAX_SHIPS) return;
+  const lane = npcPickLane();
+  const reversed = Math.random() < 0.5;
+  const fromId = reversed ? lane.to : lane.from;
+  const toId   = reversed ? lane.from : lane.to;
+  if (!isMarketColony(getColonyState(fromId)) || !isMarketColony(getColonyState(toId))) return; // no market there
+  const cargo = npcBuildManifest(fromId, toId);
+  if (!cargo || !cargo.length) return;
+  const variant = NPC_VARIANTS[Math.floor(Math.random() * NPC_VARIANTS.length)];
+  const now = Date.now();
+  const dur = (variant === 'v3' ? NPC_TRAVERSAL_MIN_MS : NPC_SHORT_MIN_MS) + Math.random() * 30_000;
+  const id = 'NPC' + Math.random().toString(36).slice(2, 9).toUpperCase();
+  const ship = {
+    id, variant, from: fromId, to: toId, laneType: lane.type,
+    cargo, startTs: now, arriveTs: now + dur, sold: false,
+  };
+  NPC_FLEET.set(id, ship);
+  // Buy each line at origin: demand pressure → origin prices tick UP. Half player impact.
+  try {
+    const fromColony = getColonyState(fromId);
+    if (fromColony) for (const line of cargo) nudgeAndBroadcast(fromColony, line.commodityId, -0.006 * Math.log10(1 + line.qty), 'npc_buy');
+  } catch(_){}
+  broadcast({ type:'npc_spawn', data: npcWire(ship) });
+}
+
+function npcArrive(ship) {
+  // Sell each line at destination: supply flood → destination prices tick DOWN.
+  try {
+    const toColony = getColonyState(ship.to);
+    if (toColony) for (const line of ship.cargo) nudgeAndBroadcast(toColony, line.commodityId, 0.006 * Math.log10(1 + line.qty), 'npc_sell');
+  } catch(_){}
+  broadcast({ type:'npc_arrive', data:{ id: ship.id, to: ship.to } });
+  NPC_FLEET.delete(ship.id);
+}
+
+function npcTick() {
+  const now = Date.now();
+  for (const ship of [...NPC_FLEET.values()]) {
+    if (!ship.sold && now >= ship.arriveTs) { ship.sold = true; npcArrive(ship); }
+  }
+}
+
+// Wire format for clients: enough to render the ship moving + show its full manifest.
+function npcWire(s) {
+  const now = Date.now();
+  const progress = Math.max(0, Math.min(1, (now - s.startTs) / (s.arriveTs - s.startTs)));
+  return { id:s.id, variant:s.variant, from:s.from, to:s.to, laneType:s.laneType,
+           cargo: s.cargo.map(l => ({ commodityId:l.commodityId, commodityName:l.commodityName, qty:l.qty })),
+           startTs:s.startTs, arriveTs:s.arriveTs, progress };
+}
+
+// Full fleet snapshot (sent to a client on galaxy open / reconnect).
+function npcFleetSnapshot() { return [...NPC_FLEET.values()].map(npcWire); }
+
+// ─── SHIPPING CONTRACTS (options) ─────────────────────────────────────────────
+// House-written, cash-settled options on a lane's commodity spread. No cargo, no ship.
+// Pricing verified in isolation (contract_pricing.js): ~12% house edge, players win ~half.
+const CONTRACT_HOUSE_EDGE   = 0.12;
+const CONTRACT_VOL_TO_SIGMA = 1.8;
+const CONTRACT_LANE_PREMIUM = { corporate:1.00, grey:1.15, contested:1.30, dark:1.50 };
+const CONTRACT_BLOCKADE_MULT = 1.35;   // blockade raises premium AND realized volatility
+const CONTRACT_MIN_FRAC     = 0.04;
+const CONTRACT_OFFER_COUNT  = 8;        // how many contracts the board shows at once
+const CONTRACT_OFFER_TTL_MS = 90_000;   // board reshuffles every 90s
+const CONTRACT_EXPIRIES_MS  = [3_600_000, 4*3_600_000, 8*3_600_000]; // 1h / 4h / 8h
+const CONTRACT_KICKBACK_RATE = 0.02;    // 2% of exercise profit to lane shareholders
+
+let _contractOffers = [];
+let _contractOffersTs = 0;
+
+function contractPremium(buyPrice, sellPrice, commodityVol, laneType, blockaded, ttlMs, size) {
+  const strikeSpread = Math.max(0, sellPrice - buyPrice);
+  const hoursToExpiry = Math.max(0.25, ttlMs / 3_600_000);
+  const timeFactor = Math.sqrt(hoursToExpiry);
+  const laneFactor = CONTRACT_LANE_PREMIUM[laneType] || 1.0;
+  const blockadeVolMult = blockaded ? CONTRACT_BLOCKADE_MULT : 1.0;
+  const sigma = buyPrice * commodityVol * CONTRACT_VOL_TO_SIGMA * timeFactor * laneFactor * blockadeVolMult;
+  const expectedUpsidePerUnit = sigma / 2.5;
+  let premiumPerUnit = expectedUpsidePerUnit * (1 + CONTRACT_HOUSE_EDGE);
+  const floor = Math.max(strikeSpread, buyPrice) * CONTRACT_MIN_FRAC;
+  premiumPerUnit = Math.max(premiumPerUnit, floor * 0.1);
+  return {
+    strikeSpread: Math.round(strikeSpread * 100) / 100,
+    premiumPerUnit: Math.round(premiumPerUnit * 100) / 100,
+    premiumTotal: Math.round(premiumPerUnit * size * 100) / 100,
+    sigma: Math.round(sigma * 100) / 100,
+  };
+}
+
+// Find the cheapest-buy and dearest-sell colonies for a commodity (the natural lane).
+function bestLaneForCommodity(commodityId) {
+  let best=null, worst=null;
+  for (const c of getAllColonyStates()) {
+    if (!isMarketColony(c)) continue;
+    const pr = getCommodityPrice(c.id, commodityId);
+    if (!pr) continue;
+    if (!best || pr.price < best.price) best = { id:c.id, price:pr.price };
+    if (!worst || pr.price > worst.price) worst = { id:c.id, price:pr.price };
+  }
+  if (!best || !worst || best.id === worst.id) return null;
+  return { from:best.id, to:worst.id, buyPrice:best.price, sellPrice:worst.price };
+}
+
+function laneTypeBetween(a, b) {
+  const lane = LANES_SERVER.find(l => (l.from===a&&l.to===b)||(l.from===b&&l.to===a));
+  return lane ? lane.type : 'grey';
+}
+
+// Regenerate the rotating offer board: pick commodities with real spreads, price them.
+function refreshContractOffers() {
+  const offers = [];
+  const pool = [...COMMODITIES];
+  // Shuffle and walk until we have enough valid offers.
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  for (const com of pool) {
+    if (offers.length >= CONTRACT_OFFER_COUNT) break;
+    const lane = bestLaneForCommodity(com.id);
+    if (!lane) continue;
+    const spread = lane.sellPrice - lane.buyPrice;
+    if (spread <= 0) continue;
+    const ttlMs = CONTRACT_EXPIRIES_MS[Math.floor(Math.random()*CONTRACT_EXPIRIES_MS.length)];
+    const laneType = laneTypeBetween(lane.from, lane.to);
+    const blockaded = !!(activeBlockades.get(getLaneKey(lane.from, lane.to))||{}).active;
+    const size = [25, 50, 100][Math.floor(Math.random()*3)];
+    const pr = contractPremium(lane.buyPrice, lane.sellPrice, com.vol, laneType, blockaded, ttlMs, size);
+    offers.push({
+      offerId: 'OF'+Math.random().toString(36).slice(2,9).toUpperCase(),
+      commodityId: com.id, commodityName: com.name, icon: com.icon,
+      from: lane.from, to: lane.to, laneType, blockaded,
+      buyPrice: Math.round(lane.buyPrice), sellPrice: Math.round(lane.sellPrice),
+      strikeSpread: pr.strikeSpread, premiumPerUnit: pr.premiumPerUnit, premiumTotal: pr.premiumTotal,
+      size, ttlMs, expiresInMin: Math.round(ttlMs/60000),
+    });
+  }
+  _contractOffers = offers;
+  _contractOffersTs = Date.now();
+  return offers;
+}
+
+function getContractOffers() {
+  if (!_contractOffers.length || Date.now() - _contractOffersTs > CONTRACT_OFFER_TTL_MS) refreshContractOffers();
+  return _contractOffers;
+}
+
+// Settle one contract: cash-settled on the CURRENT spread vs the locked strike.
+function settleContract(c, reason) {
+  const p = getPlayer(c.player_id);
+  const com = COMMODITY_BY_ID[c.commodity_id];
+  // Current spread on the SAME lane the contract was struck on.
+  const fp = getCommodityPrice(c.from_colony, c.commodity_id);
+  const tp = getCommodityPrice(c.to_colony, c.commodity_id);
+  const curSpread = (fp && tp) ? Math.max(0, tp.price - fp.price) : 0;
+  const gain = Math.max(0, curSpread - c.strike_spread);
+  const payout = Math.round(gain * c.size * 100) / 100;
+  const status = payout > 0 ? 'exercised' : 'expired';
+  settleShippingContract(c.id, status, payout, Date.now());
+  if (payout > 0 && p) {
+    safeAddCash(p, payout); savePlayer(p);
+    // Lane kickback to shareholders from the profit (reuses existing distribution).
+    try { distributeLaneKickback(getLaneKey(c.from_colony, c.to_colony), payout, CONTRACT_KICKBACK_RATE, c.player_id); } catch(_){}
+    pushHeadline(`Contract exercised: ${com?com.name:c.commodity_id} ${c.from_colony.replace(/_/g,' ')}→${c.to_colony.replace(/_/g,' ')} pays ${Math.round(payout).toLocaleString()} SC`, 'good', '📈');
+  }
+  const sockets = playerSockets.get(c.player_id);
+  if (sockets) {
+    const msg = JSON.stringify({ type:'contract_settled', data:{ id:c.id, status, payout,
+      commodity:com?com.name:c.commodity_id, from:c.from_colony, to:c.to_colony,
+      reason: reason||status, cash:p?p.cash:0 }});
+    for (const ws of sockets) { try { if (ws.readyState===1) ws.send(msg); } catch(_){} }
+    if (p) { const pf=JSON.stringify({type:'portfolio',data:snapshotPortfolio(p)}); for (const ws of sockets){try{if(ws.readyState===1)ws.send(pf);}catch(_){}} }
+  }
+  return { status, payout };
+}
+
+// Auto-expire sweep: settle any open contracts past expiry (auto-exercises if ITM).
+function sweepContracts() {
+  try { for (const c of getExpiredOpenContracts(Date.now())) settleContract(c, 'expired'); }
+  catch(e) { console.error('[Contracts sweep]', e); }
+}
+
+// ─── COMMODITY MARKET (trade) ─────────────────────────────────────────────────
+app.post('/api/commodities/buy', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const p   = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    if (!shipClassFor(p.id)) return res.status(403).json({ ok:false, error:'no_ship' });
+    const { colonyId, commodityId } = req.body || {};
+    const qty = Math.max(1, Math.floor(Number(req.body?.qty) || 0));
+    const com = COMMODITY_BY_ID[commodityId];
+    if (!com) return res.status(400).json({ ok:false, error:'unknown_commodity' });
+    const colony = getColonyState(colonyId);
+    if (!colony) return res.status(404).json({ ok:false, error:'colony_not_found' });
+    if (!isMarketColony(colony)) return res.status(403).json({ ok:false, error:'no_market_here' });
+
+    const leading = colonyLeadingFaction(colony);
+    const tithe = leading === 'guild' ? GUILD_TITHE : 0;
+    let row = getCommodityPrice(colonyId, commodityId);
+    if (!row) { // lazy seed
+      const seed = Math.round(commodityTargetPrice(com, leading, colony.tension, 0, colony.id) * 100) / 100;
+      upsertCommodityPrice(colonyId, commodityId, seed, 0);
+      row = { price: seed, supply: 0 };
+    }
+    const unitBuy = Math.round(row.price * (1 + tithe) * 100) / 100;
+    const cost = Math.round(unitBuy * qty * 100) / 100;
+    if ((p.cash || 0) < cost) return res.status(400).json({ ok:false, error:'insufficient_funds', need:cost, have:p.cash });
+
+    p.cash = Math.round((p.cash - cost) * 100) / 100;
+    savePlayer(p);
+    addCargo(p.id, commodityId, qty, unitBuy, colonyId);
+    // Buying tightens local supply (price drifts up). Scale impact by lot size.
+    const newPrice = nudgeAndBroadcast(colony, commodityId, -0.012 * Math.log10(1 + qty), 'player_buy');
+
+    res.json({ ok:true, bought:qty, unitPrice:unitBuy, cost, cash:p.cash, newPrice,
+               cargo:cargoSnapshot(p.id) });
+    try { broadcastToPlayer(p.id, { type:'portfolio', data:snapshotPortfolio(getPlayer(p.id)) }); } catch(_){}
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+app.post('/api/commodities/sell', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const p   = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    if (!shipClassFor(p.id)) return res.status(403).json({ ok:false, error:'no_ship' });
+    const { colonyId, commodityId } = req.body || {};
+    const qtyReq = Math.max(1, Math.floor(Number(req.body?.qty) || 0));
+    const com = COMMODITY_BY_ID[commodityId];
+    if (!com) return res.status(400).json({ ok:false, error:'unknown_commodity' });
+    const colony = getColonyState(colonyId);
+    if (!colony) return res.status(404).json({ ok:false, error:'colony_not_found' });
+    if (!isMarketColony(colony)) return res.status(403).json({ ok:false, error:'no_market_here' });
+
+    const held = getCargoQty(p.id, commodityId, colonyId);
+    if (held <= 0) return res.status(400).json({ ok:false, error:'no_cargo_here' });
+    const qty = Math.min(qtyReq, held);
+
+    const leading = colonyLeadingFaction(colony);
+    let row = getCommodityPrice(colonyId, commodityId);
+    if (!row) {
+      const seed = Math.round(commodityTargetPrice(com, leading, colony.tension, 0, colony.id) * 100) / 100;
+      upsertCommodityPrice(colonyId, commodityId, seed, 0);
+      row = { price: seed, supply: 0 };
+    }
+    const unitSell = Math.round(row.price * 100) / 100; // sell side: no tithe
+    const proceeds = Math.round(unitSell * qty * 100) / 100;
+
+    removeCargo(p.id, commodityId, qty, colonyId);
+    p.cash = Math.round((p.cash + proceeds) * 100) / 100;
+    savePlayer(p);
+    // Selling floods local supply (price drifts down).
+    const newPrice = nudgeAndBroadcast(colony, commodityId, 0.012 * Math.log10(1 + qty), 'player_sell');
+
+    res.json({ ok:true, sold:qty, unitPrice:unitSell, proceeds, cash:p.cash, newPrice,
+               cargo:cargoSnapshot(p.id) });
+    try { broadcastToPlayer(p.id, { type:'portfolio', data:snapshotPortfolio(getPlayer(p.id)) }); } catch(_){}
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Current player's cargo hold.
+app.get('/api/cargo/me', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const p   = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    res.json({ ok:true, cargo:cargoSnapshot(p.id) });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// In-transit cargo shipments for the current player.
+app.get('/api/cargo/transit', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const p   = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const now = Date.now();
+    const rows = getPlayerCargoShipments(p.id, 'in_transit').map(s => {
+      const com = COMMODITY_BY_ID[s.commodity_id];
+      const elapsed = now - s.created_at;
+      const phase = SHIPMENT_PHASES[s.phase_idx] || SHIPMENT_PHASES[0];
+      const pct = Math.max(0, Math.min(100, Math.round(elapsed / SHIPMENT_TOTAL_MS * 100)));
+      return { id:s.id, commodity:com?com.name:s.commodity_id, qty:s.qty,
+               from:s.from_colony, to:s.to_colony, laneType:s.lane_type,
+               insured:!!s.insured, resolveTs:s.resolve_ts, shipClass:s.ship_class,
+               phase:phase.id, phaseLabel:phase.label, phaseIdx:s.phase_idx, pct,
+               intercepted:s.status==='intercepted',
+               interceptChance:Math.round((s.intercept_chance||0)*100) };
+    });
+    res.json({ ok:true, shipments:rows, phases:SHIPMENT_PHASES.map(p=>({id:p.id,label:p.label})) });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Server NPC trade fleet snapshot (client renders these moving + shows manifests).
+app.get('/api/npc-fleet', (req, res) => {
+  try { res.json({ ok:true, fleet: npcFleetSnapshot() }); }
+  catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Smuggling tab config: guard escort tiers + contraband cargo types.
+app.get('/api/smuggling/config', (req, res) => {
+  try {
+    res.json({ ok:true,
+      guards: GUARD_TIERS.map(g => ({ id:g.id, name:g.name, feeFrac:g.feeFrac, riskCut:g.riskCut, desc:g.desc })),
+      cargo: CARGO_TYPES.map(c => ({ id:c.id, name:c.name, baseMult:c.baseMult, riskMod:c.riskMod })),
+    });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// ─── Shipping contracts (options) ─────────────────────────────────────────────
+// The rotating offer board (the house's bet menu).
+app.get('/api/contracts/offers', (req, res) => {
+  try { res.json({ ok:true, offers: getContractOffers(), reshuffleMs: CONTRACT_OFFER_TTL_MS }); }
+  catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Player's open + recently settled contracts.
+app.get('/api/contracts/mine', (req, res) => {
+  try {
+    const tok = tokenFrom(req); const p = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const now = Date.now();
+    const open = getPlayerShippingContracts(p.id, 'open').map(c => {
+      const fp = getCommodityPrice(c.from_colony, c.commodity_id);
+      const tp = getCommodityPrice(c.to_colony, c.commodity_id);
+      const curSpread = (fp && tp) ? Math.max(0, tp.price - fp.price) : 0;
+      const com = COMMODITY_BY_ID[c.commodity_id];
+      const intrinsic = Math.round(Math.max(0, curSpread - c.strike_spread) * c.size * 100) / 100;
+      return { id:c.id, commodity:com?com.name:c.commodity_id, commodityId:c.commodity_id,
+        from:c.from_colony, to:c.to_colony, strikeSpread:c.strike_spread, premiumPaid:c.premium_paid,
+        size:c.size, expiresAt:c.expires_at, expiresInMin:Math.max(0,Math.round((c.expires_at-now)/60000)),
+        curSpread:Math.round(curSpread*100)/100, intrinsic, inTheMoney: intrinsic>0 };
+    });
+    res.json({ ok:true, open });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Buy a contract off the board.
+app.post('/api/contracts/buy', (req, res) => {
+  try {
+    const tok = tokenFrom(req); const p = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const offerId = String(req.body?.offerId||'');
+    const offer = getContractOffers().find(o => o.offerId === offerId);
+    if (!offer) return res.status(400).json({ ok:false, error:'offer_expired' });
+    if ((p.cash||0) < offer.premiumTotal) return res.status(400).json({ ok:false, error:'insufficient_funds', need:offer.premiumTotal });
+    p.cash = Math.round((p.cash - offer.premiumTotal) * 100) / 100;
+    savePlayer(p);
+    const now = Date.now();
+    const id = 'SC' + Math.random().toString(36).slice(2,10).toUpperCase();
+    createShippingContract({ id, playerId:p.id, commodityId:offer.commodityId,
+      from:offer.from, to:offer.to, laneType:offer.laneType, strikeSpread:offer.strikeSpread,
+      premiumPaid:offer.premiumTotal, size:offer.size, createdAt:now, expiresAt:now + offer.ttlMs });
+    res.json({ ok:true, id, premiumPaid:offer.premiumTotal, cash:p.cash, expiresAt:now+offer.ttlMs });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Exercise a contract early (settle now at the current spread).
+app.post('/api/contracts/exercise', (req, res) => {
+  try {
+    const tok = tokenFrom(req); const p = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const c = getShippingContract(String(req.body?.id||''));
+    if (!c || c.player_id !== p.id) return res.status(404).json({ ok:false, error:'not_found' });
+    if (c.status !== 'open') return res.status(400).json({ ok:false, error:'already_settled' });
+    const result = settleContract(c, 'manual');
+    res.json({ ok:true, ...result, cash:getPlayer(p.id).cash });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Ship classes: definitions + which the player owns.
+app.get('/api/ships', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const p   = tok ? getPlayer(tok) : null;
+    const owned = p ? (getPlayerShipClass(p.id) || '') : '';
+    const classes = Object.values(SHIP_CLASSES).map(s => ({ id:s.id, name:s.name, variant:s.variant, capacity:s.capacity, price:s.price, riskMod:s.riskMod, desc:s.desc }));
+    res.json({ ok:true, owned, classes });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Buy / upgrade ship class.
+app.post('/api/ships/buy', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const p   = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const classId = String(req.body?.classId||'');
+    const ship = SHIP_CLASSES[classId];
+    if (!ship) return res.status(400).json({ ok:false, error:'unknown_class' });
+    const owned = getPlayerShipClass(p.id) || '';
+    if (owned === classId) return res.status(400).json({ ok:false, error:'already_owned' });
+    if ((p.cash||0) < ship.price) return res.status(400).json({ ok:false, error:'insufficient_funds', need:ship.price, have:p.cash });
+    p.cash = Math.round((p.cash - ship.price) * 100) / 100;
+    savePlayer(p);
+    setPlayerShipClass(p.id, classId);
+    pushHeadline(`${p.name} commissions a ${ship.name} (${ship.capacity.toLocaleString()}u hold)`, 'neutral', '🚀');
+    res.json({ ok:true, owned:classId, capacity:ship.capacity, cash:p.cash });
+    try { broadcastToPlayer(p.id, { type:'portfolio', data:snapshotPortfolio(getPlayer(p.id)) }); } catch(_){}
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Ship cargo from one colony to another through a lane (arbitrage shipping).
+app.post('/api/cargo/ship', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const p   = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const { commodityId, from, to } = req.body || {};
+    const wantInsurance = !!(req.body && req.body.insured);
+    const qty = Math.max(1, Math.floor(Number(req.body?.qty) || 0));
+    const com = COMMODITY_BY_ID[commodityId];
+    if (!com) return res.status(400).json({ ok:false, error:'unknown_commodity' });
+    if (from === to) return res.status(400).json({ ok:false, error:'same_colony' });
+    const fromColony = getColonyState(from), toColony = getColonyState(to);
+    if (!fromColony || !toColony) return res.status(404).json({ ok:false, error:'colony_not_found' });
+    const lane = findLane(from, to);
+    if (!lane) return res.status(400).json({ ok:false, error:'no_lane' });
+
+    const held = getCargoQty(p.id, commodityId, from);
+    if (held < qty) return res.status(400).json({ ok:false, error:'insufficient_cargo_at_origin', have:held });
+
+    // Ship class gates capacity and adds a risk modifier.
+    const ship = shipClassFor(p.id);
+    if (!ship) return res.status(403).json({ ok:false, error:'no_ship' });
+    if (qty > ship.capacity) return res.status(400).json({ ok:false, error:'over_capacity', capacity:ship.capacity, shipName:ship.name });
+
+    // Value the escrowed goods at the player's weighted avg cost for insurance/refund.
+    const cargoRow = getPlayerCargo(p.id).find(r => r.commodity_id === commodityId && r.colony_id === from);
+    const unitCost = cargoRow ? cargoRow.avg_cost : (getCommodityPrice(from, commodityId)?.price || com.basePrice);
+    const buyCost  = Math.round(unitCost * qty * 100) / 100;
+
+    // Return cost (fuel): a flat per-class fee + small distance/value component, paid
+    // up front since the ship must deadhead home. Makes long big-ship hauls cost real.
+    const returnCost = Math.round((2000 + ship.capacity * 0.02 + buyCost * 0.005) * 100) / 100;
+
+    let insurancePaid = 0;
+    if (wantInsurance) {
+      const rate = insurancePremiumRate(buyCost);
+      insurancePaid = Math.round(buyCost * rate * 100) / 100;
+    }
+    const upfront = insurancePaid + returnCost;
+    if ((p.cash||0) < upfront) return res.status(400).json({ ok:false, error:'insufficient_funds', need:upfront, returnCost, insurancePaid });
+    p.cash = Math.round((p.cash - upfront) * 100) / 100;
+    savePlayer(p);
+
+    // Escrow the units out of the origin colony's hold now.
+    removeCargo(p.id, commodityId, qty, from);
+
+    // Interception chance, plus the ship-class risk modifier.
+    let interceptChance = cargoShipmentInterceptChance(p.id, from, to, lane.type, qty, unitCost);
+    interceptChance = Math.min(0.60, Math.max(0.02, interceptChance + (ship.riskMod || 0)));
+    const now = Date.now();
+    const resolveTs = now + SHIPMENT_TOTAL_MS; // 10-min flat run, phases stepped by the tick
+    const id = 'CS' + Math.random().toString(36).slice(2, 10).toUpperCase();
+    createCargoShipment({ id, playerId:p.id, commodityId, qty, buyCost,
+      from, to, laneType:lane.type, insured:wantInsurance, insurancePaid,
+      interceptChance, createdAt:now, resolveTs,
+      phase:'loading', phaseIdx:0, shipClass:ship.id, sellValue:0 });
+    // No per-shipment setTimeout — stepCargoShipments() advances phases on its tick.
+
+    res.json({ ok:true, id, qty, from, to, laneType:lane.type, durSec:Math.round(SHIPMENT_TOTAL_MS/1000), resolveTs,
+      insured:wantInsurance, insurancePaid, returnCost, ship:ship.name,
+      interceptChance:Math.round(interceptChance*100),
+      cash:p.cash, cargo:cargoSnapshot(p.id) });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
 
 app.post('/api/galaxy/fund', (req, res) => {
@@ -5052,6 +6037,7 @@ wss.on('connection',(ws,req)=>{
     // ── Smuggling: start a run ───────────────────────────────────────────────
     if (msg.type === 'smuggling_start') {
       const { from, to, cargoId, stake } = msg;
+      const guardTier = GUARD_BY_ID[msg.guardTier] ? msg.guardTier : 'none';
       if (!from || !to || !cargoId || !stake) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Missing fields' })); return; }
       if (activeSmuggling.has(actor.id)) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Smuggling run already in progress' })); return; }
       if (activeShipping.has(actor.id)) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Shipping run in progress — shared cooldown' })); return; }
@@ -5069,18 +6055,21 @@ wss.on('connection',(ws,req)=>{
       if (!cargo) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Unknown cargo' })); return; }
       const amt = Math.max(100, Math.min(10_000_000, Math.round(Number(stake) * 100) / 100));
       if (!Number.isFinite(amt)) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Invalid stake amount' })); return; }
-      if (actor.cash < amt) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Insufficient funds' })); return; }
-      // Deduct stake
-      actor.cash = Math.round((actor.cash - amt) * 100) / 100;
+      // Guard fee is a % of stake, paid up front and LOST if the run is intercepted.
+      const gFee = guardFee(guardTier, amt);
+      const upfront = amt + gFee;
+      if (actor.cash < upfront) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Insufficient funds (stake + guard fee)' })); return; }
+      // Deduct stake + guard fee
+      actor.cash = Math.round((actor.cash - upfront) * 100) / 100;
       savePlayer(actor);
       const laneRisk = LANE_RISK[lane.type] || LANE_RISK.grey;
       const durMs = laneRisk.durSec * 1000;
       const resolveTs = Date.now() + durMs;
-      activeSmuggling.set(actor.id, { from, to, cargoId, stake: amt, laneType: lane.type, startTs: Date.now(), resolveTs });
+      activeSmuggling.set(actor.id, { from, to, cargoId, stake: amt, guardTier, guardFee: gFee, laneType: lane.type, startTs: Date.now(), resolveTs });
       _lastTradeRun.set(actor.id, Date.now());
       // Set timer
       setTimeout(() => resolveSmuggling(actor.id), durMs);
-      ws.send(JSON.stringify({ type:'smuggling_started', data: { from, to, cargo: cargo.name, stake: amt, laneType: lane.type, resolveTs, durSec: laneRisk.durSec, cash: actor.cash } }));
+      ws.send(JSON.stringify({ type:'smuggling_started', data: { from, to, cargo: cargo.name, stake: amt, guardTier, guardFee: gFee, laneType: lane.type, resolveTs, durSec: laneRisk.durSec, cash: actor.cash } }));
       // Refresh P&L after stake deduction
       ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
     }
@@ -5712,12 +6701,94 @@ setInterval(()=>{
 */
 
 // ─── Galaxy: Hourly tension tick + conquest resolution ────────────────────────
+// ─── COMMODITY PRICE ENGINE ───────────────────────────────────────────────────
+// Leading faction for a colony state row (4-faction aware).
+function colonyLeadingFaction(c) {
+  if (!c) return 'contested';
+  if (c.faction === 'fleshstation') return 'fleshstation';
+  const ctrl = {
+    coalition: c.control_coalition || 0,
+    syndicate: c.control_syndicate || 0,
+    void:      c.control_void      || 0,
+    guild:     c.control_guild     || 0,
+  };
+  const total = ctrl.coalition + ctrl.syndicate + ctrl.void + ctrl.guild;
+  if (total < 10) return 'contested';
+  const leading = ['coalition','syndicate','void','guild'].reduce((b,f)=>ctrl[f]>ctrl[b]?f:b,'coalition');
+  // Need a real lead (>=45% of cast control) to set the tone; else contested.
+  return ctrl[leading] >= total * 0.45 ? leading : 'contested';
+}
+
+// Target price for a commodity at a colony, given its leading faction + supply.
+// supply is a signed pressure value: positive = oversupplied (cheaper),
+// negative = scarce (dearer). It decays toward 0 each tick.
+function commodityTargetPrice(commodity, leading, tension, supply, colonyId) {
+  const facMods = COMMODITY_FACTION_MOD[leading] || COMMODITY_FACTION_MOD.contested;
+  const facMod  = facMods[commodity.cls] || 1.0;
+  // Tension premium: scarce-goods classes cost more in unstable colonies.
+  const tensionMod = 1 + (Math.max(0, Math.min(100, tension || 0)) / 100) *
+    (commodity.cls === 'med' ? 0.25 : commodity.cls === 'tech' ? 0.12 : 0.05);
+  const supplyMod = 1 - Math.max(-0.4, Math.min(0.4, (supply || 0)));
+  const affinity = colonyId ? commodityColonyAffinity(colonyId, commodity.id) : 1.0;
+  return commodity.basePrice * facMod * tensionMod * supplyMod * affinity;
+}
+
+// Per-colony, per-commodity local affinity. Each colony naturally produces some goods
+// (cheaper there) and lacks others (dearer there), independent of faction class mods.
+// Deterministic hash so it's stable per colony+commodity but varies across the matrix.
+// This is what makes EVERY colony a distinct market: different goods are cheapest and
+// dearest in different places, so trade routes span the whole galaxy rather than
+// funneling through one cheap and one dear colony for an entire class.
+function commodityColonyAffinity(colonyId, commodityId) {
+  let h = 2166136261;
+  const s = colonyId + '|' + commodityId;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  // Map hash to roughly 0.80..1.20 (±20% local price swing).
+  const u = ((h >>> 0) % 1000) / 1000; // 0..1
+  return 0.80 + u * 0.40;
+}
+
+// One price tick: random-walk each colony×commodity price toward its control-driven
+// target, scaled by the commodity's volatility and the faction's volatility profile.
+function tickCommodityPrices() {
+  const colonies = getAllColonyStates();
+  const existing = {};
+  for (const r of getAllCommodityPrices()) existing[r.colony_id + '|' + r.commodity_id] = r;
+  let updated = 0;
+  for (const c of colonies) {
+    if (!isMarketColony(c)) continue;
+    const leading = colonyLeadingFaction(c);
+    const facVol  = COMMODITY_FACTION_VOL[leading] || 1.0;
+    for (const com of COMMODITIES) {
+      const key = c.id + '|' + com.id;
+      const prev = existing[key];
+      let supply = prev ? prev.supply : 0;
+      supply = supply * (1 - COMMODITY_SUPPLY_DECAY); // relax toward equilibrium
+      const target = commodityTargetPrice(com, leading, c.tension, supply, c.id);
+      let price;
+      if (!prev) {
+        price = target; // seed at target
+      } else {
+        // Mean-reverting walk: move a fraction toward target + small noise.
+        const revert = 0.25;
+        const noise  = (Math.random() * 2 - 1) * com.vol * facVol * prev.price;
+        price = prev.price + (target - prev.price) * revert + noise;
+        price = Math.max(target * 0.5, Math.min(target * 1.8, price)); // clamp band
+      }
+      price = Math.round(price * 100) / 100;
+      upsertCommodityPrice(c.id, com.id, price, Math.round(supply * 1e4) / 1e4);
+      updated++;
+    }
+  }
+  return updated;
+}
+
 function runGalaxyTick() {
   try {
     const colonies = getAllColonyStates();
     const now = Date.now();
     for (const c of colonies) {
-      const ctrl = { coalition: c.control_coalition, syndicate: c.control_syndicate, void: c.control_void };
+      const ctrl = { coalition: c.control_coalition, syndicate: c.control_syndicate, void: c.control_void, guild: c.control_guild || 0 };
       const leading = ['coalition','syndicate','void','guild'].reduce((best, f) => ctrl[f] > ctrl[best] ? f : best, 'coalition');
       const contested = ctrl[leading] < 60 ? 1 : 0;
 
@@ -5783,6 +6854,36 @@ function runGalaxyTick() {
   } catch(e) { console.error('[Galaxy tick]', e); }
 }
 setInterval(runGalaxyTick, 60 * 60 * 1000); // hourly
+// Commodity price grid: float prices on control every 5 min, and seed once on boot.
+try { const n = tickCommodityPrices(); console.log(`[Commodities] Seeded/updated ${n} colony×commodity prices`); } catch(e) { console.error('[Commodities] seed', e); }
+setInterval(() => { try { tickCommodityPrices(); } catch(e) { console.error('[Commodities]', e); } }, COMMODITY_TICK_MS);
+// Light live drift: nudge a handful of random colony×commodity prices every 12s and
+// push them, so the board visibly breathes between NPC/player events. Small moves;
+// the 5-min control tick still does the real mean-reverting work.
+setInterval(() => {
+  try {
+    const colonies = getAllColonyStates().filter(isMarketColony);
+    if (!colonies.length) return;
+    for (let i = 0; i < 4; i++) {
+      const c = colonies[Math.floor(Math.random() * colonies.length)];
+      const com = COMMODITIES[Math.floor(Math.random() * COMMODITIES.length)];
+      const drift = (Math.random() * 2 - 1) * 0.02; // +/-2% supply jitter
+      nudgeAndBroadcast(c, com.id, drift, 'drift');
+    }
+  } catch(e) { console.error('[Drift]', e); }
+}, 12_000);
+// Cargo arbitrage shipments run as a 10-min phase machine. The stepper advances every
+// active shipment by elapsed time, so a restart resumes them correctly (phases catch
+// up, completed ones deliver/close on the next tick). Steps every 3s for a smooth tracker.
+try { stepCargoShipments(); const n = getActiveCargoShipments().length; if (n) console.log(`[CargoShip] Resumed ${n} in-flight shipment(s)`); } catch(e) { console.error('[CargoShip recovery]', e); }
+setInterval(() => { try { stepCargoShipments(); } catch(e) { console.error('[CargoStep]', e); } }, 3_000);
+// Shipping contracts: auto-settle expired ones every 15s (auto-exercises if in-the-money).
+setInterval(() => { try { sweepContracts(); } catch(e) { console.error('[Contracts]', e); } }, 15_000);
+// Server NPC trade fleet: spawn ships that carry real manifests and move prices.
+setInterval(() => { try { npcSpawn(); } catch(e) { console.error('[NPC spawn]', e); } }, NPC_SPAWN_MS);
+setInterval(() => { try { npcTick(); } catch(e) { console.error('[NPC tick]', e); } }, NPC_TICK_MS);
+// Seed a few NPC ships at boot so the galaxy isn't empty.
+try { for (let i=0;i<8;i++) npcSpawn(); console.log(`[NPC] Fleet seeded (${NPC_FLEET.size} ships)`); } catch(e) { console.error('[NPC seed]', e); }
 
 // ─── Lane Shares dividend distribution (every 30 min) ─────────────────────────
 setInterval(() => {

@@ -1,43 +1,56 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  FleshMarket — Database Backup
-#  Safe SQLite backup using the .backup command (consistent snapshot).
-#  Keeps 7 daily backups + 4 weekly backups automatically.
+#  FleshMarket — Database Backup (VPS-side)
+#  Safe SQLite snapshot using the .backup command (consistent even while live).
+#  Keeps the 14 most recent backups, then rotates the oldest out.
 #
 #  Usage:  ./deploy/backup.sh
-#  Cron:   0 3 * * * /opt/fleshmarket/deploy/backup.sh >> /var/log/fleshmarket/backup.log 2>&1
+#  Cron (daily 3am):
+#    0 3 * * * /root/Flesh-Market/deploy/backup.sh >> /var/log/fleshmarket-backup.log 2>&1
+#
+#  Paths can be overridden by env vars if your install differs:
+#    APP_DIR=/path/to/Flesh-Market ./deploy/backup.sh
 # =============================================================================
 
 set -euo pipefail
-APP_DIR="/opt/fleshmarket"
-BACKUP_DIR="/opt/fleshmarket/backups"
-DB_PATH="$APP_DIR/server/fleshmarket.db"
-DATE=$(date +%Y-%m-%d_%H-%M)
+
+# Default to the real deploy path; override with APP_DIR=... if needed.
+APP_DIR="${APP_DIR:-/root/Flesh-Market}"
+BACKUP_DIR="${BACKUP_DIR:-$APP_DIR/backups}"
+DB_PATH="${DB_PATH:-$APP_DIR/server/fleshmarket.db}"
+KEEP="${KEEP:-14}"
+
+DATE=$(date +%Y-%m-%d_%H-%M-%S)
 DEST="$BACKUP_DIR/fleshmarket_$DATE.db"
 
 mkdir -p "$BACKUP_DIR"
 
 if [ ! -f "$DB_PATH" ]; then
-  echo "[$(date)] WARN: DB not found at $DB_PATH — skipping backup"
-  exit 0
+  echo "[$(date)] ERROR: DB not found at $DB_PATH"
+  echo "[$(date)] Set the correct path:  APP_DIR=/your/path ./deploy/backup.sh"
+  exit 1
 fi
 
-# Use SQLite's .backup for a consistent hot copy (works while server is running)
-sqlite3 "$DB_PATH" ".backup '$DEST'"
-SIZE=$(du -sh "$DEST" | cut -f1)
-echo "[$(date)] Backup OK → $DEST ($SIZE)"
+# Prefer sqlite3 .backup (consistent hot copy). Fall back to cp if sqlite3 absent.
+if command -v sqlite3 >/dev/null 2>&1; then
+  sqlite3 "$DB_PATH" ".backup '$DEST'"
+else
+  echo "[$(date)] WARN: sqlite3 not installed, using cp (less safe while live)"
+  cp "$DB_PATH" "$DEST"
+fi
 
-# ── Rotation: keep 7 daily, remove older ─────────────────────────────────────
-BACKUPS=("$BACKUP_DIR"/fleshmarket_*.db)
+SIZE=$(du -sh "$DEST" | cut -f1)
+echo "[$(date)] Backup OK -> $DEST ($SIZE)"
+
+# ── Rotation: keep the newest $KEEP, delete the rest ─────────────────────────
+mapfile -t BACKUPS < <(ls -1 "$BACKUP_DIR"/fleshmarket_*.db 2>/dev/null | sort)
 COUNT=${#BACKUPS[@]}
-KEEP=7
 if [ "$COUNT" -gt "$KEEP" ]; then
   TO_DELETE=$(( COUNT - KEEP ))
-  # Sort oldest first and delete the excess
-  printf '%s\n' "${BACKUPS[@]}" | sort | head -n "$TO_DELETE" | while read -r f; do
-    rm -f "$f"
-    echo "[$(date)] Rotated: $f"
+  for ((i=0; i<TO_DELETE; i++)); do
+    rm -f "${BACKUPS[$i]}"
+    echo "[$(date)] Rotated out: ${BACKUPS[$i]}"
   done
 fi
 
-echo "[$(date)] Backups in $BACKUP_DIR: $(ls "$BACKUP_DIR"/*.db 2>/dev/null | wc -l)"
+echo "[$(date)] Total backups in $BACKUP_DIR: $(ls -1 "$BACKUP_DIR"/fleshmarket_*.db 2>/dev/null | wc -l)"
