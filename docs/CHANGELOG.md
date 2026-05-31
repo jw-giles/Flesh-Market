@@ -4,6 +4,10 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.0d (2026-05-30) — routing fix: cluster gateways
+
+Multi-hop routing wrongly refused to pass through non-market colonies, which made the entire Abaddon cluster (Limbosis / Lustandia / Gluttonis) unreachable — their only link to the galaxy is the gluttonis/lustandia/limbosis <-> abaddon lanes, and Abaddon is a non-market anchor. Shipping to any cluster colony returned "no route". Fixed: a ship can fly THROUGH any colony as a transit waypoint (it just can't buy/sell at a non-market one). Endpoints are still validated as market colonies. Example now works: Nova Reach -> Gluttonis routes in 4 hops through Abaddon.
+
 ## v1.0.3.0c (2026-05-30) — multi-hop auto-routing
 
 Shipping to a colony with no direct lane now **auto-routes** the shortest path through intermediate colonies (BFS over the lane graph) instead of returning "no lane." It stays one shipment with one delivery at the final destination — a simple auto-queue, not manual leg-chaining.

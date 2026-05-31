@@ -835,9 +835,9 @@ function findRoute(from, to) {
     if (cur === to) break;
     for (const edge of (adj[cur] || [])) {
       if (prev[edge.to] !== undefined) continue;
-      // Don't route THROUGH a non-market colony (can still be an endpoint).
-      const wpState = getColonyState(edge.to);
-      if (edge.to !== to && !isMarketColony(wpState)) continue;
+      // Any colony can be a fly-through waypoint (including non-market gateways like
+      // Abaddon, the only link to the cluster). Endpoints are validated upstream;
+      // a ship doesn't need to trade at a hop, just pass through it.
       prev[edge.to] = { from:cur, lane:edge.lane };
       queue.push(edge.to);
     }
