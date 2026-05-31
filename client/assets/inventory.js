@@ -567,11 +567,12 @@ function renderInventory(){
   bagEl.innerHTML = bag.map(inv=>{
     const item = ITEM_CATALOG_CLIENT[inv.itemId]||{name:inv.itemId,rarity:'common',passive:0,slot:'?'};
     const rc = RARITY_COLORS[item.rarity]||'#888';
-    return `<div class="bag-item" onclick="equipFromBag('${inv.invId}','${item.slot}')" title="Click to equip · ${item.name}">
+    return `<div class="bag-item" style="position:relative" onclick="equipFromBag('${inv.invId}','${item.slot}')" title="Click to equip · ${item.name}">
       <div style="margin-bottom:2px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;margin:0 auto 2px">${itemIcon(item,'32px')}</div>
       <div style="font-size:.62rem;color:${rc};font-weight:500;line-height:1.2">${item.name}</div>
       <div style="font-size:.58rem;color:#443333;margin-top:2px">+${item.passive} Ƒ</div>
       ${rarityBadge(item.rarity)}
+      <div onclick="event.stopPropagation();scrapFromBag('${inv.invId}')" title="Scrap for Ƒ500 (permanent)" style="position:absolute;top:2px;right:3px;font-size:.55rem;color:#553333;cursor:pointer;letter-spacing:.03em">⊘ Ƒ500</div>
     </div>`;
   }).join('');
 }
@@ -583,6 +584,28 @@ window.equipFromBag = async function(invId, slot){
     const d = await r.json();
     if(d.ok){ invState.equipped[slot]=invId; renderInventory(); try{showToast('Equipped!','#1D9E75');}catch(_){} }
     else{ try{showToast('Could not equip: '+d.error,'#ff4444');}catch(_){} }
+  }catch(e){}
+};
+
+window.scrapFromBag = async function(invId){
+  const token = getToken(); if(!token) return;
+  const inv  = invState.inventory.find(i=>i.invId===invId);
+  const item = inv ? (ITEM_CATALOG_CLIENT[inv.itemId]||{}) : {};
+  const name = item.name || 'this item';
+  if(!confirm('Scrap '+name+' for Ƒ500? This permanently destroys the item.')) return;
+  try{
+    const r = await fetch('/api/items/scrap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,invId})});
+    const d = await r.json();
+    if(d.ok){
+      invState.inventory = invState.inventory.filter(i=>i.invId!==invId);
+      renderInventory();
+      try{showToast('Scrapped for Ƒ500','#1D9E75');}catch(_){}
+    } else {
+      const msg = d.error==='item_equipped' ? 'Unequip it first'
+                : d.error==='item_listed'   ? 'Cancel the Ƒbay listing first'
+                : 'Could not scrap: '+d.error;
+      try{showToast(msg,'#ff4444');}catch(_){}
+    }
   }catch(e){}
 };
 

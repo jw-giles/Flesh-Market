@@ -2280,6 +2280,29 @@ export function cancelMarketListing(sellerId, listingId) {
   return true;
 }
 
+// Flat scrap payout for slot-machine items. Same value for every rarity — this is
+// a sink to clear inventory clutter, not a fair-value buyback, so Ƒbay doesn't fill
+// up with junk listings nobody buys.
+export const SCRAP_VALUE = 500;
+
+export const scrapItem = transaction(function(playerId, invId) {
+  const inv = stmt(`SELECT * FROM player_inventory WHERE id=? AND player_id=?`).get(invId, playerId);
+  if (!inv) return { ok: false, error: 'not_owned' };
+  // Can't scrap equipped items
+  const equipped = getEquipped(playerId);
+  if (equipped) {
+    for (const slot of ITEM_SLOTS) {
+      if (equipped[slot] === invId) return { ok: false, error: 'item_equipped' };
+    }
+  }
+  // Can't scrap an item that's currently listed on Ƒbay (would orphan the listing)
+  const listed = stmt(`SELECT 1 FROM item_market WHERE inv_id=? AND sold=0`).get(invId);
+  if (listed) return { ok: false, error: 'item_listed' };
+  stmt(`UPDATE players SET cash=cash+? WHERE id=?`).run(SCRAP_VALUE, playerId);
+  stmt(`DELETE FROM player_inventory WHERE id=?`).run(invId);
+  return { ok: true, payout: SCRAP_VALUE, item: ITEM_CATALOG[inv.item_id] || null };
+});
+
 export function getPatreonSubscribers() {
   try {
     // Include regular Patreon subscribers AND owner/dev accounts (treated as CEO tier 3)

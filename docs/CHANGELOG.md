@@ -4,6 +4,14 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.1 (2026-05-31) — item scrapping
+
+Slot-machine items can now be scrapped from the bag for a flat Ƒ500, same payout for every rarity. It's a clutter sink, not a fair-value buyback — the point is to give players a one-click way to dump junk instead of listing it on Ƒbay forever.
+
+- ⊘ Ƒ500 control on each bag item; click stops propagation so it doesn't trigger equip. Confirm dialog since the item is destroyed permanently.
+- Equipped items and items currently listed on Ƒbay can't be scrapped (the listed guard prevents orphaning an active listing).
+- New `POST /api/items/scrap`. Payout + delete run inside a single DB transaction; portfolio is pushed over WS on success so cash updates live.
+
 ## v1.0.3.0e (2026-05-30) — route risk preview
 
 You can now gauge a shipment's risk BEFORE committing. The Shipping Console shows a live preview as you change the commodity, origin, destination, or quantity:

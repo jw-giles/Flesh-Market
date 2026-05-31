@@ -80,7 +80,7 @@ import {
   initItemTables, rollItemDrop, giveItem,
   getInventory, getEquipped, equipItem, unequipItem, getEquippedPassiveBonus, getPassiveIncome,
   getSlotRecord, addSpins, recordMilestoneTrade, useSpinAndDrop, grantMonthlySpins,
-  listItemOnMarket, getMarketListings, buyMarketItem, cancelMarketListing, getPatreonSubscribers,
+  listItemOnMarket, getMarketListings, buyMarketItem, cancelMarketListing, scrapItem, getPatreonSubscribers,
   getTutorialSeen,
   // Dev Communications (DB-persisted)
   addBugReport, getBugReports, toggleBugUpvote, toggleBugResolved, getBugUpvoters,
@@ -4142,6 +4142,19 @@ app.post('/api/items/market/cancel', requirePlayer, (req, res) => {
     const { listingId } = req.body;
     const ok = cancelMarketListing(req.player.id, listingId);
     res.json({ ok });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Scrap an item for a flat Ƒ500 (inventory/Ƒbay clutter sink)
+app.post('/api/items/scrap', requirePlayer, (req, res) => {
+  try {
+    const { invId } = req.body;
+    if (!invId) return res.status(400).json({ ok: false, error: 'missing_invId' });
+    const result = scrapItem(req.player.id, invId);
+    if (!result.ok) return res.status(400).json(result);
+    const p = getPlayer(req.player.id);
+    if (p) broadcastToPlayer(p.id, { type:'portfolio', data: snapshotPortfolio(p) });
+    res.json(result);
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 

@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3.0e",
-  "built": "2026-05-29T00:00:00Z",
+  "version": "1.0.3.1",
+  "built": "2026-05-31T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.3.0e",
-  "notes": "Route risk preview: the Shipping Console now shows the route, hop count, transit time, and color-coded interception risk live as you pick commodity/origin/destination, before you commit. New /api/cargo/quote endpoint mirrors the ship math without executing."
+  "patch": "1.0.3.1",
+  "notes": "Item scrapping: every slot-machine item can be scrapped from the bag for a flat Ƒ500 regardless of rarity. A clutter sink so Ƒbay doesn't fill with junk listings. Equipped or listed items can't be scrapped. New POST /api/items/scrap endpoint."
 }
