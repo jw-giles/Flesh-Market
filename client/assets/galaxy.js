@@ -1966,6 +1966,28 @@ function startShipmentTicker(){
 }
 function stopShipmentTicker(){ if(_fmTrackTimer){ clearInterval(_fmTrackTimer); _fmTrackTimer=null; } }
 
+// Shared smuggling countdown ticker. Recomputes remaining time from resolveTs every
+// tick (no drifting local counter) and writes to whichever countdown element is on
+// screen: the Smuggling tab panel renders #gShipCountdownTimer, the compact line uses
+// #gSmugStatus. Re-armable so a tab re-render keeps it live.
+window._stopSmugTicker = function(){ if(window._smugCountdownIv){ clearInterval(window._smugCountdownIv); window._smugCountdownIv=null; } };
+window._smugTick = function(){
+  var ar = window._activeSmugRun;
+  if(!ar){ window._stopSmugTicker(); return; }
+  var left = Math.max(0, Math.ceil((ar.resolveTs - Date.now())/1000));
+  var ct = document.getElementById('gShipCountdownTimer');
+  if(ct) ct.textContent = left>0 ? ('EN ROUTE \u2014 '+left+'s...') : 'Resolving...';
+  var ss = document.getElementById('gSmugStatus');
+  if(ss) ss.innerHTML = left>0 ? '<span style="color:#e74c3c">EN ROUTE \u2014 '+left+'s remaining...</span>' : '<span style="color:#555">Resolving...</span>';
+  if(left<=0){ window._stopSmugTicker(); window._activeSmugRun=null; if(typeof gMapActive!=='undefined' && gMapActive) renderLanes(); }
+};
+window._ensureSmugTicker = function(restart){
+  if(restart) window._stopSmugTicker();
+  if(!window._activeSmugRun) return;
+  window._smugTick();
+  if(!window._smugCountdownIv) window._smugCountdownIv = setInterval(window._smugTick, 1000);
+};
+
 // ── Markets tab: galaxy-wide commodity arbitrage view ─────────────────────────
 function renderMarketsTab(){
   var box = document.getElementById('gMarketsInner'); if(!box) return;
@@ -3132,7 +3154,7 @@ document.addEventListener('fm_ws_msg',function(e){
       gToast(lostMsg+' \u2014 '+d.cargo+' seized','#e74c3c');
     }
     window._activeSmugRun=null;
-    window._smugCountdownIv && clearInterval(window._smugCountdownIv); window._smugCountdownIv=null;
+    window._stopSmugTicker();
     if(gMapActive) renderLanes();
     window._shippingAddLog(d);
     try{ window.renderShippingTab(); }catch(_){}
@@ -3147,22 +3169,7 @@ document.addEventListener('fm_ws_msg',function(e){
     gToast('Smuggling run launched — '+d2.cargo+' via '+d2.laneType+' lane','#e74c3c');
     window._activeSmugRun={from:d2.from,to:d2.to,cargo:d2.cargo,stake:d2.stake,resolveTs:d2.resolveTs,durSec:d2.durSec,type:'smuggling'};
     if(gMapActive) renderLanes();
-    // Countdown anchored to resolveTs (recomputed each tick) so it stays correct even
-    // when the tab is backgrounded and setInterval throttles — a local secLeft-- drifts.
-    window._smugCountdownIv && clearInterval(window._smugCountdownIv);
-    var _paintSmug=function(){
-      var ss2=document.getElementById('gSmugStatus');
-      if(!ss2) return;
-      var left=window._activeSmugRun?Math.max(0,Math.ceil((window._activeSmugRun.resolveTs-Date.now())/1000)):0;
-      ss2.innerHTML=left>0?'<span style="color:#e74c3c">EN ROUTE — '+left+'s remaining...</span>':'<span style="color:#555">Resolving...</span>';
-    };
-    _paintSmug();
-    window._smugCountdownIv=setInterval(function(){
-      if(!window._activeSmugRun){ clearInterval(window._smugCountdownIv); window._smugCountdownIv=null; return; }
-      var left=Math.max(0,Math.ceil((window._activeSmugRun.resolveTs-Date.now())/1000));
-      _paintSmug();
-      if(left<=0){ clearInterval(window._smugCountdownIv); window._smugCountdownIv=null; window._activeSmugRun=null; if(gMapActive) renderLanes(); }
-    },1000);
+    window._ensureSmugTicker(true);
   }
   if(msg.type==='smuggling_error') gToast(msg.error||'Smuggling error','#e74c3c');
 
@@ -4736,6 +4743,7 @@ window.renderShippingTab = function(){
   el.innerHTML=h;
 
   try{ window._gSmugCalcRisk(); }catch(_){}
+  try{ window._ensureSmugTicker(); }catch(_){}
 };
 
 window._gSmugSetGuard = function(id){ window._gSmugGuard=id; try{window.renderShippingTab();}catch(_){} };

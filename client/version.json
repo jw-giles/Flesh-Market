@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3.5",
+  "version": "1.0.3.6",
   "built": "2026-05-31T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.3.5",
-  "notes": "Fix: smuggling run countdown drifted and desynced from the actual arrival time. It was decrementing a local per-tick counter instead of recomputing from the run's resolve timestamp, so background-tab throttling made the displayed time wrong. Now anchored to resolveTs like the shipping countdown, with the interval properly cleared on resolve and before a new run."
+  "patch": "1.0.3.6",
+  "notes": "Fix (real one): the smuggling RUN IN PROGRESS panel renders its countdown into #gShipCountdownTimer, but the timer interval was only updating #gSmugStatus — a different element — so the visible countdown never moved. Replaced with one shared ticker that recomputes from resolveTs and updates whichever countdown element is on screen, re-armed on every panel render so it survives tab switches."
 }

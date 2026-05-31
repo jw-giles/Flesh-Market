@@ -4,6 +4,10 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.6 (2026-05-31) — fix: smuggling countdown froze (real fix)
+
+v1.0.3.5 anchored the smuggling countdown to resolveTs but updated the wrong element: the RUN IN PROGRESS panel renders its timer into #gShipCountdownTimer (a shipping-named id it reuses), while the interval was writing to #gSmugStatus. So the visible number never moved. Replaced both with one shared ticker (_smugTick / _ensureSmugTicker / _stopSmugTicker) that recomputes from resolveTs each second and writes to whichever countdown element is present, re-armed at the end of renderShippingTab so tab switches and re-renders keep it live. Known minor gap: a full page refresh mid-run doesn't restore the run panel (no smuggling_status client handler yet) — separate follow-up.
+
 ## v1.0.3.5 (2026-05-31) — fix: smuggling countdown drift
 
 The smuggling run timer counted down a local `secLeft--` once per `setInterval` tick instead of recomputing from the run's resolve timestamp. Background-tab throttling and interval drift made the displayed time desync from the real arrival, and the interval wasn't cleared on resolve or before a new run (so they could stack). Rewrote it to mirror the shipping countdown: recompute remaining time from `resolveTs` every tick, store the interval on window, and clear it on resolve and before starting a new one.
