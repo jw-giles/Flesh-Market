@@ -203,7 +203,8 @@ async function renderFundPerformance(fundId) {
 }
 
 window.__guildHoldSearch = window.__guildHoldSearch || '';
-window.__guildHoldSort = window.__guildHoldSort || 'default'; // 'default' | 'sector'
+// 'default' | 'group' (cluster by sector) | '0'..'7' (show one sector)
+window.__guildHoldSort = window.__guildHoldSort || 'default';
 
 // Sector index + readable name for a symbol, from the live market snapshot.
 function _gSectorOf(sym){
@@ -217,14 +218,23 @@ function _gSectorName(idx){
   const names = window.V5_SECTOR_NAMES || [];
   return (idx != null && names[idx]) ? names[idx] : 'Misc';
 }
-// Sort holding rows into sector groups, then ticker A→Z, when sector sort is on.
-function _gSortHoldings(rows){
-  if (window.__guildHoldSort !== 'sector') return rows;
-  return rows.slice().sort((a,b) => {
-    const sa = _gSectorOf(a.symbol), sb = _gSectorOf(b.symbol);
-    if (sa !== sb) return sa - sb;
-    return String(a.symbol).localeCompare(String(b.symbol));
-  });
+// Apply the search filter + the active sector view (filter-to-one or group) so
+// the holdings list and the %-move bars always agree.
+function _gArrange(rows){
+  const q = window.__guildHoldSearch;
+  let out = (rows || []).filter(h => !q || String(h.symbol||'').toLowerCase().includes(q));
+  const s = window.__guildHoldSort;
+  if (s === 'group') {
+    out = out.slice().sort((a,b) => {
+      const sa = _gSectorOf(a.symbol), sb = _gSectorOf(b.symbol);
+      if (sa !== sb) return sa - sb;
+      return String(a.symbol).localeCompare(String(b.symbol));
+    });
+  } else if (s !== 'default') {
+    const idx = Number(s);
+    out = out.filter(h => _gSectorOf(h.symbol) === idx);
+  }
+  return out;
 }
 
 // Live price + today's % for a symbol from the global market snapshot.
@@ -261,8 +271,11 @@ function _renderGuildHoldings(f){
     if (!rowsAll.length){
       hBox.innerHTML = '<span style="opacity:.4">No positions</span>';
     } else {
-      const rows = _gSortHoldings(rowsAll.filter(h => !q || String(h.symbol||'').toLowerCase().includes(q)));
-      const bySector = window.__guildHoldSort === 'sector';
+      const rows = _gArrange(rowsAll);
+      const bySector = window.__guildHoldSort === 'group';
+      const emptyMsg = /^[0-9]+$/.test(String(window.__guildHoldSort))
+        ? ('No holdings in ' + _gSectorName(Number(window.__guildHoldSort)))
+        : 'No holdings match filter';
       hBox.innerHTML = rows.length
         ? rows.map(h => {
             const sign = h.pct >= 0 ? '+' : '';
@@ -275,7 +288,7 @@ function _renderGuildHoldings(f){
               + `<span style="min-width:120px;text-align:right">${h.qty}× <b>${_mfmt(h.value)}</b></span>`
               + `</span></div>`;
           }).join('')
-        : '<span style="opacity:.4">No holdings match filter</span>';
+        : `<span style="opacity:.4">${emptyMsg}</span>`;
     }
   }
 
@@ -288,7 +301,8 @@ window.guildHoldingsSearch = function(v){
 };
 
 window.guildHoldingsSort = function(v){
-  window.__guildHoldSort = (v === 'sector') ? 'sector' : 'default';
+  const ok = (v === 'group') || (v === 'default') || /^[0-9]+$/.test(String(v));
+  window.__guildHoldSort = ok ? String(v) : 'default';
   if (__currentFundData) _renderGuildHoldings(__currentFundData);
 };
 
@@ -331,8 +345,7 @@ function _drawGuildBarsAxis(W, maxAbs){
 function _drawGuildBars(rowsIn){
   const canvas = document.getElementById('g-pnl-bars');
   if (!canvas) return;
-  const q = window.__guildHoldSearch;
-  const rows = _gSortHoldings((rowsIn||[]).filter(h => !q || String(h.symbol||'').toLowerCase().includes(q)));
+  const rows = _gArrange(rowsIn);
 
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.clientWidth || (canvas.parentElement && canvas.parentElement.clientWidth) || 400;
@@ -352,7 +365,10 @@ function _drawGuildBars(rowsIn){
     _drawGuildBarsAxis(W, null);
     ctx.fillStyle = 'rgba(212,184,122,0.2)'; ctx.font = '11px monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(q ? 'No holdings match filter' : 'No positions', W/2, H/2);
+    ctx.fillText(
+      window.__guildHoldSearch ? 'No holdings match filter'
+        : (/^[0-9]+$/.test(String(window.__guildHoldSort)) ? ('No holdings in ' + _gSectorName(Number(window.__guildHoldSort))) : 'No positions'),
+      W/2, H/2);
     return;
   }
 

@@ -4,6 +4,21 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.4.1 (2026-06-01) — P&L sector control: named sectors + themed dropdown
+
+The 1.0.4.0 sector sort was a bare two-option select (`default` / `by sector`) stretched full-width next to the search box — it read as cobbled-together and only offered a binary group toggle.
+
+Reworked into one control on both the personal P&L and the Capital House portfolio:
+- Options are now `All positions` / `Grouped by sector`, plus an optgroup listing every sector by name (Finance, Biotech, Insurance, Manufacturing, Energy, Logistics, Tech, Misc). Picking a sector filters the row list **and** the %-move bars to that sector only; "Grouped by sector" keeps the cluster-by-sector ordering with a faint per-row sector tag.
+- New `.sector-select` style (`style.css`): panel-matched dark fill, gold border that brightens on hover/focus, custom SVG caret, styled `option`/`optgroup`. Search box + select sit in a tidy `.pnl-ctl` flex row.
+- `core.js`: `_pnlSort` replaced by `_pnlArrange` (search + sector filter/group in one pass, shared by bars and list); `pnlApplySort` accepts `default` / `group` / sector index. Empty states read "No positions in <sector>" when a sector filter is active.
+- `funds.js`: mirror — `_gSortHoldings` → `_gArrange`; `guildHoldingsSort` accepts the same values; sector-aware empty messages for list and bars.
+- Sector indices/names come from `window.TICKERS` `.sector` + `V5_SECTOR_NAMES`; the dropdown values are the sector indices (0–7), so labels and tags stay consistent.
+
+No server changes; purely a client reorder/relabel of already-computed rows.
+
+---
+
 ## v1.0.4.0 (2026-06-01) — free starter ship, commodity-shipping rebalance + escorts, P&L sector sort
 
 Three changes in one pass.

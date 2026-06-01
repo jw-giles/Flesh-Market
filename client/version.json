@@ -1,7 +1,7 @@
 {
-  "version": "1.0.4.0",
+  "version": "1.0.4.1",
   "built": "2026-06-01T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.4.0",
-  "notes": "Free starter Skiff so every account can buy/ship/sell commodities instantly (scaled off the Courier row: 2,500u hold, +3% risk, zero cost; not purchasable, it is the floor). Commodity-haul interception rebalanced via simulation so the riskiest unescorted hauls land in a 45-50% band with a hard 50% backstop: value scaling cap +7% (was +15%), fly-by 2.5%/hop, lane factor x0.35, tension /1800, blockade +6%, final clamp 0.50, 3% residual floor. Lane ordering corporate->dark preserved; sim median ~18%, p99 39%. Guard escorts (Light/Armed Convoy/Private Army, same tiers as smuggling) added to the shipping console, priced as a percent of cargo value, baked into the roll and lost if intercepted. P&L position lists and %-move bars now sortable by sector (personal + Capital House guild)."
+  "patch": "1.0.4.1",
+  "notes": "P&L sector control reworked into a single themed dropdown on both personal P&L and Capital House: \"All positions\", \"Grouped by sector\", and every sector listed by name (Finance, Biotech, Insurance, Manufacturing, Energy, Logistics, Tech, Misc) to filter the list and %-move bars to one sector. Styled to match the panel (gold accent, custom caret) instead of a bare full-width select. Builds on the 1.0.4.0 free Skiff, commodity shipping rebalance + escorts, and simulated 45-50% risk ceiling."
 }

@@ -109,11 +109,21 @@
     </div>
   </div>
 </div>
-<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-  <input id="pnlSearch" class="input" placeholder="Filter positions by ticker..." style="flex:1;font-size:.8rem" oninput="window.pnlApplySearch&&window.pnlApplySearch(this.value)"/>
-  <select id="pnlSort" class="input" title="Sort positions" style="flex:0 0 auto;font-size:.78rem" onchange="window.pnlApplySort&&window.pnlApplySort(this.value)">
-    <option value="default">Sort: default</option>
-    <option value="sector">Sort: by sector</option>
+<div class="pnl-ctl">
+  <input id="pnlSearch" class="input" placeholder="Filter positions by ticker..." style="font-size:.8rem" oninput="window.pnlApplySearch&&window.pnlApplySearch(this.value)"/>
+  <select id="pnlSort" class="sector-select" title="Sort or filter by sector" onchange="window.pnlApplySort&&window.pnlApplySort(this.value)">
+    <option value="default">All positions</option>
+    <option value="group">Grouped by sector</option>
+    <optgroup label="Show one sector">
+      <option value="0">Finance</option>
+      <option value="1">Biotech</option>
+      <option value="2">Insurance</option>
+      <option value="3">Manufacturing</option>
+      <option value="4">Energy</option>
+      <option value="5">Logistics</option>
+      <option value="6">Tech</option>
+      <option value="7">Misc</option>
+    </optgroup>
   </select>
 </div>
 <div class="list" id="pnlBox" style="max-height:360px;overflow-y:auto"></div>
@@ -537,11 +547,21 @@ window.storeSubTab=storeSubTab;
       </div>
 
       <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Portfolio</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-        <input id="g-holdings-search" class="input" placeholder="Filter holdings..." style="flex:1;font-size:.78rem" oninput="window.guildHoldingsSearch&&window.guildHoldingsSearch(this.value)"/>
-        <select id="g-holdings-sort" class="input" title="Sort holdings" style="flex:0 0 auto;font-size:.76rem" onchange="window.guildHoldingsSort&&window.guildHoldingsSort(this.value)">
-          <option value="default">Sort: default</option>
-          <option value="sector">Sort: by sector</option>
+      <div class="pnl-ctl">
+        <input id="g-holdings-search" class="input" placeholder="Filter holdings..." style="font-size:.78rem" oninput="window.guildHoldingsSearch&&window.guildHoldingsSearch(this.value)"/>
+        <select id="g-holdings-sort" class="sector-select" title="Sort or filter by sector" onchange="window.guildHoldingsSort&&window.guildHoldingsSort(this.value)">
+          <option value="default">All holdings</option>
+          <option value="group">Grouped by sector</option>
+          <optgroup label="Show one sector">
+            <option value="0">Finance</option>
+            <option value="1">Biotech</option>
+            <option value="2">Insurance</option>
+            <option value="3">Manufacturing</option>
+            <option value="4">Energy</option>
+            <option value="5">Logistics</option>
+            <option value="6">Tech</option>
+            <option value="7">Misc</option>
+          </optgroup>
         </select>
       </div>
       <div style="margin-bottom:8px">

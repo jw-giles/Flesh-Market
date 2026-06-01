@@ -711,7 +711,7 @@ function _drawBarsAxis(W, maxAbs) {
 function _drawBars(posArrIn) {
   const canvas = document.getElementById('pnl-bars');
   if (!canvas) return;
-  const posArr = _pnlSort((posArrIn || []).filter(p => _pnlMatch(p.sym)));
+  const posArr = _pnlArrange(posArrIn);
 
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.clientWidth || (canvas.parentElement && canvas.parentElement.clientWidth) || 400;
@@ -736,7 +736,9 @@ function _drawBars(posArrIn) {
     _drawBarsAxis(W, null);
     ctx.fillStyle = 'rgba(212,184,122,0.2)'; ctx.font = '11px monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(window.__pnlSearch ? 'No positions match filter' : 'No open positions', W/2, H/2);
+    var _emptyMsg = window.__pnlSearch ? 'No positions match filter'
+      : (/^[0-9]+$/.test(String(window.__pnlSort)) ? ('No positions in ' + _sectorName(Number(window.__pnlSort))) : 'No open positions');
+    ctx.fillText(_emptyMsg, W/2, H/2);
     return;
   }
 
@@ -850,7 +852,8 @@ function _buildPosArr(tickData, portfolioSnap) {
 
 // ─── P&L position filter (search box) ───────────────────────────────────────
 window.__pnlSearch = window.__pnlSearch || '';
-window.__pnlSort = window.__pnlSort || 'default'; // 'default' | 'sector'
+// 'default' (book order) | 'group' (cluster by sector) | '0'..'7' (show one sector)
+window.__pnlSort = window.__pnlSort || 'default';
 function _pnlMatch(sym){
   const q = window.__pnlSearch;
   return !q || String(sym||'').toLowerCase().includes(q);
@@ -867,17 +870,26 @@ function _sectorName(idx){
   const names = window.V5_SECTOR_NAMES || [];
   return (idx != null && names[idx]) ? names[idx] : 'Misc';
 }
-// Apply the active sort to a position array (sector groups, then ticker A→Z).
-function _pnlSort(arr){
-  if (window.__pnlSort !== 'sector') return arr;
-  return arr.slice().sort((a,b) => {
-    const sa = _sectorOf(a.sym), sb = _sectorOf(b.sym);
-    if (sa !== sb) return sa - sb;
-    return String(a.sym).localeCompare(String(b.sym));
-  });
+// Apply search + the active sector view (filter-to-one or group) in one pass, so
+// the bar chart and the row list always agree.
+function _pnlArrange(arr){
+  let out = (arr || []).filter(p => _pnlMatch(p.sym));
+  const s = window.__pnlSort;
+  if (s === 'group') {
+    out = out.slice().sort((a,b) => {
+      const sa = _sectorOf(a.sym), sb = _sectorOf(b.sym);
+      if (sa !== sb) return sa - sb;
+      return String(a.sym).localeCompare(String(b.sym));
+    });
+  } else if (s !== 'default') {
+    const idx = Number(s);
+    out = out.filter(p => _sectorOf(p.sym) === idx);
+  }
+  return out;
 }
 window.pnlApplySort = function(v){
-  window.__pnlSort = (v === 'sector') ? 'sector' : 'default';
+  const ok = (v === 'group') || (v === 'default') || /^[0-9]+$/.test(String(v));
+  window.__pnlSort = ok ? String(v) : 'default';
   try { liveUpdatePnL(null, null); } catch(e){}
   try { drawEquity(); } catch(e){}
 };
@@ -931,8 +943,8 @@ function liveUpdatePnL(tickData, portfolioSnap) {
   </div>` : ''}`;
 
   // ── Position rows ─────────────────────────────────────────────────────────
-  const shownArr = _pnlSort(posArr.filter(p => _pnlMatch(p.sym)));
-  const bySector = window.__pnlSort === 'sector';
+  const shownArr = _pnlArrange(posArr);
+  const bySector = window.__pnlSort === 'group';
   const posRows = shownArr.map(p => {
     const uplSign2 = p.upl >= 0 ? '+' : '';
     const pctSign  = p.gainPct >= 0 ? '+' : '';
@@ -958,7 +970,7 @@ function liveUpdatePnL(tickData, portfolioSnap) {
       </div>` : '';
 
   const empty = !posRows.length
-    ? `<div style="padding:18px 0;text-align:center;opacity:.35;font-size:.82rem">${posArr.length && window.__pnlSearch ? 'No positions match filter' : 'No open positions'}</div>` : '';
+    ? `<div style="padding:18px 0;text-align:center;opacity:.35;font-size:.82rem">${posArr.length && window.__pnlSearch ? 'No positions match filter' : (posArr.length && /^[0-9]+$/.test(String(window.__pnlSort)) ? ('No positions in '+_sectorName(Number(window.__pnlSort))) : 'No open positions')}</div>` : '';
 
   box.innerHTML = kpiBar + header + posRows.join('') + empty;
 }
