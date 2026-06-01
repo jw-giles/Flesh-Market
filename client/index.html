@@ -100,11 +100,17 @@
 </div>
 <div id="pnlTab" style="display:none">
 <!-- Static snapshot charts: donut (allocation) + bars (per-position P&L) -->
-<div style="display:flex;gap:10px;margin-bottom:10px;align-items:stretch">
+<div style="display:flex;gap:10px;margin-bottom:8px;align-items:flex-start">
   <canvas id="pnl-donut" width="180" height="180" style="flex:0 0 180px;height:180px;border-radius:6px"></canvas>
-  <canvas id="pnl-bars"  style="flex:1;height:180px;display:block;border-radius:6px;min-width:0"></canvas>
+  <div style="flex:1;min-width:0">
+    <canvas id="pnl-bars-axis" style="width:100%;height:20px;display:block;background:#0a0804;border-radius:6px 6px 0 0"></canvas>
+    <div id="pnl-bars-wrap" style="max-height:180px;overflow-y:auto;border-radius:0 0 6px 6px;background:#0a0804">
+      <canvas id="pnl-bars" style="width:100%;display:block"></canvas>
+    </div>
+  </div>
 </div>
-<div class="list" id="pnlBox"></div>
+<input id="pnlSearch" class="input" placeholder="Filter positions by ticker..." style="margin-bottom:8px;font-size:.8rem" oninput="window.pnlApplySearch&&window.pnlApplySearch(this.value)"/>
+<div class="list" id="pnlBox" style="max-height:360px;overflow-y:auto"></div>
 <!-- v5.0 Sector Breakdown -->
 <div id="sectorBreakdown" style="margin-top:10px;padding:8px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
   <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px">Sector Exposure</div>
@@ -525,6 +531,7 @@ window.storeSubTab=storeSubTab;
       </div>
 
       <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Portfolio</div>
+      <input id="g-holdings-search" class="input" placeholder="Filter holdings..." style="font-size:.78rem;margin-bottom:6px" oninput="window.guildHoldingsSearch&&window.guildHoldingsSearch(this.value)"/>
       <div id="g-d-holdings" style="font-size:.8rem;max-height:200px;overflow:auto;margin-bottom:12px"></div>
 
       <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Activity</div>

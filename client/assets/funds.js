@@ -202,6 +202,23 @@ async function renderFundPerformance(fundId) {
   }
 }
 
+window.__guildHoldSearch = window.__guildHoldSearch || '';
+function _renderGuildHoldings(f){
+  const hBox = document.getElementById('g-d-holdings');
+  if (!hBox) return;
+  const q = window.__guildHoldSearch;
+  const all = (f && f.holdings) ? f.holdings : [];
+  if (!all.length){ hBox.innerHTML = '<span style="opacity:.4">No positions</span>'; return; }
+  const rows = all.filter(h => !q || String(h.symbol||'').toLowerCase().includes(q));
+  hBox.innerHTML = rows.length
+    ? rows.map(h=>`<div class="ticker"><span class="sym">${h.symbol}</span><span>${h.qty}× <b>${_mfmt(h.value)}</b></span></div>`).join('')
+    : '<span style="opacity:.4">No holdings match filter</span>';
+}
+window.guildHoldingsSearch = function(v){
+  window.__guildHoldSearch = (v||'').trim().toLowerCase();
+  if (__currentFundData) _renderGuildHoldings(__currentFundData);
+};
+
 function renderFundDetail(f) {
   if (!f) return;
   __isOwner_g  = f.isOwner;
@@ -236,10 +253,7 @@ function renderFundDetail(f) {
   if (wbEl) wbEl.textContent = `Withdrawable: ${_mfmt(f.withdrawable||0)} fund cash · ${_mfmt(f.lockedInPositions||0)} locked in positions`;
 
   // Holdings
-  const hBox = document.getElementById('g-d-holdings');
-  if (hBox) hBox.innerHTML = f.holdings?.length
-    ? f.holdings.map(h=>`<div class="ticker"><span class="sym">${h.symbol}</span><span>${h.qty}× <b>${_mfmt(h.value)}</b></span></div>`).join('')
-    : '<span style="opacity:.4">No positions</span>';
+  _renderGuildHoldings(f);
 
   // Members
   const mBox = document.getElementById('g-d-members');

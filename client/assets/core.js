@@ -679,13 +679,51 @@ function _drawDonut(posArr, cashNow, netWorth) {
   ctx.fillText('NET WORTH', cx, cy+7);
 }
 
+// ── Bars axis: pinned +/-% scale that stays put while bars scroll ────────────
+function _drawBarsAxis(W, maxAbs) {
+  const c = document.getElementById('pnl-bars-axis');
+  if (!c) return;
+  const dpr = window.devicePixelRatio || 1;
+  const H = 20;
+  c.width = W * dpr; c.height = H * dpr;
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle = '#0a0804';
+  ctx.fillRect(0,0,W,H);
+  if (maxAbs == null) return; // empty book: blank axis
+
+  const PAD_L = 52, PAD_R = 58;
+  const plotW = W - PAD_L - PAD_R;
+  const zeroX = PAD_L + plotW/2;
+
+  ctx.strokeStyle = 'rgba(212,184,122,0.18)';
+  ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(zeroX, 5); ctx.lineTo(zeroX, H); ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = 'rgba(212,184,122,0.42)'; ctx.font = '12px monospace';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';  ctx.fillText('+'+maxAbs.toFixed(0)+'%', W-PAD_R+4, H/2);
+  ctx.textAlign = 'right'; ctx.fillText('-'+maxAbs.toFixed(0)+'%', PAD_L-4,    H/2);
+}
+
 // ── Bars: per-position % gain/loss (horizontal) ──────────────────────────────
-function _drawBars(posArr) {
+function _drawBars(posArrIn) {
   const canvas = document.getElementById('pnl-bars');
   if (!canvas) return;
+  const posArr = (posArrIn || []).filter(p => _pnlMatch(p.sym));
+
   const dpr = window.devicePixelRatio || 1;
-  const W = canvas.clientWidth  || 400;
-  const H = canvas.clientHeight || 180;
+  const W = canvas.clientWidth || (canvas.parentElement && canvas.parentElement.clientWidth) || 400;
+
+  // Fixed readable row height — canvas grows with position count and the
+  // #pnl-bars-wrap container scrolls. No more cramming N rows into 180px.
+  const PAD_L = 52, PAD_R = 58, PAD_T = 8, PAD_B = 10;
+  const ROW_H = 24, BAR_H = 15;
+  const n = posArr.length;
+  const H = Math.max(120, PAD_T + PAD_B + n * ROW_H);
+
+  canvas.style.height = H + 'px';
   canvas.width  = W * dpr;
   canvas.height = H * dpr;
   const ctx = canvas.getContext('2d');
@@ -694,40 +732,34 @@ function _drawBars(posArr) {
   ctx.fillStyle = '#0a0804';
   ctx.fillRect(0,0,W,H);
 
-  if (!posArr.length) {
+  if (!n) {
+    _drawBarsAxis(W, null);
     ctx.fillStyle = 'rgba(212,184,122,0.2)'; ctx.font = '11px monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('No open positions', W/2, H/2);
+    ctx.fillText(window.__pnlSearch ? 'No positions match filter' : 'No open positions', W/2, H/2);
     return;
   }
 
-  const PAD_L = 52, PAD_R = 58, PAD_T = 12, PAD_B = 10;
   const plotW = W - PAD_L - PAD_R;
-  const n = posArr.length;
-  const rowH = Math.min(28, Math.floor((H - PAD_T - PAD_B) / n));
-  const barH = Math.max(4, rowH - 6);
 
   // Find max abs % for scaling
   let maxAbs = 0.001;
   for (const p of posArr) { if (Math.abs(p.gainPct) > maxAbs) maxAbs = Math.abs(p.gainPct); }
-  // Always show at least ±5% range so a flat position isn't a full-width bar
-  maxAbs = Math.max(maxAbs, 5);
+  maxAbs = Math.max(maxAbs, 5); // floor the range so flat positions aren't full-width
 
   // Zero line
   const zeroX = PAD_L + plotW/2;
   ctx.strokeStyle = 'rgba(212,184,122,0.18)';
   ctx.lineWidth = 1;
   ctx.setLineDash([3,3]);
-  ctx.beginPath(); ctx.moveTo(zeroX, PAD_T-4); ctx.lineTo(zeroX, H-PAD_B+4); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(zeroX, PAD_T-6); ctx.lineTo(zeroX, H-PAD_B+2); ctx.stroke();
   ctx.setLineDash([]);
 
-  // Axis labels
-  ctx.fillStyle = 'rgba(212,184,122,0.28)'; ctx.font = '12px monospace'; ctx.textBaseline = 'top';
-  ctx.textAlign = 'left';  ctx.fillText('+'+maxAbs.toFixed(0)+'%', W-PAD_R+4, PAD_T);
-  ctx.textAlign = 'right'; ctx.fillText('-'+maxAbs.toFixed(0)+'%', PAD_L-4,    PAD_T);
+  // Pinned scale (drawn into the fixed axis canvas, not this scrolling one)
+  _drawBarsAxis(W, maxAbs);
 
   posArr.forEach((p, i) => {
-    const y = PAD_T + i * rowH + (rowH - barH) / 2;
+    const y = PAD_T + i * ROW_H + (ROW_H - BAR_H) / 2;
     const pct = Math.max(-maxAbs, Math.min(maxAbs, p.gainPct));
     const barPx = (Math.abs(pct) / maxAbs) * (plotW/2);
     const isPos = pct >= 0;
@@ -735,28 +767,28 @@ function _drawBars(posArr) {
 
     // Background track
     ctx.fillStyle = 'rgba(255,255,255,0.03)';
-    ctx.fillRect(PAD_L, y, plotW, barH);
+    ctx.fillRect(PAD_L, y, plotW, BAR_H);
 
     // Bar (grows left from zero for negative, right for positive)
     const bx = isPos ? zeroX : zeroX - barPx;
     ctx.fillStyle = color + (isPos ? 'cc' : '99');
-    ctx.fillRect(bx, y, barPx, barH);
+    ctx.fillRect(bx, y, barPx, BAR_H);
 
     // Thin edge glow
     ctx.fillStyle = color;
-    if (isPos) ctx.fillRect(bx + barPx - 1, y, 1, barH);
-    else       ctx.fillRect(bx, y, 1, barH);
+    if (isPos) ctx.fillRect(bx + barPx - 1, y, 1, BAR_H);
+    else       ctx.fillRect(bx, y, 1, BAR_H);
 
     // Symbol label (left)
     ctx.fillStyle = '#d4b87a'; ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-    ctx.fillText(p.sym, PAD_L - 4, y + barH/2);
+    ctx.fillText(p.sym, PAD_L - 4, y + BAR_H/2);
 
     // % label (right)
     const sign = pct >= 0 ? '+' : '';
     ctx.fillStyle = isPos ? color : '#e06b5a';
     ctx.textAlign = 'left';
-    ctx.fillText(sign + pct.toFixed(2)+'%', W - PAD_R + 4, y + barH/2);
+    ctx.fillText(sign + pct.toFixed(2)+'%', W - PAD_R + 4, y + BAR_H/2);
   });
 }
 
@@ -816,6 +848,18 @@ function _buildPosArr(tickData, portfolioSnap) {
   return arr;
 }
 
+// ─── P&L position filter (search box) ───────────────────────────────────────
+window.__pnlSearch = window.__pnlSearch || '';
+function _pnlMatch(sym){
+  const q = window.__pnlSearch;
+  return !q || String(sym||'').toLowerCase().includes(q);
+}
+window.pnlApplySearch = function(v){
+  window.__pnlSearch = (v||'').trim().toLowerCase();
+  try { liveUpdatePnL(null, null); } catch(e){}
+  try { drawEquity(); } catch(e){}
+};
+
 // ─── liveUpdatePnL: re-renders P&L display on every price tick ───────────────
 function liveUpdatePnL(tickData, portfolioSnap) {
   const box = el('#pnlBox');
@@ -860,7 +904,8 @@ function liveUpdatePnL(tickData, portfolioSnap) {
   </div>` : ''}`;
 
   // ── Position rows ─────────────────────────────────────────────────────────
-  const posRows = posArr.map(p => {
+  const shownArr = posArr.filter(p => _pnlMatch(p.sym));
+  const posRows = shownArr.map(p => {
     const uplSign2 = p.upl >= 0 ? '+' : '';
     const pctSign  = p.gainPct >= 0 ? '+' : '';
     return `<div class="pnl-pos-row" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #1a1208">
@@ -884,7 +929,7 @@ function liveUpdatePnL(tickData, portfolioSnap) {
       </div>` : '';
 
   const empty = !posRows.length
-    ? `<div style="padding:18px 0;text-align:center;opacity:.35;font-size:.82rem">No open positions</div>` : '';
+    ? `<div style="padding:18px 0;text-align:center;opacity:.35;font-size:.82rem">${posArr.length && window.__pnlSearch ? 'No positions match filter' : 'No open positions'}</div>` : '';
 
   box.innerHTML = kpiBar + header + posRows.join('') + empty;
 }

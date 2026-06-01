@@ -4,6 +4,15 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.8 (2026-05-31) — P&L: scrollable + searchable position list (personal + guild)
+
+With a large book the P&L bar chart packed every position into a fixed 180px canvas. `rowH = min(28, floor((H-22)/n))` collapsed to ~6px at ~25 holdings, so bars overlapped and the left-edge symbol labels overprinted into an unreadable smear (the donut/net-worth side was fine). The `#pnlBox` list below had no height cap or filter, and the guild Capital House portfolio (`#g-d-holdings`) had no filter either.
+
+Changes:
+- Personal P&L: added `#pnlSearch` ticker filter; `#pnlBox` capped at 360px with `overflow-y:auto`. `_drawBars` rewritten to use a fixed 24px row height and grow the canvas vertically inside a 180px-max scroll wrapper (`#pnl-bars-wrap`) instead of compressing rows. The `+/-%` scale is drawn into a separate pinned canvas (`#pnl-bars-axis`) above the scroll wrapper so it stays fixed while the bars scroll (shared geometry keeps the zero line aligned). Search filters the visible list and bars via `_pnlMatch` / `window.pnlApplySearch`.
+- Guild portfolio: added `#g-holdings-search`; holdings render refactored into `_renderGuildHoldings(f)` driven by `window.guildHoldingsSearch`, filtering `__currentFundData.holdings`.
+- KPIs, net worth, equity, unrealized P&L, and the allocation donut still compute on the full portfolio; the filter only narrows the readable list/bars.
+
 ## v1.0.3.7 (2026-05-31) — fix: golden-share badge shown on wrong member
 
 The golden-share ★ in the member list was rendered by matching the holder's name against each member's name (f.goldenHolder===m.name). Name collisions (or a treasurer/other officer whose name matched) could show the badge on the wrong person. The members array didn't expose player_id to the client, so a name match was the only thing available. Fixed by computing an isGolden boolean per member server-side off player_id and badging on that. Purely cosmetic — both veto endpoints already gate on getGoldenHolder()===actor.id, so the share's actual authority was never mis-assigned; only the badge was wrong.
