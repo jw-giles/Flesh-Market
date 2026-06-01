@@ -658,7 +658,10 @@ function _drawDonut(posArr, cashNow, netWorth) {
   let ang = -Math.PI/2;
   slices.forEach((s, i) => {
     const sweep = (s.value / total) * (Math.PI*2) - GAP;
-    if (sweep <= 0) return;
+    // Guard tiny slices: a sweep below GAP/2 makes the arc end angle fall below its
+    // start, so the default-clockwise arc wraps ~360° and floods the ring with this
+    // slice's color. Drop sub-~0.6% wedges instead.
+    if (sweep <= GAP/2) return;
     ctx.beginPath();
     ctx.moveTo(cx + ri*Math.cos(ang+GAP/2), cy + ri*Math.sin(ang+GAP/2));
     ctx.arc(cx, cy, ro, ang+GAP/2, ang+sweep);

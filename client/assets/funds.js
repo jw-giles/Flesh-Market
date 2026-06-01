@@ -130,7 +130,10 @@ function renderFundDonut(f) {
   const GAP=0.025; let ang=-Math.PI/2;
   slices.forEach(s=>{
     const sweep=(s.value/total)*(Math.PI*2)-GAP;
-    if (sweep<=0) return;
+    // Guard tiny slices: if the drawn span (sweep - GAP/2) would be <= 0 the arc
+    // end angle falls below its start and the default-clockwise arc wraps ~360°,
+    // flooding the whole ring with this slice's color. Drop sub-~0.6% wedges.
+    if (sweep<=GAP/2) return;
     ctx.beginPath();
     ctx.moveTo(cx+ri*Math.cos(ang+GAP/2), cy+ri*Math.sin(ang+GAP/2));
     ctx.arc(cx,cy,ro,ang+GAP/2,ang+sweep);
