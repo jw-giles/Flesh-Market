@@ -595,11 +595,21 @@ function computeEquityFromLive(p){
 // ── P&L static snapshot charts ───────────────────────────────────────────────
 // No history stored. Both canvases redraw from current positions/prices only.
 
-// Palette for up to 12 positions (hue steps, desaturated game palette)
+// Palette for up to 12 positions (hue steps, desaturated game palette).
+// Used by the personal P&L bar chart.
 const PNL_COLORS = [
   '#e6a832','#5b9bd5','#8fce6a','#c97fd4','#e06b5a','#4ecdc4',
   '#f0c96a','#7eb8e6','#a8d86e','#d48fd4','#e08a6a','#6cd4c4'
 ];
+
+// Shared allocation-donut palette — vivid, glow-friendly. Used by BOTH the
+// personal net-worth donut here and the Capital House NAV donut in funds.js
+// (which reads window.FM_DONUT_PAL), so the two wheels stay identical.
+const FM_DONUT_PAL = [
+  '#2dd4c4','#ff3b3b','#b86bff','#27e36b','#ffd400',
+  '#ff8c2e','#5dff7a','#e0b85a','#3aa0ff','#ff7a45'
+];
+window.FM_DONUT_PAL = FM_DONUT_PAL;
 
 let EQUITY = []; // kept for legacy compat — nothing writes to it now
 
@@ -627,7 +637,7 @@ function _drawDonut(posArr, cashNow, netWorth) {
   // Build slices: positions + cash
   const slices = posArr.map((p, i) => ({
     label: p.sym, value: Math.max(0, p.value),
-    color: PNL_COLORS[i % PNL_COLORS.length]
+    color: FM_DONUT_PAL[i % FM_DONUT_PAL.length]
   }));
   if (cashNow > 0) slices.push({ label: 'CASH', value: cashNow, color: 'rgba(228,200,140,0.85)' });
 
@@ -656,7 +666,7 @@ function _drawDonut(posArr, cashNow, netWorth) {
     ctx.closePath();
     // Per-segment glow so the ring reads luminous against the near-black panel.
     ctx.save();
-    ctx.shadowColor = s.color; ctx.shadowBlur = 8;
+    ctx.shadowColor = s.color; ctx.shadowBlur = 6;
     ctx.fillStyle = s.color;
     ctx.fill();
     ctx.restore();

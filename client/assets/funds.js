@@ -96,7 +96,8 @@ async function openFund(fundId) {
 // spp isolates trading performance from member cashflows. Series begins when
 // the server started snapshotting (v1.0.2.4), so new/old houses start sparse.
 // ── Performance: allocation donut + metrics (matches the player P&L) ─────
-const _GPAL = ['#5fe8de','#ff5b4d','#b56fe0','#3ff086','#ffe14d','#ffae5e','#9dff7d','#dcc28c','#6fc8f0','#f0a878'];
+const _GPAL = (typeof window !== 'undefined' && window.FM_DONUT_PAL) ? window.FM_DONUT_PAL
+  : ['#2dd4c4','#ff3b3b','#b86bff','#27e36b','#ffd400','#ff8c2e','#5dff7a','#e0b85a','#3aa0ff','#ff7a45'];
 
 function _gFmtC(v){ v=Number(v)||0; return v>=1e9?(v/1e9).toFixed(1)+'B':v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'k':v.toFixed(0); }
 
@@ -137,7 +138,7 @@ function renderFundDonut(f) {
     ctx.closePath();
     // Per-segment glow so the ring reads luminous against the near-black panel.
     ctx.save();
-    ctx.shadowColor=s.color; ctx.shadowBlur=8;
+    ctx.shadowColor=s.color; ctx.shadowBlur=6;
     ctx.fillStyle=s.color; ctx.fill();
     ctx.restore();
     if (s.value/total > 0.08) {
