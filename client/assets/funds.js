@@ -203,21 +203,170 @@ async function renderFundPerformance(fundId) {
 }
 
 window.__guildHoldSearch = window.__guildHoldSearch || '';
-function _renderGuildHoldings(f){
-  const hBox = document.getElementById('g-d-holdings');
-  if (!hBox) return;
-  const q = window.__guildHoldSearch;
-  const all = (f && f.holdings) ? f.holdings : [];
-  if (!all.length){ hBox.innerHTML = '<span style="opacity:.4">No positions</span>'; return; }
-  const rows = all.filter(h => !q || String(h.symbol||'').toLowerCase().includes(q));
-  hBox.innerHTML = rows.length
-    ? rows.map(h=>`<div class="ticker"><span class="sym">${h.symbol}</span><span>${h.qty}× <b>${_mfmt(h.value)}</b></span></div>`).join('')
-    : '<span style="opacity:.4">No holdings match filter</span>';
+
+// Live price + today's % for a symbol from the global market snapshot.
+function _gLive(sym){
+  try{
+    if (Array.isArray(window.TICKERS)){
+      const t = window.TICKERS.find(x => x && String(x.symbol) === String(sym));
+      if (t) return { price: Number(t.price)||0, pct: Number(t.pct)||0 };
+    }
+  }catch(e){}
+  return null;
 }
+
+// Build live-priced holding rows. Funds store only (symbol, qty) — no cost
+// basis — so the metric is today's % move, not gain-vs-entry. Value is
+// re-marked at the live price; fund NAV/cash stay server-authoritative.
+function _gBuildHoldings(f){
+  const all = (f && f.holdings) ? f.holdings : [];
+  return all.map(h => {
+    const live  = _gLive(h.symbol);
+    const price = (live && live.price) ? live.price : (Number(h.price)||0);
+    const pct   = live ? live.pct : 0;
+    const qty   = Number(h.qty)||0;
+    return { symbol:h.symbol, qty, price, pct, value: price*qty };
+  });
+}
+
+function _renderGuildHoldings(f){
+  const rowsAll = _gBuildHoldings(f);
+  const q = window.__guildHoldSearch;
+
+  const hBox = document.getElementById('g-d-holdings');
+  if (hBox){
+    if (!rowsAll.length){
+      hBox.innerHTML = '<span style="opacity:.4">No positions</span>';
+    } else {
+      const rows = rowsAll.filter(h => !q || String(h.symbol||'').toLowerCase().includes(q));
+      hBox.innerHTML = rows.length
+        ? rows.map(h => {
+            const sign = h.pct >= 0 ? '+' : '';
+            const col  = h.pct >= 0 ? '#86ff6a' : '#ff6b6b';
+            return `<div class="ticker"><span class="sym">${h.symbol}</span>`
+              + `<span style="display:flex;gap:12px;align-items:baseline;justify-content:flex-end">`
+              + `<span style="color:#d4b87a">Ƒ${h.price.toFixed(2)}</span>`
+              + `<span style="color:${col};min-width:64px;text-align:right">${sign}${h.pct.toFixed(2)}%</span>`
+              + `<span style="min-width:120px;text-align:right">${h.qty}× <b>${_mfmt(h.value)}</b></span>`
+              + `</span></div>`;
+          }).join('')
+        : '<span style="opacity:.4">No holdings match filter</span>';
+    }
+  }
+
+  _drawGuildBars(rowsAll);
+}
+
 window.guildHoldingsSearch = function(v){
   window.__guildHoldSearch = (v||'').trim().toLowerCase();
   if (__currentFundData) _renderGuildHoldings(__currentFundData);
 };
+
+// Re-mark holdings on every market tick while the Portfolio pane is visible.
+window.refreshGuildHoldingsLive = function(){
+  try{
+    const pane = document.getElementById('g-pane-portfolio');
+    if (!pane || pane.offsetParent === null) return; // detail/pane not visible
+    if (!__currentFundData) return;
+    _renderGuildHoldings(__currentFundData);
+  }catch(e){}
+};
+
+// ── Pinned axis: today's %-move scale, stays put while bars scroll ──────────
+function _drawGuildBarsAxis(W, maxAbs){
+  const c = document.getElementById('g-pnl-bars-axis');
+  if (!c) return;
+  const dpr = window.devicePixelRatio || 1;
+  const H = 20;
+  c.width = W*dpr; c.height = H*dpr;
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle = '#0a0804';
+  ctx.fillRect(0,0,W,H);
+  if (maxAbs == null) return;
+  const PAD_L = 52, PAD_R = 58;
+  const plotW = W - PAD_L - PAD_R;
+  const zeroX = PAD_L + plotW/2;
+  ctx.strokeStyle = 'rgba(212,184,122,0.18)';
+  ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(zeroX, 5); ctx.lineTo(zeroX, H); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(212,184,122,0.42)'; ctx.font = '12px monospace';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';  ctx.fillText('+'+maxAbs.toFixed(0)+'%', W-PAD_R+4, H/2);
+  ctx.textAlign = 'right'; ctx.fillText('-'+maxAbs.toFixed(0)+'%', PAD_L-4,    H/2);
+}
+
+// ── Bars: today's % move per holding (mirrors personal P&L bars) ────────────
+function _drawGuildBars(rowsIn){
+  const canvas = document.getElementById('g-pnl-bars');
+  if (!canvas) return;
+  const q = window.__guildHoldSearch;
+  const rows = (rowsIn||[]).filter(h => !q || String(h.symbol||'').toLowerCase().includes(q));
+
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth || (canvas.parentElement && canvas.parentElement.clientWidth) || 400;
+  const PAD_L = 52, PAD_R = 58, PAD_T = 8, PAD_B = 10;
+  const ROW_H = 24, BAR_H = 15;
+  const n = rows.length;
+  const H = Math.max(120, PAD_T + PAD_B + n*ROW_H);
+
+  canvas.style.height = H + 'px';
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle = '#0a0804';
+  ctx.fillRect(0,0,W,H);
+
+  if (!n){
+    _drawGuildBarsAxis(W, null);
+    ctx.fillStyle = 'rgba(212,184,122,0.2)'; ctx.font = '11px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(q ? 'No holdings match filter' : 'No positions', W/2, H/2);
+    return;
+  }
+
+  const plotW = W - PAD_L - PAD_R;
+  let maxAbs = 0.001;
+  for (const h of rows){ if (Math.abs(h.pct) > maxAbs) maxAbs = Math.abs(h.pct); }
+  maxAbs = Math.max(maxAbs, 5);
+
+  const zeroX = PAD_L + plotW/2;
+  ctx.strokeStyle = 'rgba(212,184,122,0.18)';
+  ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(zeroX, PAD_T-6); ctx.lineTo(zeroX, H-PAD_B+2); ctx.stroke();
+  ctx.setLineDash([]);
+
+  _drawGuildBarsAxis(W, maxAbs);
+
+  rows.forEach((h, i) => {
+    const y = PAD_T + i*ROW_H + (ROW_H - BAR_H)/2;
+    const pct = Math.max(-maxAbs, Math.min(maxAbs, h.pct));
+    const barPx = (Math.abs(pct)/maxAbs) * (plotW/2);
+    const isPos = pct >= 0;
+    const color = isPos ? PNL_COLORS[i % PNL_COLORS.length] : '#e06b5a';
+
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fillRect(PAD_L, y, plotW, BAR_H);
+
+    const bx = isPos ? zeroX : zeroX - barPx;
+    ctx.fillStyle = color + (isPos ? 'cc' : '99');
+    ctx.fillRect(bx, y, barPx, BAR_H);
+
+    ctx.fillStyle = color;
+    if (isPos) ctx.fillRect(bx + barPx - 1, y, 1, BAR_H);
+    else       ctx.fillRect(bx, y, 1, BAR_H);
+
+    ctx.fillStyle = '#d4b87a'; ctx.font = 'bold 9px monospace';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(h.symbol, PAD_L - 4, y + BAR_H/2);
+
+    const sign = pct >= 0 ? '+' : '';
+    ctx.fillStyle = isPos ? color : '#e06b5a';
+    ctx.textAlign = 'left';
+    ctx.fillText(sign + pct.toFixed(2)+'%', W - PAD_R + 4, y + BAR_H/2);
+  });
+}
 
 function renderFundDetail(f) {
   if (!f) return;
@@ -495,6 +644,10 @@ function setHousePane(name) {
     t.style.borderBottomColor = on ? '#ffb547' : 'transparent';
     t.style.color = on ? '#ffb547' : '#6a5a3a';
   });
+  // Canvas has zero width while the pane is hidden; redraw once it's visible.
+  if (name === 'portfolio' && __currentFundData) {
+    try { _renderGuildHoldings(__currentFundData); } catch(e){}
+  }
 }
 
 function _gEsc(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }

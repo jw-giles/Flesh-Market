@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3.8",
+  "version": "1.0.3.9",
   "built": "2026-05-31T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.3.8",
-  "notes": "P&L usability: personal P&L and guild (Capital House) portfolio now have a ticker filter box and a scrollable list. The per-position bar chart no longer crams every holding into a fixed 180px (which collapsed row height and overprinted the symbol labels into an unreadable column); it now grows to a fixed readable row height and the panel scrolls, with the +/-% scale pinned in its own header so it stays put while the bars scroll. Search narrows the visible list and bars only; KPIs, net worth, and the allocation donut still reflect the full portfolio."
+  "patch": "1.0.3.9",
+  "notes": "Guild (Capital House) Portfolio now shows real-time price shifts of its holdings: each position is re-marked at the live market price every tick with today's % move (color-coded), and a per-holding %-move bar chart with a pinned scale mirrors the personal P&L view. Funds store only symbol+qty (no cost basis), so the metric is today's % change rather than gain-vs-entry. Filter box and scroll carry over from 1.0.3.8. Fund NAV, cash, and per-share stay server-authoritative and update on fund events; only the holdings rows/bars are re-priced live on the client."
 }

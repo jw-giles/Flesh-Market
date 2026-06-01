@@ -4,6 +4,19 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.3.9 (2026-05-31) — guild Portfolio: live-priced holdings + %-move bars
+
+The Capital House Portfolio pane only rendered holdings on `openFund`/`fund_update` (fund trades, deposits), so between those events the prices were stale and you couldn't watch companies move. `fund_holdings` stores only `(symbol, qty)` — no cost basis — so there's no gain-vs-entry to show; the available, and more relevant, metric is today's % move.
+
+Changes (funds.js, index.html, core.js):
+- `_gBuildHoldings(f)` re-marks each holding at the live price from `window.TICKERS` and pulls today's `pct`; value recomputed at live price.
+- `_renderGuildHoldings` rows now show live price + color-coded today's % alongside qty/value.
+- New `_drawGuildBars` / `_drawGuildBarsAxis` render a per-holding %-move bar chart into `#g-pnl-bars` with a pinned `#g-pnl-bars-axis`, fixed 24px rows growing inside a 180px scroll wrapper — same shape as the personal P&L bars.
+- `window.refreshGuildHoldingsLive()` re-renders on every market tick (hooked in core.js after `refreshHeatmap`), gated on `#g-pane-portfolio` being visible (`offsetParent`), so it's idle unless you're looking at it.
+- `setHousePane('portfolio')` triggers a redraw so the canvas sizes correctly after being hidden (zero clientWidth).
+- The 1.0.3.8 holdings filter and scroll still apply; search narrows rows and bars.
+- Scope: fund NAV/cash/per-share remain server-authoritative; only the holdings rows and bars are re-priced client-side.
+
 ## v1.0.3.8 (2026-05-31) — P&L: scrollable + searchable position list (personal + guild)
 
 With a large book the P&L bar chart packed every position into a fixed 180px canvas. `rowH = min(28, floor((H-22)/n))` collapsed to ~6px at ~25 holdings, so bars overlapped and the left-edge symbol labels overprinted into an unreadable smear (the donut/net-worth side was fine). The `#pnlBox` list below had no height cap or filter, and the guild Capital House portfolio (`#g-d-holdings`) had no filter either.

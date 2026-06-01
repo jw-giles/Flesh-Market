@@ -1558,6 +1558,7 @@ ws.addEventListener('message', (ev)=>{
       // v5.0: refresh heatmap if visible
       window.TICKERS = TICKERS; // keep in sync for cross-script access
       try { refreshHeatmap(); } catch(e) {}
+      try { window.refreshGuildHoldingsLive && window.refreshGuildHoldingsLive(); } catch(e) {}
       try { updateBottomTicker(); } catch(e) {}
     }
     renderTickers();

@@ -532,6 +532,12 @@ window.storeSubTab=storeSubTab;
 
       <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Portfolio</div>
       <input id="g-holdings-search" class="input" placeholder="Filter holdings..." style="font-size:.78rem;margin-bottom:6px" oninput="window.guildHoldingsSearch&&window.guildHoldingsSearch(this.value)"/>
+      <div style="margin-bottom:8px">
+        <canvas id="g-pnl-bars-axis" style="width:100%;height:20px;display:block;background:#0a0804;border-radius:6px 6px 0 0"></canvas>
+        <div id="g-pnl-bars-wrap" style="max-height:180px;overflow-y:auto;border-radius:0 0 6px 6px;background:#0a0804">
+          <canvas id="g-pnl-bars" style="width:100%;display:block"></canvas>
+        </div>
+      </div>
       <div id="g-d-holdings" style="font-size:.8rem;max-height:200px;overflow:auto;margin-bottom:12px"></div>
 
       <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:4px">Activity</div>
