@@ -622,14 +622,14 @@ function _drawDonut(posArr, cashNow, netWorth) {
   ctx.fillStyle = '#0a0804';
   ctx.fillRect(0,0,S,S);
 
-  const cx = S/2, cy = S/2, ro = S/2 - 10, ri = ro * 0.58;
+  const cx = S/2, cy = S/2, ro = S/2 - 8, ri = ro * 0.6;
 
   // Build slices: positions + cash
   const slices = posArr.map((p, i) => ({
     label: p.sym, value: Math.max(0, p.value),
     color: PNL_COLORS[i % PNL_COLORS.length]
   }));
-  if (cashNow > 0) slices.push({ label: 'CASH', value: cashNow, color: 'rgba(212,184,122,0.7)' });
+  if (cashNow > 0) slices.push({ label: 'CASH', value: cashNow, color: 'rgba(228,200,140,0.85)' });
 
   const total = slices.reduce((s,x)=>s+x.value,0) || 1;
 
@@ -654,14 +654,18 @@ function _drawDonut(posArr, cashNow, netWorth) {
     ctx.arc(cx, cy, ro, ang+GAP/2, ang+sweep);
     ctx.arc(cx, cy, ri, ang+sweep, ang+GAP/2, true);
     ctx.closePath();
+    // Per-segment glow so the ring reads luminous against the near-black panel.
+    ctx.save();
+    ctx.shadowColor = s.color; ctx.shadowBlur = 8;
     ctx.fillStyle = s.color;
     ctx.fill();
+    ctx.restore();
     // label if slice > 8%
     if (s.value / total > 0.08) {
       const midA = ang + sweep/2 + GAP/2;
       const lr = (ro+ri)/2;
       const lx = cx + lr*Math.cos(midA), ly = cy + lr*Math.sin(midA);
-      ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.font = 'bold 8px monospace';
+      ctx.fillStyle = 'rgba(0,0,0,0.78)'; ctx.font = 'bold 8px monospace';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(s.label, lx, ly);
     }
@@ -669,13 +673,14 @@ function _drawDonut(posArr, cashNow, netWorth) {
   });
 
   // Centre: net worth
+  ctx.shadowBlur = 0;
   ctx.fillStyle = '#0a0804';
   ctx.beginPath(); ctx.arc(cx,cy,ri-2,0,Math.PI*2); ctx.fill();
   const fmtC = v => v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'k':v.toFixed(0);
-  ctx.fillStyle = '#d4b87a'; ctx.font = 'bold 13px monospace';
+  ctx.fillStyle = '#ffcf7a'; ctx.font = 'bold 13px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('Ƒ'+fmtC(netWorth), cx, cy-7);
-  ctx.fillStyle = 'rgba(212,184,122,0.4)'; ctx.font = '12px monospace';
+  ctx.fillStyle = 'rgba(230,200,140,0.55)'; ctx.font = '12px monospace';
   ctx.fillText('NET WORTH', cx, cy+7);
 }
 

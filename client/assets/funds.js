@@ -96,7 +96,7 @@ async function openFund(fundId) {
 // spp isolates trading performance from member cashflows. Series begins when
 // the server started snapshotting (v1.0.2.4), so new/old houses start sparse.
 // ── Performance: allocation donut + metrics (matches the player P&L) ─────
-const _GPAL = ['#4ecdc4','#e74c3c','#9b59b6','#2ecc71','#ffd700','#ff9a4a','#86ff6a','#c8a86a','#5dade2','#e59866'];
+const _GPAL = ['#5fe8de','#ff5b4d','#b56fe0','#3ff086','#ffe14d','#ffae5e','#9dff7d','#dcc28c','#6fc8f0','#f0a878'];
 
 function _gFmtC(v){ v=Number(v)||0; return v>=1e9?(v/1e9).toFixed(1)+'B':v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'k':v.toFixed(0); }
 
@@ -112,9 +112,9 @@ function renderFundDonut(f) {
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.fillStyle = '#0a0804'; ctx.fillRect(0,0,S,S);
 
-  const cx=S/2, cy=S/2, ro=S/2-10, ri=ro*0.58;
+  const cx=S/2, cy=S/2, ro=S/2-8, ri=ro*0.6;
   const slices = (f.holdings||[]).map((h,i)=>({ label:h.symbol, value:Math.max(0,h.value||0), color:_GPAL[i%_GPAL.length] }));
-  if ((f.cash||0) > 0) slices.push({ label:'CASH', value:f.cash, color:'rgba(212,184,122,0.7)' });
+  if ((f.cash||0) > 0) slices.push({ label:'CASH', value:f.cash, color:'rgba(228,200,140,0.85)' });
   const total = slices.reduce((s,x)=>s+x.value,0) || 0;
 
   if (total <= 0) {
@@ -134,20 +134,26 @@ function renderFundDonut(f) {
     ctx.moveTo(cx+ri*Math.cos(ang+GAP/2), cy+ri*Math.sin(ang+GAP/2));
     ctx.arc(cx,cy,ro,ang+GAP/2,ang+sweep);
     ctx.arc(cx,cy,ri,ang+sweep,ang+GAP/2,true);
-    ctx.closePath(); ctx.fillStyle=s.color; ctx.fill();
+    ctx.closePath();
+    // Per-segment glow so the ring reads luminous against the near-black panel.
+    ctx.save();
+    ctx.shadowColor=s.color; ctx.shadowBlur=8;
+    ctx.fillStyle=s.color; ctx.fill();
+    ctx.restore();
     if (s.value/total > 0.08) {
       const midA=ang+sweep/2+GAP/2, lr=(ro+ri)/2;
-      ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.font='bold 8px monospace';
+      ctx.fillStyle='rgba(0,0,0,0.78)'; ctx.font='bold 8px monospace';
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText(s.label, cx+lr*Math.cos(midA), cy+lr*Math.sin(midA));
     }
     ang += sweep+GAP;
   });
+  ctx.shadowBlur=0;
   ctx.fillStyle='#0a0804'; ctx.beginPath(); ctx.arc(cx,cy,ri-2,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#d4b87a'; ctx.font='bold 13px monospace';
+  ctx.fillStyle='#ffcf7a'; ctx.font='bold 13px monospace';
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText('Ƒ'+_gFmtC(f.nav), cx, cy-7);
-  ctx.fillStyle='rgba(212,184,122,0.4)'; ctx.font='12px monospace';
+  ctx.fillStyle='rgba(230,200,140,0.55)'; ctx.font='12px monospace';
   ctx.fillText('NAV', cx, cy+7);
 }
 

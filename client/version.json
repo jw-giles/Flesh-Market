@@ -1,7 +1,7 @@
 {
-  "version": "1.0.4.1",
+  "version": "1.1.0.0",
   "built": "2026-06-01T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.4.1",
-  "notes": "P&L sector control reworked into a single themed dropdown on both personal P&L and Capital House: \"All positions\", \"Grouped by sector\", and every sector listed by name (Finance, Biotech, Insurance, Manufacturing, Energy, Logistics, Tech, Misc) to filter the list and %-move bars to one sector. Styled to match the panel (gold accent, custom caret) instead of a bare full-width select. Builds on the 1.0.4.0 free Skiff, commodity shipping rebalance + escorts, and simulated 45-50% risk ceiling."
+  "patch": "1.1.0.0",
+  "notes": "Major content drop: free starter Skiff (every account can buy/ship/sell commodities instantly), commodity-shipping overhaul (lower risk tuned to a 45-50% ceiling for the riskiest hauls) with hireable guard escorts, P&L sector tools (filter or group by named sector on personal P&L and Capital House), and brighter allocation donuts with per-segment glow on both panels."
 }

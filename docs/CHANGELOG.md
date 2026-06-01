@@ -4,43 +4,28 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
-## v1.0.4.1 (2026-06-01) — P&L sector control: named sectors + themed dropdown
+## v1.1.0.0 (2026-06-01) — major content drop: free starter ship, shipping overhaul + escorts, P&L sector tools, brighter donuts
 
-The 1.0.4.0 sector sort was a bare two-option select (`default` / `by sector`) stretched full-width next to the search box — it read as cobbled-together and only offered a binary group toggle.
+A single large release consolidating the post-governance sprint. Four things land together.
 
-Reworked into one control on both the personal P&L and the Capital House portfolio:
-- Options are now `All positions` / `Grouped by sector`, plus an optgroup listing every sector by name (Finance, Biotech, Insurance, Manufacturing, Energy, Logistics, Tech, Misc). Picking a sector filters the row list **and** the %-move bars to that sector only; "Grouped by sector" keeps the cluster-by-sector ordering with a faint per-row sector tag.
-- New `.sector-select` style (`style.css`): panel-matched dark fill, gold border that brightens on hover/focus, custom SVG caret, styled `option`/`optgroup`. Search box + select sit in a tidy `.pnl-ctl` flex row.
-- `core.js`: `_pnlSort` replaced by `_pnlArrange` (search + sector filter/group in one pass, shared by bars and list); `pnlApplySort` accepts `default` / `group` / sector index. Empty states read "No positions in <sector>" when a sector filter is active.
-- `funds.js`: mirror — `_gSortHoldings` → `_gArrange`; `guildHoldingsSort` accepts the same values; sector-aware empty messages for list and bars.
-- Sector indices/names come from `window.TICKERS` `.sector` + `V5_SECTOR_NAMES`; the dropdown values are the sector indices (0–7), so labels and tags stay consistent.
-
-No server changes; purely a client reorder/relabel of already-computed rows.
-
----
-
-## v1.0.4.0 (2026-06-01) — free starter ship, commodity-shipping rebalance + escorts, P&L sector sort
-
-Three changes in one pass.
-
-**Free starter Skiff.** New accounts (and any existing account that never commissioned a ship) were locked out of the entire commodity loop — `/api/commodities/buy`, `/api/commodities/sell`, and `/api/cargo/ship` all hard-gate on `shipClassFor()`, which returned `null` until you spent Ƒ150k on a Courier. Added a free `skiff` class scaled off the Courier row (capacity 2,500u = 25% of Courier, `riskMod` +0.03, `price` 0) and made `shipClassFor()` fall back to it instead of returning null. `/api/ships` now floors `owned` to `skiff`, and `/api/ships/buy` rejects `classId==='skiff'` (`starter_ship`) since it's the floor, not an upgrade. No DB migration: the fallback is virtual, so the Skiff is never persisted and the first real purchase still sets `ship_class` normally. The client Shipyard already renders any `price<=0` class as a non-buyable "Starter ship," so it shows as ACTIVE for new players with no UI change.
+**Free starter Skiff.** New accounts (and any existing account that never commissioned a ship) were locked out of the entire commodity loop — `/api/commodities/buy`, `/api/commodities/sell`, and `/api/cargo/ship` all hard-gate on `shipClassFor()`, which returned `null` until you spent Ƒ150k on a Courier. Added a free `skiff` class scaled off the Courier row (capacity 2,500u = 25% of Courier, `riskMod` +0.03, `price` 0) and made `shipClassFor()` fall back to it instead of returning null. `/api/ships` floors `owned` to `skiff`; `/api/ships/buy` rejects `classId==='skiff'` (`starter_ship`) since it's the floor, not an upgrade. No DB migration — the fallback is virtual, so the Skiff is never persisted and the first real purchase still sets `ship_class` normally. The Shipyard renders any `price<=0` class as a non-buyable "Starter ship," so it shows as ACTIVE for new players with no UI change.
 
 **Commodity interception rebalanced.** The "40–55% no matter the lane" was the lane base being swamped by stacked modifiers, not the lane itself. Fixes in `cargoShipmentInterceptChance()` and the two cargo endpoints, tuned via Monte Carlo over the weighted run space so the riskiest unescorted hauls land in a 45–50% band with a hard 50% backstop:
 - Cargo-value scaling no longer reuses the steep abstract `shippingBetRisk` curve (0/0.05/0.10/0.15). New `CARGO_VALUE_RISK_TIERS`: 0 / +3% / +5% / +7% at Ƒ25k / 100k / 500k / ∞.
 - Fly-by risk cut from 5% to 2.5% per extra hop.
 - Lane factor trimmed from `laneRisk.intercept * 0.4` to `* 0.35` (lane ordering corporate→dark preserved).
-- Tension divisor raised 1500→1800 (max tension contributes ~5% instead of ~6.7%).
+- Tension divisor raised 1500→1800 (max tension ~5% instead of ~6.7%).
 - Blockade surcharge cut from +10% to +6%.
-- Inner clamp 0.60→0.52; final clamp 0.70→**0.50** as the hard ceiling, floor 2%→3% so a fully-escorted corporate run keeps a sliver of risk.
+- Inner clamp 0.60→0.52; final clamp 0.70→**0.50** hard ceiling, floor 2%→3% so a fully-escorted corporate run keeps a sliver of risk.
 - Simulated outcome (200k runs): all-runs median ~18%, p99 39%; risky subset (dark/contested, ≥100k, no escort) p99 46%, max 50%; lane means corp 14% / grey 18% / contested 22% / dark 27%.
 
-**Shipping escorts.** Added guard escorts to the commodity shipping console, reusing the smuggling `GUARD_TIERS` verbatim (None / Light -8% / Armed Convoy -16% / Private Army -26%). Fee is the tier `feeFrac` × cargo value, paid up front and lost if intercepted (the escort dies with the cargo). The cut is baked into the stored `interceptChance`, so the resolution roll already reflects it — no schema change. Plumbed through `/api/cargo/quote` (`?guard=`) and `/api/cargo/ship` (`guardTier` in body); quote returns `guardFee`/`guardCut`. Console gains an Escort selector; preview shows the cut and the fee.
+**Shipping escorts.** Added guard escorts to the commodity shipping console, reusing the smuggling `GUARD_TIERS` verbatim (None / Light -8% / Armed Convoy -16% / Private Army -26%). Fee is `feeFrac` × cargo value, paid up front and lost if intercepted (the escort dies with the cargo). The cut is baked into the stored `interceptChance`, so the resolution roll reflects it — no schema change. Plumbed through `/api/cargo/quote` (`?guard=`) and `/api/cargo/ship` (`guardTier` in body); quote returns `guardFee`/`guardCut`. Console gains an Escort selector; preview shows the cut and fee. Worked example, dark 3-hop 800k haul: unescorted 48%, Light 40% (Ƒ32k), Armed Convoy 32% (Ƒ80k), Private Army 22% (Ƒ176k).
 
-Worked example, dark 3-hop 800k haul: unescorted 48%, Light 40% (fee Ƒ32k), Armed Convoy 32% (Ƒ80k), Private Army 22% (Ƒ176k). The escort fee on a big manifest is real money, so heavy escort on a thin spread is deliberately not worth it — the call is yours to pen-and-paper.
+**P&L sector tools.** Personal P&L (`core.js`) and the Capital House portfolio (`funds.js`) gained a themed sector control beside the search box: `All positions` / `Grouped by sector` plus every sector listed by name (Finance, Biotech, Insurance, Manufacturing, Energy, Logistics, Tech, Misc). Picking a sector filters the row list **and** the %-move bars to that sector; "Grouped" clusters by sector with a faint per-row tag. New `.sector-select` style (panel-matched fill, gold border, custom caret). `_pnlArrange` / `_gArrange` apply search + sector filter/group in one pass shared by bars and list; sector-aware empty states. Sector indices/names come from `window.TICKERS` `.sector` + `V5_SECTOR_NAMES`.
 
-**P&L sortable by sector.** Personal P&L (`core.js`) and Capital House guild portfolio (`funds.js`) both gained a "Sort: by sector" dropdown beside the existing filter. Sort groups holdings by the ticker's `sector` index (from `window.TICKERS` / `V5_SECTOR_NAMES`), then ticker A→Z, applied to both the position list and the %-move bar chart. In sector mode each row gets a faint sector tag. Filters and live re-pricing are unchanged; sort is purely a reordering of the already-computed rows.
+**Brighter allocation donuts.** Both the personal P&L net-worth donut (`_drawDonut`) and the Capital House NAV donut (`renderFundDonut`) drew flat opaque slices on the near-black panel and read as dim. Now each slice fills with a per-segment glow (`shadowColor`/`shadowBlur 8`), the rings are slightly bolder (outer radius +2px, inner ratio 0.6), center text is warmer (`#ffcf7a` value, soft tan label), and the cash slice is lifted. The guild palette (`_GPAL`) was brightened; the personal palette is unchanged but gains the glow.
 
-Scope: all exploitable paths stay server-authoritative. Guard cut and value scaling are computed server-side; the client only mirrors them for preview.
+Scope: all exploitable paths stay server-authoritative. Guard cut and value scaling are computed server-side; the client only mirrors them for preview. Donut and sector changes are client-side reorders/redraws of already-computed data.
 
 ---
 
