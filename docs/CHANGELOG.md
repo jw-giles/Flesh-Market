@@ -4,7 +4,33 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.0.4.0 (2026-06-01) — free starter ship, commodity-shipping rebalance + escorts, P&L sector sort
+
+Three changes in one pass.
+
+**Free starter Skiff.** New accounts (and any existing account that never commissioned a ship) were locked out of the entire commodity loop — `/api/commodities/buy`, `/api/commodities/sell`, and `/api/cargo/ship` all hard-gate on `shipClassFor()`, which returned `null` until you spent Ƒ150k on a Courier. Added a free `skiff` class scaled off the Courier row (capacity 2,500u = 25% of Courier, `riskMod` +0.03, `price` 0) and made `shipClassFor()` fall back to it instead of returning null. `/api/ships` now floors `owned` to `skiff`, and `/api/ships/buy` rejects `classId==='skiff'` (`starter_ship`) since it's the floor, not an upgrade. No DB migration: the fallback is virtual, so the Skiff is never persisted and the first real purchase still sets `ship_class` normally. The client Shipyard already renders any `price<=0` class as a non-buyable "Starter ship," so it shows as ACTIVE for new players with no UI change.
+
+**Commodity interception rebalanced.** The "40–55% no matter the lane" was the lane base being swamped by stacked modifiers, not the lane itself. Fixes in `cargoShipmentInterceptChance()` and the two cargo endpoints, tuned via Monte Carlo over the weighted run space so the riskiest unescorted hauls land in a 45–50% band with a hard 50% backstop:
+- Cargo-value scaling no longer reuses the steep abstract `shippingBetRisk` curve (0/0.05/0.10/0.15). New `CARGO_VALUE_RISK_TIERS`: 0 / +3% / +5% / +7% at Ƒ25k / 100k / 500k / ∞.
+- Fly-by risk cut from 5% to 2.5% per extra hop.
+- Lane factor trimmed from `laneRisk.intercept * 0.4` to `* 0.35` (lane ordering corporate→dark preserved).
+- Tension divisor raised 1500→1800 (max tension contributes ~5% instead of ~6.7%).
+- Blockade surcharge cut from +10% to +6%.
+- Inner clamp 0.60→0.52; final clamp 0.70→**0.50** as the hard ceiling, floor 2%→3% so a fully-escorted corporate run keeps a sliver of risk.
+- Simulated outcome (200k runs): all-runs median ~18%, p99 39%; risky subset (dark/contested, ≥100k, no escort) p99 46%, max 50%; lane means corp 14% / grey 18% / contested 22% / dark 27%.
+
+**Shipping escorts.** Added guard escorts to the commodity shipping console, reusing the smuggling `GUARD_TIERS` verbatim (None / Light -8% / Armed Convoy -16% / Private Army -26%). Fee is the tier `feeFrac` × cargo value, paid up front and lost if intercepted (the escort dies with the cargo). The cut is baked into the stored `interceptChance`, so the resolution roll already reflects it — no schema change. Plumbed through `/api/cargo/quote` (`?guard=`) and `/api/cargo/ship` (`guardTier` in body); quote returns `guardFee`/`guardCut`. Console gains an Escort selector; preview shows the cut and the fee.
+
+Worked example, dark 3-hop 800k haul: unescorted 48%, Light 40% (fee Ƒ32k), Armed Convoy 32% (Ƒ80k), Private Army 22% (Ƒ176k). The escort fee on a big manifest is real money, so heavy escort on a thin spread is deliberately not worth it — the call is yours to pen-and-paper.
+
+**P&L sortable by sector.** Personal P&L (`core.js`) and Capital House guild portfolio (`funds.js`) both gained a "Sort: by sector" dropdown beside the existing filter. Sort groups holdings by the ticker's `sector` index (from `window.TICKERS` / `V5_SECTOR_NAMES`), then ticker A→Z, applied to both the position list and the %-move bar chart. In sector mode each row gets a faint sector tag. Filters and live re-pricing are unchanged; sort is purely a reordering of the already-computed rows.
+
+Scope: all exploitable paths stay server-authoritative. Guard cut and value scaling are computed server-side; the client only mirrors them for preview.
+
+---
+
 ## v1.0.3.9 (2026-05-31) — guild Portfolio: live-priced holdings + %-move bars
+
 
 The Capital House Portfolio pane only rendered holdings on `openFund`/`fund_update` (fund trades, deposits), so between those events the prices were stale and you couldn't watch companies move. `fund_holdings` stores only `(symbol, qty)` — no cost basis — so there's no gain-vs-entry to show; the available, and more relevant, metric is today's % move.
 

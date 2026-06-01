@@ -203,6 +203,29 @@ async function renderFundPerformance(fundId) {
 }
 
 window.__guildHoldSearch = window.__guildHoldSearch || '';
+window.__guildHoldSort = window.__guildHoldSort || 'default'; // 'default' | 'sector'
+
+// Sector index + readable name for a symbol, from the live market snapshot.
+function _gSectorOf(sym){
+  try {
+    const t = (window.TICKERS||[]).find(x => x && String(x.symbol) === String(sym));
+    if (t && t.sector != null) return Number(t.sector);
+  } catch(e){}
+  return 99;
+}
+function _gSectorName(idx){
+  const names = window.V5_SECTOR_NAMES || [];
+  return (idx != null && names[idx]) ? names[idx] : 'Misc';
+}
+// Sort holding rows into sector groups, then ticker A→Z, when sector sort is on.
+function _gSortHoldings(rows){
+  if (window.__guildHoldSort !== 'sector') return rows;
+  return rows.slice().sort((a,b) => {
+    const sa = _gSectorOf(a.symbol), sb = _gSectorOf(b.symbol);
+    if (sa !== sb) return sa - sb;
+    return String(a.symbol).localeCompare(String(b.symbol));
+  });
+}
 
 // Live price + today's % for a symbol from the global market snapshot.
 function _gLive(sym){
@@ -238,12 +261,14 @@ function _renderGuildHoldings(f){
     if (!rowsAll.length){
       hBox.innerHTML = '<span style="opacity:.4">No positions</span>';
     } else {
-      const rows = rowsAll.filter(h => !q || String(h.symbol||'').toLowerCase().includes(q));
+      const rows = _gSortHoldings(rowsAll.filter(h => !q || String(h.symbol||'').toLowerCase().includes(q)));
+      const bySector = window.__guildHoldSort === 'sector';
       hBox.innerHTML = rows.length
         ? rows.map(h => {
             const sign = h.pct >= 0 ? '+' : '';
             const col  = h.pct >= 0 ? '#86ff6a' : '#ff6b6b';
-            return `<div class="ticker"><span class="sym">${h.symbol}</span>`
+            const secTag = bySector ? ` <span style="font-size:.6rem;color:#7a6a4a;letter-spacing:.04em">${_gSectorName(_gSectorOf(h.symbol))}</span>` : '';
+            return `<div class="ticker"><span class="sym">${h.symbol}${secTag}</span>`
               + `<span style="display:flex;gap:12px;align-items:baseline;justify-content:flex-end">`
               + `<span style="color:#d4b87a">Ƒ${h.price.toFixed(2)}</span>`
               + `<span style="color:${col};min-width:64px;text-align:right">${sign}${h.pct.toFixed(2)}%</span>`
@@ -259,6 +284,11 @@ function _renderGuildHoldings(f){
 
 window.guildHoldingsSearch = function(v){
   window.__guildHoldSearch = (v||'').trim().toLowerCase();
+  if (__currentFundData) _renderGuildHoldings(__currentFundData);
+};
+
+window.guildHoldingsSort = function(v){
+  window.__guildHoldSort = (v === 'sector') ? 'sector' : 'default';
   if (__currentFundData) _renderGuildHoldings(__currentFundData);
 };
 
@@ -302,7 +332,7 @@ function _drawGuildBars(rowsIn){
   const canvas = document.getElementById('g-pnl-bars');
   if (!canvas) return;
   const q = window.__guildHoldSearch;
-  const rows = (rowsIn||[]).filter(h => !q || String(h.symbol||'').toLowerCase().includes(q));
+  const rows = _gSortHoldings((rowsIn||[]).filter(h => !q || String(h.symbol||'').toLowerCase().includes(q)));
 
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.clientWidth || (canvas.parentElement && canvas.parentElement.clientWidth) || 400;

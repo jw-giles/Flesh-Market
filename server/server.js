@@ -720,16 +720,23 @@ const COMMODITY_SUPPLY_DECAY = 0.04; // per tick, supply pressure relaxes toward
 // ─── SHIP CLASSES ─────────────────────────────────────────────────────────────
 // One owned hauler per player sets cargo capacity, transit risk, and (cosmetically)
 // the variant shown. Everyone starts with a Courier.
+// Every account is born with the Skiff: a free Class-0 frame scaled down off the
+// Courier row (25% hold, slightly riskier, zero cost). It is the floor, not a
+// purchasable upgrade — it exists so a brand-new player can buy, ship and sell
+// commodities the moment they log in instead of being gated behind Ƒ150k.
+const STARTER_SHIP_ID = 'skiff';
 const SHIP_CLASSES = {
+  skiff:     { id:'skiff',     name:'Skiff',     variant:'v0', capacity:2500,  price:0,         riskMod:0.03, desc:'Class-0 issue skiff. Tiny unarmored hold, free with every berth.' },
   courier:   { id:'courier',   name:'Courier',   variant:'v1', capacity:10000, price:150_000,   riskMod:0.00, desc:'Class-1 courier frame. Cheap, nimble, modest hold.' },
   freighter: { id:'freighter', name:'Freighter', variant:'v2', capacity:35000, price:1_500_000, riskMod:0.02, desc:'Mid-bulk hauler. Bigger hold, a fatter target.' },
   hauler:    { id:'hauler',    name:'Hauler',    variant:'v3', capacity:70000, price:5_000_000, riskMod:0.04, desc:'Heavy freight. Massive hold, slow and conspicuous.' },
 };
-// Returns the player's owned ship class, or null if they don't own one yet.
+// Returns the player's owned ship class. Players who have never commissioned a
+// ship fall back to the free Skiff so the commodity game is usable instantly.
 function shipClassFor(playerId) {
   let c = '';
   try { c = getPlayerShipClass(playerId) || ''; } catch(_){}
-  return SHIP_CLASSES[c] || null;
+  return SHIP_CLASSES[c] || SHIP_CLASSES[STARTER_SHIP_ID];
 }
 
 // ─── SHIPMENT PHASES ──────────────────────────────────────────────────────────
@@ -762,6 +769,21 @@ const SHIPPING_BET_TIERS = [
 function shippingBetRisk(amt) {
   for (const t of SHIPPING_BET_TIERS) { if (amt <= t.max) return t.extra; }
   return 0.15;
+}
+
+// Commodity-arbitrage haul value scaling. Far gentler than the abstract
+// shippingBetRisk above: legal hauling is the steady-income path, so a big
+// manifest should draw *some* extra attention without the +15% cliff that made
+// every worthwhile haul read as a coin-flip. Higher thresholds, smaller steps.
+const CARGO_VALUE_RISK_TIERS = [
+  { max: 25_000,   extra: 0.00 },
+  { max: 100_000,  extra: 0.03 },
+  { max: 500_000,  extra: 0.05 },
+  { max: Infinity, extra: 0.07 },
+];
+function cargoValueRisk(value) {
+  for (const t of CARGO_VALUE_RISK_TIERS) { if (value <= t.max) return t.extra; }
+  return 0.09;
 }
 
 // Insurance premium scales with shipment size
@@ -1212,7 +1234,7 @@ function cargoShipmentInterceptChance(playerId, from, to, laneType, qty, unitVal
   const fromState = getColonyState(from) || {};
   const toState   = getColonyState(to)   || {};
   const avgTension = ((fromState.tension||0) + (toState.tension||0)) / 2;
-  const tensionMod = avgTension / 1500;
+  const tensionMod = avgTension / 1800;
   let factionMod = 0;
   let playerFaction = null;
   try { playerFaction = getPlayerFaction(playerId); } catch(_){}
@@ -1225,13 +1247,17 @@ function cargoShipmentInterceptChance(playerId, from, to, laneType, qty, unitVal
     if (fromLead !== playerFaction) factionMod += 0.02;
     if (toLead   !== playerFaction) factionMod += 0.02;
   }
-  // Cargo value scaling: bigger hauls draw more attention (mirrors shippingBetRisk).
+  // Cargo value scaling: bigger hauls draw more attention. Uses the gentle
+  // commodity-haul tiers, not the steep abstract shippingBetRisk curve.
   const cargoValue = qty * unitValue;
-  const valRisk = shippingBetRisk(cargoValue);
+  const valRisk = cargoValueRisk(cargoValue);
   const blk = activeBlockades.get(getLaneKey(from, to));
-  const blockadeMod = (blk && blk.active) ? 0.10 : 0;
-  return Math.min(0.60, Math.max(0.02,
-    SHIPPING_BASE_RISK + laneRisk.intercept * 0.4 + tensionMod + factionMod + valRisk + blockadeMod));
+  const blockadeMod = (blk && blk.active) ? 0.06 : 0;
+  // Floor at 0.03 (not 0.02): even a fully-escorted corporate run keeps a sliver
+  // of risk, so shipping never becomes a literally free money pump. Inner cap 0.52
+  // so that, after the ship/fly-by adders, the riskiest unescorted run lands ~50%.
+  return Math.min(0.52, Math.max(0.03,
+    SHIPPING_BASE_RISK + laneRisk.intercept * 0.35 + tensionMod + factionMod + valRisk + blockadeMod));
 }
 
 // Apply an interception outcome (cargo lost; ship survives, returns empty).
@@ -3754,7 +3780,8 @@ app.get('/api/ships', (req, res) => {
   try {
     const tok = tokenFrom(req);
     const p   = tok ? getPlayer(tok) : null;
-    const owned = p ? (getPlayerShipClass(p.id) || '') : '';
+    // Floor to the free Skiff so a never-purchased account still shows an active ship.
+    const owned = p ? (getPlayerShipClass(p.id) || STARTER_SHIP_ID) : '';
     const classes = Object.values(SHIP_CLASSES).map(s => ({ id:s.id, name:s.name, variant:s.variant, capacity:s.capacity, price:s.price, riskMod:s.riskMod, desc:s.desc }));
     res.json({ ok:true, owned, classes });
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
@@ -3769,7 +3796,8 @@ app.post('/api/ships/buy', (req, res) => {
     const classId = String(req.body?.classId||'');
     const ship = SHIP_CLASSES[classId];
     if (!ship) return res.status(400).json({ ok:false, error:'unknown_class' });
-    const owned = getPlayerShipClass(p.id) || '';
+    if (classId === STARTER_SHIP_ID) return res.status(400).json({ ok:false, error:'starter_ship' });
+    const owned = getPlayerShipClass(p.id) || STARTER_SHIP_ID;
     if (owned === classId) return res.status(400).json({ ok:false, error:'already_owned' });
     if ((p.cash||0) < ship.price) return res.status(400).json({ ok:false, error:'insufficient_funds', need:ship.price, have:p.cash });
     p.cash = Math.round((p.cash - ship.price) * 100) / 100;
@@ -3802,19 +3830,25 @@ app.get('/api/cargo/quote', (req, res) => {
     // Unit cost: player's avg at origin if held, else current price.
     let unitCost = getCommodityPrice(from, commodityId)?.price || com.basePrice;
     if (p) { const cr = getPlayerCargo(p.id).find(r => r.commodity_id===commodityId && r.colony_id===from); if (cr) unitCost = cr.avg_cost; }
-    const flyByRisk = (hops - 1) * 0.05;
+    const flyByRisk = (hops - 1) * 0.025;
     const ship = p ? shipClassFor(p.id) : null;
     const shipMod = ship ? (ship.riskMod||0) : 0;
+    // Guard escort (same tiers as smuggling): cuts the roll, fee is a % of cargo value.
+    const guardTier = GUARD_BY_ID[req.query.guard] ? String(req.query.guard) : 'none';
+    const guardCut = guardRiskCut(guardTier);
+    const buyCost = Math.round(unitCost * qty * 100) / 100;
+    const gFee = guardFee(guardTier, buyCost);
     // If we have a player, use their faction-aware risk; otherwise base estimate.
     let interceptChance;
     if (p) interceptChance = cargoShipmentInterceptChance(p.id, from, to, routeLaneType, qty, unitCost);
     else   interceptChance = cargoShipmentInterceptChance('', from, to, routeLaneType, qty, unitCost);
-    interceptChance = Math.min(0.70, Math.max(0.02, interceptChance + shipMod + flyByRisk));
+    interceptChance = Math.min(0.50, Math.max(0.03, interceptChance + shipMod + flyByRisk - guardCut));
     const totalMs = SHIPMENT_TOTAL_MS * hops;
     res.json({ ok:true, hops, route: route.path, laneType: routeLaneType,
       durSec: Math.round(totalMs/1000), durMin: Math.round(totalMs/60000),
       interceptChance: Math.round(interceptChance*100),
       flyByRisk: Math.round(flyByRisk*100),
+      guardTier, guardFee: gFee, guardCut: Math.round(guardCut*100),
       hasShip: !!ship, shipName: ship?ship.name:null });
   } catch(e) { res.json({ ok:false, error:String(e) }); }
 });
@@ -3862,8 +3896,12 @@ app.post('/api/cargo/ship', (req, res) => {
       const rate = insurancePremiumRate(buyCost);
       insurancePaid = Math.round(buyCost * rate * 100) / 100;
     }
-    const upfront = insurancePaid + returnCost;
-    if ((p.cash||0) < upfront) return res.status(400).json({ ok:false, error:'insufficient_funds', need:upfront, returnCost, insurancePaid });
+    // Guard escort: same tiers as smuggling. Fee is a % of cargo value, paid up
+    // front and gone if the run is intercepted (the escort dies with the cargo).
+    const guardTier = GUARD_BY_ID[req.body?.guardTier] ? String(req.body.guardTier) : 'none';
+    const gFee = guardFee(guardTier, buyCost);
+    const upfront = insurancePaid + returnCost + gFee;
+    if ((p.cash||0) < upfront) return res.status(400).json({ ok:false, error:'insufficient_funds', need:upfront, returnCost, insurancePaid, guardFee:gFee });
     p.cash = Math.round((p.cash - upfront) * 100) / 100;
     savePlayer(p);
 
@@ -3871,10 +3909,12 @@ app.post('/api/cargo/ship', (req, res) => {
     removeCargo(p.id, commodityId, qty, from);
 
     // Interception chance, plus the ship-class risk modifier. Multi-hop adds a small
-    // fly-by risk per extra hop (5% each) for skipping past colonies without docking.
-    const flyByRisk = (hops - 1) * 0.05;
+    // fly-by risk per extra hop (2.5% each) for skipping past colonies without docking.
+    // Guard escort cut is baked into the stored chance, so the resolution roll uses it.
+    const flyByRisk = (hops - 1) * 0.025;
+    const guardCut = guardRiskCut(guardTier);
     let interceptChance = cargoShipmentInterceptChance(p.id, from, to, routeLaneType, qty, unitCost);
-    interceptChance = Math.min(0.70, Math.max(0.02, interceptChance + (ship.riskMod || 0) + flyByRisk));
+    interceptChance = Math.min(0.50, Math.max(0.03, interceptChance + (ship.riskMod || 0) + flyByRisk - guardCut));
     const now = Date.now();
     // Each hop is a full leg, so total transit scales with hop count
     // (3 hops = 30 min, not 10). Phases still step across the whole journey.
@@ -3889,7 +3929,7 @@ app.post('/api/cargo/ship', (req, res) => {
 
     res.json({ ok:true, id, qty, from, to, laneType:routeLaneType, hops,
       route: route.path, durSec:Math.round(totalMs/1000), resolveTs,
-      insured:wantInsurance, insurancePaid, returnCost, ship:ship.name,
+      insured:wantInsurance, insurancePaid, returnCost, guardTier, guardFee:gFee, ship:ship.name,
       interceptChance:Math.round(interceptChance*100),
       cash:p.cash, cargo:cargoSnapshot(p.id) });
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }

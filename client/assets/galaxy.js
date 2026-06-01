@@ -2047,6 +2047,13 @@ function renderMarketsTab(){
           +'<select id="gShipConTo" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
         +'<div style="flex:0 0 80px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">Qty</div>'
           +'<input id="gShipConQty" type="number" min="1" value="10" oninput="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"></div>'
+        +'<div style="flex:1;min-width:140px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">Escort</div>'
+          +'<select id="gShipConGuard" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'
+            +'<option value="none">No escort \u2014 free</option>'
+            +'<option value="light">Light escort \u2014 4% fee, -8% risk</option>'
+            +'<option value="medium">Armed convoy \u2014 10% fee, -16% risk</option>'
+            +'<option value="heavy">Private army \u2014 22% fee, -26% risk</option>'
+          +'</select></div>'
         +'<button onclick="window.gShipConsoleGo()" style="flex:0 0 auto;background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:7px 16px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">SHIP</button>'
       +'</div>'
       +'<div id="gShipConPreview" style="font-size:.68rem;color:#888;margin-top:8px;min-height:15px;padding:6px 8px;background:#070710;border:1px solid #14141f;border-radius:3px">Select a commodity and two colonies to preview the route and risk.</div>'
@@ -2262,9 +2269,11 @@ window.gShipQuote = function(){
     if(!comId){ prev.innerHTML='<span style="color:#777">Pick a commodity to preview the route.</span>'; return; }
     if(from.value===to.value){ prev.innerHTML='<span style="color:#c0392b">Origin and destination must differ.</span>'; return; }
     var qty=Math.max(1,Math.floor(Number(qtyI&&qtyI.value)||1));
+    var guardEl=document.getElementById('gShipConGuard');
+    var guard=(guardEl&&guardEl.value)||'none';
     var nm=window._gColNameOf||function(x){return x;};
     prev.innerHTML='<span style="color:#666">Calculating route\u2026</span>';
-    var qs='commodityId='+encodeURIComponent(comId)+'&from='+encodeURIComponent(from.value)+'&to='+encodeURIComponent(to.value)+'&qty='+qty+(gToken?'&token='+encodeURIComponent(gToken):'');
+    var qs='commodityId='+encodeURIComponent(comId)+'&from='+encodeURIComponent(from.value)+'&to='+encodeURIComponent(to.value)+'&qty='+qty+'&guard='+encodeURIComponent(guard)+(gToken?'&token='+encodeURIComponent(gToken):'');
     fetch('/api/cargo/quote?'+qs).then(function(r){return r.json();}).then(function(d){
       if(!d.ok){
         var msg=d.error==='no_lane'?'No route exists between those colonies.':d.error==='same_colony'?'Pick two different colonies.':(d.error||'No route.');
@@ -2279,6 +2288,8 @@ window.gShipQuote = function(){
         +'<span style="color:#9ab">Time:</span> <span style="color:#ccc">~'+d.durMin+' min</span> '
         +'&nbsp;&nbsp;<span style="color:#9ab">Risk:</span> <span style="color:'+rc+';font-weight:700">'+risk+'%</span>'
         +(d.flyByRisk>0?' <span style="color:#777">(+'+d.flyByRisk+'% fly-by)</span>':'')
+        +((d.guardCut>0)?' <span style="color:#2ecc71">(\u2212'+d.guardCut+'% escort)</span>':'')
+        +((d.guardFee>0)?'<br><span style="color:#9ab">Escort fee:</span> <span style="color:#e6c27a">\u0192'+Number(d.guardFee).toLocaleString()+'</span> <span style="color:#555">(lost if intercepted)</span>':'')
         +(d.hasShip?'':' <span style="color:#e74c3c">\u2014 no ship yet</span>');
       prev.innerHTML=html;
     }).catch(function(){ prev.innerHTML='<span style="color:#777">Could not load route preview.</span>'; });
@@ -2299,8 +2310,10 @@ window.gShipConsoleGo = function(){
   if(!comId){ if(hint){hint.textContent='\u2717 Pick a commodity from the list';hint.style.color='#ff6b6b';} return; }
   var qty=Math.max(1,Math.floor(Number(qtyI.value)||0));
   if(from.value===to.value){ if(hint){hint.textContent='\u2717 Pick two different colonies';hint.style.color='#ff6b6b';} return; }
+  var guardEl=document.getElementById('gShipConGuard');
+  var guard=(guardEl&&guardEl.value)||'none';
   fetch('/api/cargo/ship',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({token:gToken,commodityId:comId,from:from.value,to:to.value,qty:qty})})
+    body:JSON.stringify({token:gToken,commodityId:comId,from:from.value,to:to.value,qty:qty,guardTier:guard})})
     .then(function(r){return r.json();}).then(function(d){
       if(!d.ok){
         var msg=d.error==='no_ship'?'Commission a ship first (Shipyard below)':

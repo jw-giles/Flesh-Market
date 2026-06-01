@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3.9",
-  "built": "2026-05-31T00:00:00Z",
+  "version": "1.0.4.0",
+  "built": "2026-06-01T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.0.3.9",
-  "notes": "Guild (Capital House) Portfolio now shows real-time price shifts of its holdings: each position is re-marked at the live market price every tick with today's % move (color-coded), and a per-holding %-move bar chart with a pinned scale mirrors the personal P&L view. Funds store only symbol+qty (no cost basis), so the metric is today's % change rather than gain-vs-entry. Filter box and scroll carry over from 1.0.3.8. Fund NAV, cash, and per-share stay server-authoritative and update on fund events; only the holdings rows/bars are re-priced live on the client."
+  "patch": "1.0.4.0",
+  "notes": "Free starter Skiff so every account can buy/ship/sell commodities instantly (scaled off the Courier row: 2,500u hold, +3% risk, zero cost; not purchasable, it is the floor). Commodity-haul interception rebalanced via simulation so the riskiest unescorted hauls land in a 45-50% band with a hard 50% backstop: value scaling cap +7% (was +15%), fly-by 2.5%/hop, lane factor x0.35, tension /1800, blockade +6%, final clamp 0.50, 3% residual floor. Lane ordering corporate->dark preserved; sim median ~18%, p99 39%. Guard escorts (Light/Armed Convoy/Private Army, same tiers as smuggling) added to the shipping console, priced as a percent of cargo value, baked into the roll and lost if intercepted. P&L position lists and %-move bars now sortable by sector (personal + Capital House guild)."
 }

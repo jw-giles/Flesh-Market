@@ -711,7 +711,7 @@ function _drawBarsAxis(W, maxAbs) {
 function _drawBars(posArrIn) {
   const canvas = document.getElementById('pnl-bars');
   if (!canvas) return;
-  const posArr = (posArrIn || []).filter(p => _pnlMatch(p.sym));
+  const posArr = _pnlSort((posArrIn || []).filter(p => _pnlMatch(p.sym)));
 
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.clientWidth || (canvas.parentElement && canvas.parentElement.clientWidth) || 400;
@@ -850,10 +850,37 @@ function _buildPosArr(tickData, portfolioSnap) {
 
 // ─── P&L position filter (search box) ───────────────────────────────────────
 window.__pnlSearch = window.__pnlSearch || '';
+window.__pnlSort = window.__pnlSort || 'default'; // 'default' | 'sector'
 function _pnlMatch(sym){
   const q = window.__pnlSearch;
   return !q || String(sym||'').toLowerCase().includes(q);
 }
+// Sector index + readable name for a symbol, pulled from the live market snapshot.
+function _sectorOf(sym){
+  try {
+    const t = (window.TICKERS||[]).find(x => x && String(x.symbol) === String(sym));
+    if (t && t.sector != null) return Number(t.sector);
+  } catch(e){}
+  return 99; // unknown sorts last
+}
+function _sectorName(idx){
+  const names = window.V5_SECTOR_NAMES || [];
+  return (idx != null && names[idx]) ? names[idx] : 'Misc';
+}
+// Apply the active sort to a position array (sector groups, then ticker A→Z).
+function _pnlSort(arr){
+  if (window.__pnlSort !== 'sector') return arr;
+  return arr.slice().sort((a,b) => {
+    const sa = _sectorOf(a.sym), sb = _sectorOf(b.sym);
+    if (sa !== sb) return sa - sb;
+    return String(a.sym).localeCompare(String(b.sym));
+  });
+}
+window.pnlApplySort = function(v){
+  window.__pnlSort = (v === 'sector') ? 'sector' : 'default';
+  try { liveUpdatePnL(null, null); } catch(e){}
+  try { drawEquity(); } catch(e){}
+};
 window.pnlApplySearch = function(v){
   window.__pnlSearch = (v||'').trim().toLowerCase();
   try { liveUpdatePnL(null, null); } catch(e){}
@@ -904,12 +931,14 @@ function liveUpdatePnL(tickData, portfolioSnap) {
   </div>` : ''}`;
 
   // ── Position rows ─────────────────────────────────────────────────────────
-  const shownArr = posArr.filter(p => _pnlMatch(p.sym));
+  const shownArr = _pnlSort(posArr.filter(p => _pnlMatch(p.sym)));
+  const bySector = window.__pnlSort === 'sector';
   const posRows = shownArr.map(p => {
     const uplSign2 = p.upl >= 0 ? '+' : '';
     const pctSign  = p.gainPct >= 0 ? '+' : '';
+    const secTag = bySector ? `<span style="font-size:.6rem;color:#7a6a4a;letter-spacing:.04em">${_sectorName(_sectorOf(p.sym))}</span>` : '';
     return `<div class="pnl-pos-row" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #1a1208">
-      <span style="font-weight:700;color:#ffb547;min-width:52px">${p.sym}</span>
+      <span style="font-weight:700;color:#ffb547;min-width:52px">${p.sym}${secTag?' '+secTag:''}</span>
       <span class="muted" style="min-width:60px;font-size:.8rem">${p.qty} @ Ƒ${p.avg.toFixed(2)}</span>
       <span style="min-width:72px;color:#d4b87a">Ƒ${p.last.toFixed(2)}</span>
       <span style="min-width:80px;color:#d4b87a">${fmt(p.value)}</span>
