@@ -321,7 +321,7 @@ function renderTickers() {
       const pctSign = pct >= 0 ? '+' : '';
       const priceLabel = isActive
         ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-            <span class="px" style="font-size:.95rem;font-weight:700;color:#fff">${fmt(t.price)}</span>
+            <span class="px" style="font-size:.95rem;font-weight:700;color:#b6ffcf">${fmt(t.price)}</span>
             <span style="font-size:.68rem;color:${pctColor};opacity:.9">${pctSign}${pct.toFixed(2)}%</span>
            </div>`
         : `<div class="px">${fmt(t.price)}</div>`;
@@ -329,9 +329,9 @@ function renderTickers() {
       const loreText = COMPANY_LORE[loreName] || '';
       row.innerHTML = `<div style="flex:1;min-width:0">
         <div style="display:flex;align-items:baseline;gap:4px">
-          <span class="sym">${t.symbol}</span><span class="muted"> — ${loreName}</span>
+          <span class="sym">${t.symbol}</span><span style="color:#b6ffcf;opacity:.9"> — ${loreName}</span>
         </div>
-        ${isActive && loreText ? `<div style="font-size:.72rem;color:#9ab;line-height:1.55;margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.07);padding-bottom:2px;opacity:.85">${loreText}</div>` : ''}
+        ${isActive && loreText ? `<div style="font-size:.72rem;color:#b6ffcf;line-height:1.55;margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.07);padding-bottom:2px;opacity:.96">${loreText}</div>` : ''}
       </div>
       ${priceLabel}`;
       if (isActive) {
@@ -409,9 +409,9 @@ function renderNews(item) {
 }
 
 const _TIER_BADGES = {1:'★',2:'⚖',3:'♛'};
-const _TIER_COLORS = {1:'#c8a040',2:'#2ecc71',3:'#ffd700'};
+const _TIER_COLORS = {1:'#c8a040',2:'#2ecc71',3:'#9dff5a'};
 const _DEV_BADGE   = '⚙';
-const _DEV_COLOR   = '#4da6ff';
+const _DEV_COLOR   = '#ffce4d';
 const _OWNER_BADGE = '★';
 const _OWNER_COLOR = '#ff6a00';
 
@@ -460,7 +460,7 @@ function renderBoard(data) {
       const rankEl  = document.createElement('span'); rankEl.style.cssText = 'opacity:.5;min-width:20px;text-align:right;font-size:.7rem';
       const badgeEl = document.createElement('span'); badgeEl.style.fontSize = '.7rem';
       const nameEl  = document.createElement('b'); nameEl.style.cssText = 'flex:1;font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-      const netEl   = document.createElement('span'); netEl.style.cssText = 'color:#ffb547;font-size:.7rem';
+      const netEl   = document.createElement('span'); netEl.style.cssText = 'color:#46ff7d;font-size:.7rem';
       row.appendChild(rankEl); row.appendChild(badgeEl); row.appendChild(nameEl); row.appendChild(netEl);
       box.appendChild(row);
       _lbRows.set(p.id + (showSelf && i === 10 ? '_self' : ''), { row, rankEl, badgeEl, nameEl, netEl, realIdx: showSelf && i === 10 ? myIdx : i });
@@ -476,7 +476,7 @@ function renderBoard(data) {
     const isOwner = !!(p.is_prime);
     const isDev   = !isOwner && !!(p.is_dev || p.is_admin);
     const tier    = p.patreon_tier || 0;
-    const color   = isOwner ? _OWNER_COLOR : (isDev ? _DEV_COLOR : (_TIER_COLORS[tier] || '#d4b87a'));
+    const color   = isOwner ? _OWNER_COLOR : (isDev ? _DEV_COLOR : (_TIER_COLORS[tier] || '#72e09c'));
     const rank    = actualRank === 0 ? '🥇' : actualRank === 1 ? '🥈' : actualRank === 2 ? '🥉' : `${actualRank+1}.`;
     const badge   = isOwner ? _OWNER_BADGE : (isDev ? _DEV_BADGE : (_TIER_BADGES[tier] || ''));
     const factionBadge = p.faction === 'syndicate' ? ' 💀' : '';
@@ -488,7 +488,7 @@ function renderBoard(data) {
     els.netEl.textContent   = fmt(p.net);
     // Highlight own row
     if (myId && p.id === myId) {
-      els.row.style.borderColor = '#ffb54755';
+      els.row.style.borderColor = '#46ff7d55';
       els.row.style.background = '#0d0a04';
     }
   });
@@ -606,7 +606,7 @@ const PNL_COLORS = [
 // personal net-worth donut here and the Capital House NAV donut in funds.js
 // (which reads window.FM_DONUT_PAL), so the two wheels stay identical.
 const FM_DONUT_PAL = [
-  '#2dd4c4','#ff3b3b','#b86bff','#27e36b','#ffd400',
+  '#2dd4c4','#ff3b3b','#b86bff','#27e36b','#9dff5a',
   '#ff8c2e','#5dff7a','#e0b85a','#3aa0ff','#ff7a45'
 ];
 window.FM_DONUT_PAL = FM_DONUT_PAL;
@@ -690,7 +690,7 @@ function _drawDonut(posArr, cashNow, netWorth) {
   ctx.fillStyle = '#0a0804';
   ctx.beginPath(); ctx.arc(cx,cy,ri-2,0,Math.PI*2); ctx.fill();
   const fmtC = v => v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'k':v.toFixed(0);
-  ctx.fillStyle = '#ffcf7a'; ctx.font = 'bold 13px monospace';
+  ctx.fillStyle = '#9dffb0'; ctx.font = 'bold 13px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('Ƒ'+fmtC(netWorth), cx, cy-7);
   ctx.fillStyle = 'rgba(230,200,140,0.55)'; ctx.font = '12px monospace';
@@ -800,7 +800,7 @@ function _drawBars(posArrIn) {
     else       ctx.fillRect(bx, y, 1, BAR_H);
 
     // Symbol label (left)
-    ctx.fillStyle = '#d4b87a'; ctx.font = 'bold 9px monospace';
+    ctx.fillStyle = '#72e09c'; ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     ctx.fillText(p.sym, PAD_L - 4, y + BAR_H/2);
 
@@ -947,16 +947,16 @@ function liveUpdatePnL(tickData, portfolioSnap) {
      </div>`;
 
   const dailyIncome = window.__passiveIncome ? (window.__passiveIncome.total||0) : 0;
-  const kpiBar = `<div style="display:flex;gap:18px;flex-wrap:wrap;padding:8px 4px 10px;border-bottom:1px solid #2a1a04;margin-bottom:8px">
-    ${kpi('Net Worth', fmt(netWorth), '#ffb547')}
+  const kpiBar = `<div style="display:flex;gap:18px;flex-wrap:wrap;padding:8px 4px 10px;border-bottom:1px solid #0a3315;margin-bottom:8px">
+    ${kpi('Net Worth', fmt(netWorth), '#46ff7d')}
     ${kpi('Equity',    fmt(equity),   '#d4b87a')}
     ${kpi('Cash',      fmt(cashNow),  '#d4b87a')}
     ${kpi('Unrealized P&L', uplSign+fmt(Math.abs(totalUPL)), uplColor)}
     ${kpi('Daily Income', fmt(dailyIncome), '#51cf66')}
   </div>${(window.gPlayerFaction && window.gPlayerFaction !== 'null') ? `<div style="display:flex;align-items:center;gap:6px;padding:4px 4px 8px;margin-bottom:2px;font-size:.64rem;opacity:.75">
-    <span style="color:${window.gPlayerFaction==='coalition'?'#4ecdc4':window.gPlayerFaction==='syndicate'?'#e74c3c':window.gPlayerFaction==='void'?'#9b59b6':'#ffd700'}">⬡</span>
+    <span style="color:${window.gPlayerFaction==='coalition'?'#4ecdc4':window.gPlayerFaction==='syndicate'?'#e74c3c':window.gPlayerFaction==='void'?'#9b59b6':'#9dff5a'}">⬡</span>
     <span style="color:#888">Faction:</span>
-    <span style="color:${window.gPlayerFaction==='coalition'?'#4ecdc4':window.gPlayerFaction==='syndicate'?'#e74c3c':window.gPlayerFaction==='void'?'#9b59b6':'#ffd700'};letter-spacing:.06em">${window.gPlayerFaction==='coalition'?'THE COALITION':window.gPlayerFaction==='syndicate'?'THE SYNDICATE':window.gPlayerFaction==='void'?'VOID COLLECTIVE':window.gPlayerFaction==='fleshstation'?'FLESH STATION ⚡':'—'}</span>
+    <span style="color:${window.gPlayerFaction==='coalition'?'#4ecdc4':window.gPlayerFaction==='syndicate'?'#e74c3c':window.gPlayerFaction==='void'?'#9b59b6':'#9dff5a'};letter-spacing:.06em">${window.gPlayerFaction==='coalition'?'THE COALITION':window.gPlayerFaction==='syndicate'?'THE SYNDICATE':window.gPlayerFaction==='void'?'VOID COLLECTIVE':window.gPlayerFaction==='fleshstation'?'FLESH STATION ⚡':'—'}</span>
     <span style="color:#555;font-size:.58rem">colony bonuses active</span>
   </div>` : ''}`;
 
@@ -967,8 +967,8 @@ function liveUpdatePnL(tickData, portfolioSnap) {
     const uplSign2 = p.upl >= 0 ? '+' : '';
     const pctSign  = p.gainPct >= 0 ? '+' : '';
     const secTag = bySector ? `<span style="font-size:.6rem;color:#7a6a4a;letter-spacing:.04em">${_sectorName(_sectorOf(p.sym))}</span>` : '';
-    return `<div class="pnl-pos-row" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #1a1208">
-      <span style="font-weight:700;color:#ffb547;min-width:52px">${p.sym}${secTag?' '+secTag:''}</span>
+    return `<div class="pnl-pos-row" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #06160a">
+      <span style="font-weight:700;color:#46ff7d;min-width:52px">${p.sym}${secTag?' '+secTag:''}</span>
       <span class="muted" style="min-width:60px;font-size:.8rem">${p.qty} @ Ƒ${p.avg.toFixed(2)}</span>
       <span style="min-width:72px;color:#d4b87a">Ƒ${p.last.toFixed(2)}</span>
       <span style="min-width:80px;color:#d4b87a">${fmt(p.value)}</span>
@@ -1166,7 +1166,7 @@ function drawChart() {
     ctx.setLineDash([2, 6]);
     ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(CW, oy); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(120,90,40,0.4)';
+    ctx.fillStyle = 'rgba(40,120,70,0.4)';
     ctx.font = '12px monospace';
     ctx.textAlign = 'right';
     ctx.fillText('OPEN', CW - 4, oy - 3);
@@ -1185,11 +1185,11 @@ function drawChart() {
   for (let i = 0; i <= pSteps; i++) {
     const p = hi - (i / pSteps) * (hi - lo);
     const y = pY(p);
-    ctx.fillStyle = 'rgba(210,170,70,0.7)';
+    ctx.fillStyle = 'rgba(114,224,156,0.75)';
     ctx.fillText('Ƒ' + p.toFixed(2), CW + 3, y + 3);
   }
   // Current price highlight
-  ctx.fillStyle = '#080500';
+  ctx.fillStyle = '#021008';
   ctx.fillRect(CW, ey - 7, MR, 14);
   ctx.fillStyle = amber;
   ctx.font = 'bold 12px monospace';
@@ -1198,7 +1198,7 @@ function drawChart() {
   // ── Time axis (bottom) ──
   ctx.font = '12px monospace';
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(210,170,70,0.6)';
+  ctx.fillStyle = 'rgba(114,224,156,0.55)';
   const secTotal = n * 0.5; // each point is 500ms
   const labels = 6;
   for (let i = 0; i <= labels; i++) {
@@ -1225,7 +1225,7 @@ function drawChart() {
   // Symbol
   ctx.font = 'bold 16px monospace';
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#f0b840';
+  ctx.fillStyle = '#b6ffcf';
   ctx.fillText(CURRENT || '—', 6, 18);
 
   // Price + pct + hi/lo
@@ -1234,7 +1234,7 @@ function drawChart() {
   ctx.fillStyle = isUp ? '#00ff88' : '#ff5533';
   ctx.fillText('Ƒ' + lastP.toFixed(2), symW, 18);
   ctx.font = '13px monospace';
-  ctx.fillStyle = 'rgba(210,170,70,0.7)';
+  ctx.fillStyle = 'rgba(114,224,156,0.75)';
   ctx.fillText(pctStr + '  ' + hiLo, symW + (lastP.toFixed(2).length + 1) * 8.5 + 8, 18);
 }
 
@@ -1281,7 +1281,7 @@ function addChat(item){
   const isOwner  = !!(item.is_prime);
   const isDev    = !isOwner && !!(item.is_dev);
   const rawBadge = isOwner ? _OWNER_BADGE : (isDev ? _DEV_BADGE : (item.badge || ''));
-  const color    = isOwner ? _OWNER_COLOR : (isDev ? _DEV_COLOR : (item.color || '#d4b87a'));
+  const color    = isOwner ? _OWNER_COLOR : (isDev ? _DEV_COLOR : (item.color || '#f0b454'));
   const badge    = rawBadge ? `<span style="margin-right:3px;opacity:.9;color:${color}">${rawBadge}</span>` : '';
 
   let text = String(item.text || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -1291,7 +1291,7 @@ function addChat(item){
     text = text.replace(re, `<span class="chat-mention">$1</span>`);
     if (re.test(item.text || '')) try { playSound && playSound('mention'); } catch(e) {}
   }
-  text = text.replace(/@([A-Za-z0-9_\-]+)/g, '<span style="color:#ffdb70;opacity:.8">@$1</span>');
+  text = text.replace(/@([A-Za-z0-9_\-]+)/g, '<span style="color:#9dffb0;opacity:.8">@$1</span>');
 
   const isSystem = item.user === 'SYSTEM';
   const titleTag = (!isSystem && item.title) ? ` <span style="font-size:.72rem;opacity:.65;color:${color}">[${item.title}]</span>` : '';
@@ -1305,7 +1305,7 @@ function addChat(item){
     : '';
   div.className = 'cm chat-msg';
   div.dataset.user = item.user || '';
-  div.innerHTML = `${badge}${userSpan}: <span style="color:#c8a86a">${text}</span>${blockBtnHtml}`;
+  div.innerHTML = `${badge}${userSpan}: <span style="color:${isSystem ? '#7fc090' : '#f0b454'}">${text}</span>${blockBtnHtml}`;
 
   // Show block button on hover
   div.addEventListener('mouseenter', function(){ var b=div.querySelector('.chat-block-btn'); if(b) b.style.display='inline'; });
@@ -1711,9 +1711,9 @@ ws.addEventListener('message', (ev)=>{
   if (msg.type === 'patreon') {
     const d = msg.data;
     const tierNames = {0:'Free',1:'Premium ★',2:'Merchants Guild ⚖',3:'CEO ♛'};
-    const colors    = {0:'#888',1:'#c8a040',2:'#2ecc71',3:'#ffd700'};
+    const colors    = {0:'#888',1:'#c8a040',2:'#2ecc71',3:'#9dff5a'};
     const glyphs    = {1:'★',2:'⚖',3:'♛'};
-    const color = colors[d.tier] || '#ffb547';
+    const color = colors[d.tier] || '#46ff7d';
     addChat({user:'SYSTEM', text: d.message || `Tier updated: ${tierNames[d.tier]||d.tier}`, badge:'⚡', color});
     if (typeof d.tier === 'number') {
       // Update all badge elements
@@ -1738,7 +1738,7 @@ ws.addEventListener('message', (ev)=>{
     const d = msg.data;
     const hasBonus  = d.bonus > 0;
     const isPatreon = d.base > 25; // free tier base is 25; anything above is Patreon
-    const color = hasBonus ? '#4ecdc4' : (isPatreon ? '#ffb547' : '#888');
+    const color = hasBonus ? '#4ecdc4' : (isPatreon ? '#46ff7d' : '#888');
     const badge = hasBonus ? '⚖' : (isPatreon ? 'Ƒ' : 'Ƒ');
     addChat({ user: 'SYSTEM', text: d.text, badge, color });
   }
@@ -1858,31 +1858,31 @@ ws.addEventListener('message', (ev)=>{
   #rl-controls{flex:1;min-width:260px;display:flex;flex-direction:column;gap:10px}
   .rl-label{font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:#8a6a40;margin-bottom:3px}
   .rl-info-row{display:flex;gap:18px;font-size:.85rem;flex-wrap:wrap;margin-bottom:4px}
-  .rl-info-row span{color:#8ab}.rl-info-row strong{color:#e6c27a}
+  .rl-info-row span{color:#8ab}.rl-info-row strong{color:#72e09c}
   .rl-bet-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .rl-bet-row input{width:90px;padding:5px 8px;background:#0d0d08;border:1px solid #4a3a10;color:#e6c27a;font-size:.85rem;font-family:monospace;border-radius:4px}
+  .rl-bet-row input{width:90px;padding:5px 8px;background:#0d0d08;border:1px solid #1f4a1f;color:#72e09c;font-size:.85rem;font-family:monospace;border-radius:4px}
   .rl-chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
-  .rl-chips button{padding:4px 9px;background:#1a1500;border:1px solid #5a4a10;color:#e6c27a;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.78rem;transition:background .15s}
+  .rl-chips button{padding:4px 9px;background:#06200d;border:1px solid #5a4a10;color:#72e09c;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.78rem;transition:background .15s}
   .rl-chips button:hover{background:#2a2200}
   .rl-bet-type-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .rl-bet-type-row select,.rl-bet-type-row input{padding:5px 8px;background:#0d0d08;border:1px solid #4a3a10;color:#e6c27a;font-size:.82rem;font-family:monospace;border-radius:4px}
+  .rl-bet-type-row select,.rl-bet-type-row input{padding:5px 8px;background:#0d0d08;border:1px solid #1f4a1f;color:#72e09c;font-size:.82rem;font-family:monospace;border-radius:4px}
   #rl-action-row{display:flex;gap:8px;flex-wrap:wrap}
-  #rl-action-row button{padding:7px 18px;background:#1a1500;border:1px solid #5a4a10;color:#e6c27a;cursor:pointer;border-radius:5px;font-family:monospace;font-size:.85rem;transition:background .15s,border-color .15s}
+  #rl-action-row button{padding:7px 18px;background:#06200d;border:1px solid #5a4a10;color:#72e09c;cursor:pointer;border-radius:5px;font-family:monospace;font-size:.85rem;transition:background .15s,border-color .15s}
   #rl-action-row button:hover{background:#2a2200}
-  #rl-spin-btn{border-color:#8a6a00!important;color:#ffd700!important}
-  #rl-spin-btn:hover{background:#2a2000!important;border-color:#c8a000!important}
+  #rl-spin-btn{border-color:#8a6a00!important;color:#9dff5a!important}
+  #rl-spin-btn:hover{background:#012a14!important;border-color:#2f9f4a!important}
   #rl-clear-btn{border-color:#6a2020!important;color:#ff9090!important}
   #rl-clear-btn:hover{background:#2a0808!important}
   #rl-bets-list{max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
   .rl-bet-item{display:flex;justify-content:space-between;align-items:center;padding:3px 8px;border-radius:4px;background:#0d0a00;border:1px solid #2a1a00;font-size:.78rem}
   .rl-bet-item .rl-bi-label{color:#c8a060}
-  .rl-bet-item .rl-bi-amt{color:#e6c27a}
+  .rl-bet-item .rl-bi-amt{color:#72e09c}
   .rl-bet-item .rl-bi-del{cursor:pointer;color:#884040;margin-left:6px;font-size:.7rem}
   .rl-bet-item .rl-bi-del:hover{color:#ff6060}
   #rl-result-banner{padding:8px 14px;border-radius:8px;font-size:.95rem;display:none;margin-top:4px;text-align:center;letter-spacing:.05em}
   #rl-result-banner.win{background:#0a2a0a;border:1px solid #2a6a2a;color:#4eff4e}
   #rl-result-banner.lose{background:#2a0808;border:1px solid #6a1a1a;color:#ff6b6b}
-  #rl-result-banner.neutral{background:#1a1500;border:1px solid #5a5000;color:#ffeb80}
+  #rl-result-banner.neutral{background:#06200d;border:1px solid #5a5000;color:#ffeb80}
   #rl-log{max-height:90px;overflow-y:auto;font-size:.72rem;color:#7a8a6a;line-height:1.5;margin-top:4px}
   #rl-log div{border-bottom:1px solid #1a1a0a;padding:1px 0}
   /* Number grid for straight bets */
@@ -1892,7 +1892,7 @@ ws.addEventListener('message', (ev)=>{
   .rl-num-cell.red-cell{background:#5a1010;color:#ff9090}
   .rl-num-cell.black-cell{background:#1a1a1a;color:#b0b0b0}
   .rl-num-cell.green-cell{background:#0a3a0a;color:#80ff80}
-  .rl-num-cell.selected-num{outline:2px solid #ffd700;filter:brightness(1.8)}
+  .rl-num-cell.selected-num{outline:2px solid #9dff5a;filter:brightness(1.8)}
   /* Last results strip */
   #rl-history{display:flex;gap:3px;flex-wrap:nowrap;overflow:hidden;margin-top:6px;min-height:18px}
   .rl-hist-dot{width:16px;height:16px;border-radius:50%;font-size:.55rem;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;color:#fff}
@@ -2186,13 +2186,13 @@ ws.addEventListener('message', (ev)=>{
 
     // ── Pointer (static, always at top) ──────────────────────────────
     ctx.save();
-    ctx.shadowColor='#ffd700'; ctx.shadowBlur=10;
+    ctx.shadowColor='#9dff5a'; ctx.shadowBlur=10;
     ctx.beginPath();
     ctx.moveTo(cx, cy-(R+1));
     ctx.lineTo(cx-10, cy-(R-16));
     ctx.lineTo(cx+10, cy-(R-16));
     ctx.closePath();
-    ctx.fillStyle='#ffd700'; ctx.fill();
+    ctx.fillStyle='#9dff5a'; ctx.fill();
     ctx.shadowBlur=0;
     ctx.restore();
 
@@ -2399,7 +2399,7 @@ ws.addEventListener('message', (ev)=>{
 
   // Band names for leaderboard display
   const _MINING_BAND_NAMES = ['NEAR', 'MID', 'DEEP', 'VOID'];
-  const _MINING_BAND_COLORS = ['#86ff6a', '#e6c27a', '#ff9a4a', '#ff4a4a'];
+  const _MINING_BAND_COLORS = ['#86ff6a', '#72e09c', '#ff9a4a', '#ff4a4a'];
 
   function _renderBriefLeaderboard(rows) {
     const body = document.getElementById('miningLeaderboardBody');
@@ -2411,7 +2411,7 @@ ws.addEventListener('message', (ev)=>{
     const myName = (typeof ME === 'object' && ME && ME.name) ? ME.name : null;
     let html = `<table style="width:100%; border-collapse:collapse; font-size:13px; letter-spacing:.04em">
       <thead>
-        <tr style="color:#8a7a50; text-transform:uppercase; font-size:11px; letter-spacing:.12em">
+        <tr style="color:#4f8f5f; text-transform:uppercase; font-size:11px; letter-spacing:.12em">
           <th style="text-align:left; padding:6px 8px; border-bottom:1px solid #3a2a10">#</th>
           <th style="text-align:left; padding:6px 8px; border-bottom:1px solid #3a2a10">Pilot</th>
           <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #3a2a10">Best Run</th>
@@ -2429,15 +2429,15 @@ ws.addEventListener('message', (ev)=>{
       const factionColor = r.faction === 'syndicate' ? '#e74c3c'
                         : r.faction === 'void'      ? '#9b59b6'
                         : r.faction === 'coalition' ? '#4ecdc4'
-                        : '#8a7a50';
+                        : '#4f8f5f';
       const rowBg = isMe ? 'background:rgba(230,194,122,.07);' : '';
-      const nameStyle = isMe ? 'color:#e6c27a; font-weight:bold' : `color:${factionColor}`;
+      const nameStyle = isMe ? 'color:#72e09c; font-weight:bold' : `color:${factionColor}`;
       html += `<tr style="${rowBg}">
-        <td style="padding:6px 8px; color:#8a7a50; font-size:12px">${i+1}</td>
+        <td style="padding:6px 8px; color:#4f8f5f; font-size:12px">${i+1}</td>
         <td style="padding:6px 8px"><span style="${nameStyle}">${_escHtml(r.name)}</span></td>
         <td style="padding:6px 8px; text-align:right; color:#86ff6a; font-weight:bold">+Ƒ${Math.floor(r.best_run_profit).toLocaleString()}</td>
         <td style="padding:6px 8px; text-align:center; color:${bandColor}; font-size:11px; letter-spacing:.15em">${bandName}</td>
-        <td style="padding:6px 8px; text-align:right; color:#8a7a50; font-size:12px">${r.total_runs}</td>
+        <td style="padding:6px 8px; text-align:right; color:#4f8f5f; font-size:12px">${r.total_runs}</td>
       </tr>`;
     }
     html += '</tbody></table>';
@@ -2676,7 +2676,7 @@ ws.addEventListener('message', (ev)=>{
           setTimeout(() => {
             btn.textContent = orig;
             btn.style.borderColor = '#8a6a30';
-            btn.style.color = '#e6c27a';
+            btn.style.color = '#72e09c';
           }, 1400);
         }
         return;

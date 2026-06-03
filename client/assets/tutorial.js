@@ -138,7 +138,7 @@
     },
     {
       heading: 'DRONE MINING',
-      text: `The <em>⛏ Mining</em> tab opens an unregulated asteroid extraction zone. Pilot a single drone into the belt, mine ore with your laser, and bring it back to bank. Every faction agreed that mining is where conflict happens, so safe mining is not enforced anywhere. Hostile drones patrol every sector. Drones of <strong>your own faction</strong> leave you alone. Depth bands get richer and more hostile the further you push: <span style="color:#86ff6a">NEAR</span>, <span style="color:#e6c27a">MID</span>, <span style="color:#ff9a4a">DEEP</span>, <span style="color:#ff4a4a">VOID</span>. One hostile hit ends the drone. Docking safely refunds the drone's Ƒ1,000 build cost. Fuel does not refill.`,
+      text: `The <em>⛏ Mining</em> tab opens an unregulated asteroid extraction zone. Pilot a single drone into the belt, mine ore with your laser, and bring it back to bank. Every faction agreed that mining is where conflict happens, so safe mining is not enforced anywhere. Hostile drones patrol every sector. Drones of <strong>your own faction</strong> leave you alone. Depth bands get richer and more hostile the further you push: <span style="color:#86ff6a">NEAR</span>, <span style="color:#72e09c">MID</span>, <span style="color:#ff9a4a">DEEP</span>, <span style="color:#ff4a4a">VOID</span>. One hostile hit ends the drone. Docking safely refunds the drone's Ƒ1,000 build cost. Fuel does not refill.`,
       callout: 'Your FleshMarket faction determines who shoots at you. The game opens fullscreen, ESC returns.',
       tab: 'mining',
     },

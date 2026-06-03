@@ -280,13 +280,13 @@
   cursor: pointer;
   padding: 6px 8px;
   background: #0a0804;
-  border: 1px solid #2a1a04;
+  border: 1px solid #0a3315;
   border-radius: 6px;
   margin-bottom: 4px;
   font-size: .72rem;
   letter-spacing: .08em;
   text-transform: uppercase;
-  color: #c8a86a;
+  color: #7fc090;
   user-select: none;
 }
 .fm-collapse-head::after {
@@ -310,7 +310,7 @@
   right: 0;
   z-index: 9990;
   background: #0a0804;
-  border-top: 1px solid #2a1a04;
+  border-top: 1px solid #0a3315;
   padding: 0;
   box-shadow: 0 -4px 16px rgba(0,0,0,.6);
 }
@@ -326,7 +326,7 @@
   font-size: .58rem;
   letter-spacing: .04em;
   text-transform: uppercase;
-  color: #665533;
+  color: #3a5f3a;
   background: none;
   border: none;
   cursor: pointer;
@@ -336,8 +336,8 @@
   transition: color .15s, border-color .15s;
 }
 #mobileNav .mnav-btn.active {
-  color: #ffb547;
-  border-top-color: #ffb547;
+  color: #46ff7d;
+  border-top-color: #46ff7d;
 }
 #mobileNav .mnav-btn .mnav-icon {
   display: block;

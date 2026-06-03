@@ -3859,6 +3859,9 @@ app.post('/api/cargo/ship', (req, res) => {
     const tok = tokenFrom(req);
     const p   = tok ? getPlayer(tok) : null;
     if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    // Single shipment only — no stacking. One in-transit run per player at a time.
+    const _activeShipments = getPlayerCargoShipments(p.id, 'in_transit');
+    if (_activeShipments && _activeShipments.length > 0) return res.status(400).json({ ok:false, error:'shipment_in_progress' });
     const { commodityId, from, to } = req.body || {};
     const wantInsurance = !!(req.body && req.body.insured);
     const qty = Math.max(1, Math.floor(Number(req.body?.qty) || 0));

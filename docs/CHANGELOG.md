@@ -4,6 +4,18 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.1.0 (2026-06-03) — green CRT phosphor reskin (Ellen's Theme)
+
+Full visual reskin to a permanent green-phosphor CRT look, plus one gameplay fix. Cosmetic unless noted.
+
+- **Theme:** permanent green-phosphor CRT (amber retired, theme selector removed), always-on scanlines, re-saturated palette with a pale to dim green readability hierarchy.
+- **Fonts:** self-hosted (no Google Fonts) — Share Tech Mono on chrome (wordmark/headings/tabs/EOD timer), IBM Plex Mono on body/data. Header wordmark is ASCII-art (figlet 'small').
+- **Signal palette:** green = data/structure; amber (#f0b454) = places, neutral news, ticker symbols, chat text; gold (#ffce4d) = Patreon/premium + FLSH dev guild + golden share; red = loss/danger. Faction/rainbow/tension colors kept as identity.
+- **Polish:** softened glow + de-glowed dense tables, muddy greys lifted to green tiers, pale company-list text, heatmap warm tiles fixed and sector headers colored from the P&L wheel palette, faint amber button outlines removed.
+- **Fix (functional):** cargo shipping now allows only one in-transit shipment per player at a time, enforced server-side.
+
+---
+
 ## v1.1.0.0 (2026-06-01) — major content drop: free starter ship, shipping overhaul + escorts, P&L sector tools, brighter donuts
 
 A single large release consolidating the post-governance sprint. Four things land together.

@@ -13,12 +13,16 @@
 
 
 <body>
+<div id="crtOverlay" aria-hidden="true"></div>
 <link rel="stylesheet" href="assets/eod-timer.css">
 <div class="wrap">
 <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
 <div style="display:flex;align-items:center;gap:0">
 <div>
-<h1 style="margin:0;font-size:18px;letter-spacing:.14em">FLESH MARKET</h1>
+<pre class="fm-wordmark" aria-label="FLESH MARKET" style="margin:0;font-family:'Share Tech Mono',ui-monospace,monospace;font-size:7.5px;line-height:8px;letter-spacing:0;color:var(--green);text-shadow:0 0 6px rgba(70,255,125,.45);white-space:pre;font-weight:400;user-select:none"> ___ _    ___ ___ _  _   __  __   _   ___ _  _____ _____ 
+| __| |  | __/ __| || | |  \/  | /_\ | _ \ |/ / __|_   _|
+| _|| |__| _|\__ \ __ | | |\/| |/ _ \|   / ' &lt;| _|  | |  
+|_| |____|___|___/_||_| |_|  |_/_/ \_\_|_\_|\_\___| |_|  </pre>
 <small class="muted"></small>
 </div>
 <div id="eod-timer-wrap">
@@ -33,14 +37,14 @@
 <input class="input" id="name" placeholder="Your name" style="display:none"/><!-- legacy hidden -->
 <button class="btn" id="helloBtn" style="display:none">Join</button>
 <span id="fm-header-user" style="display:none;align-items:center;gap:6px;font-size:.85rem">
-  <span id="fm-header-name" style="color:#ffb547;opacity:.85"></span>
+  <span id="fm-header-name" style="color:#46ff7d;opacity:.85"></span>
   <span id="fm-tier-badge-hdr" style="font-size:.95rem"></span>
   <span id="invNavBtn" style="display:none"></span><span id="slotNavBtn" style="display:none"><span id="slotNavSpinCount"></span></span>
-  <a href="https://www.patreon.com/FLSH" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#6a4a10;color:#ffb547;text-decoration:none;animation:patreonPulse 2.5s ease-in-out infinite;font-weight:500">☆ Patreon</a>
+  <a href="https://www.patreon.com/FLSH" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#7a5e1e;color:#ffce4d;text-decoration:none;animation:patreonPulse 2.5s ease-in-out infinite;font-weight:500">☆ Patreon</a>
   <a href="https://discord.gg/H47DnbY33t" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#3a3a6a;color:#8a8ae0;text-decoration:none;animation:discordPulse 2.5s ease-in-out infinite;font-weight:500">◈ Discord</a>
-  <style>@keyframes patreonPulse{0%,100%{box-shadow:0 0 4px #ffb54722;border-color:#6a4a10}50%{box-shadow:0 0 8px #ffb54744,0 0 12px #ffb54722;border-color:#8a6a20}}@keyframes discordPulse{0%,100%{box-shadow:0 0 4px #5865f222;border-color:#3a3a6a}50%{box-shadow:0 0 8px #5865f244,0 0 12px #5865f222;border-color:#5a5a9a}}</style>
+  <style>@keyframes patreonPulse{0%,100%{box-shadow:0 0 4px #ffce4d22;border-color:#7a5e1e}50%{box-shadow:0 0 8px #ffce4d44,0 0 12px #ffce4d22;border-color:#a07e2e}}@keyframes discordPulse{0%,100%{box-shadow:0 0 4px #5865f222;border-color:#3a3a6a}50%{box-shadow:0 0 8px #5865f244,0 0 12px #5865f222;border-color:#5a5a9a}}</style>
   <button class="btn" onclick="window.showTutorial&&window.showTutorial()" style="padding:3px 10px;font-size:.78rem;border-color:#1a3a1a;color:#4a8a4a" title="Replay Tutorial">? Tutorial</button>
-  <button class="btn" onclick="window.FM_Auth&&window.FM_Auth.logout()" style="padding:3px 10px;font-size:.78rem;border-color:#4a3510;color:#888">Logout</button>
+  <button class="btn" onclick="window.FM_Auth&&window.FM_Auth.logout()" style="padding:3px 10px;font-size:.78rem;border-color:#1f4515;color:#888">Logout</button>
 </span>
 </div>
 </div>
@@ -73,7 +77,7 @@
 <div class="muted" id="cash" style="margin-left:auto"></div>
 </div>
 <!-- v5.0: Limit Orders Panel -->
-<div id="limitPanel" style="margin-top:6px;padding:8px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+<div id="limitPanel" style="margin-top:6px;padding:8px;border:1px solid #0a3315;border-radius:6px;background:#050403">
   <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px">Limit Orders</div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
     <select id="limitSide" class="input" style="max-width:70px"><option value="buy">BUY</option><option value="sell">SELL</option></select>
@@ -128,7 +132,7 @@
 </div>
 <div class="list" id="pnlBox" style="max-height:360px;overflow-y:auto"></div>
 <!-- v5.0 Sector Breakdown -->
-<div id="sectorBreakdown" style="margin-top:10px;padding:8px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+<div id="sectorBreakdown" style="margin-top:10px;padding:8px;border:1px solid #0a3315;border-radius:6px;background:#050403">
   <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px">Sector Exposure</div>
   <div id="sectorBars" style="display:flex;flex-direction:column;gap:4px"></div>
 </div>
@@ -163,7 +167,7 @@
     <span>Stack: <strong id="pk-balance">Ƒ0</strong></span>
     <span>Blind: <strong id="pk-blind-lbl">Ƒ10/Ƒ20</strong></span>
     <span>Pot: <strong id="pk-pot">Ƒ0</strong></span>
-    <span id="pk-street-info" style="color:#ffb547;opacity:.8"></span>
+    <span id="pk-street-info" style="color:#46ff7d;opacity:.8"></span>
   </div>
   <div class="pk-table">
     <!-- AI seats -->
@@ -219,14 +223,14 @@
 </div>
 </div><div class="tab-pane" id="storeTab" style="display:none; padding:8px;"><div id="patreon-panel" style="margin-bottom:16px;padding:12px;border:1px solid #3a2a08;border-radius:8px;background:#060504">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-    <span style="font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;color:#ffb547">Patreon Membership</span>
+    <span style="font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;color:#ffce4d">Patreon Membership</span>
     <span id="fm-tier-badge" style="font-size:1.1rem"></span>
   </div>
   <div style="font-size:.8rem;opacity:.7;margin-bottom:10px;line-height:1.5">
     Link your Patreon email to unlock tier benefits.<br>
-    <span style="color:#c8a040">Premium ★ $5 · +Ƒ500/30min</span> · 
+    <span style="color:#72e09c">Premium ★ $5 · +Ƒ500/30min</span> · 
     <span style="color:#2ecc71">Guild ⚖ $15 · +Ƒ1,500/30min</span> · 
-    <span style="color:#ffd700">CEO ♛ $100 · +Ƒ10,000/30min</span>
+    <span style="color:#9dff5a">CEO ♛ $100 · +Ƒ10,000/30min</span>
   </div>
   <div style="display:flex;gap:8px">
     <input id="patreon-email" class="input" placeholder="Your Patreon email" type="email" style="flex:1;font-size:.85rem"/>
@@ -235,11 +239,11 @@
   <div id="patreon-hint" style="font-size:.78rem;min-height:16px;margin-top:6px"></div>
   <div style="margin-top:10px;font-size:.75rem;opacity:.5;line-height:1.4">
     After linking, your tier updates automatically when Patreon processes your membership.
-    <a href="https://www.patreon.com/FLSH" target="_blank" style="color:#ffb547;opacity:.8">patreon.com/FLSH</a>
+    <a href="https://www.patreon.com/FLSH" target="_blank" style="color:#46ff7d;opacity:.8">patreon.com/FLSH</a>
   </div>
 </div>
 <div style="display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid #3a1a08;padding-bottom:0;background:#0a0604;border-radius:4px 4px 0 0">
-  <button class="store-stab active" data-stab="titles" onclick="storeSubTab('titles')" style="background:none;border:none;border-bottom:2px solid #cc6644;color:#e6c27a;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Titles</button>
+  <button class="store-stab active" data-stab="titles" onclick="storeSubTab('titles')" style="background:none;border:none;border-bottom:2px solid #cc6644;color:#72e09c;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Titles</button>
   <button class="store-stab" data-stab="inventory" onclick="storeSubTab('inventory')" style="background:none;border:none;border-bottom:2px solid transparent;color:#997755;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Inventory</button>
   <button class="store-stab" data-stab="fbay" onclick="storeSubTab('fbay')" style="background:none;border:none;border-bottom:2px solid transparent;color:#997755;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Ƒbay</button>
   <button class="store-stab" data-stab="slots" onclick="storeSubTab('slots')" style="background:none;border:none;border-bottom:2px solid transparent;color:#997755;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">🎰 Slots</button>
@@ -320,7 +324,7 @@
       <div>
         <div style="font-size:.65rem;letter-spacing:.12em;color:#884444;text-transform:uppercase;margin-bottom:10px">Equipped</div>
         <div id="equippedGrid"></div>
-        <div style="font-size:.68rem;color:#553333;margin-top:8px">Item passive: <span id="invPassiveTotal" style="color:#ff9900">+0 Ƒ/30min</span></div>
+        <div style="font-size:.68rem;color:#553333;margin-top:8px">Item passive: <span id="invPassiveTotal" style="color:#42ff7e">+0 Ƒ/30min</span></div>
         <div id="invSetBonuses" style="display:none;margin-top:8px"></div>
       </div>
       <div>
@@ -335,7 +339,7 @@
 <div id="store-pane-fbay" class="store-pane" style="display:none">
   <div id="invTab-market" class="inv-tab-content">
     <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
-      <span style="font-size:.7rem;color:#ff9900;letter-spacing:.1em;text-transform:uppercase;font-weight:500">Ƒbay</span>
+      <span style="font-size:.7rem;color:#42ff7e;letter-spacing:.1em;text-transform:uppercase;font-weight:500">Ƒbay</span>
       <select id="mktFilterSlot" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
         <option value="">All Slots</option>
         <option value="hat">Hat</option>
@@ -368,14 +372,14 @@
       </select>
       <div style="flex:1"></div>
       <button onclick="loadMarket()" style="background:#0d0505;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">↻</button>
-      <button onclick="showListForm()" style="background:#0d0505;border:1px solid #ff6a0044;color:#ff9900;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">+ List</button>
+      <button onclick="showListForm()" style="background:#0d0505;border:1px solid #2f9f4a44;color:#42ff7e;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">+ List</button>
     </div>
     <div id="listForm" style="display:none;background:#0a0303;border:1px solid #2a1010;border-radius:6px;padding:10px;margin-bottom:10px">
       <div style="font-size:.68rem;color:#884444;margin-bottom:8px">List an item for sale</div>
-      <select id="listInvSelect" style="width:100%;background:#060303;border:1px solid #2a1010;color:#c8a86a;padding:5px;font-family:inherit;font-size:.75rem;margin-bottom:6px;border-radius:4px"></select>
+      <select id="listInvSelect" style="width:100%;background:#060303;border:1px solid #2a1010;color:#7fc090;padding:5px;font-family:inherit;font-size:.75rem;margin-bottom:6px;border-radius:4px"></select>
       <div style="display:flex;gap:6px">
-        <input id="listPrice" type="number" min="1" placeholder="Price in Ƒ" style="flex:1;background:#060303;border:1px solid #2a1010;color:#c8a86a;padding:5px 8px;font-family:inherit;font-size:.75rem;border-radius:4px">
-        <button onclick="submitListing()" style="background:#0d0505;border:1px solid #ff6a0055;color:#ff9900;font-size:.75rem;padding:5px 14px;border-radius:4px;cursor:pointer;font-family:inherit">List</button>
+        <input id="listPrice" type="number" min="1" placeholder="Price in Ƒ" style="flex:1;background:#060303;border:1px solid #2a1010;color:#7fc090;padding:5px 8px;font-family:inherit;font-size:.75rem;border-radius:4px">
+        <button onclick="submitListing()" style="background:#0d0505;border:1px solid #2f9f4a55;color:#42ff7e;font-size:.75rem;padding:5px 14px;border-radius:4px;cursor:pointer;font-family:inherit">List</button>
         <button onclick="document.getElementById('listForm').style.display='none'" style="background:none;border:1px solid #2a1010;color:#553333;font-size:.75rem;padding:5px 10px;border-radius:4px;cursor:pointer;font-family:inherit">✕</button>
       </div>
     </div>
@@ -387,13 +391,13 @@
 <div id="store-pane-slots" class="store-pane" style="display:none">
   <div style="max-width:420px;margin:0 auto;text-align:center">
     <div style="font-size:.65rem;color:#553333;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px">Spins Available</div>
-    <div id="slotModalSpinCount" style="font-size:3rem;font-weight:500;color:#ff9900;line-height:1;margin-bottom:4px">0</div>
+    <div id="slotModalSpinCount" style="font-size:3rem;font-weight:500;color:#42ff7e;line-height:1;margin-bottom:4px">0</div>
     <div style="font-size:.68rem;color:#443333;margin-bottom:20px">
       <div style="margin-bottom:6px">Every 9 day trades earns a free spin</div>
       <div style="display:flex;align-items:center;justify-content:center;gap:8px">
-        <span style="color:#ff9900;font-size:.75rem;font-weight:600" id="slotMilestoneCount">0</span>
+        <span style="color:#42ff7e;font-size:.75rem;font-weight:600" id="slotMilestoneCount">0</span>
         <div style="flex:0 0 140px;height:6px;background:#1a0800;border:1px solid #331500;border-radius:3px;overflow:hidden">
-          <div id="slotMilestoneBar" style="height:100%;width:0%;background:linear-gradient(90deg,#ff6a00,#ff9900);border-radius:3px;transition:width .3s"></div>
+          <div id="slotMilestoneBar" style="height:100%;width:0%;background:linear-gradient(90deg,#2f9f4a,#42ff7e);border-radius:3px;transition:width .3s"></div>
         </div>
         <span style="color:#553333;font-size:.7rem">/ 9</span>
       </div>
@@ -406,7 +410,7 @@
     <div id="slotModalResult" style="min-height:80px;margin-bottom:16px;display:flex;align-items:center;justify-content:center"></div>
     <button id="slotModalBtn" onclick="doSlotSpin()" style="
       background:linear-gradient(135deg,#2a0800,#180400);
-      border:1px solid #ff6a00;color:#ff9900;
+      border:1px solid #2f9f4a;color:#42ff7e;
       font-size:.9rem;padding:11px 40px;border-radius:6px;
       cursor:pointer;font-family:inherit;letter-spacing:.12em;text-transform:uppercase;
       width:100%;transition:all .15s;margin-bottom:16px;
@@ -416,7 +420,7 @@
       <span style="font-size:.62rem;color:#1D9E75;border:1px solid #1D9E7533;padding:1px 7px;border-radius:3px">Uncommon 25%</span>
       <span style="font-size:.62rem;color:#3B8BD4;border:1px solid #3B8BD433;padding:1px 7px;border-radius:3px">Rare 12%</span>
       <span style="font-size:.62rem;color:#8B5CF6;border:1px solid #8B5CF633;padding:1px 7px;border-radius:3px">Epic 6%</span>
-      <span style="font-size:.62rem;color:#ff6a00;border:1px solid #ff6a0033;padding:1px 7px;border-radius:3px">Legendary 0.5%</span>
+      <span style="font-size:.62rem;color:#2f9f4a;border:1px solid #2f9f4a33;padding:1px 7px;border-radius:3px">Legendary 0.5%</span>
       <span style="font-size:.62rem;color:#ff0055;border:1px solid #ff005533;padding:1px 7px;border-radius:3px">Phantom 0.00001%</span>
     </div>
   </div>
@@ -427,7 +431,7 @@ function storeSubTab(tab){
   document.querySelectorAll('.store-stab').forEach(function(b){
     b.classList.toggle('active',b.dataset.stab===tab);
     b.style.borderBottomColor=b.dataset.stab===tab?'#cc6644':'transparent';
-    b.style.color=b.dataset.stab===tab?'#e6c27a':'#997755';
+    b.style.color=b.dataset.stab===tab?'#72e09c':'#997755';
   });
   document.querySelectorAll('.store-pane').forEach(function(d){d.style.display='none';});
   var el=document.getElementById('store-pane-'+tab);
@@ -453,7 +457,7 @@ window.storeSubTab=storeSubTab;
   </div>
 
   <!-- CREATE FUND FORM -->
-  <div id="guild-create-form" style="display:none;background:#060504;border:1px solid #2a1a04;border-radius:8px;padding:14px;margin-bottom:12px">
+  <div id="guild-create-form" style="display:none;background:#060504;border:1px solid #0a3315;border-radius:8px;padding:14px;margin-bottom:12px">
     <div style="font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin-bottom:10px">New Capital House — Cost: Ƒ10,000,000</div>
     <input id="g-new-name" class="input" placeholder="Fund name (3–40 chars)" style="width:100%;margin-bottom:7px;box-sizing:border-box"/>
     <textarea id="g-new-desc" class="input" placeholder="Description (optional)" rows="2" style="width:100%;resize:none;margin-bottom:7px;box-sizing:border-box"></textarea>
@@ -469,14 +473,14 @@ window.storeSubTab=storeSubTab;
   <div id="guild-detail" style="display:none">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <button class="btn" id="g-back-btn" style="padding:3px 10px;font-size:.8rem">← Back</button>
-      <span id="g-detail-name" style="font-size:1rem;font-weight:700;color:#ffb547"></span>
+      <span id="g-detail-name" style="font-size:1rem;font-weight:700;color:#46ff7d"></span>
       <span id="g-detail-type-badge" style="font-size:.75rem;padding:2px 8px;border-radius:10px;border:1px solid #333"></span>
     </div>
     <div id="g-detail-desc" style="font-size:.8rem;opacity:.6;margin-bottom:8px"></div>
 
     <!-- Sub-tab nav -->
-    <div id="g-subtabs" style="display:flex;gap:2px;border-bottom:1px solid #2a1a04;margin-bottom:10px">
-      <div class="g-stab" data-gpane="overview"  style="padding:5px 12px;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-bottom:2px solid #ffb547;color:#ffb547">Overview</div>
+    <div id="g-subtabs" style="display:flex;gap:2px;border-bottom:1px solid #0a3315;margin-bottom:10px">
+      <div class="g-stab" data-gpane="overview"  style="padding:5px 12px;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-bottom:2px solid #46ff7d;color:#46ff7d">Overview</div>
       <div class="g-stab" data-gpane="portfolio" style="padding:5px 12px;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-bottom:2px solid transparent;color:#6a5a3a">Portfolio</div>
       <div class="g-stab" data-gpane="governance" style="padding:5px 12px;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-bottom:2px solid transparent;color:#6a5a3a">Governance</div>
       <div class="g-stab" data-gpane="manage" id="g-stab-manage" style="padding:5px 12px;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-bottom:2px solid transparent;color:#6a5a3a">Manage</div>
@@ -491,7 +495,7 @@ window.storeSubTab=storeSubTab;
         <div class="guild-stat"><div class="gs-label">Contributed</div><div class="gs-val" id="g-d-myval"></div></div>
       </div>
 
-      <div id="g-perf-wrap" style="margin-bottom:12px;border:1px solid #2a1a04;border-radius:6px;background:#050403;padding:10px">
+      <div id="g-perf-wrap" style="margin-bottom:12px;border:1px solid #0a3315;border-radius:6px;background:#050403;padding:10px">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
           <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">Performance</div>
           <div id="g-perf-delta" style="font-size:.74rem;font-weight:700"></div>
@@ -499,12 +503,12 @@ window.storeSubTab=storeSubTab;
         <div style="display:flex;gap:10px;align-items:stretch;flex-wrap:wrap">
           <canvas id="g-perf-donut" width="160" height="160" style="flex:0 0 160px;height:160px;border-radius:6px"></canvas>
           <div id="g-perf-metrics" style="flex:1;min-width:210px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-content:center">
-            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Max Drawdown</div><div id="gm-drawdown" style="font-size:1rem;font-weight:700;color:#ff6b6b">—</div></div>
-            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Best Period</div><div id="gm-best" style="font-size:1rem;font-weight:700;color:#86ff6a">—</div></div>
-            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Worst Period</div><div id="gm-worst" style="font-size:1rem;font-weight:700;color:#ff6b6b">—</div></div>
-            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Volatility</div><div id="gm-vol" style="font-size:1rem;font-weight:700;color:#ffb547">—</div></div>
-            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Win Rate</div><div id="gm-winrate" style="font-size:1rem;font-weight:700;color:#4ecdc4">—</div></div>
-            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Total Return</div><div id="gm-return" style="font-size:1rem;font-weight:700;color:#c8a86a">—</div></div>
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Max Drawdown</div><div id="gm-drawdown" style="font-size:1rem;font-weight:700;color:#ff6b6b">—</div></div>
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Best Period</div><div id="gm-best" style="font-size:1rem;font-weight:700;color:#86ff6a">—</div></div>
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Worst Period</div><div id="gm-worst" style="font-size:1rem;font-weight:700;color:#ff6b6b">—</div></div>
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Volatility</div><div id="gm-vol" style="font-size:1rem;font-weight:700;color:#46ff7d">—</div></div>
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Win Rate</div><div id="gm-winrate" style="font-size:1rem;font-weight:700;color:#4ecdc4">—</div></div>
+            <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px"><div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Total Return</div><div id="gm-return" style="font-size:1rem;font-weight:700;color:#7fc090">—</div></div>
           </div>
         </div>
         <div id="g-perf-empty" style="display:none;font-size:.74rem;opacity:.4;text-align:center;padding:10px 0">Performance metrics fill in as the house trades — tracking began at deploy.</div>
@@ -535,7 +539,7 @@ window.storeSubTab=storeSubTab;
 
     <!-- ═══ PORTFOLIO ═══ -->
     <div id="g-pane-portfolio" class="g-pane" style="display:none">
-      <div id="g-trade-panel" style="display:none;margin-bottom:10px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+      <div id="g-trade-panel" style="display:none;margin-bottom:10px;padding:10px;border:1px solid #0a3315;border-radius:6px;background:#050403">
         <div style="font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Fund Trade</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <select id="g-t-side" class="input" style="max-width:80px"><option value="buy">BUY</option><option value="sell">SELL</option></select>
@@ -581,7 +585,7 @@ window.storeSubTab=storeSubTab;
       <div id="g-gov-mode-badge" style="font-size:.8rem;margin-bottom:10px"></div>
 
       <!-- Owner: set governance mode -->
-      <div id="g-gov-owner" style="display:none;margin-bottom:12px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+      <div id="g-gov-owner" style="display:none;margin-bottom:12px;padding:10px;border:1px solid #0a3315;border-radius:6px;background:#050403">
         <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Governance Mode</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <select id="g-gov-select" class="input" style="max-width:200px">
@@ -607,12 +611,12 @@ window.storeSubTab=storeSubTab;
       </div>
 
       <div id="g-golden-box" style="margin-bottom:12px;padding:8px 10px;border:1px solid #4a3a14;border-radius:6px;background:#0a0805">
-        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:#e6c27a;margin-bottom:4px">Golden Share</div>
+        <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:#72e09c;margin-bottom:4px">Golden Share</div>
         <div id="g-golden-holder" style="font-size:.78rem;opacity:.8;margin-bottom:6px"></div>
         <div id="g-golden-controls" style="display:none">
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <input id="g-golden-target" class="input" placeholder="Member name" style="max-width:140px" maxlength="32"/>
-            <button class="btn" id="g-golden-transfer-btn" style="border-color:#e6c27a;color:#e6c27a">Hand Over Golden Share</button>
+            <button class="btn" id="g-golden-transfer-btn" style="border-color:#72e09c;color:#72e09c">Hand Over Golden Share</button>
           </div>
           <div style="font-size:.68rem;opacity:.45;margin-top:3px">You can veto any open proposal below. Transferring is permanent and instant.</div>
         </div>
@@ -620,7 +624,7 @@ window.storeSubTab=storeSubTab;
       </div>
 
       <!-- Propose a trade (vote / council) -->
-      <div id="g-propose-panel" style="display:none;margin-bottom:12px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+      <div id="g-propose-panel" style="display:none;margin-bottom:12px;padding:10px;border:1px solid #0a3315;border-radius:6px;background:#050403">
         <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Propose Trade</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <select id="g-pr-side" class="input" style="max-width:80px"><option value="buy">BUY</option><option value="sell">SELL</option></select>
@@ -641,7 +645,7 @@ window.storeSubTab=storeSubTab;
           <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">Member Polls</div>
           <button class="btn" id="g-create-poll-btn" style="padding:2px 10px;font-size:.72rem">+ New Poll</button>
         </div>
-        <div id="g-poll-form" style="display:none;background:#060504;border:1px solid #2a1a04;border-radius:6px;padding:10px;margin-bottom:8px">
+        <div id="g-poll-form" style="display:none;background:#060504;border:1px solid #0a3315;border-radius:6px;padding:10px;margin-bottom:8px">
           <input id="g-poll-question" class="input" placeholder="Poll question…" style="width:100%;margin-bottom:5px;box-sizing:border-box" maxlength="200"/>
           <div id="g-poll-options-list">
             <input class="input g-poll-opt" placeholder="Option 1" style="width:100%;margin-bottom:4px;box-sizing:border-box"/>
@@ -665,7 +669,7 @@ window.storeSubTab=storeSubTab;
         <button class="btn" id="g-buy-slot-btn" style="padding:3px 10px;font-size:.78rem;margin-left:8px">+1 Slot (Ƒ100k)</button>
       </div>
 
-      <div id="g-owner-panel" style="display:none;margin-bottom:10px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403">
+      <div id="g-owner-panel" style="display:none;margin-bottom:10px;padding:10px;border:1px solid #0a3315;border-radius:6px;background:#050403">
         <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:7px">Owner Controls</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
           <input id="g-owner-withdraw-amt" class="input" type="number" min="1" placeholder="Amount Ƒ" style="max-width:110px"/>
@@ -694,7 +698,7 @@ window.storeSubTab=storeSubTab;
         </div>
         <div id="g-officer-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #1a1a0a">
-          <button class="btn" id="g-edit-btn" onclick="window._fmEditFund()" style="border-color:#e6c27a;color:#e6c27a;font-size:.72rem;padding:3px 10px">Edit Name/Desc (Ƒ250k)</button>
+          <button class="btn" id="g-edit-btn" onclick="window._fmEditFund()" style="border-color:#72e09c;color:#72e09c;font-size:.72rem;padding:3px 10px">Edit Name/Desc (Ƒ250k)</button>
           <button class="btn" id="g-delete-btn" onclick="window._fmDeleteFund()" style="border-color:#ff4444;color:#ff4444;font-size:.72rem;padding:3px 10px">Disband Fund (Refund Ƒ5M)</button>
         </div>
         <div id="g-owner-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
@@ -720,7 +724,7 @@ window.storeSubTab=storeSubTab;
           <filter id="gf-syndicate" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#e74c3c" flood-opacity="0.7" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           <filter id="gf-void" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#9b59b6" flood-opacity="0.7" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           <filter id="gf-contested" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="10" result="b"/><feFlood flood-color="#f39c12" flood-opacity="0.9" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-          <filter id="gf-dev" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="10" result="b"/><feFlood flood-color="#ffd700" flood-opacity="0.8" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="gf-dev" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="10" result="b"/><feFlood flood-color="#9dff5a" flood-opacity="0.8" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           <filter id="gf-guild"  x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#2ecc71" flood-opacity="0.7" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
         </defs>
         <image id="gNebula" href="assets/space/backgrounds/blue_purple.png" x="-300" y="-300" width="1700" height="1400" preserveAspectRatio="xMidYMid slice" opacity="0" style="transition:opacity 1.2s ease"/>
@@ -821,22 +825,22 @@ window.storeSubTab=storeSubTab;
      window.postMessage for bank updates. -->
 <div id="miningTab" style="display:none;padding:24px 16px;
      font-family:'Courier New','Lucida Console',monospace;
-     color:#e6c27a;
+     color:#72e09c;
      background:radial-gradient(ellipse at 30% 20%, #120820 0%, transparent 50%),
                 radial-gradient(ellipse at 80% 70%, #0a0614 0%, transparent 55%),
                 #02020a;
      min-height:400px; flex-direction:column; align-items:center; overflow-y:auto">
 
-  <div style="font-size:13px; letter-spacing:.2em; color:#8a7a50; text-transform:uppercase; text-align:center; margin-bottom:10px">OPEN RANGE · UNREGULATED EXTRACTION ZONE</div>
+  <div style="font-size:13px; letter-spacing:.2em; color:#4f8f5f; text-transform:uppercase; text-align:center; margin-bottom:10px">OPEN RANGE · UNREGULATED EXTRACTION ZONE</div>
 
-  <h2 style="font-size:32px; letter-spacing:.3em; color:#e6c27a; margin:0 0 6px; text-shadow:0 0 24px rgba(230,194,122,.3); text-align:center">DRONE MINING</h2>
+  <h2 style="font-size:32px; letter-spacing:.3em; color:#72e09c; margin:0 0 6px; text-shadow:0 0 24px rgba(230,194,122,.3); text-align:center">DRONE MINING</h2>
   <div style="font-size:14px; letter-spacing:.22em; color:#8a6a30; text-align:center; margin-bottom:22px">ONE SHOT · ONE TANK · ONE CHANCE</div>
 
   <!-- Lore panel: high contrast prose -->
   <div style="max-width:720px; width:100%; box-sizing:border-box;
               margin:0 auto 22px; padding:20px 26px;
               border:1px solid #3a2a10; background:rgba(10,6,2,.55);
-              font-size:16px; color:#c8b088; line-height:1.75; letter-spacing:.03em">
+              font-size:16px; color:#a8d8b8; line-height:1.75; letter-spacing:.03em">
     <p style="margin:0 0 12px">
       Every faction agreed on one thing: the asteroid belts are where conflict happens.
       No treaty covers the open range. No safety board patrols the rocks.
@@ -855,19 +859,19 @@ window.storeSubTab=storeSubTab;
               border:1px solid #3a2a10; background:rgba(10,6,2,.6);
               padding:16px 24px; display:flex; flex-direction:column; gap:8px; box-sizing:border-box">
     <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px">
-      <span style="color:#8a7a50; letter-spacing:.1em; text-transform:uppercase">Current Bank</span>
-      <span id="mining-brief-bank" style="color:#e6c27a; font-weight:bold; font-size:18px">Ƒ0</span>
+      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase">Current Bank</span>
+      <span id="mining-brief-bank" style="color:#72e09c; font-weight:bold; font-size:18px">Ƒ0</span>
     </div>
     <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px">
-      <span style="color:#8a7a50; letter-spacing:.1em; text-transform:uppercase">Minimum Loadout</span>
-      <span style="color:#e6c27a; font-weight:bold; font-size:18px">Ƒ1,000</span>
+      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase">Minimum Loadout</span>
+      <span style="color:#72e09c; font-weight:bold; font-size:18px">Ƒ1,000</span>
     </div>
     <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px">
-      <span style="color:#8a7a50; letter-spacing:.1em; text-transform:uppercase">Drone Refund</span>
+      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase">Drone Refund</span>
       <span style="color:#86ff6a; font-weight:bold; font-size:18px">+Ƒ1,000 if drone survives the run</span>
     </div>
     <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px">
-      <span style="color:#8a7a50; letter-spacing:.1em; text-transform:uppercase">Factions</span>
+      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase">Factions</span>
       <span style="font-weight:bold; font-size:14px; letter-spacing:.08em">
         <span style="color:#4ecdc4">COALITION</span> ·
         <span style="color:#e74c3c">SYNDICATE</span> ·
@@ -876,7 +880,7 @@ window.storeSubTab=storeSubTab;
     </div>
   </div>
 
-  <button id="miningLaunchBtn" style="display:block; margin:8px auto 16px; padding:18px 56px; min-width:360px; background:linear-gradient(180deg, #1a0f04 0%, #0a0600 100%); border:1px solid #8a6a30; color:#e6c27a; font:bold 20px 'Courier New',monospace; letter-spacing:.2em; cursor:pointer; transition:all .15s">⛏ LAUNCH EXPEDITION</button>
+  <button id="miningLaunchBtn" style="display:block; margin:8px auto 16px; padding:18px 56px; min-width:360px; background:linear-gradient(180deg, #1a0f04 0%, #0a0600 100%); border:1px solid #8a6a30; color:#72e09c; font:bold 20px 'Courier New',monospace; letter-spacing:.2em; cursor:pointer; transition:all .15s">⛏ LAUNCH EXPEDITION</button>
 
   <div style="max-width:560px; margin:10px auto 20px; font-size:12px; color:#6a5a38; letter-spacing:.08em; line-height:1.6; text-align:center">
     Game opens in a fullscreen view. The in-game BACK button returns you here.
@@ -887,8 +891,8 @@ window.storeSubTab=storeSubTab;
   <div id="miningLeaderboardPanel" style="max-width:720px; width:100%; box-sizing:border-box;
               margin:0 auto 22px; padding:20px 26px;
               border:1px solid #3a2a10; background:rgba(10,6,2,.55);
-              font-size:14px; color:#c8b088">
-    <h3 style="margin:0 0 14px; font-size:16px; letter-spacing:.22em; color:#e6c27a; text-transform:uppercase">⛏ Top Expeditions</h3>
+              font-size:14px; color:#a8d8b8">
+    <h3 style="margin:0 0 14px; font-size:16px; letter-spacing:.22em; color:#72e09c; text-transform:uppercase">⛏ Top Expeditions</h3>
     <div id="miningLeaderboardBody" style="font-family:'Courier New',monospace">
       <div style="color:#6a5a38; text-align:center; padding:14px 0">Loading leaderboard…</div>
     </div>
@@ -901,46 +905,46 @@ window.storeSubTab=storeSubTab;
   <div style="max-width:720px; width:100%; box-sizing:border-box;
               margin:0 auto 22px; padding:20px 26px;
               border:1px solid #3a2a10; background:rgba(10,6,2,.55);
-              font-size:15px; color:#c8b088; line-height:1.7">
-    <h3 style="margin:0 0 14px; font-size:16px; letter-spacing:.22em; color:#e6c27a; text-transform:uppercase">How Mining Works</h3>
+              font-size:15px; color:#a8d8b8; line-height:1.7">
+    <h3 style="margin:0 0 14px; font-size:16px; letter-spacing:.22em; color:#72e09c; text-transform:uppercase">How Mining Works</h3>
 
     <div style="display:grid; grid-template-columns:120px 1fr; gap:10px 18px; align-items:baseline">
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Movement</div>
-      <div><span style="color:#e6c27a;font-weight:bold">WASD</span> or arrow keys fly the drone. Momentum carries you; plan approaches.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Movement</div>
+      <div><span style="color:#72e09c;font-weight:bold">WASD</span> or arrow keys fly the drone. Momentum carries you; plan approaches.</div>
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Mining</div>
-      <div>Hold <span style="color:#e6c27a;font-weight:bold">LEFT CLICK</span> to fire the mining laser at rocks. Each rock takes time to drill. When the drill bar fills, its mineral type and ore yield are revealed. Empty rocks still require a drill cycle, then explode. Buy the Improved Scanner perk to see contents without drilling.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Mining</div>
+      <div>Hold <span style="color:#72e09c;font-weight:bold">LEFT CLICK</span> to fire the mining laser at rocks. Each rock takes time to drill. When the drill bar fills, its mineral type and ore yield are revealed. Empty rocks still require a drill cycle, then explode. Buy the Improved Scanner perk to see contents without drilling.</div>
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Combat</div>
-      <div><span style="color:#e6c27a;font-weight:bold">RIGHT CLICK</span> fires your auto-cannon. Bullets travel forward from your nose, but within medium range and a ±60° forward cone they snap to the nearest rival. Hostile ships show a red <span style="color:#ff4a4a;font-weight:bold">HOSTILE</span> tag above them. Two solid hits kill a fighter.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Combat</div>
+      <div><span style="color:#72e09c;font-weight:bold">RIGHT CLICK</span> fires your auto-cannon. Bullets travel forward from your nose, but within medium range and a ±60° forward cone they snap to the nearest rival. Hostile ships show a red <span style="color:#ff4a4a;font-weight:bold">HOSTILE</span> tag above them. Two solid hits kill a fighter.</div>
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Heat</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Heat</div>
       <div>Sustained mining overheats the laser. At 100% heat the laser <em style="color:#ff9a4a;font-style:normal">and</em> your thrust lock out until it cools below 40%. Don't hold the trigger on rock you've already depleted.</div>
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Factions</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Factions</div>
       <div>Your drone flies under your FleshMarket faction's colors. Same-faction drones patrol but won't attack you. Rivals will, and show HOSTILE tags. If you have no faction set, <em style="color:#ff9a4a;font-style:normal">every</em> patrol treats you as hostile — factionless is lone-wolf mode. Syndicate drones are fast and swarm; Void drones are slow but their bullets hit harder; Coalition is balanced.</div>
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Scrap</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Scrap</div>
       <div>Killing enemies drops salvage. Tougher fights drop more: Void enemies drop more than Coalition, chasing enemies drop more than patrollers, and higher run difficulty scales scrap value up. Risky combat pays off.</div>
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Depth</div>
-      <div><span style="color:#86ff6a;font-weight:bold">NEAR</span> iron and cobalt, thin hostiles. <span style="color:#e6c27a;font-weight:bold">MID</span> gold appears. <span style="color:#ff9a4a;font-weight:bold">DEEP</span> painite, void opal, thick hostiles. <span style="color:#ff4a4a;font-weight:bold">VOID</span> musgravite, Ƒ250/unit, swarms.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Depth</div>
+      <div><span style="color:#86ff6a;font-weight:bold">NEAR</span> iron and cobalt, thin hostiles. <span style="color:#72e09c;font-weight:bold">MID</span> gold appears. <span style="color:#ff9a4a;font-weight:bold">DEEP</span> painite, void opal, thick hostiles. <span style="color:#ff4a4a;font-weight:bold">VOID</span> musgravite, Ƒ250/unit, swarms.</div>
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Docking</div>
-      <div>Return to the mothership and press <span style="color:#e6c27a;font-weight:bold">Q</span> to bank your current cargo. You can dock, leave, and mine again as many times as you want. Drones only get refunded at end of run if they're still alive. Fuel is <em style="color:#ff9a4a;font-style:normal">not</em> refilled on dock. One tank per drone.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Docking</div>
+      <div>Return to the mothership and press <span style="color:#72e09c;font-weight:bold">Q</span> to bank your current cargo. You can dock, leave, and mine again as many times as you want. Drones only get refunded at end of run if they're still alive. Fuel is <em style="color:#ff9a4a;font-style:normal">not</em> refilled on dock. One tank per drone.</div>
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Dying</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Dying</div>
       <div>One hostile round ends the drone. The run is over. Undeployed escorts and refineries are refunded at end of run.</div>
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Refineries</div>
-      <div>Optional loadout item. Press <span style="color:#e6c27a;font-weight:bold">R</span> in the field to deploy a portable fuel refinery. It generates fuel while you park near it. Enemies can destroy it.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Refineries</div>
+      <div>Optional loadout item. Press <span style="color:#72e09c;font-weight:bold">R</span> in the field to deploy a portable fuel refinery. It generates fuel while you park near it. Enemies can destroy it.</div>
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Escorts</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Escorts</div>
       <div>Optional loadout item. Small combat drones orbit your drone and shoot hostiles automatically. They absorb hits for you. They die with your drone.</div>
 
-      <div style="color:#8a7a50; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Ships</div>
-      <div>The <span style="color:#e6c27a;font-weight:bold">SHIPS</span> button opens the shipyard. Twelve alternate hulls across three faction styles: <span style="color:#4ecdc4;font-weight:bold">Coalition</span> (mining focus — faster drills, higher heat cap), <span style="color:#e74c3c;font-weight:bold">Syndicate</span> (combat focus — higher fire rate, free escorts), <span style="color:#9b59b6;font-weight:bold">Void</span> (drone focus — built-in cargo drones that haul ore to the mothership while you mine). Ships are one-time purchases, available regardless of your own faction. Stats multiply your loadout tiers and perks. Each ship class also grants additional hull HP: Scout 2, Prospector 3, Hauler 4, Dreadnought 5. You survive that many hits before dying. Press <span style="color:#e6c27a;font-weight:bold">T</span> in the field to toggle auto-miner on ships that have it — off by default to protect your heat sink in easy zones.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Ships</div>
+      <div>The <span style="color:#72e09c;font-weight:bold">SHIPS</span> button opens the shipyard. Twelve alternate hulls across three faction styles: <span style="color:#4ecdc4;font-weight:bold">Coalition</span> (mining focus — faster drills, higher heat cap), <span style="color:#e74c3c;font-weight:bold">Syndicate</span> (combat focus — higher fire rate, free escorts), <span style="color:#9b59b6;font-weight:bold">Void</span> (drone focus — built-in cargo drones that haul ore to the mothership while you mine). Ships are one-time purchases, available regardless of your own faction. Stats multiply your loadout tiers and perks. Each ship class also grants additional hull HP: Scout 2, Prospector 3, Hauler 4, Dreadnought 5. You survive that many hits before dying. Press <span style="color:#72e09c;font-weight:bold">T</span> in the field to toggle auto-miner on ships that have it — off by default to protect your heat sink in easy zones.</div>
 
     </div>
   </div>
@@ -1084,7 +1088,7 @@ window.storeSubTab=storeSubTab;
     <button onclick="channelRoomNav('patreon',1)" style="background:none;border:1px solid #2a1010;border-radius:4px;color:#884444;font-size:.65rem;padding:1px 7px;cursor:pointer;line-height:1.5">▶</button>
   </div>
   <!-- Patreon rooms 1-5 -->
-  <div class="chat-channel" id="chatch-patreon" data-room="1"><div style="opacity:.75;font-size:.73rem;padding:6px;color:#d4a05e">Premium members only.</div></div>
+  <div class="chat-channel" id="chatch-patreon" data-room="1"><div style="opacity:.75;font-size:.73rem;padding:6px;color:#72e09c">Premium members only.</div></div>
   <div class="chat-channel" id="chatch-patreon-r2" data-room="2" style="display:none"></div>
   <div class="chat-channel" id="chatch-patreon-r3" data-room="3" style="display:none"></div>
   <div class="chat-channel" id="chatch-patreon-r4" data-room="4" style="display:none"></div>
@@ -1101,17 +1105,17 @@ window.storeSubTab=storeSubTab;
     <button onclick="channelRoomNav('guild',1)" style="background:none;border:1px solid #2a1010;border-radius:4px;color:#884444;font-size:.65rem;padding:1px 7px;cursor:pointer;line-height:1.5">▶</button>
   </div>
   <!-- Guild rooms 1-5 -->
-  <div class="chat-channel" id="chatch-guild" data-room="1"><div id="guildPlaceholder" style="opacity:.75;font-size:.73rem;padding:6px;color:#d4a05e">Merchants Guild members only.</div></div>
+  <div class="chat-channel" id="chatch-guild" data-room="1"><div id="guildPlaceholder" style="opacity:.75;font-size:.73rem;padding:6px;color:#72e09c">Merchants Guild members only.</div></div>
   <div class="chat-channel" id="chatch-guild-r2" data-room="2" style="display:none"></div>
   <div class="chat-channel" id="chatch-guild-r3" data-room="3" style="display:none"></div>
   <div class="chat-channel" id="chatch-guild-r4" data-room="4" style="display:none"></div>
   <div class="chat-channel" id="chatch-guild-r5" data-room="5" style="display:none"></div>
 
   <!-- Whisper (single pane, no rooms) -->
-  <div class="chat-channel" id="chatch-whisper"><div class="chat-ph" style="opacity:.75;font-size:.73rem;padding:6px;color:#d4a05e">Private messages appear here.<br>Type <b style="color:#ffb547">@name message</b> to whisper.</div></div>
+  <div class="chat-channel" id="chatch-whisper"><div class="chat-ph" style="opacity:.75;font-size:.73rem;padding:6px;color:#72e09c">Private messages appear here.<br>Type <b style="color:#46ff7d">@name message</b> to whisper.</div></div>
 
   <!-- Dunce (single room, no pager) -->
-  <div class="chat-channel" id="chatch-dunce"><div style="opacity:.75;font-size:.73rem;padding:6px;color:#d4a05e">🎓 Dunce corner. Visible to dunced players and devs only.</div></div>
+  <div class="chat-channel" id="chatch-dunce"><div style="opacity:.75;font-size:.73rem;padding:6px;color:#72e09c">🎓 Dunce corner. Visible to dunced players and devs only.</div></div>
 
   <!-- Unmod Room Pager -->
   <div id="unmodRoomPager" class="roomPager" style="
@@ -1124,7 +1128,7 @@ window.storeSubTab=storeSubTab;
     <button onclick="channelRoomNav('unmod',1)" style="background:none;border:1px solid #2a1010;border-radius:4px;color:#884444;font-size:.65rem;padding:1px 7px;cursor:pointer;line-height:1.5">▶</button>
   </div>
   <!-- Unmod rooms 1-10 -->
-  <div class="chat-channel" id="chatch-unmod" data-room="1"><div style="opacity:.75;font-size:.73rem;padding:6px;color:#d4a05e">🔞 Unmoderated. All content visible here. Premium access only.</div></div>
+  <div class="chat-channel" id="chatch-unmod" data-room="1"><div style="opacity:.75;font-size:.73rem;padding:6px;color:#72e09c">🔞 Unmoderated. All content visible here. Premium access only.</div></div>
   <div class="chat-channel" id="chatch-unmod-r2" data-room="2" style="display:none"></div>
   <div class="chat-channel" id="chatch-unmod-r3" data-room="3" style="display:none"></div>
   <div id="chatInputRow" style="position:relative">
@@ -1134,8 +1138,8 @@ window.storeSubTab=storeSubTab;
     <button id="chatSend">Send</button>
     <div id="chatMentionDrop" style="display:none;bottom:34px;left:0"></div>
     <div style="position:absolute;right:0;bottom:calc(100% + 2px);display:flex;gap:2px">
-      <button id="chatFontDec" title="Smaller text" style="background:rgba(30,20,5,.6);border:1px solid #5a4a2a;border-radius:3px;color:#c8a040;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#ffcc44';this.style.borderColor='#8a7a4a'" onmouseleave="this.style.color='#c8a040';this.style.borderColor='#5a4a2a'">A−</button>
-      <button id="chatFontInc" title="Larger text"  style="background:rgba(30,20,5,.6);border:1px solid #5a4a2a;border-radius:3px;color:#c8a040;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#ffcc44';this.style.borderColor='#8a7a4a'" onmouseleave="this.style.color='#c8a040';this.style.borderColor='#5a4a2a'">A+</button>
+      <button id="chatFontDec" title="Smaller text" style="background:rgba(6,26,14,.6);border:1px solid #1f4a2f;border-radius:3px;color:#72e09c;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#9dff5a';this.style.borderColor='#4f8a5f'" onmouseleave="this.style.color='#72e09c';this.style.borderColor='#1f4a2f'">A−</button>
+      <button id="chatFontInc" title="Larger text"  style="background:rgba(6,26,14,.6);border:1px solid #1f4a2f;border-radius:3px;color:#72e09c;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#9dff5a';this.style.borderColor='#4f8a5f'" onmouseleave="this.style.color='#72e09c';this.style.borderColor='#1f4a2f'">A+</button>
     </div>
   </div>
 </div>
@@ -1144,7 +1148,7 @@ window.storeSubTab=storeSubTab;
   <div style="font-size:1.5rem;margin-bottom:4px">🎓</div>
   <div style="color:#ff4444;font-weight:700;letter-spacing:.1em;font-size:.85rem;text-transform:uppercase;margin-bottom:4px">You Are In The Dunce Corner</div>
   <div id="dunce-reason-text" style="color:#884444;font-size:.73rem;margin-bottom:10px;font-style:italic"></div>
-  <div style="color:#666;font-size:.7rem;margin-bottom:8px">All chat channels are blocked. You may only use the Dunce channel.<br>To escape, pay <strong id="dunce-fine-display" style="color:#ffb547">45% of your net worth</strong> in cash.</div>
+  <div style="color:#666;font-size:.7rem;margin-bottom:8px">All chat channels are blocked. You may only use the Dunce channel.<br>To escape, pay <strong id="dunce-fine-display" style="color:#46ff7d">45% of your net worth</strong> in cash.</div>
   <button id="dunce-redeem-btn" onclick="window.dunceRedeem()" style="background:#1a0000;border:1px solid #ff4444;color:#ff6666;font-family:inherit;font-size:.78rem;padding:6px 18px;border-radius:5px;cursor:pointer;letter-spacing:.06em">💸 PAY FINE &amp; ESCAPE</button>
   <div id="dunce-redeem-hint" style="font-size:.7rem;color:#666;margin-top:6px"></div>
 </div>
@@ -1156,7 +1160,7 @@ window.storeSubTab=storeSubTab;
     <input class="input" id="amt" min="1" style="max-width:110px" type="number" value="10"/>
     <button class="btn" id="xfer">Wire</button>
   </div>
-  <div style="font-size:.62rem;color:#665533;margin-top:4px;letter-spacing:.03em;line-height:1.3">* Standard 2% transfer tax applies. Transfers exceeding Ƒ10,000 are subject to 90% taxation by the Merchant Guild.</div>
+  <div style="font-size:.62rem;color:#3a5f3a;margin-top:4px;letter-spacing:.03em;line-height:1.3">* Standard 2% transfer tax applies. Transfers exceeding Ƒ10,000 are subject to 90% taxation by the Merchant Guild.</div>
 </div>
 <div id="leaderboardCompact">
   <h2 style="margin:4px 0 4px 0;font-size:11px">Leaderboard <span style="opacity:.4;font-weight:400;letter-spacing:.04em">NET WORTH</span></h2>
@@ -1180,7 +1184,7 @@ window.storeSubTab=storeSubTab;
   <div style="background:#100a04;border:1px solid #8b0000;border-radius:10px;padding:28px 32px;max-width:480px;width:90%;box-shadow:0 0 40px rgba(180,0,0,.35)">
     <div style="font-size:1.3rem;font-weight:700;color:#ff4444;letter-spacing:.08em;margin-bottom:12px;text-align:center">🔞 ADULTS ONLY — 18+</div>
     <div style="font-size:.85rem;color:#ccc;line-height:1.7;margin-bottom:18px">
-      <strong style="color:#ffb547">Warning:</strong> The Unmoderated Chat channel contains <strong>no content filtering</strong>.
+      <strong style="color:#46ff7d">Warning:</strong> The Unmoderated Chat channel contains <strong>no content filtering</strong>.
       Users in this channel may be subject to a wide range of discriminatory language, slurs, and other offensive content that is explicitly permitted here.<br><br>
       By entering, you confirm that you are <strong>18 years of age or older</strong> and that you <strong>voluntarily consent</strong> to viewing unfiltered content, including potentially hateful or offensive speech.
     </div>
@@ -1192,11 +1196,11 @@ window.storeSubTab=storeSubTab;
 </div>
 <!-- ── Non-Patron Unmod Block Modal ─────────────────────────────────── -->
 <div id="unmod-patron-gate-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);align-items:center;justify-content:center">
-  <div style="background:#100a04;border:1px solid #4a3510;border-radius:10px;padding:28px 32px;max-width:480px;width:90%;box-shadow:0 0 40px rgba(100,60,0,.35)">
-    <div style="font-size:1.1rem;font-weight:700;color:#ffb547;letter-spacing:.08em;margin-bottom:12px;text-align:center">🔒 Premium-Only Channel</div>
+  <div style="background:#100a04;border:1px solid #1f4515;border-radius:10px;padding:28px 32px;max-width:480px;width:90%;box-shadow:0 0 40px rgba(100,60,0,.35)">
+    <div style="font-size:1.1rem;font-weight:700;color:#46ff7d;letter-spacing:.08em;margin-bottom:12px;text-align:center">🔒 Premium-Only Channel</div>
     <div style="font-size:.85rem;color:#ccc;line-height:1.7;margin-bottom:14px">
       The <strong>Unmoderated Chat</strong> channel is available to all active Premium members (any tier).
-      <a href="https://www.patreon.com/FLSH" target="_blank" style="color:#ffb547">Support us on Patreon</a> to unlock access.<br><br>
+      <a href="https://www.patreon.com/FLSH" target="_blank" style="color:#ffce4d">Support us on Patreon</a> to unlock access.<br><br>
       <span style="color:#aaa;font-size:.8rem"><strong>Note:</strong> This channel contains no content filtering. Users may be subject to discriminatory language, slurs, and other offensive content. All participants 18+ and enter voluntarily.</span>
     </div>
     <div style="text-align:center">
@@ -1213,7 +1217,7 @@ window.storeSubTab=storeSubTab;
 <div class="row"><div class="lab">Avg Cost</div><div class="val" id="sm-avg">0</div></div>
 <div class="row"><div class="lab">Last Price</div><div class="val" id="sm-last">0</div></div>
 <div class="row"><div class="lab">Qty to sell</div><input id="sm-qty" min="1" step="1" style="width:120px;" type="number" value="1"/><span class="small">max <span id="sm-max">0</span></span></div>
-<div class="row small"><div class="lab">Sale Value</div><div class="val" id="sm-value" style="color:#e6c27a">0</div></div>
+<div class="row small"><div class="lab">Sale Value</div><div class="val" id="sm-value" style="color:#72e09c">0</div></div>
 <div class="row small"><div class="lab">Unrealized P&amp;L</div><div class="val" id="sm-pnl">0</div></div>
 <div class="actions">
 <button id="sm-cancel">Cancel</button>
@@ -1376,9 +1380,9 @@ function __updateEffectivePositions(){
         dot.textContent = room;
         dot.style.cssText = [
           'background:' + (room === cur ? '#6a1a00' : '#110505'),
-          'border:1px solid ' + (room === cur ? '#ff6a00' : '#2a1010'),
+          'border:1px solid ' + (room === cur ? '#2f9f4a' : '#2a1010'),
           'border-radius:4px',
-          'color:' + (room === cur ? '#ff9900' : '#552222'),
+          'color:' + (room === cur ? '#42ff7e' : '#2f5a3a'),
           'font-size:.62rem',
           'padding:1px 5px',
           'cursor:pointer',
@@ -1577,13 +1581,13 @@ ws.addEventListener('message', function(ev){
 <link rel="stylesheet" href="assets/toast.css">
 <style>
 /* Market Tools — Watchlist, Alerts, Metrics, Detail, News Filter */
-#watchlist-bar button:hover{border-color:#ffb547!important;color:#ffb547!important}
-.wl-star:hover{color:#ffb547!important;transform:scale(1.2)}
-#alertPanel .btn:hover{border-color:#ffb547;color:#ffb547}
+#watchlist-bar button:hover{border-color:#46ff7d!important;color:#46ff7d!important}
+.wl-star:hover{color:#46ff7d!important;transform:scale(1.2)}
+#alertPanel .btn:hover{border-color:#46ff7d;color:#46ff7d}
 #companyDetail{animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .metric-card{background:#080604;transition:border-color .2s}
-.metric-card:hover{border-color:#2a1a04!important}
+.metric-card:hover{border-color:#0a3315!important}
 #newsFilter:focus{border-color:#884444;outline:none}
 #newsFilter::placeholder{color:#442222}
 </style>
@@ -1623,8 +1627,8 @@ ws.addEventListener('message', function(ev){
     <div style="margin-top:4px">
       <input id="modReason" placeholder="Reason (optional)" style="
         width:100%;box-sizing:border-box;background:#050403;
-        border:1px solid #2a1a04;border-radius:5px;
-        color:#c8a86a;font-size:.78rem;padding:5px 8px;
+        border:1px solid #0a3315;border-radius:5px;
+        color:#7fc090;font-size:.78rem;padding:5px 8px;
         outline:none;font-family:inherit
       "/>
     </div>
@@ -1795,7 +1799,7 @@ ws.addEventListener('message', function(ev){
           oninput="godPlayerSearch(this.value)">
         <button class="god-btn" onclick="godLookup()">Look Up</button>
       </div>
-      <div id="god-player-info" style="display:none;background:#0d0800;border:1px solid #ff990022;border-radius:7px;padding:8px 10px;margin-bottom:10px;font-size:.76rem;color:#c8a86a;line-height:1.7"></div>
+      <div id="god-player-info" style="display:none;background:#0d0800;border:1px solid #ff990022;border-radius:7px;padding:8px 10px;margin-bottom:10px;font-size:.76rem;color:#7fc090;line-height:1.7"></div>
 
       <div class="god-section-title">Add / Remove Cash</div>
       <div style="display:flex;gap:5px;margin-bottom:6px;flex-wrap:wrap">
@@ -2305,7 +2309,7 @@ ws.addEventListener('message', function(ev){
 ">
   <div style="background:linear-gradient(135deg,#120303,#060303);padding:10px 14px 8px;border-bottom:1px solid #2a1010;display:flex;align-items:center;justify-content:space-between">
     <div>
-      <div id="ppName" style="font-size:.9rem;font-weight:500;color:#c8a86a"></div>
+      <div id="ppName" style="font-size:.9rem;font-weight:500;color:#7fc090"></div>
       <div id="ppTitle" style="font-size:.65rem;color:#553333;letter-spacing:.06em"></div>
     </div>
     <button onclick="closePlayerProfile()" style="background:none;border:none;color:#553333;font-size:.9rem;cursor:pointer;padding:0 2px;line-height:1">✕</button>
@@ -2355,7 +2359,7 @@ ws.addEventListener('message', function(ev){
     <div id="spHUDZoneTabs" style="display:none;border-bottom:1px solid #1a1a2e;"></div>
     <div style="padding:12px 14px 8px;border-bottom:1px solid #1a1a2e;display:flex;align-items:center;justify-content:space-between">
       <div>
-        <div id="spHUDPlanetName" style="font-size:.85rem;letter-spacing:.16em;color:#ccc;font-weight:bold">PLANET</div>
+        <div id="spHUDPlanetName" style="font-size:.85rem;letter-spacing:.16em;color:#f0b454;font-weight:bold">PLANET</div>
         <div id="spHUDColony" style="font-size:.62rem;color:#444;letter-spacing:.1em;margin-top:1px"></div>
         <div id="spHUDSector" style="margin-top:3px"></div>
       </div>

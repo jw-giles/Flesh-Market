@@ -10,7 +10,7 @@
     const st=document.createElement('style'); st.id='bjCardCSS';
     st.textContent=`
 #bj-wrap{font-family:monospace;max-width:none;width:100%;padding:12px 4px}
-#bj-wrap h3{margin:0 0 12px;font-size:1rem;letter-spacing:.08em;color:#e6c27a}
+#bj-wrap h3{margin:0 0 12px;font-size:1rem;letter-spacing:.08em;color:#72e09c}
 .bj-table{background:radial-gradient(ellipse at center,#0e3d1e 0%,#061a0b 100%);border:2px solid #2d5a1e;border-radius:16px;padding:24px 28px 28px;margin-bottom:14px;min-height:240px;display:flex;flex-direction:column;justify-content:space-between}
 .bj-section{margin-bottom:16px}
 .bj-label{font-size:.78rem;letter-spacing:.1em;color:#6a9a70;margin-bottom:6px;text-transform:uppercase}
@@ -21,15 +21,15 @@
 .bj-card.black{color:#111}
 .bj-rank{font-size:1.05rem;font-weight:900}
 .bj-suit{font-size:.85rem}
-.bj-total{font-size:1.1rem;color:#e6c27a;font-weight:bold;margin-left:12px}
+.bj-total{font-size:1.1rem;color:#72e09c;font-weight:bold;margin-left:12px}
 .bj-divider{border:none;border-top:1px solid #1a3a1a;margin:12px 0}
 .bj-info{display:flex;gap:20px;margin-bottom:12px;font-size:.9rem;flex-wrap:wrap}
 .bj-info span{color:#8ab}
-.bj-info strong{color:#e6c27a}
+.bj-info strong{color:#72e09c}
 .bj-bet-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-.bj-bet-row input{width:80px;padding:5px 8px;background:#0d0d08;border:1px solid #4a3a10;color:#e6c27a;font-size:.9rem;font-family:monospace;border-radius:4px}
+.bj-bet-row input{width:80px;padding:5px 8px;background:#0d0d08;border:1px solid #1f4a1f;color:#72e09c;font-size:.9rem;font-family:monospace;border-radius:4px}
 .bj-chips{display:flex;gap:5px;flex-wrap:wrap}
-.bj-chips button,.bj-actions button{padding:6px 12px;background:#1a1500;border:1px solid #5a4a10;color:#e6c27a;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.85rem;transition:background .15s}
+.bj-chips button,.bj-actions button{padding:6px 12px;background:#06200d;border:1px solid #5a4a10;color:#72e09c;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.85rem;transition:background .15s}
 .bj-chips button:hover,.bj-actions button:hover{background:#2a2200}
 .bj-actions{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .bj-actions button:disabled{opacity:.35;cursor:not-allowed}
@@ -43,14 +43,14 @@
 #bj-shoe-bar-wrap{margin-bottom:10px;padding:8px 12px;border:1px solid #2d5a1e;border-radius:8px;background:rgba(10,30,15,.6)}
 #bj-shoe-bar-wrap .bj-shoe-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
 #bj-shoe-bar-wrap .bj-shoe-title{font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:#6a9a70}
-#bj-shoe-bar-wrap .bj-shoe-stat{font-size:.85rem;color:#e6c27a;font-weight:bold}
+#bj-shoe-bar-wrap .bj-shoe-stat{font-size:.85rem;color:#72e09c;font-weight:bold}
 #bj-shoe-track{height:8px;background:#0a1a0d;border-radius:4px;overflow:hidden;border:1px solid #1a3a1a}
-#bj-shoe-fill{height:100%;width:0%;border-radius:4px;transition:width .3s ease;background:linear-gradient(90deg,#2a8a3a,#e6c27a)}
+#bj-shoe-fill{height:100%;width:0%;border-radius:4px;transition:width .3s ease;background:linear-gradient(90deg,#2a8a3a,#72e09c)}
 #bj-shoe-fill.warn{background:linear-gradient(90deg,#c8a020,#e05020)}
 #bj-shoe-fill.hot{background:linear-gradient(90deg,#e05020,#ff2020)}
 #bj-shuffle-overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.75);border-radius:16px;z-index:10;flex-direction:column;gap:8px}
 #bj-shuffle-overlay.show{display:flex}
-#bj-shuffle-overlay .shuffle-text{font-size:1.1rem;letter-spacing:.15em;color:#e6c27a;text-transform:uppercase;animation:bjShufflePulse 0.6s ease-in-out infinite alternate}
+#bj-shuffle-overlay .shuffle-text{font-size:1.1rem;letter-spacing:.15em;color:#72e09c;text-transform:uppercase;animation:bjShufflePulse 0.6s ease-in-out infinite alternate}
 #bj-shuffle-overlay .shuffle-cards{font-size:2rem;animation:bjShuffleSpin 0.8s linear infinite}
 @keyframes bjShufflePulse{from{opacity:.5;transform:scale(.97)}to{opacity:1;transform:scale(1.03)}}
 @keyframes bjShuffleSpin{0%{transform:rotateY(0)}100%{transform:rotateY(360deg)}}
@@ -344,9 +344,9 @@
 
   pane.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px">
-      <div style="position:relative;border:1px solid #2a1a04;border-radius:6px;overflow:hidden;background:#050300">
+      <div style="position:relative;border:1px solid #0a3315;border-radius:6px;overflow:hidden;background:#050300">
         <canvas id="horseCanvas" width="820" height="280" style="width:100%;display:block"></canvas>
-        <div id="raceStatus" style="position:absolute;bottom:0;left:0;right:0;padding:5px 12px;font-size:.74rem;letter-spacing:.06em;color:#d4a05e;background:linear-gradient(transparent,rgba(0,0,0,.85));text-align:center">
+        <div id="raceStatus" style="position:absolute;bottom:0;left:0;right:0;padding:5px 12px;font-size:.74rem;letter-spacing:.06em;color:#72e09c;background:linear-gradient(transparent,rgba(0,0,0,.85));text-align:center">
           &#9672; Place a bet and start the race
         </div>
       </div>
@@ -362,7 +362,7 @@
         <input id="horseBet" class="input" type="number" min="1" value="10" style="max-width:110px"/>
         <button id="horseStart" class="btn" style="padding:6px 20px;font-size:.85rem;letter-spacing:.06em">&#9654; RACE</button>
         <span style="font-size:.72rem;color:#555;flex:1">5x payout &bull; 16.7% house edge &bull; one bet per race</span>
-        <span id="horseBalance" style="font-size:.82rem;color:#ffb547;font-weight:700">&#401;&mdash;</span>
+        <span id="horseBalance" style="font-size:.82rem;color:#46ff7d;font-weight:700">&#401;&mdash;</span>
       </div>
       <div id="horseLog" style="max-height:90px;overflow:auto;font-size:.74rem;padding:0 2px"></div>
     </div>`;
@@ -396,7 +396,7 @@
   const W=cv.width, H=cv.height;
   const LANES=6, STRIP=20, laneH=Math.floor((H-STRIP)/LANES), finishX=W-50, startX=46;
   const NAMES=['Comet','Nebula','Phantom','Vortex','Ember','Quicksilver'];
-  const COLS=['#ffcc44','#44ddff','#ff6688','#88ff66','#ff9944','#cc88ff'];
+  const COLS=['#9dff5a','#44ddff','#ff6688','#88ff66','#ff9944','#cc88ff'];
   const JERSEY=['#8a5c00','#005570','#6a0020','#1e5010','#7a3000','#3c1070'];
 
   let horses=[], legPhase=[], running=false, winner=-1, planned=-1;
@@ -558,7 +558,7 @@
 
   function setStatus(txt, col){
     const s=document.getElementById('raceStatus');
-    if(s){ s.style.color=col||'#d4a05e'; s.textContent=txt; }
+    if(s){ s.style.color=col||'#72e09c'; s.textContent=txt; }
   }
 
   function settle(wi){
@@ -585,7 +585,7 @@
     init(); drawFrame();
     planned=Math.floor(Math.random()*LANES);
     adj(-amt); escrow=amt; running=true; winner=-1;
-    setStatus('\u25c8 Racing\u2026  You picked #'+(pick+1)+' ('+NAMES[pick]+')  \u2014  Bet: '+fmt(amt),'#ffb547');
+    setStatus('\u25c8 Racing\u2026  You picked #'+(pick+1)+' ('+NAMES[pick]+')  \u2014  Bet: '+fmt(amt),'#46ff7d');
     startT=performance.now();
     animId=requestAnimationFrame(tick);
   };

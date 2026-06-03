@@ -9,15 +9,15 @@
     const st=document.createElement('style'); st.id='plinkoCSS';
     st.textContent=`
 #plinko-wrap{font-family:monospace;width:100%;padding:12px 4px}
-#plinko-wrap h3{margin:0 0 10px;font-size:1rem;letter-spacing:.08em;color:#e6c27a}
+#plinko-wrap h3{margin:0 0 10px;font-size:1rem;letter-spacing:.08em;color:#72e09c}
 #plinko-canvas{width:100%;max-width:460px;display:block;margin:0 auto 10px;background:radial-gradient(ellipse at center,#0e1a2e 0%,#060a12 100%);border:1.5px solid #1a2a4a;border-radius:10px}
 .plinko-info{display:flex;gap:16px;margin-bottom:8px;font-size:.85rem;flex-wrap:wrap;justify-content:center}
 .plinko-info span{color:#8ab}
-.plinko-info strong{color:#e6c27a}
+.plinko-info strong{color:#72e09c}
 .plinko-bet-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;justify-content:center}
-.plinko-bet-row input{width:80px;padding:5px 8px;background:#0d0d08;border:1px solid #4a3a10;color:#e6c27a;font-size:.85rem;font-family:monospace;border-radius:4px}
+.plinko-bet-row input{width:80px;padding:5px 8px;background:#0d0d08;border:1px solid #1f4a1f;color:#72e09c;font-size:.85rem;font-family:monospace;border-radius:4px}
 .plinko-chips{display:flex;gap:4px;flex-wrap:wrap}
-.plinko-chips button,.plinko-actions button{padding:5px 10px;background:#1a1500;border:1px solid #5a4a10;color:#e6c27a;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.8rem;transition:background .15s}
+.plinko-chips button,.plinko-actions button{padding:5px 10px;background:#06200d;border:1px solid #5a4a10;color:#72e09c;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.8rem;transition:background .15s}
 .plinko-chips button:hover,.plinko-actions button:hover{background:#2a2200}
 .plinko-actions{display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;justify-content:center}
 .plinko-actions button:disabled{opacity:.35;cursor:not-allowed}
@@ -29,7 +29,7 @@
 #plinko-log{max-height:50px;overflow-y:auto;font-size:.7rem;color:#7a9a7a;line-height:1.4;margin-top:4px;text-align:center}
 .plinko-risk-row{display:flex;gap:5px;align-items:center;justify-content:center;margin-bottom:8px;font-size:.78rem;color:#8ab}
 .plinko-risk-row button{padding:3px 9px;background:#0d0d08;border:1px solid #3a3a2a;color:#aaa;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.75rem}
-.plinko-risk-row button.active{border-color:#e6c27a;color:#e6c27a;background:#1a1500}
+.plinko-risk-row button.active{border-color:#72e09c;color:#72e09c;background:#06200d}
     `;
     document.head.appendChild(st);
   }
@@ -186,9 +186,9 @@
     for(const ball of balls){
       ctx.beginPath();
       ctx.arc(ball.x, ball.y, BALL_RAD, 0, Math.PI*2);
-      ctx.fillStyle = ball.settled ? (ball.color || '#e6c27a') : '#e6c27a';
+      ctx.fillStyle = ball.settled ? (ball.color || '#72e09c') : '#72e09c';
       ctx.fill();
-      ctx.strokeStyle = '#ffd700';
+      ctx.strokeStyle = '#9dff5a';
       ctx.lineWidth = 0.8;
       ctx.stroke();
     }

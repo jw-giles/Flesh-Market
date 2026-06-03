@@ -23,7 +23,7 @@ var FACTIONS = {
     bonusSummary:'Colony dividend bonuses: Biotech &amp; Energy sectors + ƒ15/colony passive income + permanent +ƒ15 cyborg augment',
   },
   fleshstation:{
-    id:'fleshstation', name:'Flesh Station', short:'FLESH STN', color:'#ffd700', dim:'#4d3a00', bg:'#1a1200', sym:'⬡', devOnly:true,
+    id:'fleshstation', name:'Flesh Station', short:'FLESH STN', color:'#9dff5a', dim:'#4d3a00', bg:'#1a1200', sym:'⬡', devOnly:true,
     desc:'An impenetrable megastructure. Home of Mr. Flesh. No faction, no tariffs, no rules.',
     bonusSummary:'⚡ Dev-only: passive income multiplied &amp; all colony data readable in real time',
   },
@@ -799,7 +799,7 @@ window.spOpenSystem = function(colonyId){
       })();
       sysView._spBodyTimerStop=function(){clearTimeout(bhT);};
     } else if(colonyId==='flesh_station'){
-      sbSun.style.cssText='position:absolute;width:90px;height:90px;image-rendering:pixelated;z-index:2;filter:drop-shadow(0 0 20px #ffd700)';
+      sbSun.style.cssText='position:absolute;width:90px;height:90px;image-rendering:pixelated;z-index:2;filter:drop-shadow(0 0 20px #9dff5a)';
       var fsF=1,fsT=null;
       (function animFS(){
         sbSun.src='assets/space/planets/static/tech/'+fsF+'.png';
@@ -810,7 +810,7 @@ window.spOpenSystem = function(colonyId){
       sbSun.style.cssText='position:absolute;width:70px;height:70px;image-rendering:pixelated;z-index:2;filter:drop-shadow(0 0 16px '+f.color+')';
       sbSun.src='assets/space/planets/suns/'+sbSunNum+'.png';
     } else {
-      sbSun.style.cssText='position:absolute;width:70px;height:70px;image-rendering:pixelated;z-index:2;filter:drop-shadow(0 0 16px #ffcc44)';
+      sbSun.style.cssText='position:absolute;width:70px;height:70px;image-rendering:pixelated;z-index:2;filter:drop-shadow(0 0 16px #9dff5a)';
       sbSun.src='assets/space/planets/suns/1.png';
     }
     stage.appendChild(sbSun);
@@ -929,7 +929,7 @@ window.spOpenSystem = function(colonyId){
       sun.style.filter = 'drop-shadow(0 0 28px '+f.color+') drop-shadow(0 0 60px '+f.color+'55)';
     } else {
       sun.src = 'assets/space/planets/suns/1.png';
-      sun.style.filter = 'drop-shadow(0 0 28px #ffcc44) drop-shadow(0 0 60px #ffcc4433)';
+      sun.style.filter = 'drop-shadow(0 0 28px #9dff5a) drop-shadow(0 0 60px #9dff5a33)';
     }
     stage.appendChild(sun);
 
@@ -1305,7 +1305,7 @@ function spUpdateHUDPrices(colonyId){
   var m = COLONY_META[colonyId]; if(!m) return;
   var list = document.getElementById('spPriceList'); if(!list) return;
   var companies = (m.companies||[]).slice(0,6);
-  if(!companies.length){ list.innerHTML='<div style="font-size:.68rem;color:#333">No listed operators</div>'; return; }
+  if(!companies.length){ list.innerHTML='<div style="font-size:.68rem;color:#4f8a64">No listed operators</div>'; return; }
   var tickers = window.TICKERS || [];
   list.innerHTML = companies.map(function(name){
     var sym = name.replace(/\s+/g,'').replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,8);
@@ -2015,7 +2015,7 @@ function renderMarketsTab(){
         var loc=it.colonyName?(' <span style="color:#3498db">@ '+it.colonyName+'</span>'):'';
         return '<div style="font-size:.8rem;color:#aaa;padding:2px 0">'+ico+it.qty+'\u00d7 '+it.name+loc+' <span style="color:#666">(avg \u0192'+Math.round(it.avgCost).toLocaleString()+')</span></div>';
       }).join('');
-    } else { h+='<div style="font-size:.78rem;color:#666">Empty \u2014 buy commodities from a colony</div>'; }
+    } else { h+='<div style="font-size:.78rem;color:#4f8a64">Empty \u2014 buy commodities from a colony</div>'; }
     h+='</div>';
     // In-transit phase tracker (Domino's style)
     h+='<div style="flex:1;min-width:240px;background:#0a0a14;border:1px solid #1a1a2e;border-radius:4px;padding:10px 12px">'
@@ -2037,17 +2037,17 @@ function renderMarketsTab(){
     _comsSorted.forEach(function(c){ window._gShipComNameToId[c.name.toLowerCase()] = c.id; window._gShipComIdToName[c.id] = c.name; });
     h+='<div id="gShipConsole" style="background:#0a0a14;border:1px solid #1a2a3a;border-radius:4px;padding:12px 14px;margin-bottom:16px">'
       +'<div style="font-size:.8rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">\uD83D\uDCE6 Ship Cargo</div>'
-      +'<div style="font-size:.66rem;color:#666;margin-bottom:8px">Buy a commodity at a colony, then ship it to another to sell at the spread. Shipping takes time and can be intercepted.</div>'
+      +'<div style="font-size:.66rem;color:#4f8a64;margin-bottom:8px">Buy a commodity at a colony, then ship it to another to sell at the spread. Shipping takes time and can be intercepted.</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
-        +'<div style="flex:1;min-width:130px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">Commodity</div>'
+        +'<div style="flex:1;min-width:130px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">Commodity</div>'
           +'<input id="gShipConCom" list="gShipConComList" placeholder="Type to search\u2026" autocomplete="off" oninput="window.gShipQuote()" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"><datalist id="gShipConComList">'+_comDatalist+'</datalist></div>'
-        +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">From</div>'
+        +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">From</div>'
           +'<select id="gShipConFrom" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
-        +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">To</div>'
+        +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">To</div>'
           +'<select id="gShipConTo" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
-        +'<div style="flex:0 0 80px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">Qty</div>'
+        +'<div style="flex:0 0 80px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">Qty</div>'
           +'<input id="gShipConQty" type="number" min="1" value="10" oninput="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"></div>'
-        +'<div style="flex:1;min-width:140px"><div style="font-size:.6rem;color:#888;text-transform:uppercase;margin-bottom:3px">Escort</div>'
+        +'<div style="flex:1;min-width:140px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">Escort</div>'
           +'<select id="gShipConGuard" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'
             +'<option value="none">No escort \u2014 free</option>'
             +'<option value="light">Light escort \u2014 4% fee, -8% risk</option>'
@@ -2073,7 +2073,7 @@ function renderMarketsTab(){
     window._gColNameOf = nameOf;
 
     // Arbitrage board: per commodity, cheapest buy vs dearest sell across colonies
-    h+='<div style="font-size:.82rem;color:#999;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Arbitrage Board <span style="color:#666;text-transform:none;letter-spacing:0">\u2014 best spread per commodity right now</span></div>';
+    h+='<div style="font-size:.82rem;color:#72e09c;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Arbitrage Board <span style="color:#4f8a64;text-transform:none;letter-spacing:0">\u2014 best spread per commodity right now</span></div>';
     // Class filter (the catalog is large; let players narrow by class).
     var curFilter = window._gMktFilter || 'all';
     var fbtn=function(key,label,c){ var on=curFilter===key; return '<button onclick="window.gMktFilter(\''+key+'\')" style="background:'+(on?c:'#0a0a14')+';border:1px solid '+c+';color:'+(on?'#0a0a14':c)+';padding:3px 12px;cursor:pointer;font-size:.66rem;font-family:inherit;border-radius:2px;margin-right:5px;letter-spacing:.06em">'+label+'</button>'; };
@@ -2112,8 +2112,8 @@ function renderMarketsTab(){
       var icoHtml = com.icon ? '<img src="assets/'+com.icon+'" style="width:20px;height:20px;vertical-align:middle;margin-right:7px;image-rendering:pixelated" onerror="this.style.display=\'none\'">' : '';
       h+='<tr style="border-top:1px solid #14141f" data-com="'+com.id+'">'
         +'<td style="padding:6px 8px;color:'+col+'">'+icoHtml+com.name+(held>0?' <span style="color:#777">\u00d7'+held+(loc?' @ '+loc.colonyName:'')+'</span>':'')+'</td>'
-        +'<td style="padding:6px 8px;color:#bbb" id="mb_'+com.id+'">\u0192'+Math.round(best.buy).toLocaleString()+' <span style="color:#666">@ '+nameOf(best.col)+'</span></td>'
-        +'<td style="padding:6px 8px;color:#bbb" id="ms_'+com.id+'">\u0192'+Math.round(worst.sell).toLocaleString()+' <span style="color:#666">@ '+nameOf(worst.col)+'</span></td>'
+        +'<td style="padding:6px 8px;color:#9bffba" id="mb_'+com.id+'">\u0192'+Math.round(best.buy).toLocaleString()+' <span style="color:#f0b454">@ '+nameOf(best.col)+'</span></td>'
+        +'<td style="padding:6px 8px;color:#9bffba" id="ms_'+com.id+'">\u0192'+Math.round(worst.sell).toLocaleString()+' <span style="color:#f0b454">@ '+nameOf(worst.col)+'</span></td>'
         +'<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+(profit?'#2ecc71':'#888')+'" id="mp_'+com.id+'">'+(profit?'+':'')+pct+'%</td>'
         +'<td style="padding:6px 8px;text-align:right;white-space:nowrap">'+buyBtn+sellBtn+shipBtn+'</td>'
         +'</tr>';
@@ -2133,14 +2133,14 @@ function renderMarketsTab(){
           +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
             +'<span style="font-size:.82rem;color:'+(owned?'#2ecc71':'#ccc')+'">'+c.name+'</span>'
             +(owned?'<span style="font-size:.62rem;color:#2ecc71;letter-spacing:.08em">ACTIVE</span>':'')+'</div>'
-          +'<div style="font-size:.68rem;color:#778;margin-bottom:6px">'+c.desc+'</div>'
+          +'<div style="font-size:.68rem;color:#72e09c;margin-bottom:6px">'+c.desc+'</div>'
           +'<div style="font-size:.68rem;color:#9ab;margin-bottom:2px">Capacity: <span style="color:#ccc">'+c.capacity.toLocaleString()+'u</span></div>'
           +'<div style="font-size:.68rem;color:#9ab;margin-bottom:8px">Risk: <span style="color:#ccc">'+(c.riskMod>0?'+'+Math.round(c.riskMod*100)+'%':'baseline')+'</span></div>'
           +(owned
-              ? '<div style="font-size:.66rem;color:#555;text-align:center;padding:4px">In service</div>'
+              ? '<div style="font-size:.66rem;color:#4f8a64;text-align:center;padding:4px">In service</div>'
               : (canBuy
                   ? '<button onclick="window.gBuyShip(\''+c.id+'\')" style="width:100%;background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:5px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px">Commission \u2014 \u0192'+c.price.toLocaleString()+'</button>'
-                  : '<div style="font-size:.66rem;color:#555;text-align:center;padding:4px">Starter ship</div>'))
+                  : '<div style="font-size:.66rem;color:#4f8a64;text-align:center;padding:4px">Starter ship</div>'))
           +'</div>';
       }).join('');
       h+='</div>';
@@ -2209,8 +2209,8 @@ window.gMktApplyTick = function(colonyId, commodityId, price){
     el.style.background = up ? 'rgba(46,204,113,0.22)' : 'rgba(231,76,60,0.22)';
     setTimeout(function(){ el.style.transition='background 0.6s'; el.style.background='transparent'; }, 30);
   };
-  var newBuy='\u0192'+Math.round(best.buy).toLocaleString()+' <span style="color:#666">@ '+nameOf(best.col)+'</span>';
-  var newSell='\u0192'+Math.round(worst.sell).toLocaleString()+' <span style="color:#666">@ '+nameOf(worst.col)+'</span>';
+  var newBuy='\u0192'+Math.round(best.buy).toLocaleString()+' <span style="color:#f0b454">@ '+nameOf(best.col)+'</span>';
+  var newSell='\u0192'+Math.round(worst.sell).toLocaleString()+' <span style="color:#f0b454">@ '+nameOf(worst.col)+'</span>';
   var newPct=(profit?'+':'')+pct+'%';
   // Flash direction based on sell price change vs displayed.
   var prevSell=parseFloat((ms.textContent||'').replace(/[^0-9.]/g,''))||0;
@@ -2289,7 +2289,7 @@ window.gShipQuote = function(){
         +'&nbsp;&nbsp;<span style="color:#9ab">Risk:</span> <span style="color:'+rc+';font-weight:700">'+risk+'%</span>'
         +(d.flyByRisk>0?' <span style="color:#777">(+'+d.flyByRisk+'% fly-by)</span>':'')
         +((d.guardCut>0)?' <span style="color:#2ecc71">(\u2212'+d.guardCut+'% escort)</span>':'')
-        +((d.guardFee>0)?'<br><span style="color:#9ab">Escort fee:</span> <span style="color:#e6c27a">\u0192'+Number(d.guardFee).toLocaleString()+'</span> <span style="color:#555">(lost if intercepted)</span>':'')
+        +((d.guardFee>0)?'<br><span style="color:#9ab">Escort fee:</span> <span style="color:#72e09c">\u0192'+Number(d.guardFee).toLocaleString()+'</span> <span style="color:#555">(lost if intercepted)</span>':'')
         +(d.hasShip?'':' <span style="color:#e74c3c">\u2014 no ship yet</span>');
       prev.innerHTML=html;
     }).catch(function(){ prev.innerHTML='<span style="color:#777">Could not load route preview.</span>'; });
@@ -2321,7 +2321,8 @@ window.gShipConsoleGo = function(){
           d.error==='insufficient_cargo_at_origin'?('You only hold '+(d.have||0)+' there \u2014 buy it at the origin first'):
           d.error==='over_capacity'?('Over capacity: '+d.shipName+' holds '+d.capacity):
           d.error==='no_lane'?'No route between those colonies':
-          d.error==='same_colony'?'Pick two different colonies':(d.error||'Ship failed');
+          d.error==='same_colony'?'Pick two different colonies':
+          d.error==='shipment_in_progress'?'You already have a shipment in transit — only one at a time':(d.error||'Ship failed');
         if(hint){hint.textContent='\u2717 '+msg;hint.style.color='#ff6b6b';} return;
       }
       if(hint){
@@ -2707,7 +2708,7 @@ function renderMap(){
     lbl.setAttribute('x', lblX);
     lbl.setAttribute('text-anchor', lblAnchor);
     lbl.setAttribute('font-size','13');
-    lbl.setAttribute('fill',id==='flesh_station'?'#ffd700':'#ccc');
+    lbl.setAttribute('fill',id==='flesh_station'?'#9dff5a':'#ccc');
     lbl.setAttribute('letter-spacing','1.2');lbl.setAttribute('pointer-events','none');
     lbl.textContent=m.name.toUpperCase();
     grp.appendChild(lbl);
@@ -2753,7 +2754,7 @@ function renderMap(){
     if(id==='flesh_station'){
       var pulse=document.createElementNS('http://www.w3.org/2000/svg','circle');
       pulse.setAttribute('cx',m.x);pulse.setAttribute('cy',m.y);pulse.setAttribute('r',r+2);
-      pulse.setAttribute('fill','none');pulse.setAttribute('stroke','#ffd700');
+      pulse.setAttribute('fill','none');pulse.setAttribute('stroke','#9dff5a');
       pulse.setAttribute('stroke-width','1');pulse.setAttribute('opacity','0.4');
       pulse.setAttribute('pointer-events','none');
       grp.appendChild(pulse);
@@ -2807,7 +2808,7 @@ function renderDetail(id){
   h+='<div style="font-size:.76rem;color:#555;letter-spacing:.1em;margin-bottom:10px">'+(isFlesh?'MEGASTRUCTURE':'')+'</div>';
 
   if(contested) h+='<div style="border:1px solid #f39c12;color:#f39c12;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9888; CONTESTED — Faction war active</div>';
-  if(isFlesh)   h+='<div style="border:1px solid #ffd70066;color:#ffd700;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9889; HOME OF MR. FLESH — Cannot be contested or funded</div>';
+  if(isFlesh)   h+='<div style="border:1px solid #9dff5a66;color:#9dff5a;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9889; HOME OF MR. FLESH — Cannot be contested or funded</div>';
 
   // Space Asset: landscape banner
   var banner = COLONY_BANNER[id];
@@ -2823,8 +2824,8 @@ function renderDetail(id){
   h+='<div style="font-size:.78rem;color:#777;line-height:1.6;margin-bottom:12px;border-left:2px solid '+f.dim+';padding-left:8px">'+m.lore+'</div>';
 
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-bottom:12px">';
-  h+='<div><div style="font-size:.66rem;color:#555;letter-spacing:.08em">POPULATION</div><div style="font-size:.84rem;color:#ccc">'+m.pop+'</div></div>';
-  if(!isFlesh) h+='<div><div style="font-size:.66rem;color:#555;letter-spacing:.08em">TENSION</div><div style="font-size:.84rem;color:'+(tension>40?'#f39c12':'#ccc')+'">'+tension+'%</div></div>';
+  h+='<div><div style="font-size:.66rem;color:#4f9a68;letter-spacing:.08em">POPULATION</div><div style="font-size:.84rem;color:#b6ffcf">'+m.pop+'</div></div>';
+  if(!isFlesh) h+='<div><div style="font-size:.66rem;color:#4f9a68;letter-spacing:.08em">TENSION</div><div style="font-size:.84rem;color:'+(tension>40?'#f39c12':'#b6ffcf')+'">'+tension+'%</div></div>';
   h+='</div>';
 
   // Planets grid
@@ -2846,7 +2847,7 @@ function renderDetail(id){
     var pIcon16 = (p.isStation || _spIconForZoneName(p.name)) ? 'Tech2' : SECTOR_PLANET_ICON[p.sector];
     var pIconHtml = pIcon16 ? '<img src="assets/space/planets/icons/'+pIcon16+'.png" class="space-picon">' : (p.icon+' ');
     h+='<span style="display:flex;align-items:center;gap:3px;font-size:.76rem;color:'+pCol+';letter-spacing:.06em">'+pIconHtml+p.name+'</span>';
-    if(!_isSingleBody) h+='<span style="font-size:.68rem;color:#444;letter-spacing:.06em">ENTER ›</span>';
+    if(!_isSingleBody) h+='<span style="font-size:.68rem;color:#4ecdc4;letter-spacing:.06em">ENTER ›</span>';
     h+='</div>';
     h+='<div style="font-size:.70rem;color:#888;line-height:1.5">'+p.bonus+'</div>';
     if(contested) h+='<div style="font-size:.68rem;color:#f39c12;margin-top:2px">'+p.contestBonus+'</div>';
@@ -2894,7 +2895,7 @@ function renderDetail(id){
   } else {
     // Flesh Station: show companies, no funding
     h+='<div><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">Core Systems</div>';
-    m.companies.forEach(function(co){ h+='<div style="font-size:.74rem;color:#ffd70066;padding:2px 0;border-bottom:1px solid #1a1200">'+co+'</div>'; });
+    m.companies.forEach(function(co){ h+='<div style="font-size:.74rem;color:#9dff5a66;padding:2px 0;border-bottom:1px solid #1a1200">'+co+'</div>'; });
     h+='</div>';
   }
 
@@ -3036,7 +3037,7 @@ function renderFactionList(){
     var isGuild=(fid==='guild');
     // Dev-only banner
     if(isFlesh){
-      h+='<div style="position:absolute;top:8px;right:10px;font-size:.70rem;color:#ffd700;border:1px solid #ffd70044;padding:2px 7px;letter-spacing:.08em">DEV ONLY</div>';
+      h+='<div style="position:absolute;top:8px;right:10px;font-size:.70rem;color:#9dff5a;border:1px solid #9dff5a44;padding:2px 7px;letter-spacing:.08em">DEV ONLY</div>';
     }
     if(isGuild){
       h+='<div style="position:absolute;top:8px;right:10px;font-size:.70rem;color:#2ecc71;border:1px solid #2ecc7144;padding:2px 7px;letter-spacing:.08em">⬢ PATREON</div>';
@@ -3047,7 +3048,7 @@ function renderFactionList(){
     if(isP){
       h+='<div style="font-size:.72rem;color:'+f.color+';border:1px solid '+f.color+';padding:3px 8px">&#10003; ALIGNED</div>';
     } else if(isGuild){
-      h+='<a href="https://www.patreon.com" target="_blank" style="background:'+f.dim+';border:1px solid '+f.color+';color:'+f.color+';padding:4px 12px;cursor:pointer;font-size:.76rem;letter-spacing:.08em;font-family:inherit;text-decoration:none">JOIN ON PATREON ›</a>';
+      h+='<a href="https://www.patreon.com" target="_blank" style="background:#1a1405;border:1px solid #ffce4d;color:#ffce4d;padding:4px 12px;cursor:pointer;font-size:.76rem;letter-spacing:.08em;font-family:inherit;text-decoration:none">JOIN ON PATREON ›</a>';
     } else if(!isFlesh){
       if(fid==='void'){
         h+='<button onclick="window.gJoinFaction(\'void\')" style="background:'+f.dim+';border:1px solid '+f.color+';color:'+f.color+';padding:4px 12px;cursor:pointer;font-size:.76rem;letter-spacing:.08em;font-family:inherit">\u26A0 CONVERT</button>';
@@ -3059,7 +3060,7 @@ function renderFactionList(){
     }
     h+='</div>';
 
-    h+='<div style="font-size:.82rem;color:#aaa;line-height:1.6;margin-bottom:10px">'+f.desc+'</div>';
+    h+='<div style="font-size:.82rem;color:#8fd9a8;line-height:1.6;margin-bottom:10px">'+f.desc+'</div>';
 
     // Void Collective permanent conversion warning
     if(fid==='void' && !isP){
@@ -3083,7 +3084,7 @@ function renderFactionList(){
       h+='<div style="background:#ffffff04;padding:5px;text-align:center"><div style="font-size:.66rem;color:#666">CONTESTED</div><div style="font-size:.96rem;color:'+(cont?'#f39c12':'#ccc')+'">'+cont+'</div></div>';
       h+='<div style="background:#ffffff04;padding:5px;text-align:center"><div style="font-size:.66rem;color:#666">WAR CHEST</div><div style="font-size:.82rem;color:#ccc">&#401;'+Math.round(wc).toLocaleString()+'</div></div>';
     } else {
-      h+='<div style="background:#ffffff04;padding:5px;text-align:center;grid-column:span 2"><div style="font-size:.66rem;color:#666">STATUS</div><div style="font-size:.78rem;color:#ffd700">PERMANENT CONTROL</div></div>';
+      h+='<div style="background:#ffffff04;padding:5px;text-align:center;grid-column:span 2"><div style="font-size:.66rem;color:#666">STATUS</div><div style="font-size:.78rem;color:#9dff5a">PERMANENT CONTROL</div></div>';
     }
     h+='</div>';
 
@@ -3440,7 +3441,7 @@ function renderContractsTable(){
     h += '<div style="font-size:.78rem;color:#3498db;letter-spacing:.1em">\uD83D\uDCCB YOUR POSITION</div>';
     h += '<button onclick="window._gSellShare()" style="background:#1a0a0a;border:1px solid #e74c3c88;color:#e74c3c;padding:4px 14px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">SELL</button>';
     h += '</div>';
-    h += '<div style="font-size:.82rem;color:#ccc;margin-bottom:6px">'+_colonyName(parts[0])+' \u2194 '+_colonyName(parts[1])+'</div>';
+    h += '<div style="font-size:.82rem;color:#f0b454;margin-bottom:6px">'+_colonyName(parts[0])+' \u2194 '+_colonyName(parts[1])+'</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:.72rem">';
     h += '<div><div style="color:#555;font-size:.62rem">PAID</div><div style="color:#aaa">\u0192'+Number(myShare.purchasePrice||0).toLocaleString()+'</div></div>';
     h += '<div><div style="color:#555;font-size:.62rem">VALUE</div><div style="color:#3498db">\u0192'+Number(mSellPrice).toLocaleString()+'</div></div>';
@@ -3468,9 +3469,9 @@ function renderContractsTable(){
     var hasMyShare = !!myShare;
 
     h += '<div style="padding:8px;border-bottom:1px solid '+borderCol+';background:'+rowBg+';cursor:pointer" onclick="window._gSelectLane(\''+r.from+'\',\''+r.to+'\')">'
-      +'<span style="color:#ccc">'+_colonyName(r.from)+'</span>'
+      +'<span style="color:#f0b454">'+_colonyName(r.from)+'</span>'
       +'<span style="color:#444"> \u2194 </span>'
-      +'<span style="color:#ccc">'+_colonyName(r.to)+'</span>'
+      +'<span style="color:#f0b454">'+_colonyName(r.to)+'</span>'
       +(r.blockaded?'<span style="color:#e74c3c"> \u26D4</span>':'')
       +(r.isMine?'<span style="color:#3498db"> \u2605</span>':'')
       +'</div>';
@@ -3519,7 +3520,7 @@ function renderShippingContracts(){
       h+=mine.open.map(function(c){
         var itm=c.inTheMoney;
         return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;margin-bottom:3px;background:#0a0a14;border:1px solid '+(itm?'#2ecc71':'#1a1a2e')+';border-radius:3px;font-size:.8rem">'
-          +'<span style="flex:1;color:#ccc">'+c.size+'u '+c.commodity+' <span style="color:#666">'+nameOf(c.from)+'\u2192'+nameOf(c.to)+'</span></span>'
+          +'<span style="flex:1;color:#9bffba">'+c.size+'u '+c.commodity+' <span style="color:#f0b454">'+nameOf(c.from)+'\u2192'+nameOf(c.to)+'</span></span>'
           +'<span style="color:#778">strike \u0192'+Math.round(c.strikeSpread).toLocaleString()+'</span>'
           +'<span style="color:'+(itm?'#2ecc71':'#888')+'">now \u0192'+Math.round(c.curSpread).toLocaleString()+' ('+(itm?'+':'')+Math.round(c.intrinsic).toLocaleString()+')</span>'
           +'<span style="color:#666">'+c.expiresInMin+'m</span>'
@@ -3537,7 +3538,7 @@ function renderShippingContracts(){
         var ico=o.icon?'<img src="assets/'+o.icon+'" style="width:18px;height:18px;vertical-align:middle;margin-right:5px;image-rendering:pixelated" onerror="this.style.display=\'none\'">':'';
         return '<tr style="border-top:1px solid #14141f">'
           +'<td style="padding:4px 6px;color:#ccc">'+ico+o.size+'u '+o.commodityName+'</td>'
-          +'<td style="padding:4px 6px;color:#889">'+nameOf(o.from)+'\u2192'+nameOf(o.to)+(o.blockaded?' <span style="color:#e74c3c">\u26d4</span>':'')+'</td>'
+          +'<td style="padding:4px 6px;color:#f0b454">'+nameOf(o.from)+'\u2192'+nameOf(o.to)+(o.blockaded?' <span style="color:#e74c3c">\u26d4</span>':'')+'</td>'
           +'<td style="padding:4px 6px;text-align:right;color:#aaa">\u0192'+Math.round(o.strikeSpread).toLocaleString()+'</td>'
           +'<td style="padding:4px 6px;text-align:right;color:#f39c12">\u0192'+Math.round(o.premiumTotal).toLocaleString()+'</td>'
           +'<td style="padding:4px 6px;text-align:right;color:#778">'+o.expiresInMin+'m</td>'
@@ -3627,7 +3628,7 @@ window._gSelectLane = function(from, to){
 
   var h = '';
   h += '<div style="font-size:.88rem;letter-spacing:.14em;color:'+tc+';font-weight:bold;margin-bottom:4px">SHIPPING LANE</div>';
-  h += '<div style="font-size:.78rem;color:#aaa;margin-bottom:12px">'+_colonyName(from)+' \u2194 '+_colonyName(to)+'</div>';
+  h += '<div style="font-size:.78rem;color:#f0b454;margin-bottom:12px">'+_colonyName(from)+' \u2194 '+_colonyName(to)+'</div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-bottom:14px">';
   h += '<div><div style="font-size:.66rem;color:#555">TYPE</div><div style="font-size:.84rem;color:'+tc+'">'+lane.type.toUpperCase()+'</div></div>';
   h += '<div><div style="font-size:.66rem;color:#555">VOLUME</div><div style="font-size:.84rem;color:'+(lane.vol==='high'?'#2ecc71':lane.vol==='medium'?'#f39c12':'#888')+'">'+lane.vol.toUpperCase()+'</div></div>';
@@ -4638,11 +4639,11 @@ window.renderShippingTab = function(){
   h += '.ship-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.78rem;margin-top:10px}';
   h += '.ship-info-cell{padding:8px 10px;background:#0a0a14;border:1px solid #2a1a1a;border-radius:2px}';
   h += '.ship-info-cell .lbl{color:#888;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase}';
-  h += '.ship-info-cell .val{color:#e6c27a;font-size:.88rem;font-weight:bold;margin-top:3px}';
+  h += '.ship-info-cell .val{color:#72e09c;font-size:.88rem;font-weight:bold;margin-top:3px}';
   h += '.ship-log-entry{padding:6px 8px;border-bottom:1px solid #0f0f1a;font-size:.76rem;display:flex;justify-content:space-between;gap:6px}';
   h += '.ship-faction-tip{padding:12px;border:1px solid #1a1a2e;border-radius:3px;font-size:.74rem;color:#888;line-height:1.8;margin-top:12px}';
   h += '.guard-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid #2a1a1a;border-radius:3px;margin-bottom:5px;cursor:pointer;font-size:.74rem}';
-  h += '.guard-opt.sel{border-color:#e6c27a;background:#1a1408}';
+  h += '.guard-opt.sel{border-color:#72e09c;background:#1a1408}';
   h += '</style>';
 
   h += '<div id="gShipTab">';
@@ -4704,10 +4705,10 @@ window.renderShippingTab = function(){
   guards.forEach(function(g){
     var sel=window._gSmugGuard===g.id;
     h += '<div class="guard-opt'+(sel?' sel':'')+'" onclick="window._gSmugSetGuard(\''+g.id+'\')">';
-    h += '<span style="flex:0 0 110px;color:'+(sel?'#e6c27a':'#bbb')+'">'+g.name+'</span>';
+    h += '<span style="flex:0 0 110px;color:'+(sel?'#72e09c':'#bbb')+'">'+g.name+'</span>';
     h += '<span style="flex:1;color:#777">'+g.desc+'</span>';
     h += '<span style="color:#2ecc71">-'+Math.round(g.riskCut*100)+'% risk</span>';
-    h += '<span style="color:#e6c27a;flex:0 0 70px;text-align:right">'+(g.feeFrac>0?(Math.round(g.feeFrac*100)+'% fee'):'free')+'</span>';
+    h += '<span style="color:#72e09c;flex:0 0 70px;text-align:right">'+(g.feeFrac>0?(Math.round(g.feeFrac*100)+'% fee'):'free')+'</span>';
     h += '</div>';
   });
   h += '</div>';
@@ -4734,7 +4735,7 @@ window.renderShippingTab = function(){
   h += '<div><span style="color:#9b59b6">Void</span> \u2014 Earns 2% of all intercepted cargo as raid income.</div>';
   h += '<div><span style="color:#f39c12">Tension</span> \u2014 High tension HELPS smugglers (chaos is cover).</div>';
   h += '<div><span style="color:#e74c3c">Blockades</span> \u2014 Smuggling still runs, +10% risk.</div>';
-  h += '<div><span style="color:#e6c27a">Guards</span> \u2014 Cut interception odds, but the fee is gone if you\u2019re caught.</div>';
+  h += '<div><span style="color:#72e09c">Guards</span> \u2014 Cut interception odds, but the fee is gone if you\u2019re caught.</div>';
   h += '<div><span style="color:#3498db">Lane Shares</span> \u2014 Shareholders earn a cut of your profit.</div>';
   h += '</div>';
 
@@ -4974,7 +4975,7 @@ window._gSmugCalcRisk = function(){
   var atRiskEl=document.getElementById('gSmugAtRisk');
   var evEl=document.getElementById('gSmugEV');
   if(payEl) payEl.textContent='\u0192'+payout.toLocaleString()+(isSynd?' (+15%)':'');
-  if(feeEl){ feeEl.textContent='\u0192'+guardFee.toLocaleString(); feeEl.style.color=guardFee>0?'#e6c27a':'#666'; }
+  if(feeEl){ feeEl.textContent='\u0192'+guardFee.toLocaleString(); feeEl.style.color=guardFee>0?'#72e09c':'#666'; }
   if(atRiskEl) atRiskEl.textContent='\u0192'+(stake+guardFee).toLocaleString();
   if(evEl){
     // EV: win => payout - stake - guardFee ; lose => -(stake + guardFee).

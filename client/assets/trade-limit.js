@@ -17,7 +17,7 @@
       '#dt-timer-overlay{display:none;position:absolute;inset:0;background:rgba(10,5,0,.85);z-index:20;align-items:center;justify-content:center;flex-direction:column;gap:4px;border-radius:6px;pointer-events:none}',
       '#dt-timer-overlay.show{display:flex}',
       '#dt-timer-overlay .dt-timer-label{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:#ff6b6b;font-family:monospace}',
-      '#dt-timer-overlay .dt-timer-clock{font-size:1.1rem;color:#e6c27a;font-weight:bold;font-family:monospace;letter-spacing:.08em}',
+      '#dt-timer-overlay .dt-timer-clock{font-size:1.1rem;color:#72e09c;font-weight:bold;font-family:monospace;letter-spacing:.08em}',
       '#dayTradeBadge.dt-exhausted{color:#ff6b6b!important;font-weight:bold}'
     ].join('\n');
     document.head.appendChild(st);

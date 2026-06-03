@@ -10,7 +10,7 @@
   canvas { display:block; position:fixed; top:0; left:0; image-rendering:pixelated; image-rendering:crisp-edges; }
 
   .lbl { color:#5a4a28; letter-spacing:.1em; font-size:12px; text-transform:uppercase; }
-  .val { color:#e6c27a; font-weight:bold; font-size:14px; }
+  .val { color:#72e09c; font-weight:bold; font-size:14px; }
   .good { color:#86ff6a !important; }
   .warn { color:#ff6b6b !important; }
   .danger { color:#ff4a4a !important; }
@@ -19,7 +19,7 @@
   .hud-panel {
     position:fixed; z-index:10; display:none;
     background:rgba(3,2,8,.82);
-    border:1px solid #1a1208;
+    border:1px solid #06160a;
     padding:8px 12px;
     backdrop-filter:blur(2px);
   }
@@ -29,9 +29,9 @@
     font-size:11px; letter-spacing:.2em; color:#5a4a28; text-transform:uppercase;
     min-width:52px;
   }
-  .hud-panel .num { font-size:20px; font-weight:bold; color:#e6c27a; letter-spacing:.05em; }
+  .hud-panel .num { font-size:20px; font-weight:bold; color:#72e09c; letter-spacing:.05em; }
   .hud-panel .num.big { font-size:26px; }
-  .hud-panel .sub { font-size:12px; color:#8a7a50; margin-left:4px; }
+  .hud-panel .sub { font-size:12px; color:#4f8f5f; margin-left:4px; }
   .hud-panel .sub.good { color:#86ff6a; }
   .hud-panel .sub.warn { color:#ff9a4a; }
 
@@ -59,7 +59,7 @@
     margin-bottom:6px;
   }
   #hud-fuel .fuel-label {
-    font-size:13px; letter-spacing:.25em; color:#8a7a50; text-transform:uppercase;
+    font-size:13px; letter-spacing:.25em; color:#4f8f5f; text-transform:uppercase;
   }
   #hud-fuel.critical .fuel-label { color:#ff4a4a; }
   #hud-fuel .fuel-value {
@@ -72,7 +72,7 @@
   }
   #hud-fuel .fuel-bar-bg {
     position:relative; width:100%; height:14px;
-    background:#0a0808; border:1px solid #2a1a04;
+    background:#0a0808; border:1px solid #0a3315;
     overflow:hidden;
   }
   #hud-fuel .fuel-bar-fill {
@@ -113,7 +113,7 @@
     margin-bottom:6px;
   }
   #hud-heat .heat-label {
-    font-size:13px; letter-spacing:.25em; color:#8a7a50; text-transform:uppercase;
+    font-size:13px; letter-spacing:.25em; color:#4f8f5f; text-transform:uppercase;
   }
   #hud-heat.locked .heat-label { color:#ff4a4a; animation:pulse 0.6s ease-in-out infinite; }
   #hud-heat .heat-value {
@@ -126,7 +126,7 @@
   }
   #hud-heat .heat-bar-bg {
     position:relative; width:100%; height:14px;
-    background:#0a0808; border:1px solid #2a1a04;
+    background:#0a0808; border:1px solid #0a3315;
     overflow:hidden;
   }
   #hud-heat .heat-bar-fill {
@@ -155,13 +155,13 @@
   }
   #hud-controls .key {
     display:inline-block; padding:2px 7px; border:1px solid #2a1a08;
-    color:#8a7a50; margin:0 2px; background:rgba(10,6,2,.6);
+    color:#4f8f5f; margin:0 2px; background:rgba(10,6,2,.6);
     font-size:12px;
   }
 
   #msg {
     position:fixed; top:40%; left:50%; transform:translate(-50%,-50%);
-    font-size:18px; letter-spacing:.14em; text-align:center; color:#e6c27a;
+    font-size:18px; letter-spacing:.14em; text-align:center; color:#72e09c;
     text-shadow:0 0 20px rgba(230,194,122,.5); pointer-events:none;
     z-index:15; opacity:0; transition:opacity .35s; font-weight:bold;
   }
@@ -181,7 +181,7 @@
     background:repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0, rgba(255,255,255,.012) 1px, transparent 1px, transparent 3px);
   }
   #menu h1 {
-    font-size:32px; letter-spacing:.3em; color:#e6c27a;
+    font-size:32px; letter-spacing:.3em; color:#72e09c;
     margin-bottom:4px; text-shadow:0 0 24px rgba(230,194,122,.3);
   }
   #menu .sub { font-size:13px; color:#4a3a18; letter-spacing:.2em; margin-bottom:18px; }
@@ -210,14 +210,14 @@
   }
   .stepper button:hover:not(:disabled) { background:#1a1008; border-color:#c8a050; }
   .stepper button:disabled { opacity:.3; cursor:not-allowed; }
-  .stepper .count { min-width:32px; text-align:center; color:#e6c27a; font-weight:bold; font-size:16px; }
+  .stepper .count { min-width:32px; text-align:center; color:#72e09c; font-weight:bold; font-size:16px; }
 
   .tier-pick { display:flex; gap:4px; flex:1; }
   .tier-pick button {
     flex:1; padding:7px 8px; background:transparent; border:1px solid #3a2a08;
     color:#8a6a30; font:11px 'Courier New',monospace; letter-spacing:.04em; cursor:pointer;
   }
-  .tier-pick button.sel { border-color:#e6c27a; color:#e6c27a; background:#0a0600; }
+  .tier-pick button.sel { border-color:#72e09c; color:#72e09c; background:#0a0600; }
   .tier-pick button:hover:not(.sel) { border-color:#8a6a30; color:#c8a050; }
 
   #seed-input {
@@ -227,7 +227,7 @@
   }
   #seed-input:focus { outline:none; border-color:#c8a050; }
   #seed-rand { padding:4px 10px; background:transparent; border:1px solid #2a1a08;
-    color:#8a7a50; font:12px 'Courier New',monospace; cursor:pointer; margin-left:4px; letter-spacing:.1em; }
+    color:#4f8f5f; font:12px 'Courier New',monospace; cursor:pointer; margin-left:4px; letter-spacing:.1em; }
   #seed-rand:hover { border-color:#c8a050; color:#c8a050; }
 
   #summary {
@@ -237,7 +237,7 @@
   }
   #summary .loadout-row { padding:4px 0; }
   .threat-low { color:#86ff6a; }
-  .threat-med { color:#e6c27a; }
+  .threat-med { color:#72e09c; }
   .threat-high { color:#ff9a4a; }
   .threat-insane { color:#ff4a4a; animation:pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.55; } }
@@ -245,11 +245,11 @@
   #deploy-btn {
     width:620px; padding:18px 20px; margin-top:2px;
     background:linear-gradient(180deg, #1a0f04 0%, #0a0600 100%);
-    border:1px solid #8a6a30; color:#e6c27a;
+    border:1px solid #8a6a30; color:#72e09c;
     font:18px 'Courier New',monospace; letter-spacing:.2em; cursor:pointer;
     transition:all .15s; font-weight:bold;
   }
-  #deploy-btn:hover:not(:disabled) { border-color:#e6c27a; color:#fff2c8;
+  #deploy-btn:hover:not(:disabled) { border-color:#72e09c; color:#fff2c8;
     box-shadow:0 0 24px rgba(230,194,122,.25); }
   #deploy-btn:disabled { opacity:.35; cursor:not-allowed; }
 
@@ -257,7 +257,7 @@
     position:absolute; top:18px; right:18px; font-size:13px;
     color:#8a6a30; letter-spacing:.1em;
   }
-  #bank-display .val { color:#e6c27a; font-size:17px; margin-left:6px; }
+  #bank-display .val { color:#72e09c; font-size:17px; margin-left:6px; }
 
   #colony-tag {
     position:absolute; top:18px; left:18px; font-size:12px;
@@ -269,15 +269,15 @@
     align-items:center; justify-content:center; z-index:25;
     background:rgba(3,2,8,.96);
   }
-  #gameover h2 { font-size:28px; color:#e6c27a; letter-spacing:.22em; margin-bottom:14px; }
+  #gameover h2 { font-size:28px; color:#72e09c; letter-spacing:.22em; margin-bottom:14px; }
   #gameover h2.death { color:#ff4a4a; text-shadow:0 0 20px rgba(255,74,74,.4); }
-  #gameover .line { font-size:14px; color:#8a7a50; margin:3px 0; letter-spacing:.06em; }
+  #gameover .line { font-size:14px; color:#4f8f5f; margin:3px 0; letter-spacing:.06em; }
   #gameover .payout { font-size:24px; margin:14px 0; letter-spacing:.1em; font-weight:bold; }
   #gameover .payout.plus { color:#86ff6a; text-shadow:0 0 16px rgba(134,255,106,.3); }
   #gameover .payout.minus { color:#ff6b6b; }
   #gameover .stats {
     margin:10px 0; padding:14px 22px; border:1px solid #2a1a08;
-    font-size:14px; color:#8a7a50; min-width:440px;
+    font-size:14px; color:#4f8f5f; min-width:440px;
   }
   #gameover .stats .loadout-row { padding:3px 0; }
   #gameover button {
@@ -285,7 +285,7 @@
     border:1px solid #3a2a08; color:#c8a050;
     font:14px 'Courier New',monospace; letter-spacing:.12em; cursor:pointer;
   }
-  #gameover button:hover { background:#0a0800; border-color:#e6c27a; color:#e6c27a; }
+  #gameover button:hover { background:#0a0800; border-color:#72e09c; color:#72e09c; }
 
   #legend {
     position:fixed; bottom:210px; right:16px; font-size:11px;
@@ -349,7 +349,7 @@
     <div class="loadout-row">
       <span class="lbl">Ship</span>
       <div id="ship-picker" style="flex:1; display:flex; gap:6px; flex-wrap:wrap; align-items:center">
-        <span style="color:#8a7a50; font-size:11px">Loading…</span>
+        <span style="color:#4f8f5f; font-size:11px">Loading…</span>
       </div>
     </div>
 
@@ -412,12 +412,12 @@
 <div id="store-modal" style="display:none; position:fixed; inset:0; z-index:100; background:rgba(2,2,10,0.92); padding:20px; overflow-y:auto; font-family:'Courier New',monospace">
   <div style="max-width:780px; margin:20px auto; border:1px solid #3a2a10; background:#050308; padding:24px 28px">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #3a2a10; padding-bottom:14px">
-      <h2 style="margin:0; color:#e6c27a; font-size:22px; letter-spacing:.25em">⛏ MINING STORE</h2>
-      <button id="store-close" style="background:transparent; border:1px solid #3a2a10; color:#8a7a50; font:bold 16px monospace; cursor:pointer; padding:4px 14px">✕ CLOSE</button>
+      <h2 style="margin:0; color:#72e09c; font-size:22px; letter-spacing:.25em">⛏ MINING STORE</h2>
+      <button id="store-close" style="background:transparent; border:1px solid #3a2a10; color:#4f8f5f; font:bold 16px monospace; cursor:pointer; padding:4px 14px">✕ CLOSE</button>
     </div>
-    <div style="color:#8a7a50; font-size:12px; letter-spacing:.1em; margin-bottom:16px; line-height:1.6">
+    <div style="color:#4f8f5f; font-size:12px; letter-spacing:.1em; margin-bottom:16px; line-height:1.6">
       Permanent account-wide upgrades. Purchased once, applied to every expedition forever.
-      Your bank: <span id="store-bank" style="color:#e6c27a; font-weight:bold">Ƒ0</span>
+      Your bank: <span id="store-bank" style="color:#72e09c; font-weight:bold">Ƒ0</span>
     </div>
     <div id="store-body">Loading…</div>
   </div>
@@ -427,12 +427,12 @@
 <div id="ships-modal" style="display:none; position:fixed; inset:0; z-index:100; background:rgba(2,2,10,0.92); padding:20px; overflow-y:auto; font-family:'Courier New',monospace">
   <div style="max-width:880px; margin:20px auto; border:1px solid #3a2a10; background:#050308; padding:28px 32px">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #3a2a10; padding-bottom:14px">
-      <h2 style="margin:0; color:#e6c27a; font-size:24px; letter-spacing:.25em">◈ SHIPYARD</h2>
-      <button id="ships-close" style="background:transparent; border:1px solid #3a2a10; color:#8a7a50; font:bold 16px monospace; cursor:pointer; padding:4px 14px">✕ CLOSE</button>
+      <h2 style="margin:0; color:#72e09c; font-size:24px; letter-spacing:.25em">◈ SHIPYARD</h2>
+      <button id="ships-close" style="background:transparent; border:1px solid #3a2a10; color:#4f8f5f; font:bold 16px monospace; cursor:pointer; padding:4px 14px">✕ CLOSE</button>
     </div>
     <div style="color:#c8b088; font-size:13px; letter-spacing:.08em; margin-bottom:18px; line-height:1.6">
       Alternate hulls for every faction style. Coalition ships drill faster, Syndicate ships fight harder, Void ships delegate to drones. Stats multiply with your loadout and perks.
-      Your bank: <span id="ships-bank" style="color:#e6c27a; font-weight:bold">Ƒ0</span>
+      Your bank: <span id="ships-bank" style="color:#72e09c; font-weight:bold">Ƒ0</span>
     </div>
     <div id="store-ships-body">Loading ships…</div>
   </div>
@@ -442,8 +442,8 @@
 <div id="lb-modal" style="display:none; position:fixed; inset:0; z-index:100; background:rgba(2,2,10,0.92); padding:20px; overflow-y:auto; font-family:'Courier New',monospace">
   <div style="max-width:680px; margin:20px auto; border:1px solid #3a2a10; background:#050308; padding:24px 28px">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid #3a2a10; padding-bottom:14px">
-      <h2 style="margin:0; color:#e6c27a; font-size:22px; letter-spacing:.25em">◆ TOP EXPEDITIONS</h2>
-      <button id="lb-close" style="background:transparent; border:1px solid #3a2a10; color:#8a7a50; font:bold 16px monospace; cursor:pointer; padding:4px 14px">✕ CLOSE</button>
+      <h2 style="margin:0; color:#72e09c; font-size:22px; letter-spacing:.25em">◆ TOP EXPEDITIONS</h2>
+      <button id="lb-close" style="background:transparent; border:1px solid #3a2a10; color:#4f8f5f; font:bold 16px monospace; cursor:pointer; padding:4px 14px">✕ CLOSE</button>
     </div>
     <div id="lb-body" style="color:#c8b088">Loading…</div>
   </div>
@@ -797,9 +797,9 @@ window.addEventListener('keydown', e => {
     if (ship && ship.autoMiner) {
       state.autoMineOn = !state.autoMineOn;
       showMsg(state.autoMineOn ? 'AUTO-MINER: ON' : 'AUTO-MINER: OFF',
-              900, state.autoMineOn ? '#86ff6a' : '#8a7a50');
+              900, state.autoMineOn ? '#86ff6a' : '#4f8f5f');
     } else {
-      showMsg('No auto-miner on this hull.', 900, '#8a7a50');
+      showMsg('No auto-miner on this hull.', 900, '#4f8f5f');
     }
   }
   if (k === ' ') e.preventDefault();
@@ -946,7 +946,7 @@ const MINERALS = {
 // [iron, cobalt, gold, painite, voidopal, musgravite]
 const DEPTH_BANDS = [
   { name:'NEAR',  color:'#86ff6a', maxSector:2,  weights:[0.45, 0.25, 0.15, 0.05, 0.00, 0.00] },
-  { name:'MID',   color:'#e6c27a', maxSector:5,  weights:[0.25, 0.25, 0.20, 0.15, 0.10, 0.02] },
+  { name:'MID',   color:'#72e09c', maxSector:5,  weights:[0.25, 0.25, 0.20, 0.15, 0.10, 0.02] },
   { name:'DEEP',  color:'#ff9a4a', maxSector:9,  weights:[0.10, 0.15, 0.20, 0.25, 0.20, 0.10] },
   { name:'VOID',  color:'#ff4a4a', maxSector:99, weights:[0.05, 0.05, 0.15, 0.25, 0.30, 0.20] }
 ];
@@ -1521,7 +1521,7 @@ function asteroidAtPoint(px, py) {
 function showMsg(text, duration = 1800, color) {
   const el = document.getElementById('msg');
   el.textContent = text;
-  el.style.color = color || '#e6c27a';
+  el.style.color = color || '#72e09c';
   el.style.opacity = '1';
   clearTimeout(showMsg._t);
   showMsg._t = setTimeout(() => { el.style.opacity = '0'; }, duration);
@@ -1688,7 +1688,7 @@ function killDrone(cause) {
     state.particles.push({
       x: d.x, y: d.y, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
       life: 30 + Math.random()*25, max: 55,
-      color: i < 10 ? '#ffcc44' : (i < 22 ? '#ff4444' : '#662222'), size: 2 + Math.random()*2
+      color: i < 10 ? '#9dff5a' : (i < 22 ? '#ff4444' : '#662222'), size: 2 + Math.random()*2
     });
   }
   state.drone = null;
@@ -2115,7 +2115,7 @@ function update() {
           } else {
             // Empty / depleted rock — brief flash message
             if (!bestAst._emptyAnnounced) {
-              showMsg('DEPLETED · no ore', 900, '#8a7a50');
+              showMsg('DEPLETED · no ore', 900, '#4f8f5f');
               bestAst._emptyAnnounced = true;
             }
             state.runStats.rocksMined++;
@@ -2201,7 +2201,7 @@ function update() {
         vx: Math.cos(flashAngle) * flashSpd,
         vy: Math.sin(flashAngle) * flashSpd,
         life: 8, max: 8,
-        color: mf < 2 ? '#ffffff' : '#ffcc44',
+        color: mf < 2 ? '#ffffff' : '#9dff5a',
         size: 1.5 + Math.random()
       });
     }
@@ -2403,7 +2403,7 @@ function update() {
         const a = Math.random() * Math.PI * 2;
         state.particles.push({
           x: esc.x, y: esc.y, vx: Math.cos(a)*(1+Math.random()*2), vy: Math.sin(a)*(1+Math.random()*2),
-          life: 22, max: 32, color: k<6?'#ffcc44':'#e6c27a', size: 1.8
+          life: 22, max: 32, color: k<6?'#9dff5a':'#72e09c', size: 1.8
         });
       }
       state.escorts.splice(i, 1);
@@ -2584,7 +2584,7 @@ function update() {
         // Hit sparks in faction color of target so you can see damage registered
         for (let k = 0; k < 5; k++) {
           const a = Math.random() * Math.PI * 2;
-          state.particles.push({ x:b.x, y:b.y, vx:Math.cos(a)*1.8, vy:Math.sin(a)*1.8, life:14, max:14, color:'#ffcc44', size:1.3 });
+          state.particles.push({ x:b.x, y:b.y, vx:Math.cos(a)*1.8, vy:Math.sin(a)*1.8, life:14, max:14, color:'#9dff5a', size:1.3 });
         }
         if (en.hp <= 0) {
           // Death explosion
@@ -2836,7 +2836,7 @@ function update() {
       for (let k = 0; k < 14; k++) {
         const a = Math.random() * Math.PI * 2;
         const s = 1 + Math.random() * 3;
-        state.particles.push({ x:d.x, y:d.y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life:18, max:24, color:k<6?'#ffcc44':'#ff6644', size:1.5 });
+        state.particles.push({ x:d.x, y:d.y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life:18, max:24, color:k<6?'#9dff5a':'#ff6644', size:1.5 });
       }
       if (d.hp <= 0) {
         killDrone('Hostile fire. Armor breached.');
@@ -2854,7 +2854,7 @@ function update() {
           esc.hp--;
           for (let k = 0; k < 4; k++) {
             const a = Math.random() * Math.PI * 2;
-            state.particles.push({ x:b.x, y:b.y, vx:Math.cos(a)*1.5, vy:Math.sin(a)*1.5, life:10, max:10, color:'#ffcc44', size:1.2 });
+            state.particles.push({ x:b.x, y:b.y, vx:Math.cos(a)*1.5, vy:Math.sin(a)*1.5, life:10, max:10, color:'#9dff5a', size:1.2 });
           }
           consumed = true;
           break;
@@ -2896,7 +2896,7 @@ function update() {
               state.particles.push({
                 x: r.x, y: r.y, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
                 life: 30+Math.random()*20, max: 50,
-                color: k<10 ? '#ffcc44' : (k<20 ? '#ff4444' : '#662222'), size: 2
+                color: k<10 ? '#9dff5a' : (k<20 ? '#ff4444' : '#662222'), size: 2
               });
             }
             state.refineries.splice(ri, 1);
@@ -3206,7 +3206,7 @@ function render() {
     } else {
       // Vector fallback — gold tracer like escort bullets
       for (const b of state.playerBullets) {
-        X.strokeStyle = '#ffcc44'; X.lineWidth = 2;
+        X.strokeStyle = '#9dff5a'; X.lineWidth = 2;
         X.beginPath();
         X.moveTo(b.x - camX, b.y - camY);
         X.lineTo(b.x - camX - b.vx*1.8, b.y - camY - b.vy*1.8);
@@ -3525,11 +3525,11 @@ function drawAsteroid(a, x, y) {
   if (!a.mined) {
     X.textAlign = 'center';
     if (!a.scanned) {
-      X.fillStyle = '#8a7a50';
+      X.fillStyle = '#4f8f5f';
       X.font = "bold 14px 'Courier New'";
       X.fillText('???', x, y - a.r - 12);
     } else if (a.mineral.value === 0 || a.oreUnits <= 0) {
-      X.fillStyle = '#8a7a50';
+      X.fillStyle = '#4f8f5f';
       X.font = "bold 14px 'Courier New'";
       X.fillText('DEPLETED', x, y - a.r - 12);
     } else {
@@ -3712,7 +3712,7 @@ function drawDrone(d, x, y) {
     // Offset above sprite scales with ship size; default 48 → ~28px gap, big hulls further.
     const pipOffset = (ship.spriteSize || 48) / 2 + 8;
     const pct = d.hp / d.maxHP;
-    const activeColor = pct > 0.66 ? '#86ff6a' : (pct > 0.33 ? '#ffcc44' : '#ff4a4a');
+    const activeColor = pct > 0.66 ? '#86ff6a' : (pct > 0.33 ? '#9dff5a' : '#ff4a4a');
     for (let i = 0; i < d.maxHP; i++) {
       X.fillStyle = i < d.hp ? activeColor : '#2a1a08';
       X.beginPath();
@@ -3891,7 +3891,7 @@ function drawCargoDrone(cd, x, y) {
 
   // Small cargo value badge while carrying
   if (cd.carryingValue > 0) {
-    X.fillStyle = '#ffcc44';
+    X.fillStyle = '#9dff5a';
     X.font = "bold 9px 'Courier New'";
     X.textAlign = 'center';
     X.fillText(`Ƒ${cd.carryingValue}`, x, y - 18);
@@ -4017,7 +4017,7 @@ window.__refreshUpgradesUI = function() {
 
   const s = window.__miningUpgradesState;
   if (!s || !s.catalog || Object.keys(s.catalog).length === 0) {
-    body.innerHTML = '<div style="color:#8a7a50; padding:16px; text-align:center">Connecting to FleshMarket…</div>';
+    body.innerHTML = '<div style="color:#4f8f5f; padding:16px; text-align:center">Connecting to FleshMarket…</div>';
     return;
   }
   const { owned, catalog, stats } = s;
@@ -4058,14 +4058,14 @@ window.__refreshUpgradesUI = function() {
                   : !canAfford ? `NEED Ƒ${it.price.toLocaleString()}`
                   : `BUY Ƒ${it.price.toLocaleString()}`;
     const btnColor = isOwned ? '#4ecdc4'
-                   : locked ? '#8a7a50'
+                   : locked ? '#4f8f5f'
                    : !canAfford ? '#ff6b6b'
-                   : '#e6c27a';
+                   : '#72e09c';
 
     html += `<div style="border:1px solid ${isOwned ? '#2a5a48' : '#3a2a10'}; background:${isOwned ? 'rgba(76,237,207,.05)' : 'rgba(10,6,2,.6)'}; padding:14px 18px; display:flex; gap:16px; align-items:center">
       <div style="flex:1">
         <div style="display:flex; gap:10px; align-items:center; margin-bottom:4px">
-          <span style="color:${isOwned ? '#4ecdc4' : '#e6c27a'}; font-weight:bold; font-size:15px">${escH(it.name)}</span>
+          <span style="color:${isOwned ? '#4ecdc4' : '#72e09c'}; font-weight:bold; font-size:15px">${escH(it.name)}</span>
           ${kindBadge}
         </div>
         <div style="color:#c8b088; font-size:12px; line-height:1.5">${escH(it.desc)}</div>
@@ -4076,7 +4076,7 @@ window.__refreshUpgradesUI = function() {
   }
   html += '</div>';
 
-  html += `<div style="margin-top:20px; padding-top:14px; border-top:1px solid #3a2a10; color:#8a7a50; font-size:11px; letter-spacing:.08em; line-height:1.7">
+  html += `<div style="margin-top:20px; padding-top:14px; border-top:1px solid #3a2a10; color:#4f8f5f; font-size:11px; letter-spacing:.08em; line-height:1.7">
     <div>Lifetime stats: <span style="color:#c8b088">${stats.total_runs||0} runs</span> · <span style="color:#c8b088">Ƒ${Math.floor(stats.total_profit||0).toLocaleString()} total profit</span> · deepest: <span style="color:#c8b088">${BAND_NAMES[stats.deepest_band_reached||0]}</span></div>
     <div style="margin-top:4px">Best single run: <span style="color:#86ff6a">+Ƒ${Math.floor(stats.best_run_profit||0).toLocaleString()}</span></div>
   </div>`;
@@ -4130,7 +4130,7 @@ window.__refreshShipsUI = function() {
 
   const s = window.__miningShipsState;
   if (!s || !s.catalog || Object.keys(s.catalog).length === 0) {
-    body.innerHTML = '<div style="color:#8a7a50; padding:16px; text-align:center">Connecting to FleshMarket…</div>';
+    body.innerHTML = '<div style="color:#4f8f5f; padding:16px; text-align:center">Connecting to FleshMarket…</div>';
     return;
   }
   const { owned, equipped, catalog } = s;
@@ -4186,11 +4186,11 @@ window.__refreshShipsUI = function() {
       if (isEquipped) {
         btnLabel = '● EQUIPPED'; btnColor = '#86ff6a';
       } else if (isOwned) {
-        btnLabel = 'EQUIP'; btnColor = '#e6c27a'; btnAction = 'equip';
+        btnLabel = 'EQUIP'; btnColor = '#72e09c'; btnAction = 'equip';
       } else if (!canAfford) {
         btnLabel = `NEED Ƒ${it.price.toLocaleString()}`; btnColor = '#ff6b6b';
       } else {
-        btnLabel = `BUY Ƒ${it.price.toLocaleString()}`; btnColor = '#e6c27a'; btnAction = 'buy';
+        btnLabel = `BUY Ƒ${it.price.toLocaleString()}`; btnColor = '#72e09c'; btnAction = 'buy';
       }
       const disabled = isEquipped || (!isOwned && !canAfford);
 
@@ -4206,7 +4206,7 @@ window.__refreshShipsUI = function() {
         <img src="${escH(sprSrc)}" style="flex:0 0 auto; width:64px; height:64px; image-rendering:pixelated; background:rgba(30,20,8,.3); border:1px solid #2a1a08" alt="">
         <div style="flex:1; min-width:0">
           <div style="display:flex; gap:10px; align-items:center; margin-bottom:5px">
-            <span style="color:${isOwned ? '#e6c27a' : '#c8b088'}; font-weight:bold; font-size:17px">${escH(it.name)}</span>
+            <span style="color:${isOwned ? '#72e09c' : '#c8b088'}; font-weight:bold; font-size:17px">${escH(it.name)}</span>
           </div>
           <div style="color:#d8c8a0; font-size:13px; line-height:1.55; margin-bottom:6px">${escH(it.desc)}</div>
           <div style="color:#c8b088; font-size:12px; letter-spacing:.05em; line-height:1.5">${escH(statsText)}</div>
@@ -4267,7 +4267,7 @@ window.__refreshShipPickerUI = function() {
   if (!picker) return;
   const s = window.__miningShipsState;
   if (!s || !s.catalog) {
-    picker.innerHTML = '<span style="color:#8a7a50; font-size:11px">Default ship only</span>';
+    picker.innerHTML = '<span style="color:#4f8f5f; font-size:11px">Default ship only</span>';
     return;
   }
   const { owned, equipped, catalog } = s;
@@ -4281,7 +4281,7 @@ window.__refreshShipPickerUI = function() {
   });
   if (mine.length === 1) {
     // Just the default — hint at the shipyard
-    picker.innerHTML = `<span style="color:#c8b088; font-size:12px; letter-spacing:.1em">Mining Drone · </span><a id="ship-picker-store-link" style="color:#e6c27a; font-size:11px; cursor:pointer; text-decoration:underline">browse shipyard</a>`;
+    picker.innerHTML = `<span style="color:#c8b088; font-size:12px; letter-spacing:.1em">Mining Drone · </span><a id="ship-picker-store-link" style="color:#72e09c; font-size:11px; cursor:pointer; text-decoration:underline">browse shipyard</a>`;
     const link = document.getElementById('ship-picker-store-link');
     if (link) link.addEventListener('click', () => {
       document.getElementById('ships-btn').click();
@@ -4314,12 +4314,12 @@ window.__refreshLeaderboardUI = function() {
   if (!body) return;
   const rows = window.__miningLeaderboard || [];
   if (rows.length === 0) {
-    body.innerHTML = '<div style="color:#8a7a50; text-align:center; padding:20px">No expeditions recorded yet. Be the first.</div>';
+    body.innerHTML = '<div style="color:#4f8f5f; text-align:center; padding:20px">No expeditions recorded yet. Be the first.</div>';
     return;
   }
   let html = `<table style="width:100%; border-collapse:collapse; font-size:13px">
     <thead>
-      <tr style="color:#8a7a50; text-transform:uppercase; font-size:11px; letter-spacing:.12em">
+      <tr style="color:#4f8f5f; text-transform:uppercase; font-size:11px; letter-spacing:.12em">
         <th style="text-align:left; padding:8px 10px; border-bottom:1px solid #3a2a10">#</th>
         <th style="text-align:left; padding:8px 10px; border-bottom:1px solid #3a2a10">Pilot</th>
         <th style="text-align:right; padding:8px 10px; border-bottom:1px solid #3a2a10">Best Run</th>
@@ -4331,17 +4331,17 @@ window.__refreshLeaderboardUI = function() {
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     const bandIdx = Math.max(0, Math.min(3, r.best_run_band|0));
-    const bandColors = ['#86ff6a', '#e6c27a', '#ff9a4a', '#ff4a4a'];
+    const bandColors = ['#86ff6a', '#72e09c', '#ff9a4a', '#ff4a4a'];
     const facColor = r.faction === 'syndicate' ? '#e74c3c'
                    : r.faction === 'void'      ? '#9b59b6'
                    : r.faction === 'coalition' ? '#4ecdc4'
-                   : '#8a7a50';
+                   : '#4f8f5f';
     html += `<tr>
-      <td style="padding:8px 10px; color:#8a7a50">${i+1}</td>
+      <td style="padding:8px 10px; color:#4f8f5f">${i+1}</td>
       <td style="padding:8px 10px; color:${facColor}; font-weight:bold">${escH(r.name)}</td>
       <td style="padding:8px 10px; text-align:right; color:#86ff6a; font-weight:bold">+Ƒ${Math.floor(r.best_run_profit).toLocaleString()}</td>
       <td style="padding:8px 10px; text-align:center; color:${bandColors[bandIdx]}; font-size:11px; letter-spacing:.15em">${BAND_NAMES[bandIdx]}</td>
-      <td style="padding:8px 10px; text-align:right; color:#8a7a50">${r.total_runs}</td>
+      <td style="padding:8px 10px; text-align:right; color:#4f8f5f">${r.total_runs}</td>
     </tr>`;
   }
   html += '</tbody></table>';

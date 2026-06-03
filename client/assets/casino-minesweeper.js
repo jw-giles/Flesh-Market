@@ -25,12 +25,12 @@
     .ms-cell[data-n="5"]{color:#ffaa00} .ms-cell[data-n="6"]{color:#00e5ff}
     .ms-cell[data-n="7"]{color:#ff85c0} .ms-cell[data-n="8"]{color:#cccccc}
     #ms-hud{display:flex;gap:20px;align-items:center;margin-bottom:6px;font-size:.9rem;color:#aaa}
-    .ms-mode-btn{padding:6px 12px;margin:3px;background:#1a1500;border:1px solid #4a3a10;color:#e6c27a;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.85rem}
-    .ms-mode-btn.active{background:#2a2200;border-color:#e6c27a}
+    .ms-mode-btn{padding:6px 12px;margin:3px;background:#06200d;border:1px solid #1f4a1f;color:#72e09c;cursor:pointer;border-radius:4px;font-family:monospace;font-size:.85rem}
+    .ms-mode-btn.active{background:#2a2200;border-color:#72e09c}
   </style>
   <div id="ms-wrap">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-      <span style="color:#e6c27a;letter-spacing:.1em;font-size:.9rem">MINESWEEPER</span>
+      <span style="color:#72e09c;letter-spacing:.1em;font-size:.9rem">MINESWEEPER</span>
       
     </div>
     <div id="ms-mode-row" style="margin-bottom:8px">
@@ -39,7 +39,7 @@
     <div id="ms-hud">
       <span>💣 <b id="ms-mines-left">10</b></span>
       <span>⏱ <b id="ms-timer">0</b>s</span>
-      <span id="ms-msg" style="color:#e6c27a"></span>
+      <span id="ms-msg" style="color:#72e09c"></span>
     </div>
     <div style="margin-bottom:6px;font-size:.8rem;color:#888">Left click: reveal · Right click: flag</div>
     <div id="ms-board"></div>

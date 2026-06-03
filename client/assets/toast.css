@@ -5,7 +5,7 @@
 .v5toast.show{opacity:1;transform:translateX(0);}
 
 /* Trade Feed */
-#tradeFeedPanel{max-height:120px;overflow:auto;font-size:.75rem;font-family:monospace;border:1px solid #1a1208;border-radius:6px;padding:5px;margin-top:6px;background:#030201;}
+#tradeFeedPanel{max-height:120px;overflow:auto;font-size:.75rem;font-family:monospace;border:1px solid #06160a;border-radius:6px;padding:5px;margin-top:6px;background:#030201;}
 #tradeFeedPanel .tf-row{padding:1px 0;opacity:.85;}
 #tradeFeedPanel .tf-buy{color:#86ff6a;}
 #tradeFeedPanel .tf-sell{color:#ff7b7b;}
@@ -20,11 +20,11 @@
 #sectorBars .sb-row{display:flex;align-items:center;gap:8px;margin-bottom:3px;}
 #sectorBars .sb-name{width:90px;font-size:.72rem;opacity:.7;text-align:right;}
 #sectorBars .sb-bg{flex:1;background:#111;border-radius:3px;height:8px;}
-#sectorBars .sb-fill{height:8px;border-radius:3px;background:#ffb547;}
+#sectorBars .sb-fill{height:8px;border-radius:3px;background:#46ff7d;}
 #sectorBars .sb-val{width:60px;font-size:.72rem;opacity:.6;text-align:right;}
 
 /* Open orders */
-#openOrders .oo-row{display:flex;gap:8px;align-items:center;padding:2px 0;border-bottom:1px solid #1a1208;}
+#openOrders .oo-row{display:flex;gap:8px;align-items:center;padding:2px 0;border-bottom:1px solid #06160a;}
 #openOrders .oo-buy{color:#86ff6a;}
 #openOrders .oo-sell{color:#ff7b7b;}
 #openOrders .oo-cancel{cursor:pointer;opacity:.5;font-size:.7rem;margin-left:auto;}

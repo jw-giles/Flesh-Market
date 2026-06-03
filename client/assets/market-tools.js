@@ -43,8 +43,8 @@ function initWatchlistUI() {
   wrap.id = 'watchlist-bar';
   wrap.style.cssText = 'display:flex;gap:5px;align-items:center;margin-bottom:6px';
   wrap.innerHTML = `
-    <button id="wlToggle" style="background:none;border:1px solid #2a1a04;border-radius:4px;
-      color:#665533;font-size:.72rem;padding:3px 10px;cursor:pointer;font-family:inherit;
+    <button id="wlToggle" style="background:none;border:1px solid #0a3315;border-radius:4px;
+      color:#3a5f3a;font-size:.72rem;padding:3px 10px;cursor:pointer;font-family:inherit;
       transition:all .15s;white-space:nowrap" title="Show only watchlisted tickers">
       ★ Watchlist
     </button>
@@ -54,9 +54,9 @@ function initWatchlistUI() {
   const btn = $('#wlToggle');
   btn.addEventListener('click', () => {
     _watchlistMode = !_watchlistMode;
-    btn.style.borderColor = _watchlistMode ? '#ffb547' : '#2a1a04';
-    btn.style.color = _watchlistMode ? '#ffb547' : '#665533';
-    btn.style.background = _watchlistMode ? 'rgba(255,181,71,.08)' : 'none';
+    btn.style.borderColor = _watchlistMode ? '#46ff7d' : '#0a3315';
+    btn.style.color = _watchlistMode ? '#46ff7d' : '#3a5f3a';
+    btn.style.background = _watchlistMode ? 'rgba(70,255,125,.08)' : 'none';
     if (typeof renderTickers === 'function') renderTickers();
   });
   updateWatchlistCount();
@@ -103,13 +103,13 @@ function patchRenderTickers() {
       star.textContent = wl.includes(sym) ? '★' : '☆';
       star.title = wl.includes(sym) ? 'Remove from watchlist' : 'Add to watchlist';
       star.style.cssText = `cursor:pointer;font-size:.9rem;padding:0 4px;flex-shrink:0;
-        color:${wl.includes(sym) ? '#ffb547' : '#333'};user-select:none;
+        color:${wl.includes(sym) ? '#46ff7d' : '#333'};user-select:none;
         transition:color .15s;z-index:2`;
       star.addEventListener('click', (e) => {
         e.stopPropagation();
         const nowWatched = toggleWatch(sym);
         star.textContent = nowWatched ? '★' : '☆';
-        star.style.color = nowWatched ? '#ffb547' : '#333';
+        star.style.color = nowWatched ? '#46ff7d' : '#333';
         star.title = nowWatched ? 'Remove from watchlist' : 'Add to watchlist';
         updateWatchlistCount();
       });
@@ -164,7 +164,7 @@ function checkAlerts(tickData) {
       a.fired = true;
       changed = true;
       const dir = a.condition === 'above' ? '▲' : '▼';
-      try { showToast(`🔔 ${a.sym} hit ${fmt(a.price)} ${dir} (now ${fmt(px)})`, '#ffb547'); } catch(_) {}
+      try { showToast(`🔔 ${a.sym} hit ${fmt(a.price)} ${dir} (now ${fmt(px)})`, '#46ff7d'); } catch(_) {}
       try { playSound('mention'); } catch(_) {}
     }
   }
@@ -178,7 +178,7 @@ function initAlertUI() {
 
   const panel = document.createElement('div');
   panel.id = 'alertPanel';
-  panel.style.cssText = 'margin-top:6px;padding:8px;border:1px solid #2a1a04;border-radius:6px;background:#050403';
+  panel.style.cssText = 'margin-top:6px;padding:8px;border:1px solid #0a3315;border-radius:6px;background:#050403';
   panel.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">Price Alerts</div>
@@ -236,7 +236,7 @@ function renderAlertList() {
     const color = a.condition === 'above' ? '#86ff6a' : '#ff6b6b';
     return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0;border-bottom:1px solid #1a0a04">
       <span style="color:${color};font-size:.8rem">${dir}</span>
-      <span style="color:#c8a86a;font-weight:600">${a.sym}</span>
+      <span style="color:#7fc090;font-weight:600">${a.sym}</span>
       <span style="opacity:.6">${a.condition} ${fmt(a.price)}</span>
       <span style="flex:1"></span>
       <button onclick="window._fmRemoveAlert('${a.id}')" style="background:none;border:none;color:#553333;cursor:pointer;font-size:.7rem;padding:0 4px">✕</button>
@@ -258,7 +258,7 @@ function initMetricsPanel() {
 
   const panel = document.createElement('div');
   panel.id = 'metricsPanel';
-  panel.style.cssText = 'margin-top:10px;padding:10px;border:1px solid #2a1a04;border-radius:6px;background:#050403';
+  panel.style.cssText = 'margin-top:10px;padding:10px;border:1px solid #0a3315;border-radius:6px;background:#050403';
   panel.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">Performance Metrics</div>
@@ -266,28 +266,28 @@ function initMetricsPanel() {
     </div>
     <div id="metricsGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
-        <div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Max Drawdown</div>
+        <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Max Drawdown</div>
         <div id="m-drawdown" style="font-size:1rem;font-weight:700;color:#ff6b6b">—</div>
       </div>
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
-        <div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Best Period</div>
+        <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Best Period</div>
         <div id="m-best" style="font-size:1rem;font-weight:700;color:#86ff6a">—</div>
       </div>
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
-        <div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Worst Period</div>
+        <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Worst Period</div>
         <div id="m-worst" style="font-size:1rem;font-weight:700;color:#ff6b6b">—</div>
       </div>
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
-        <div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Volatility</div>
-        <div id="m-vol" style="font-size:1rem;font-weight:700;color:#ffb547">—</div>
+        <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Volatility</div>
+        <div id="m-vol" style="font-size:1rem;font-weight:700;color:#46ff7d">—</div>
       </div>
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
-        <div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Win Rate</div>
+        <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Win Rate</div>
         <div id="m-winrate" style="font-size:1rem;font-weight:700;color:#4ecdc4">—</div>
       </div>
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
-        <div style="font-size:.6rem;color:#665533;text-transform:uppercase;letter-spacing:.08em">Total Return</div>
-        <div id="m-return" style="font-size:1rem;font-weight:700;color:#c8a86a">—</div>
+        <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Total Return</div>
+        <div id="m-return" style="font-size:1rem;font-weight:700;color:#7fc090">—</div>
       </div>
     </div>`;
   pnlTab.appendChild(panel);
@@ -355,7 +355,7 @@ function computeMetrics(history) {
     const mean = returns.reduce((s,r) => s+r, 0) / returns.length;
     const variance = returns.reduce((s,r) => s + (r - mean) ** 2, 0) / (returns.length - 1);
     const vol = Math.sqrt(variance) * 100;
-    setMetric('m-vol', vol.toFixed(2) + '%', '#ffb547');
+    setMetric('m-vol', vol.toFixed(2) + '%', '#46ff7d');
   }
 
   // Win rate (% of periods with positive return)
@@ -388,7 +388,7 @@ function initCompanyDetail() {
   if (!chart) return;
   const panel = document.createElement('div');
   panel.id = 'companyDetail';
-  panel.style.cssText = 'display:none;padding:8px;border:1px solid #2a1a04;border-radius:6px;background:#050403;margin-top:6px;font-size:.78rem';
+  panel.style.cssText = 'display:none;padding:8px;border:1px solid #0a3315;border-radius:6px;background:#050403;margin-top:6px;font-size:.78rem';
   chart.after(panel);
 }
 
@@ -441,7 +441,7 @@ function updateCompanyDetail() {
       const orderItems = ordersEl.querySelectorAll('[data-sym]');
       let count = 0;
       orderItems.forEach(el => { if (el.dataset.sym === sym) count++; });
-      if (count > 0) orderInfo = `<span style="color:#ffb547">${count} open order(s)</span>`;
+      if (count > 0) orderInfo = `<span style="color:#46ff7d">${count} open order(s)</span>`;
     }
   } catch(_) {}
 
@@ -449,12 +449,12 @@ function updateCompanyDetail() {
     <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
       <div style="flex:1;min-width:180px">
         <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
-          <span style="font-size:1rem;font-weight:700;color:#c8a86a">${sym}</span>
+          <span style="font-size:1rem;font-weight:700;color:#7fc090">${sym}</span>
           <span style="font-size:.85rem;color:#888">${t.name || ''}</span>
         </div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px">
           <span style="color:${sectorColor};border:1px solid ${sectorColor}44;padding:1px 6px;border-radius:3px;font-size:.68rem">${sector}</span>
-          <span style="color:#4ecdc4;font-size:.68rem" title="Headquarters colony">HQ: ${hq}</span>
+          <span style="color:#f0b454;font-size:.68rem" title="Headquarters colony">HQ: ${hq}</span>
           ${isDivSector ? '<span style="color:#86ff6a;font-size:.68rem">💰 Dividend eligible</span>' : '<span style="color:#553333;font-size:.68rem">No base dividend</span>'}
         </div>
       </div>

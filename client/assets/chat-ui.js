@@ -92,7 +92,7 @@
           names.slice(0,8).forEach(function(name){
             var item = document.createElement('div');
             item.textContent = '@' + name;
-            item.style.cssText = 'padding:5px 10px;cursor:pointer;border-bottom:1px solid #1a1208;color:#ffb547';
+            item.style.cssText = 'padding:5px 10px;cursor:pointer;border-bottom:1px solid #06160a;color:#46ff7d';
             item.addEventListener('mousedown', function(e){
               e.preventDefault();
               var before = val.slice(0, _mentionStart);

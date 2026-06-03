@@ -6,7 +6,7 @@
 const _mfmt = n => 'Ƒ' + (Math.round(Number(n||0)*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
 const _TIER = {1:'★',2:'⚖',3:'♛'};
 const TYPE_LABEL  = { flsh:'FLSH', patreon:'Guild', player:'Capital House' };
-const TYPE_COLOR  = { flsh:'#ffd700', patreon:'#2ecc71', player:'#a0a0a0' };
+const TYPE_COLOR  = { flsh:'#ffce4d', patreon:'#2ecc71', player:'#a0a0a0' };
 let __currentFundId = null;
 let __currentFundData = null;
 let __myPlayerId_g = null;
@@ -49,9 +49,9 @@ function renderGuildDirectory(funds) {
     const isFlshLocked    = f.type === 'flsh'    && f.locked;
     const isPatreonLocked = f.type === 'patreon' && f.locked;
     const lockBadge = isFlshLocked
-      ? '<span style="color:#4da6ff;font-size:.68rem;opacity:.7">⬡ DEV ONLY</span>'
+      ? '<span style="color:#ffce4d;font-size:.68rem;opacity:.7">⬡ DEV ONLY</span>'
       : isPatreonLocked
-      ? '<span style="color:#c8a040;font-size:.68rem;opacity:.7">★ PATREON</span>'
+      ? '<span style="color:#ffce4d;font-size:.68rem;opacity:.7">★ PATREON</span>'
       : '';
     const cardOpacity = f.locked ? '0.55' : '1';
 
@@ -59,7 +59,7 @@ function renderGuildDirectory(funds) {
       <div class="g-fund-card" onclick="openFund('${f.id}')" style="cursor:pointer;opacity:${cardOpacity}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span style="font-weight:700;color:#ffb547">${f.name}</span>
+            <span style="font-weight:700;color:#46ff7d">${f.name}</span>
             <span style="font-size:.72rem;padding:1px 7px;border-radius:8px;border:1px solid ${color};color:${color}">${label}</span>
             ${badge}${lockBadge}
           </div>
@@ -97,7 +97,7 @@ async function openFund(fundId) {
 // the server started snapshotting (v1.0.2.4), so new/old houses start sparse.
 // ── Performance: allocation donut + metrics (matches the player P&L) ─────
 const _GPAL = (typeof window !== 'undefined' && window.FM_DONUT_PAL) ? window.FM_DONUT_PAL
-  : ['#2dd4c4','#ff3b3b','#b86bff','#27e36b','#ffd400','#ff8c2e','#5dff7a','#e0b85a','#3aa0ff','#ff7a45'];
+  : ['#2dd4c4','#ff3b3b','#b86bff','#27e36b','#9dff5a','#ff8c2e','#5dff7a','#e0b85a','#3aa0ff','#ff7a45'];
 
 function _gFmtC(v){ v=Number(v)||0; return v>=1e9?(v/1e9).toFixed(1)+'B':v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'k':v.toFixed(0); }
 
@@ -154,7 +154,7 @@ function renderFundDonut(f) {
   });
   ctx.shadowBlur=0;
   ctx.fillStyle='#0a0804'; ctx.beginPath(); ctx.arc(cx,cy,ri-2,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#ffcf7a'; ctx.font='bold 13px monospace';
+  ctx.fillStyle='#9dffb0'; ctx.font='bold 13px monospace';
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText('Ƒ'+_gFmtC(f.nav), cx, cy-7);
   ctx.fillStyle='rgba(230,200,140,0.55)'; ctx.font='12px monospace';
@@ -208,7 +208,7 @@ async function renderFundPerformance(fundId) {
   if (returns.length>1){
     const mean=returns.reduce((s,r)=>s+r,0)/returns.length;
     const variance=returns.reduce((s,r)=>s+(r-mean)**2,0)/(returns.length-1);
-    _gSetMetric('gm-vol', (Math.sqrt(variance)*100).toFixed(2)+'%', '#ffb547');
+    _gSetMetric('gm-vol', (Math.sqrt(variance)*100).toFixed(2)+'%', '#46ff7d');
   }
 }
 
@@ -293,7 +293,7 @@ function _renderGuildHoldings(f){
             const secTag = bySector ? ` <span style="font-size:.6rem;color:#7a6a4a;letter-spacing:.04em">${_gSectorName(_gSectorOf(h.symbol))}</span>` : '';
             return `<div class="ticker"><span class="sym">${h.symbol}${secTag}</span>`
               + `<span style="display:flex;gap:12px;align-items:baseline;justify-content:flex-end">`
-              + `<span style="color:#d4b87a">Ƒ${h.price.toFixed(2)}</span>`
+              + `<span style="color:#b6ffcf">Ƒ${h.price.toFixed(2)}</span>`
               + `<span style="color:${col};min-width:64px;text-align:right">${sign}${h.pct.toFixed(2)}%</span>`
               + `<span style="min-width:120px;text-align:right">${h.qty}× <b>${_mfmt(h.value)}</b></span>`
               + `</span></div>`;
@@ -413,7 +413,7 @@ function _drawGuildBars(rowsIn){
     if (isPos) ctx.fillRect(bx + barPx - 1, y, 1, BAR_H);
     else       ctx.fillRect(bx, y, 1, BAR_H);
 
-    ctx.fillStyle = '#d4b87a'; ctx.font = 'bold 9px monospace';
+    ctx.fillStyle = '#72e09c'; ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     ctx.fillText(h.symbol, PAD_L - 4, y + BAR_H/2);
 
@@ -465,14 +465,14 @@ function renderFundDetail(f) {
   const cntEl = document.getElementById('g-member-count');
   if (cntEl) cntEl.textContent = `(${f.memberCount}/${f.maxMembers})`;
   const isPlayerFund = f.type === 'player';
-  const _roleBadge = { treasurer:'#86ff6a', trader:'#4ecdc4', whip:'#e6c27a' };
+  const _roleBadge = { treasurer:'#86ff6a', trader:'#4ecdc4', whip:'#72e09c' };
   const _officerByName = {}; (f.officers||[]).forEach(o=>{ _officerByName[o.name]=o.role; });
   if (mBox) mBox.innerHTML = (f.members||[]).map(m=>{
     const g = _TIER[m.patreon_tier]||'';
     const own = m.isOwner ? ' 👑' : '';
     const role = _officerByName[m.name];
     const roleTag = role ? ` <span style="font-size:.58rem;color:${_roleBadge[role]||'#aaa'};border:1px solid ${_roleBadge[role]||'#aaa'}55;padding:0 4px;border-radius:3px;text-transform:uppercase;letter-spacing:.05em">${role}</span>` : '';
-    const goldTag = m.isGolden ? ' <span title="Golden share" style="color:#e6c27a">★</span>' : '';
+    const goldTag = m.isGolden ? ' <span title="Golden share" style="color:#ffce4d">★</span>' : '';
     const kickBtn = (f.isOwner && !m.isOwner && isPlayerFund)
       ? `<button onclick="kickMember('${m.name}')" style="font-size:.65rem;padding:1px 5px;background:#2a0d0d;border:1px solid #4a1a1a;color:#ff8080;border-radius:4px;cursor:pointer;margin-left:4px">kick</button>`
       : '';
@@ -517,10 +517,10 @@ function renderFundDetail(f) {
     // Insert a lock notice
     const lockEl = document.createElement('div');
     lockEl.id = 'g-lock-notice';
-    const lockColor = isDevFund ? '#4da6ff' : '#c8a040';
+    const lockColor = isDevFund ? '#ffce4d' : '#ffce4d';
     const lockMsg   = isDevFund
       ? '⬡ This is the developer fund. Access is restricted to developer accounts.'
-      : '★ This fund requires an active Patreon membership. Join at <a href="https://www.patreon.com/FLSH" target="_blank" style="color:#c8a040">patreon.com/FLSH</a>.';
+      : '★ This fund requires an active Patreon membership. Join at <a href="https://www.patreon.com/FLSH" target="_blank" style="color:#ffce4d">patreon.com/FLSH</a>.';
     lockEl.innerHTML = lockMsg;
     lockEl.style.cssText = [
       'padding:10px 14px;margin-bottom:12px',
@@ -544,8 +544,8 @@ function renderFundDetail(f) {
   const joinHint = joinBtn ? joinBtn.nextElementSibling : null;
   if (joinBtn && f.type === 'patreon') {
     joinBtn.textContent = '★ Become a Patron';
-    joinBtn.style.borderColor = '#c8a040';
-    joinBtn.style.color = '#c8a040';
+    joinBtn.style.borderColor = '#ffce4d';
+    joinBtn.style.color = '#ffce4d';
     if (joinHint) joinHint.textContent = 'Opens patreon.com/FLSH — membership unlocks the Guild';
   } else if (joinBtn) {
     joinBtn.textContent = 'Join Fund';
@@ -697,8 +697,8 @@ function setHousePane(name) {
   });
   document.querySelectorAll('#g-subtabs .g-stab').forEach(t => {
     const on = t.getAttribute('data-gpane') === name;
-    t.style.borderBottomColor = on ? '#ffb547' : 'transparent';
-    t.style.color = on ? '#ffb547' : '#6a5a3a';
+    t.style.borderBottomColor = on ? '#46ff7d' : 'transparent';
+    t.style.color = on ? '#46ff7d' : '#6a5a3a';
   });
   // Canvas has zero width while the pane is hidden; redraw once it's visible.
   if (name === 'portfolio' && __currentFundData) {
@@ -718,7 +718,7 @@ function renderGovernance(f) {
   const label = gov === 'executive' ? 'Executive — owner trades directly'
     : gov === 'vote' ? `Majority Vote — members decide (${wLabel})`
     : `Council — members vote, owner has final say (${wLabel})`;
-  if (badge) badge.innerHTML = `<span style="opacity:.5">Mode:</span> <b style="color:#ffb547">${label}</b>`;
+  if (badge) badge.innerHTML = `<span style="opacity:.5">Mode:</span> <b style="color:#46ff7d">${label}</b>`;
 
   setDisp('g-gov-owner', f.isOwner);
   if (f.isOwner) {
@@ -731,7 +731,7 @@ function renderGovernance(f) {
   // Golden share
   const ghEl = document.getElementById('g-golden-holder');
   if (ghEl) ghEl.innerHTML = f.goldenHolder
-    ? `Held by <b style="color:#e6c27a">${_gEsc(f.goldenHolder)}</b>${f.iHoldGolden?' (you)':''}`
+    ? `Held by <b style="color:#72e09c">${_gEsc(f.goldenHolder)}</b>${f.iHoldGolden?' (you)':''}`
     : '<span style="opacity:.5">Unassigned</span>';
   const gc = document.getElementById('g-golden-controls');
   if (gc) gc.style.display = f.iHoldGolden ? 'block' : 'none';
@@ -756,8 +756,8 @@ function renderProposals(f) {
       ? btn('Yes','#2ecc71',`houseVote('${p.id}','yes')`) + btn('No','#e74c3c',`houseVote('${p.id}','no')`) : '';
     const ownerBtns = (f.isOwner && gov==='council' && ['open','advisory_pass','advisory_fail'].includes(p.status))
       ? btn('Execute','#86ff6a',`houseResolve('${p.id}','execute')`) + btn('Veto','#ff6b6b',`houseResolve('${p.id}','veto')`) : '';
-    const goldenBtn = (f.iHoldGolden && open) ? btn('Veto (Golden)','#e6c27a',`goldenVeto('${p.id}')`) : '';
-    const whipBtn = ((f.isOwner || f.myRole==='whip') && open && (gov==='vote'||gov==='council')) ? btn('Force Call','#c8a86a',`forceVote('${p.id}')`) : '';
+    const goldenBtn = (f.iHoldGolden && open) ? btn('Veto (Golden)','#72e09c',`goldenVeto('${p.id}')`) : '';
+    const whipBtn = ((f.isOwner || f.myRole==='whip') && open && (gov==='vote'||gov==='council')) ? btn('Force Call','#7fc090',`forceVote('${p.id}')`) : '';
     let closes = '';
     if (open && p.expires_at) {
       const ms = p.expires_at - Date.now();
@@ -1026,7 +1026,7 @@ document.addEventListener('fm:authed', (ev) => {
 
   // Restore tier badge in header + show account name
   const tierBadge  = document.getElementById('fm-tier-badge');
-  const tierColors = {1:'#c8a040',2:'#2ecc71',3:'#ffd700'};
+  const tierColors = {1:'#c8a040',2:'#2ecc71',3:'#9dff5a'};
   const tierGlyphs = {1:'★',2:'⚖',3:'♛'};
   const tier = ev.detail?.patreon_tier || 0;
   if (tierBadge) { tierBadge.textContent = tierGlyphs[tier]||''; tierBadge.style.color = tierColors[tier]||''; }

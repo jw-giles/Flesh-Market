@@ -40,14 +40,14 @@
       }
       #fm-auth-card {
         background:#0a0a08;color:#d4b87a;
-        border:1px solid #4a3510;border-radius:10px;
+        border:1px solid #1f4515;border-radius:10px;
         min-width:340px;max-width:400px;width:92%;
         padding:28px 32px;
         box-shadow:0 0 40px rgba(255,165,0,.08), 0 16px 48px rgba(0,0,0,.7);
       }
       #fm-auth-card h2 {
         margin:0 0 20px;font-size:1.05rem;letter-spacing:.14em;
-        text-transform:uppercase;color:#ffb547;
+        text-transform:uppercase;color:#46ff7d;
         border-bottom:1px dashed #3a2a08;padding-bottom:10px;
       }
       #fm-auth-card .fm-field { margin-bottom:12px; }
@@ -58,11 +58,11 @@
       #fm-auth-card .fm-field input {
         width:100%;padding:8px 10px;
         background:#060605;border:1px solid #3a2a08;
-        color:#ffb547;border-radius:6px;outline:none;
+        color:#46ff7d;border-radius:6px;outline:none;
         font-family:inherit;font-size:.95rem;box-sizing:border-box;
         transition:border-color .15s;
       }
-      #fm-auth-card .fm-field input:focus { border-color:#ffb547; }
+      #fm-auth-card .fm-field input:focus { border-color:#46ff7d; }
       #fm-auth-card .fm-hint {
         font-size:.78rem;min-height:16px;margin-bottom:12px;
         transition:color .15s;
@@ -74,16 +74,16 @@
       }
       #fm-auth-card button {
         cursor:pointer;padding:7px 18px;
-        border:1px solid #ffb547;border-radius:6px;
-        background:transparent;color:#ffb547;
+        border:1px solid #46ff7d;border-radius:6px;
+        background:transparent;color:#46ff7d;
         font-family:inherit;font-size:.9rem;
         transition:background .15s,color .15s;
       }
-      #fm-auth-card button:hover { background:#ffb547;color:#000; }
+      #fm-auth-card button:hover { background:#46ff7d;color:#000; }
       #fm-auth-card button.secondary {
-        border-color:#4a3510;color:#888;
+        border-color:#1f4515;color:#888;
       }
-      #fm-auth-card button.secondary:hover { background:#4a3510;color:#ffb547; }
+      #fm-auth-card button.secondary:hover { background:#1f4515;color:#46ff7d; }
       #fm-auth-card button:disabled { opacity:.5;cursor:default;pointer-events:none; }
       #fm-auth-card .fm-divider {
         text-align:center;font-size:.75rem;opacity:.4;margin:14px 0 10px;

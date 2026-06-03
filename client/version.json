@@ -1,7 +1,7 @@
 {
-  "version": "1.1.0.0",
-  "built": "2026-06-01T00:00:00Z",
+  "version": "1.1.1.0",
+  "built": "2026-06-03T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.0.0",
-  "notes": "Major content drop: free starter Skiff (every account can buy/ship/sell commodities instantly), commodity-shipping overhaul (lower risk tuned to a 45-50% ceiling for the riskiest hauls) with hireable guard escorts, P&L sector tools (filter or group by named sector on personal P&L and Capital House), and brighter allocation donuts with per-segment glow on both panels."
+  "patch": "1.1.1.0",
+  "notes": "Green CRT phosphor reskin (Ellen's Theme): permanent green-phosphor palette, self-hosted Share Tech Mono + IBM Plex Mono, ASCII-art wordmark, signal palette (green=data, amber=places/neutral/symbols/chat, gold=Patreon/dev, red=loss), readability/glow tuning, heatmap sector colors from the P&L wheel. One functional fix: cargo shipping limited to one in-transit shipment per player (server-enforced)."
 }

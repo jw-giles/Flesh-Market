@@ -72,7 +72,7 @@
   const PATREON_COLORS = {
     1: '#c8a040',  // Premium  ★
     2: '#2ecc71',  // Guild    ⚖
-    3: '#ffd700',  // CEO      ♛
+    3: '#9dff5a',  // CEO      ♛
   };
   const PATREON_LABELS = { 1:'Premium ★', 2:'Merchants Guild ⚖', 3:'CEO ♛' };
 
@@ -488,7 +488,7 @@
     'Borg Betrayer': '#e74c3c',
     'Marked Subscriber': '#c8a040', 'Premium Wage Slave': '#c8a040',
     'Officer of the Guild': '#2ecc71', 'Merchant of the 7th Ward': '#2ecc71',
-    'Corporate Apex Predator': '#ffd700', 'Sovereign of the Ledger': '#ffd700',
+    'Corporate Apex Predator': '#9dff5a', 'Sovereign of the Ledger': '#9dff5a',
   };
 
   function getTitleColor(name) {

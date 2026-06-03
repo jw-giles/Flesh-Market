@@ -85,8 +85,8 @@ window.showToast = function(text, color) {
   const div = document.createElement('div');
   div.className = 'v5toast';
   div.textContent = text;
-  div.style.borderColor = color || '#ffb547';
-  div.style.color = color || '#ffb547';
+  div.style.borderColor = color || '#46ff7d';
+  div.style.color = color || '#46ff7d';
   area.appendChild(div);
   requestAnimationFrame(() => { div.classList.add('show'); });
   setTimeout(() => {
@@ -147,9 +147,9 @@ function _heatColor(pct) {
     return { bg: `rgb(${r},${g},${b})`, text: t > 0.3 ? '#ffc8c0' : '#ba8a80' };
   }
   // Neutral band (±1%) — subtle warm/cool lean
-  if (pct > 0.15) return { bg: `rgb(18,${Math.round(25+pct*8)},18)`, text: '#8a9a78' };
-  if (pct < -0.15) return { bg: `rgb(${Math.round(25+abs*8)},16,16)`, text: '#9a7878' };
-  return { bg: '#1a1a18', text: '#666' };
+  if (pct > 0.15) return { bg: `rgb(18,${Math.round(25+pct*8)},18)`, text: '#7abf90' };
+  if (pct < -0.15) return { bg: `rgb(${Math.round(25+abs*8)},16,16)`, text: '#b58a8a' };
+  return { bg: '#0c140e', text: '#4f8a64' };
 }
 
 function _makeHeatCell(t) {
@@ -220,6 +220,8 @@ window.refreshHeatmap = function() {
       // Sort stocks: biggest gainers first, biggest losers last
       const stocks = bySector[sid].sort((a, b) => (b.pct || 0) - (a.pct || 0));
       const lore = HEAT_SECTOR_LORE[sid] || { name: `Sector ${sid}`, sub: '' };
+      const _wheelPal = (typeof window!=='undefined' && window.FM_DONUT_PAL) ? window.FM_DONUT_PAL : ['#42ff7e'];
+      const _secColor = _wheelPal[sid % _wheelPal.length] || '#42ff7e';
       const isCollapsed = !!_heatCollapsed[sid];
 
       // Stats
@@ -243,12 +245,12 @@ window.refreshHeatmap = function() {
         <span class="heat-caret" style="transform:rotate(${isCollapsed ? '-90deg' : '0deg'})">▾</span>
         <div class="heat-hdr-info">
           <div class="heat-hdr-top">
-            <span class="heat-name">${lore.name}</span>
+            <span class="heat-name" style="color:${_secColor};text-shadow:0 0 6px ${_secColor}44">${lore.name}</span>
             <span class="heat-avg" style="color:${avgCol.text}">${avgSign}${avgStr}%</span>
           </div>
           <div class="heat-hdr-bot">
-            <span class="heat-sub">${lore.sub}</span>
-            <span class="heat-counts"><span style="color:#6c6">▲${up}</span> <span style="color:#888">—${flat}</span> <span style="color:#c66">▼${dn}</span></span>
+            <span class="heat-sub" style="color:${_secColor};opacity:.5">${lore.sub}</span>
+            <span class="heat-counts"><span style="color:#6c6">▲${up}</span> <span style="color:#4f8a64">—${flat}</span> <span style="color:#c66">▼${dn}</span></span>
           </div>
         </div>
       `;
@@ -403,7 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const toName = document.getElementById('toName')?.value?.trim();
       const amt = parseFloat(document.getElementById('amt')?.value || '0');
       if (!toName || !amt) { showToast('Enter recipient name and amount.', '#ff9966'); return; }
-      showToast(`Sending Ƒ${amt} to ${toName}…`, '#ffb547');
+      showToast(`Sending Ƒ${amt} to ${toName}…`, '#46ff7d');
     });
   }
 });

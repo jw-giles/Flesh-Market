@@ -112,7 +112,7 @@
       <div class="god-ticker-row" onclick="godQuickSetPrice('${c.symbol}', ${c.price.toFixed(2)})">
         <span style="color:#ff9900;font-weight:600;width:48px">${c.symbol}</span>
         <span style="color:#888;flex:1;font-size:.7rem">${c.name ? c.name.slice(0,20) : ''}</span>
-        <span style="color:#c8a86a">$${c.price.toFixed(2)}</span>
+        <span style="color:#7fc090">$${c.price.toFixed(2)}</span>
         <span style="color:#555;font-size:.65rem;margin-left:6px">✏</span>
       </div>
     `).join('');
@@ -322,13 +322,13 @@
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px">
             <span style="color:#888">Name:</span><span style="color:#fff">${d.name} ${onlineTag}</span>
             <span style="color:#888">Cash:</span><span style="color:#86ff6a">$${(d.cash||0).toLocaleString(undefined,{maximumFractionDigits:2})}</span>
-            <span style="color:#888">Net Worth:</span><span style="color:#ffd700">$${(d.net_worth||0).toLocaleString(undefined,{maximumFractionDigits:2})}</span>
+            <span style="color:#888">Net Worth:</span><span style="color:#9dff5a">$${(d.net_worth||0).toLocaleString(undefined,{maximumFractionDigits:2})}</span>
             <span style="color:#888">XP / Level:</span><span>${(d.xp||0).toLocaleString()} / Lv${d.level||1}</span>
-            <span style="color:#888">Patreon:</span><span style="color:#c8a86a">${tierNames[d.patreon_tier||0]}</span>
+            <span style="color:#888">Patreon:</span><span style="color:#7fc090">${tierNames[d.patreon_tier||0]}</span>
             <span style="color:#888">Role:</span><span>${roleTag}</span>
           </div>
           ${Object.keys(d.holdings||{}).length > 0 ? `
-            <div style="margin-top:6px;color:#888">Holdings: ${Object.entries(d.holdings).map(([s,q])=>`<span style="color:#c8a86a">${s}×${q}</span>`).join(', ')}</div>
+            <div style="margin-top:6px;color:#888">Holdings: ${Object.entries(d.holdings).map(([s,q])=>`<span style="color:#7fc090">${s}×${q}</span>`).join(', ')}</div>
           ` : ''}
         `;
       }
@@ -343,7 +343,7 @@
       const players = msg.data.players || [];
       if (!players.length) { el.innerHTML = '<div style="color:#666;padding:6px">No players found.</div>'; return; }
       el.innerHTML = players.map((p, i) => {
-        const tierColors = { 0: '#666', 1: '#c8a86a', 2: '#4ecdc4', 3: '#ffd700' };
+        const tierColors = { 0: '#666', 1: '#7fc090', 2: '#4ecdc4', 3: '#9dff5a' };
         const tc = tierColors[p.patreon_tier || 0];
         return `
           <div class="god-player-row" onclick="godSelectPlayer('${p.name.replace(/'/g,"\\'")}')">

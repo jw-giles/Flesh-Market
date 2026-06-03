@@ -1,88 +1,121 @@
+/* === Self-hosted fonts (SIL OFL): IBM Plex Mono + Share Tech Mono === */
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(assets/fonts/ibm-plex-mono-400.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:700;font-display:swap;src:url(assets/fonts/ibm-plex-mono-700.woff2) format('woff2')}
+@font-face{font-family:'Share Tech Mono';font-style:normal;font-weight:400;font-display:swap;src:url(assets/fonts/share-tech-mono-400.woff2) format('woff2')}
 
+
+/* ============================================================
+   FLESHMARKET — Ellen's Theme (green phosphor CRT)
+   Single permanent theme. Token --green = primary foreground.
+   Reds (--bad) and neutral greys are intentionally preserved so
+   losses/sells and faction identity stay readable.
+   ============================================================ */
 :root{
-  --bg:#0a0a0a; --amber:#ffb547; --dim:#7c5b1e99; --good:#86ff6a; --bad:#ff6b6b;
+  --bg:#020703; --green:#42ff7e; --pale:#b6ffcf; --amber:#f0b454; --gold:#ffce4d; --dim:#1f7a3aaa; --good:#9bffba; --bad:#ff6a6a;
+  --muted:#72e09c; --hr:#0a3315; --input-bg:#010401; --surface:#031006; --surface-2:#04160a;
+  --scroll:#46ff7d;
+  --body-bg:radial-gradient(ellipse at 50% 40%, #04130a 0%, #020703 80%);
+  --panel-bg:rgba(8,30,14,0.22);
+  --panel-blur:none;
+  --panel-shadow:0 0 24px #1aff5e1a, inset 0 0 1px #1aff5e44;
+  --tab-glow:0 0 8px #1aff5e55;
+  --text-glow:0 0 3px rgba(70,255,125,0.30);
 }
+
+/* CRT scanline overlay: always on. */
+#crtOverlay{
+  position:fixed; inset:0; z-index:99990; pointer-events:none;
+  background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.22) 0px, rgba(0,0,0,0.22) 1px, transparent 1px, transparent 3px),
+    radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(0,0,0,0.35) 100%);
+  mix-blend-mode:multiply;
+}
+#crtOverlay::after{
+  content:""; position:absolute; left:0; right:0;
+  background:linear-gradient(180deg, transparent, rgba(120,255,160,0.05), transparent);
+  height:120px; animation:crtSweep 7s linear infinite;
+}
+@keyframes crtSweep{0%{top:-120px}100%{top:100%}}
+
 *{box-sizing:border-box}
 /* Universal custom cursor */
 *, *::before, *::after { cursor: url(assets/space/ui/cursors/cursor1.png) 6 6, auto !important; }
 button:active, a:active, [onclick]:active { cursor: url(assets/space/ui/cursors/cursor1_clicked.png) 6 6, auto !important; }
 html{height:100%;overflow:hidden}
-body{margin:0;background:var(--bg);color:var(--amber);font:15px/1.5 ui-monospace, Menlo, Consolas, monospace;height:100%;overflow:hidden}
+body{margin:0;background:var(--body-bg);color:var(--green);font:15px/1.5 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;height:100%;overflow:hidden;text-shadow:var(--text-glow)}
 .wrap{width:100%; max-width:none;margin:0 auto;padding:12px;display:flex;flex-direction:column;height:100vh;box-sizing:border-box;overflow:hidden}
-.panel{border:1px solid var(--dim);padding:8px;border-radius:8px;box-shadow:0 0 24px #ffb54718,inset 0 0 1px #ffb54733}
-h2{margin:.2rem 0 .6rem 0;font-size:16px;text-transform:uppercase;letter-spacing:.12em;color:var(--amber)}
-small, .muted{color:#d4a05e;opacity:.9}
-hr{border:0;border-top:2px solid #2a1a04;margin:10px 0;box-shadow:0 1px 4px #ffb54711}
-.input{width:100%;padding:6px 8px;background:#000;border:1px solid var(--dim);color:var(--amber);border-radius:6px;outline:none}
+.panel{border:1px solid var(--dim);padding:8px;border-radius:8px;background:var(--panel-bg);backdrop-filter:var(--panel-blur);-webkit-backdrop-filter:var(--panel-blur);box-shadow:var(--panel-shadow)}
+h2{margin:.2rem 0 .6rem 0;font-size:16px;text-transform:uppercase;letter-spacing:.12em;color:var(--green)}
+small, .muted{color:var(--muted);opacity:.9}
+hr{border:0;border-top:2px solid var(--hr);margin:10px 0;box-shadow:0 1px 4px #46ff7d11}
+.input{width:100%;padding:6px 8px;background:var(--input-bg);border:1px solid var(--dim);color:var(--green);border-radius:6px;outline:none}
 /* P&L / Capital House filter + sector-sort controls */
 .pnl-ctl{display:flex;gap:8px;align-items:stretch;margin-bottom:8px}
 .pnl-ctl .input{flex:1 1 auto;min-width:0}
-.pnl-ctl .sector-select{flex:0 0 auto;width:auto;min-width:148px;max-width:60%;padding:6px 30px 6px 11px;background:#0c0907;border:1px solid var(--dim);color:var(--amber);border-radius:6px;font:inherit;font-size:.78rem;line-height:1.4;cursor:pointer;outline:none;-webkit-appearance:none;-moz-appearance:none;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23ffb547' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");background-repeat:no-repeat;background-position:right 10px center}
-.pnl-ctl .sector-select:hover{border-color:#a9802f}
-.pnl-ctl .sector-select:focus{border-color:var(--amber);box-shadow:0 0 0 1px #ffb54744}
-.pnl-ctl .sector-select option{background:#0c0907;color:var(--amber)}
-.pnl-ctl .sector-select optgroup{background:#0a0804;color:#9a7a3a;font-style:normal;letter-spacing:.04em}
-.btn{cursor:pointer;padding:6px 10px;border:1px solid var(--amber);border-radius:6px;background:transparent;color:var(--amber)}
+.pnl-ctl .sector-select{flex:0 0 auto;width:auto;min-width:148px;max-width:60%;padding:6px 30px 6px 11px;background:var(--surface-2);border:1px solid var(--dim);color:var(--green);border-radius:6px;font:inherit;font-size:.78rem;line-height:1.4;cursor:pointer;outline:none;-webkit-appearance:none;-moz-appearance:none;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%2346ff7d' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");background-repeat:no-repeat;background-position:right 10px center}
+.pnl-ctl .sector-select:hover{border-color:#3f9f4a}
+.pnl-ctl .sector-select:focus{border-color:var(--green);box-shadow:0 0 0 1px #46ff7d44}
+.pnl-ctl .sector-select option{background:var(--surface-2);color:var(--green)}
+.pnl-ctl .sector-select optgroup{background:var(--surface);color:var(--muted);font-style:normal;letter-spacing:.04em}
+.btn{cursor:pointer;padding:6px 10px;border:1px solid var(--green);border-radius:6px;background:transparent;color:var(--green)}
 .row{display:flex;gap:8px;align-items:center}
 .list{max-height:280px;overflow:auto}
-.badge{border:1px solid var(--amber);padding:2px 6px;border-radius:999px;margin-right:4px}
-#chart{width:100%;height:360px;background:radial-gradient(ellipse at center, #201505, #0b0702);border:1px solid var(--dim);border-radius:8px}
+.badge{border:1px solid var(--green);padding:2px 6px;border-radius:999px;margin-right:4px}
+#chart{width:100%;height:360px;background:radial-gradient(ellipse at center, #06200d, #020a05);border:1px solid var(--dim);border-radius:8px}
 .ticker{display:grid;grid-template-columns: 1fr auto;gap:4px}
-.ticker .sym{font-weight:700}
-.ticker .px{color:#ffdca4}
-.chatlog{max-height:400px;overflow:auto;background:#000;border:1px solid var(--dim);padding:6px;border-radius:8px}
+.ticker .sym{font-weight:700;color:var(--amber)}
+.ticker .px{color:var(--pale)}
+.chatlog{max-height:400px;overflow:auto;background:var(--input-bg);border:1px solid var(--dim);padding:6px;border-radius:8px}
 .news{max-height:340px;overflow:auto}
 .green{color:var(--good)} .red{color:var(--bad)}
 .news-line{padding:3px 6px;border-bottom:1px solid #ffffff06;font-size:13px;line-height:1.5;transition:background .15s}
 .news-line:hover{background:#ffffff0a}
 .news-line[style*="cursor"]:hover{background:#ffffff12}
-.n-time{color:#d4a05e88;font-size:11px;margin-right:6px;font-variant-numeric:tabular-nums}
-.n-good{color:var(--good)} .n-bad{color:var(--bad)} .n-neutral{color:#d4a05ecc}
+
+.n-time{color:rgba(240,180,84,0.6);font-size:11px;margin-right:6px;font-variant-numeric:tabular-nums}
+.n-good{color:var(--good)} .n-bad{color:var(--bad)} .n-neutral{color:var(--amber)}
 .n-badge{font-size:9px;font-weight:700;letter-spacing:.08em;padding:1px 4px;border-radius:3px;vertical-align:middle;margin-right:4px}
-.n-badge-market{background:#ffb54722;color:var(--amber)}
+.n-badge-market{background:#46ff7d22;color:var(--green)}
 .n-badge-colony{background:#ff6b6b22;color:#ff6b6b}
-.n-badge-system{background:#ffffff11;color:#888}
+.n-badge-system{background:#f0b45418;color:var(--amber)}
 .n-badge-trade{background:#86ff6a22;color:var(--good)}
-.n-ticker{color:var(--amber);font-weight:700;text-decoration:underline;text-decoration-color:#ffb54755;text-underline-offset:2px}
+.n-ticker{color:var(--amber);font-weight:700;text-decoration:underline;text-decoration-color:#f0b45455;text-underline-offset:2px}
 .tabs{display:flex;gap:8px;margin-bottom:6px;flex-shrink:0}
 /* Center panel tab content: fill available space */
 #marketTab,#pnlTab,#heatTab,#casinoTab,#storeTab,#guildTab,#bugsTab{flex:1;min-height:0;overflow-y:auto}
 .tab{padding:4px 8px;border:1px dashed var(--dim);cursor:pointer;border-radius:8px}
-.tab.active{border-color:var(--amber);box-shadow:0 0 8px #ffb54733}
+.tab.active{border-color:var(--green);box-shadow:var(--tab-glow)}
 
 /* Guild / Hedge Fund Tab */
-.guild-stat{background:#0a0804;border:1px solid #2a1a04;border-radius:6px;padding:8px 10px}
+.guild-stat{background:var(--surface);border:1px solid var(--hr);border-radius:6px;padding:8px 10px}
 .gs-label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;opacity:.55;margin-bottom:3px}
-.gs-val{font-size:1rem;color:#ffb547;font-weight:700}
+.gs-val{font-size:1rem;color:var(--pale);font-weight:700}
 .g-fund-card{
-  padding:10px 12px;border:1px solid #2a1a04;border-radius:6px;
-  background:#060504;transition:border-color .15s;
+  padding:10px 12px;border:1px solid var(--hr);border-radius:6px;
+  background:var(--surface);transition:border-color .15s;
 }
-.g-fund-card:hover{border-color:#5a3a14;background:#090705}
+.g-fund-card:hover{border-color:#1f5a2a;background:#031006}
 
-/* FleshMarket: Themed scrollbar (amber CRT) */
+/* FleshMarket: Themed scrollbar */
 *::-webkit-scrollbar { width: 12px; height: 12px; }
-*::-webkit-scrollbar-track { background: #000; }
+*::-webkit-scrollbar-track { background: var(--input-bg); }
 *::-webkit-scrollbar-thumb {
-  background: rgba(152, 255, 159, 0.35);
-  border: 2px solid #000;
+  background: var(--scroll);
+  border: 2px solid var(--input-bg);
   border-radius: 8px;
-  box-shadow: 0 0 8px rgba(152,255,159,0.2) inset;
+  opacity:.6;
 }
-*::-webkit-scrollbar-thumb:hover { background: rgba(152, 255, 159, 0.6); }
-*::-webkit-scrollbar-thumb:active {
-  background: #98ff9f;
-  box-shadow: 0 0 12px rgba(152,255,159,0.6);
-}
+*::-webkit-scrollbar-thumb:hover { background: var(--scroll); filter:brightness(1.2); }
+*::-webkit-scrollbar-thumb:active { background: var(--scroll); }
 
 /* Firefox */
-* { scrollbar-width: thin; scrollbar-color: rgba(152,255,159,0.35) #000; }
+* { scrollbar-width: thin; scrollbar-color: var(--scroll) var(--input-bg); }
 
 
 /* Casino subtabs: horizontal flex, wraps on narrow screens */
 #casinoTabs{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .subtab{padding:5px 14px;border:1px dashed var(--dim);cursor:pointer;border-radius:8px;white-space:nowrap;font-size:.85rem}
-.subtab.active{border-color:var(--amber);box-shadow:0 0 8px #ffb54733}
+.subtab.active{border-color:var(--green);box-shadow:var(--tab-glow)}
 
 /* Casino pane: full width, scrollable on small screens */
 #casinoContent{overflow-x:auto}
@@ -106,31 +139,31 @@ hr{border:0;border-top:2px solid #2a1a04;margin:10px 0;box-shadow:0 1px 4px #ffb
 #rightPanel>h2:first-child{display:none} /* remove empty h2 */
 
 /* Chat box fills all remaining space in right panel */
-#chatBox{display:flex;flex-direction:column;height:420px;min-height:0;background:#000;border:1px solid var(--dim);border-radius:8px;overflow:hidden}
-#chatTabs{display:flex;gap:0;border-bottom:1px solid #1a1208;flex-shrink:0}
-.chat-tab{flex:1;padding:5px 8px;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;text-align:center;opacity:.72;border-bottom:2px solid transparent;background:transparent;color:var(--amber)}
-.chat-tab.active{opacity:1;border-bottom-color:var(--amber)}
+#chatBox{display:flex;flex-direction:column;height:420px;min-height:0;background:var(--input-bg);border:1px solid var(--dim);border-radius:8px;overflow:hidden}
+#chatTabs{display:flex;gap:0;border-bottom:1px solid var(--hr);flex-shrink:0}
+.chat-tab{flex:1;padding:5px 8px;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;text-align:center;opacity:.72;border-bottom:2px solid transparent;background:transparent;color:var(--green)}
+.chat-tab.active{opacity:1;border-bottom-color:var(--green)}
 .chat-tab .chat-unread{display:inline-block;background:#c0392b;color:#fff;border-radius:10px;padding:0 5px;font-size:.65rem;margin-left:3px;line-height:1.5;vertical-align:middle}
 .chat-channel{display:none;flex:1;overflow-y:auto;padding:6px 8px;font-size:.78rem;line-height:1.45}
 .chat-channel.active{display:block}
 .chat-channel .cm{margin:3px 0;font-size:calc(.88rem * var(--chat-font-scale, 1));line-height:1.45}
-.chat-mention{background:rgba(255,181,71,0.18);border-radius:3px;padding:0 2px;color:#ffdb70}
-#chatInputRow{display:flex;gap:6px;padding:5px 6px;border-top:1px solid #1a1208;background:#050403;flex-shrink:0}
-#chatInput{flex:1;background:#000;border:1px solid #2a1a04;color:var(--amber);border-radius:5px;padding:4px 8px;font-family:inherit;font-size:.8rem}
+.chat-mention{background:rgba(70,255,125,0.18);border-radius:3px;padding:0 2px;color:#9dffb0}
+#chatInputRow{display:flex;gap:6px;padding:5px 6px;border-top:1px solid var(--hr);background:var(--surface);flex-shrink:0}
+#chatInput{flex:1;background:var(--input-bg);border:1px solid var(--hr);color:var(--green);border-radius:5px;padding:4px 8px;font-family:inherit;font-size:.8rem}
 #chatInput:focus{outline:none;border-color:var(--dim)}
-#chatSend{background:transparent;border:1px solid var(--dim);color:var(--amber);border-radius:5px;padding:4px 10px;cursor:pointer;font-size:.8rem;flex-shrink:0}
-#chatSend:hover{border-color:var(--amber)}
-#chatMentionDrop{position:absolute;background:#0d0d0d;border:1px solid var(--dim);border-radius:6px;z-index:99;max-height:120px;overflow-y:auto;font-size:.8rem;min-width:160px}
+#chatSend{background:transparent;border:1px solid var(--dim);color:var(--green);border-radius:5px;padding:4px 10px;cursor:pointer;font-size:.8rem;flex-shrink:0}
+#chatSend:hover{border-color:var(--green)}
+#chatMentionDrop{position:absolute;background:#04160a;border:1px solid var(--dim);border-radius:6px;z-index:99;max-height:120px;overflow-y:auto;font-size:.8rem;min-width:160px}
 
 /* Transfer section pinned at bottom of right panel */
 #transferSection{flex-shrink:0;padding-top:8px;border-top:1px solid var(--dim);margin-top:6px}
-#transferSection h2{margin:.2rem 0 .5rem 0;font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--amber)}
+#transferSection h2{margin:.2rem 0 .5rem 0;font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--green)}
 
 /* Leaderboard bottom row */
 #bottomRow{margin-top:4px;flex-shrink:0;overflow:hidden}
 #leaderboardCompact{flex-shrink:0;padding-top:6px;border-top:1px solid var(--dim);margin-top:6px}
 #leaderboardCompact #board{display:flex;flex-direction:column;gap:2px;max-height:none;overflow:hidden;padding-right:0}
-#leaderboardCompact #board .lb-row{display:flex;align-items:center;gap:4px;padding:2px 6px;border:1px solid #1a1208;border-radius:4px;background:#050403;font-size:.72rem;min-width:0}
+#leaderboardCompact #board .lb-row{display:flex;align-items:center;gap:4px;padding:2px 6px;border:1px solid var(--hr);border-radius:4px;background:var(--surface);font-size:.72rem;min-width:0}
 #leaderboardCompact #board .lb-sep{border-top:1px dashed #333;margin:2px 0}
 #bottomTicker{display:flex;gap:14px;flex-wrap:wrap}
 
@@ -155,4 +188,11 @@ hr{border:0;border-top:2px solid #2a1a04;margin:10px 0;box-shadow:0 1px 4px #ffb
 /* rollback: legacy equity visible */
 /* #pnlBox, #equity { display: none !important; } */
 
+/* === Typography split: display font on structural chrome === */
+h1, h2, .tab, .subtab, .chat-tab,
+#transferSection h2 {
+  font-family: 'Share Tech Mono', ui-monospace, Menlo, Consolas, monospace;
+}
 
+/* Dense data reads crisper without the phosphor glow; chrome keeps it. */
+#gMarketsInner, #tickers, #news, #heatGrid, #board, .ticker, .heat-cell { text-shadow:none; }
