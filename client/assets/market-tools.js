@@ -43,20 +43,20 @@ function initWatchlistUI() {
   wrap.id = 'watchlist-bar';
   wrap.style.cssText = 'display:flex;gap:5px;align-items:center;margin-bottom:6px';
   wrap.innerHTML = `
-    <button id="wlToggle" style="background:none;border:1px solid #0a3315;border-radius:4px;
-      color:#3a5f3a;font-size:.72rem;padding:3px 10px;cursor:pointer;font-family:inherit;
+    <button id="wlToggle" style="background:none;border:1px solid rgba(240,180,84,0.3);border-radius:4px;
+      color:#b8893a;font-size:.72rem;padding:3px 10px;cursor:pointer;font-family:inherit;
       transition:all .15s;white-space:nowrap" title="Show only watchlisted tickers">
       ★ Watchlist
     </button>
-    <span id="wlCount" style="font-size:.65rem;color:#553333;opacity:.7"></span>`;
+    <span id="wlCount" style="font-size:.65rem;color:#6a5a2e;opacity:.8"></span>`;
   searchInput.parentNode.insertBefore(wrap, searchInput);
 
   const btn = $('#wlToggle');
   btn.addEventListener('click', () => {
     _watchlistMode = !_watchlistMode;
-    btn.style.borderColor = _watchlistMode ? '#46ff7d' : '#0a3315';
-    btn.style.color = _watchlistMode ? '#46ff7d' : '#3a5f3a';
-    btn.style.background = _watchlistMode ? 'rgba(70,255,125,.08)' : 'none';
+    btn.style.borderColor = _watchlistMode ? '#f0b454' : 'rgba(240,180,84,0.3)';
+    btn.style.color = _watchlistMode ? '#f0b454' : '#b8893a';
+    btn.style.background = _watchlistMode ? 'rgba(240,180,84,.10)' : 'none';
     if (typeof renderTickers === 'function') renderTickers();
   });
   updateWatchlistCount();

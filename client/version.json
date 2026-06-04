@@ -1,7 +1,7 @@
 {
-  "version": "1.1.1.0",
+  "version": "1.1.1.1",
   "built": "2026-06-03T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.1.0",
-  "notes": "Green CRT phosphor reskin (Ellen's Theme): permanent green-phosphor palette, self-hosted Share Tech Mono + IBM Plex Mono, ASCII-art wordmark, signal palette (green=data, amber=places/neutral/symbols/chat, gold=Patreon/dev, red=loss), readability/glow tuning, heatmap sector colors from the P&L wheel. One functional fix: cargo shipping limited to one in-transit shipment per player (server-enforced)."
+  "patch": "1.1.1.1",
+  "notes": "Navigation chrome to amber: main tabs, Galaxy subtabs, chat room tabs, and the Watchlist toggle (border/text/glow/active states) now amber instead of green."
 }

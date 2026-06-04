@@ -4,6 +4,17 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.1.1 (2026-06-03) — amber navigation chrome
+
+Tabs and watchlist to amber (cosmetic). Amber now also carries primary navigation, not just places/neutral/symbols/chat.
+
+- Main tabs, Galaxy subtabs, and chat room tabs: border, text, active highlight, and glow recolored green -> amber.
+- Watchlist toggle: border/text/count and the active (filter-on) state recolored to amber.
+
+Files: `client/style.css`, `client/assets/market-tools.js`, `client/index.html`, `client/version.json`.
+
+---
+
 ## v1.1.1.0 (2026-06-03) — green CRT phosphor reskin (Ellen's Theme)
 
 Full visual reskin to a permanent green-phosphor CRT look, plus one gameplay fix. Cosmetic unless noted.
