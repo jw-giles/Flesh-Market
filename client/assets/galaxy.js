@@ -23,7 +23,7 @@ var FACTIONS = {
     bonusSummary:'Colony dividend bonuses: Biotech &amp; Energy sectors + ƒ15/colony passive income + permanent +ƒ15 cyborg augment',
   },
   fleshstation:{
-    id:'fleshstation', name:'Flesh Station', short:'FLESH STN', color:'#9dff5a', dim:'#4d3a00', bg:'#1a1200', sym:'⬡', devOnly:true,
+    id:'fleshstation', name:'Flesh Station', short:'FLESH STN', color:'#ffce4d', dim:'#4d3a00', bg:'#1a1200', sym:'⬡', devOnly:true,
     desc:'An impenetrable megastructure. Home of Mr. Flesh. No faction, no tariffs, no rules.',
     bonusSummary:'⚡ Dev-only: passive income multiplied &amp; all colony data readable in real time',
   },
@@ -2708,7 +2708,7 @@ function renderMap(){
     lbl.setAttribute('x', lblX);
     lbl.setAttribute('text-anchor', lblAnchor);
     lbl.setAttribute('font-size','13');
-    lbl.setAttribute('fill',id==='flesh_station'?'#9dff5a':'#ccc');
+    lbl.setAttribute('fill',id==='flesh_station'?'#ffce4d':'#ccc');
     lbl.setAttribute('letter-spacing','1.2');lbl.setAttribute('pointer-events','none');
     lbl.textContent=m.name.toUpperCase();
     grp.appendChild(lbl);
@@ -2808,7 +2808,7 @@ function renderDetail(id){
   h+='<div style="font-size:.76rem;color:#555;letter-spacing:.1em;margin-bottom:10px">'+(isFlesh?'MEGASTRUCTURE':'')+'</div>';
 
   if(contested) h+='<div style="border:1px solid #f39c12;color:#f39c12;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9888; CONTESTED — Faction war active</div>';
-  if(isFlesh)   h+='<div style="border:1px solid #9dff5a66;color:#9dff5a;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9889; HOME OF MR. FLESH — Cannot be contested or funded</div>';
+  if(isFlesh)   h+='<div style="border:1px solid #ffce4d66;color:#ffce4d;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9889; HOME OF MR. FLESH — Cannot be contested or funded</div>';
 
   // Space Asset: landscape banner
   var banner = COLONY_BANNER[id];
@@ -3037,7 +3037,7 @@ function renderFactionList(){
     var isGuild=(fid==='guild');
     // Dev-only banner
     if(isFlesh){
-      h+='<div style="position:absolute;top:8px;right:10px;font-size:.70rem;color:#9dff5a;border:1px solid #9dff5a44;padding:2px 7px;letter-spacing:.08em">DEV ONLY</div>';
+      h+='<div style="position:absolute;top:8px;right:10px;font-size:.70rem;color:#ffce4d;border:1px solid #ffce4d44;padding:2px 7px;letter-spacing:.08em">DEV ONLY</div>';
     }
     if(isGuild){
       h+='<div style="position:absolute;top:8px;right:10px;font-size:.70rem;color:#2ecc71;border:1px solid #2ecc7144;padding:2px 7px;letter-spacing:.08em">⬢ PATREON</div>';

@@ -365,7 +365,7 @@ function renderNews(item) {
   const catBadges = { market:'MKT', sector:'SEC', company:'', colony:'COL', system:'SYS', trade:'TRD' };
   const cat = item.cat || (item.symbol ? 'company' : 'system');
   const badge = catBadges[cat] || '';
-  const badgeHtml = badge ? `<span class="n-badge n-badge-${cat}">${badge}</span> ` : '';
+  const badgeHtml = badge ? `<span class="n-badge n-badge-${cat}">${badge}</span>` : '';
 
   // Time
   const time = new Date(item.t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
@@ -381,7 +381,10 @@ function renderNews(item) {
     }
   }
 
-  div.innerHTML = `<span class="n-time">${time}</span>${badgeHtml}<span class="${toneClass}">${text}</span>`;
+  const toneRow  = item.tone === 'good' ? ' up' : (item.tone === 'bad' ? ' dn' : ' nu');
+  const headTone = item.tone === 'good' ? ' n-up' : (item.tone === 'bad' ? ' n-dn' : '');
+  div.className = 'news-line' + toneRow;
+  div.innerHTML = `<div class="n-meta"><span class="n-time">${time}</span>${badgeHtml}</div><div class="n-head${headTone}">${text}</div>`;
 
   // Click handler: click anywhere on the line to navigate to ticker (if available)
   const clickSym = item.symbol;

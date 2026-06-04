@@ -4,6 +4,36 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.1.4 (2026-06-03) — dev text -> gold; neutral news -> amber
+
+- **Dev text gold** (`galaxy.js`): the Flesh Station (dev) faction was still light green (`#9dff5a`) despite its gold dim/bg — fixed its faction color, the DEV ONLY badge, the galaxy-map FLESH STATION label, and the HOME OF MR. FLESH banner to gold (`#ffce4d`), matching the Capital Houses dev fund.
+- **Neutral news amber** (`style.css`): neutral headlines reverted from pale to amber (good=green / bad=red still override via the tone classes).
+
+Files: `client/assets/galaxy.js`, `client/style.css`, `client/version.json`.
+
+---
+
+## v1.1.1.3 (2026-06-03) — news feed redesign + ASCII title sizing
+
+- **News feed (layout A)** (`core.js`, `style.css`): each story is now a row with a tone-colored left accent bar and faint wash (green up / red down / amber neutral), a meta header line (time + a color-coded category chip), and the headline on its own line in pale (green/red tint for good/bad). Replaces the old single inline wrapping line. Category chips recolored to a coherent set: market=green, colony=amber, sector=purple, system=blue, trade=teal.
+- **ASCII titles** (`index.html`): FLESH MARKET wordmark to 9px with a bit more glow; NEWS ASCII title to 7.5px.
+
+Files: `client/assets/core.js`, `client/style.css`, `client/index.html`, `client/version.json`.
+
+---
+
+## v1.1.1.2 (2026-06-03) — amber section titles
+
+Established "title text = amber" across the UI (cosmetic).
+
+- All `h2` panel titles recolored green -> amber (Companies, Leaderboard + Net Worth, Wire Credits, Limit Orders, Price Alerts, Drone Mining, etc.) via the global `h2` rule.
+- FLESH MARKET wordmark recolored to amber; NEWS title converted to ASCII-art (figlet) in amber to match.
+- Chat room badge (`global · room N`) and the A-/A+ chat font-size buttons recolored to amber.
+
+Files: `client/style.css`, `client/index.html`, `client/version.json`.
+
+---
+
 ## v1.1.1.1 (2026-06-03) — amber navigation chrome
 
 Tabs and watchlist to amber (cosmetic). Amber now also carries primary navigation, not just places/neutral/symbols/chat.

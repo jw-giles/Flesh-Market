@@ -19,7 +19,7 @@
 <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
 <div style="display:flex;align-items:center;gap:0">
 <div>
-<pre class="fm-wordmark" aria-label="FLESH MARKET" style="margin:0;font-family:'Share Tech Mono',ui-monospace,monospace;font-size:7.5px;line-height:8px;letter-spacing:0;color:var(--green);text-shadow:0 0 6px rgba(70,255,125,.45);white-space:pre;font-weight:400;user-select:none"> ___ _    ___ ___ _  _   __  __   _   ___ _  _____ _____ 
+<pre class="fm-wordmark" aria-label="FLESH MARKET" style="margin:0;font-family:'Share Tech Mono',ui-monospace,monospace;font-size:9px;line-height:9.5px;letter-spacing:0;color:var(--amber);text-shadow:0 0 7px rgba(240,180,84,.55);white-space:pre;font-weight:400;user-select:none"> ___ _    ___ ___ _  _   __  __   _   ___ _  _____ _____ 
 | __| |  | __/ __| || | |  \/  | /_\ | _ \ |/ / __|_   _|
 | _|| |__| _|\__ \ __ | | |\/| |/ _ \|   / ' &lt;| _|  | |  
 |_| |____|___|___/_||_| |_|  |_/_/ \_\_|_\_|\_\___| |_|  </pre>
@@ -55,7 +55,10 @@
 <input class="input" id="search" placeholder="Search symbol or name"/>
 <div class="list" id="tickers"></div>
 <hr/>
-<h2>News</h2>
+<pre class="ascii-title" aria-label="News" style="margin:.3rem 0 .5rem;font-family:'Share Tech Mono',ui-monospace,monospace;font-size:7.5px;line-height:8px;letter-spacing:0;color:var(--amber);text-shadow:0 0 6px rgba(240,180,84,.5);white-space:pre;font-weight:400;user-select:none"> _  _ _____      _____ 
+| \| | __\ \    / / __|
+| .` | _| \ \/\/ /\__ \
+|_|\_|___| \_/\_/ |___/</pre>
 <div class="news" id="news"></div>
 </div>
 <!-- Center: chart + trade + tabs -->
@@ -833,7 +836,7 @@ window.storeSubTab=storeSubTab;
 
   <div style="font-size:13px; letter-spacing:.2em; color:#4f8f5f; text-transform:uppercase; text-align:center; margin-bottom:10px">OPEN RANGE · UNREGULATED EXTRACTION ZONE</div>
 
-  <h2 style="font-size:32px; letter-spacing:.3em; color:#72e09c; margin:0 0 6px; text-shadow:0 0 24px rgba(230,194,122,.3); text-align:center">DRONE MINING</h2>
+  <h2 style="font-size:32px; letter-spacing:.3em; color:var(--amber); margin:0 0 6px; text-shadow:0 0 24px rgba(230,194,122,.3); text-align:center">DRONE MINING</h2>
   <div style="font-size:14px; letter-spacing:.22em; color:#8a6a30; text-align:center; margin-bottom:22px">ONE SHOT · ONE TANK · ONE CHANCE</div>
 
   <!-- Lore panel: high contrast prose -->
@@ -1132,14 +1135,14 @@ window.storeSubTab=storeSubTab;
   <div class="chat-channel" id="chatch-unmod-r2" data-room="2" style="display:none"></div>
   <div class="chat-channel" id="chatch-unmod-r3" data-room="3" style="display:none"></div>
   <div id="chatInputRow" style="position:relative">
-    <span id="chatChannelBadge" style="font-size:.68rem;opacity:.5;white-space:nowrap">global</span>
+    <span id="chatChannelBadge" style="font-size:.68rem;opacity:.6;color:var(--amber);white-space:nowrap">global</span>
     <span id="whisperTargetBadge" style="display:none;font-size:.68rem;color:#a78bfa;white-space:nowrap;padding:0 4px;border:1px solid #4a3580;border-radius:4px;cursor:pointer" title="Click to clear">→ …</span>
     <input id="chatInput" placeholder="Say something… @mention" autocomplete="off"/>
     <button id="chatSend">Send</button>
     <div id="chatMentionDrop" style="display:none;bottom:34px;left:0"></div>
     <div style="position:absolute;right:0;bottom:calc(100% + 2px);display:flex;gap:2px">
-      <button id="chatFontDec" title="Smaller text" style="background:rgba(6,26,14,.6);border:1px solid #1f4a2f;border-radius:3px;color:#72e09c;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#9dff5a';this.style.borderColor='#4f8a5f'" onmouseleave="this.style.color='#72e09c';this.style.borderColor='#1f4a2f'">A−</button>
-      <button id="chatFontInc" title="Larger text"  style="background:rgba(6,26,14,.6);border:1px solid #1f4a2f;border-radius:3px;color:#72e09c;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#9dff5a';this.style.borderColor='#4f8a5f'" onmouseleave="this.style.color='#72e09c';this.style.borderColor='#1f4a2f'">A+</button>
+      <button id="chatFontDec" title="Smaller text" style="background:rgba(6,26,14,.6);border:1px solid rgba(240,180,84,.35);border-radius:3px;color:#f0b454;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#ffd98a';this.style.borderColor='#a07e2e'" onmouseleave="this.style.color='#f0b454';this.style.borderColor='rgba(240,180,84,.35)'">A−</button>
+      <button id="chatFontInc" title="Larger text"  style="background:rgba(6,26,14,.6);border:1px solid rgba(240,180,84,.35);border-radius:3px;color:#f0b454;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#ffd98a';this.style.borderColor='#a07e2e'" onmouseleave="this.style.color='#f0b454';this.style.borderColor='rgba(240,180,84,.35)'">A+</button>
     </div>
   </div>
 </div>

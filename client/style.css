@@ -45,7 +45,7 @@ html{height:100%;overflow:hidden}
 body{margin:0;background:var(--body-bg);color:var(--green);font:15px/1.5 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;height:100%;overflow:hidden;text-shadow:var(--text-glow)}
 .wrap{width:100%; max-width:none;margin:0 auto;padding:12px;display:flex;flex-direction:column;height:100vh;box-sizing:border-box;overflow:hidden}
 .panel{border:1px solid var(--dim);padding:8px;border-radius:8px;background:var(--panel-bg);backdrop-filter:var(--panel-blur);-webkit-backdrop-filter:var(--panel-blur);box-shadow:var(--panel-shadow)}
-h2{margin:.2rem 0 .6rem 0;font-size:16px;text-transform:uppercase;letter-spacing:.12em;color:var(--green)}
+h2{margin:.2rem 0 .6rem 0;font-size:16px;text-transform:uppercase;letter-spacing:.12em;color:var(--amber)}
 small, .muted{color:var(--muted);opacity:.9}
 hr{border:0;border-top:2px solid var(--hr);margin:10px 0;box-shadow:0 1px 4px #46ff7d11}
 .input{width:100%;padding:6px 8px;background:var(--input-bg);border:1px solid var(--dim);color:var(--green);border-radius:6px;outline:none}
@@ -68,17 +68,25 @@ hr{border:0;border-top:2px solid var(--hr);margin:10px 0;box-shadow:0 1px 4px #4
 .chatlog{max-height:400px;overflow:auto;background:var(--input-bg);border:1px solid var(--dim);padding:6px;border-radius:8px}
 .news{max-height:340px;overflow:auto}
 .green{color:var(--good)} .red{color:var(--bad)}
-.news-line{padding:3px 6px;border-bottom:1px solid #ffffff06;font-size:13px;line-height:1.5;transition:background .15s}
+.news-line{padding:7px 8px 8px 10px;border-left:2px solid var(--dim);border-radius:0 4px 4px 0;margin-bottom:2px;font-size:13px;line-height:1.4;transition:background .15s}
+.news-line.up{border-left-color:#2f9f4a;background:linear-gradient(90deg,#0c1f1322,transparent)}
+.news-line.dn{border-left-color:#a83a3a;background:linear-gradient(90deg,#1f0c0c22,transparent)}
+.news-line.nu{border-left-color:#8a6a2e;background:linear-gradient(90deg,#1a140822,transparent)}
+.n-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.n-head{font-size:.82rem;line-height:1.4;color:var(--amber)}
+.n-head.n-up{color:var(--good)} .n-head.n-dn{color:#ffb0b0}
 .news-line:hover{background:#ffffff0a}
 .news-line[style*="cursor"]:hover{background:#ffffff12}
 
 .n-time{color:rgba(240,180,84,0.6);font-size:11px;margin-right:6px;font-variant-numeric:tabular-nums}
 .n-good{color:var(--good)} .n-bad{color:var(--bad)} .n-neutral{color:var(--amber)}
-.n-badge{font-size:9px;font-weight:700;letter-spacing:.08em;padding:1px 4px;border-radius:3px;vertical-align:middle;margin-right:4px}
-.n-badge-market{background:#46ff7d22;color:var(--green)}
-.n-badge-colony{background:#ff6b6b22;color:#ff6b6b}
-.n-badge-system{background:#f0b45418;color:var(--amber)}
-.n-badge-trade{background:#86ff6a22;color:var(--good)}
+.n-badge{font-size:9px;font-weight:700;letter-spacing:.06em;padding:1px 5px;border-radius:3px;text-transform:uppercase;flex:0 0 auto}
+.n-badge-market{background:#42ff7e22;color:var(--muted)}
+.n-badge-colony{background:#f0b45422;color:var(--amber)}
+.n-badge-sector{background:#9b59b622;color:#c99bff}
+.n-badge-company{background:#42ff7e14;color:var(--dim)}
+.n-badge-system{background:#3aa0ff22;color:#7ec8ff}
+.n-badge-trade{background:#2dd4c422;color:#5fe6da}
 .n-ticker{color:var(--amber);font-weight:700;text-decoration:underline;text-decoration-color:#f0b45455;text-underline-offset:2px}
 .tabs{display:flex;gap:8px;margin-bottom:6px;flex-shrink:0}
 /* Center panel tab content: fill available space */
@@ -157,7 +165,7 @@ hr{border:0;border-top:2px solid var(--hr);margin:10px 0;box-shadow:0 1px 4px #4
 
 /* Transfer section pinned at bottom of right panel */
 #transferSection{flex-shrink:0;padding-top:8px;border-top:1px solid var(--dim);margin-top:6px}
-#transferSection h2{margin:.2rem 0 .5rem 0;font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--green)}
+#transferSection h2{margin:.2rem 0 .5rem 0;font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--amber)}
 
 /* Leaderboard bottom row */
 #bottomRow{margin-top:4px;flex-shrink:0;overflow:hidden}

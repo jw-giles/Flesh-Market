@@ -1,7 +1,7 @@
 {
-  "version": "1.1.1.1",
+  "version": "1.1.1.4",
   "built": "2026-06-03T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.1.1",
-  "notes": "Navigation chrome to amber: main tabs, Galaxy subtabs, chat room tabs, and the Watchlist toggle (border/text/glow/active states) now amber instead of green."
+  "patch": "1.1.1.4",
+  "notes": "Developer text back to gold: the Flesh Station (dev) faction color, DEV ONLY badge, the galaxy-map FLESH STATION label, and the HOME OF MR. FLESH banner were light green; now gold to match the rest of the dev/premium tier. Neutral news headlines back to amber (good=green, bad=red still override)."
 }
