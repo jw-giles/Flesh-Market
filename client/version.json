@@ -1,7 +1,7 @@
 {
-  "version": "1.1.1.5",
-  "built": "2026-06-04T00:50:31Z",
+  "version": "1.1.1.6",
+  "built": "2026-06-04T02:51:06Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.1.5",
-  "notes": "Store/title text de-fogged: the global phosphor glow was bleeding onto the dense store panes (Titles, Inventory, Fbay, Slots), making the title text read blurry. Added .store-pane to the existing text-shadow:none exclusion list so it renders crisp, matching markets/tickers/news."
+  "patch": "1.1.1.6",
+  "notes": "More glow cleanup: the company detail panel (#companyDetail), Capital House fund view (#guild-detail), and Wire Credits panel (#transferSection) were still inheriting the global phosphor glow, blurring the 'No base dividend' line, the Capital House type badge, the fund sub-tabs, and the wire transfer-tax disclaimer. All three added to the text-shadow:none exclusion list."
 }

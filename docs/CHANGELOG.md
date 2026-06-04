@@ -4,6 +4,14 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.1.6 (2026-06-04) — de-fog company + fund detail panels
+
+- **Crisp detail panels** (`style.css`): extended the glow-exclusion rule to `#companyDetail` (market company detail), `#guild-detail` (Capital House fund view), and `#transferSection` (Wire Credits panel). They were inheriting the global `body` phosphor glow, blurring the "No base dividend" / "Dividend eligible" line, the fund type badge ("Capital House" / "Guild" / "FLSH"), the Overview/Portfolio/Governance/Manage sub-tabs, and the wire transfer-tax disclaimer. One-line CSS change; no logic touched. Follows the same v1.1.1.5 store fix.
+
+Files: `client/style.css`, `client/version.json`.
+
+---
+
 ## v1.1.1.5 (2026-06-04) — store/title text de-fogged
 
 - **Crisp store text** (`style.css`): the global `body` phosphor glow (`text-shadow:0 0 3px rgba(70,255,125,.30)`) was being inherited by the store panes, making title names and blurbs read blurry. Added `.store-pane` to the existing glow-exclusion rule alongside markets/tickers/news/board, so all four store subtabs (Titles, Inventory, Ƒbay, Slots) render crisp. One-line CSS change; no logic touched.
