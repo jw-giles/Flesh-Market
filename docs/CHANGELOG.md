@@ -4,6 +4,14 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.1.5 (2026-06-04) — store/title text de-fogged
+
+- **Crisp store text** (`style.css`): the global `body` phosphor glow (`text-shadow:0 0 3px rgba(70,255,125,.30)`) was being inherited by the store panes, making title names and blurbs read blurry. Added `.store-pane` to the existing glow-exclusion rule alongside markets/tickers/news/board, so all four store subtabs (Titles, Inventory, Ƒbay, Slots) render crisp. One-line CSS change; no logic touched.
+
+Files: `client/style.css`, `client/version.json`.
+
+---
+
 ## v1.1.1.4 (2026-06-03) — dev text -> gold; neutral news -> amber
 
 - **Dev text gold** (`galaxy.js`): the Flesh Station (dev) faction was still light green (`#9dff5a`) despite its gold dim/bg — fixed its faction color, the DEV ONLY badge, the galaxy-map FLESH STATION label, and the HOME OF MR. FLESH banner to gold (`#ffce4d`), matching the Capital Houses dev fund.
