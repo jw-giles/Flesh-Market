@@ -1,4 +1,4 @@
-# FleshMarket v1.1.2.7 — MANIFEST
+# FleshMarket v1.1.2.8 — MANIFEST
 
 ## Structure
 
@@ -33,6 +33,8 @@ game/
       auth-ui.js            auth UI components
       dev-comms.js          dev communications
       fleshbook.js          Fleshbook in-house social feed (lazy-loaded)
+      calc.js               pixel-art trader calculator widget (Markets view)
+      calc/buttons/         calculator key sprites (PNG)
       pnl-livepatch.js      P&L live patching
       pnl-panel.js          P&L panel logic
       pnl-panel.css         P&L panel styles

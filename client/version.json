@@ -1,7 +1,7 @@
 {
-  "version": "1.1.2.7",
-  "built": "2026-06-06T16:20:00Z",
+  "version": "1.1.2.8",
+  "built": "2026-06-06T16:45:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.2.7",
-  "notes": "Two fixes. Admins can now clear a pinned announcement before its duration runs out: a small clear control appears on the announcement banner for admins and removes it for everyone. Shipping risk now caps the risk-increasing factors at 50 percent before any escort reduction is applied, so buying an escort (including Private Army) always lowers the shown risk instead of being swallowed by the cap. Previously a run whose raw risk was above 50 percent would display 50 percent even after paying for Private Army, because the reduction was applied to the pre-cap number."
+  "patch": "1.1.2.8",
+  "notes": "Added a pixel-art trader's calculator under the Ship Cargo console in the Galaxy Markets view. Plain arithmetic (digits, decimal, plus minus times divide, square root, percent, sign toggle, clear, delete) using the supplied key sprites with a body and screen matched to the art palette. Mouse and touch only, so it never captures keystrokes meant for the commodity search field. Its value persists if the view re-renders."
 }

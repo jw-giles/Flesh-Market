@@ -4,6 +4,16 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.2.8 (2026-06-06) - trader's calculator under Ship Cargo
+
+- **Pixel-art calculator** (`calc.js` new, `calc/buttons/*.png` new, `galaxy.js`, `index.html`): added a self-contained calculator widget below the Ship Cargo console in the Galaxy Markets view, for working out spreads and shipping math without leaving the tab. Uses the supplied key sprites with a CSS body and screen matched to the art palette (body #736fa1, screen #4b4173/#2e2747, keys are the sprite PNGs). Supports digits, decimal, + - * /, square root, percent, sign toggle, clear, and delete via an accumulator state machine (no eval). Mouse/touch only so it never steals keystrokes from the adjacent commodity search field. Mounted by `renderMarketsTab` after render; state is module-level so the displayed value survives a view re-render. Arithmetic verified against the same state machine (chained ops, sqrt, percent, divide-by-zero -> ERR).
+
+Files: `client/assets/calc.js` (new), `client/assets/calc/buttons/` (28 PNGs, new), `client/assets/galaxy.js`, `client/index.html`, `client/version.json`, `docs/MANIFEST.txt`.
+
+Cumulative over v1.1.2.7 and earlier.
+
+---
+
 ## v1.1.2.7 (2026-06-06) - clear announcements + shipping-risk cap order fix
 
 - **Clear pinned announcements** (`core.js`): announcements were stuck until their duration expired with no way to remove one early. The pinned banner now shows an admin-only clear control (✕) that calls the existing `/api/admin/broadcast/clear` and removes the banner for everyone via the `announcement_clear` broadcast. No server change; the endpoint already existed from v1.1.2.2, it just had no UI.

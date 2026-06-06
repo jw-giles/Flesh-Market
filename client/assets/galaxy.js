@@ -2068,6 +2068,9 @@ function renderMarketsTab(){
       +'<div id="gShipConHint" style="font-size:.66rem;color:#888;margin-top:6px;min-height:13px"></div>'
       +'</div>';
 
+    // Trader's calculator (pixel-art widget) under the shipping console
+    h+='<div id="gCalc" style="margin:0 0 16px"></div>';
+
     var heldMap = {};       // comId -> total qty held anywhere
     var heldLoc = {};        // comId -> { colonyId, colonyName, qty } of the largest lot (where to sell)
     if(cg && cg.ok && cg.cargo) cg.cargo.items.forEach(function(it){
@@ -2156,6 +2159,7 @@ function renderMarketsTab(){
     }
 
     box.innerHTML=h;
+    try { if (window.FMCalc) window.FMCalc.mount(document.getElementById('gCalc')); } catch(_) {}
     startShipmentTicker();
   }).catch(function(){ box.innerHTML='<div style="color:#e74c3c">Market load failed</div>'; });
 }
