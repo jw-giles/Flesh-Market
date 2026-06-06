@@ -3355,7 +3355,10 @@ function cargoSnapshot(playerId) {
 
 // Move a colony's price for one commodity by adjusting its supply pressure, then
 // recompute that single cell immediately so buy/sell feels responsive.
-function nudgeCommoditySupply(colony, commodityId, deltaSupply) {
+// Compute the post-impact price WITHOUT writing it. Used to price a trade off the
+// slippage it will cause (so a trader eats their own impact) and to gate funds
+// before committing, with no orphan price tick if the trade is rejected.
+function previewCommodityPrice(colony, commodityId, deltaSupply) {
   const com = COMMODITY_BY_ID[commodityId];
   if (!com) return null;
   const row = getCommodityPrice(colony.id, commodityId);
@@ -3366,8 +3369,14 @@ function nudgeCommoditySupply(colony, commodityId, deltaSupply) {
   // Ease current price 60% toward the new supply-adjusted target.
   const cur = row ? row.price : target;
   const price = Math.round((cur + (target - cur) * 0.6) * 100) / 100;
-  upsertCommodityPrice(colony.id, commodityId, price, Math.round(supply * 1e4) / 1e4);
-  return price;
+  return { price, supply };
+}
+
+function nudgeCommoditySupply(colony, commodityId, deltaSupply) {
+  const pv = previewCommodityPrice(colony, commodityId, deltaSupply);
+  if (!pv) return null;
+  upsertCommodityPrice(colony.id, commodityId, pv.price, Math.round(pv.supply * 1e4) / 1e4);
+  return pv.price;
 }
 
 // Nudge a colony's price AND push the change live to all clients.
@@ -3632,7 +3641,11 @@ app.post('/api/commodities/buy', (req, res) => {
       upsertCommodityPrice(colonyId, commodityId, seed, 0);
       row = { price: seed, supply: 0 };
     }
-    const unitBuy = Math.round(row.price * (1 + tithe) * 100) / 100;
+    // Anti-exploit: price the fill off the POST-impact price, so a buy pays the
+    // slippage it causes instead of front-running its own price move.
+    const deltaSupply = -0.012 * Math.log10(1 + qty);
+    const projected = previewCommodityPrice(colony, commodityId, deltaSupply);
+    const unitBuy = Math.round(projected.price * (1 + tithe) * 100) / 100;
     const cost = Math.round(unitBuy * qty * 100) / 100;
     if ((p.cash || 0) < cost) return res.status(400).json({ ok:false, error:'insufficient_funds', need:cost, have:p.cash });
 
@@ -3640,7 +3653,7 @@ app.post('/api/commodities/buy', (req, res) => {
     savePlayer(p);
     addCargo(p.id, commodityId, qty, unitBuy, colonyId);
     // Buying tightens local supply (price drifts up). Scale impact by lot size.
-    const newPrice = nudgeAndBroadcast(colony, commodityId, -0.012 * Math.log10(1 + qty), 'player_buy');
+    const newPrice = nudgeAndBroadcast(colony, commodityId, deltaSupply, 'player_buy');
 
     res.json({ ok:true, bought:qty, unitPrice:unitBuy, cost, cash:p.cash, newPrice,
                cargo:cargoSnapshot(p.id) });
@@ -3673,14 +3686,15 @@ app.post('/api/commodities/sell', (req, res) => {
       upsertCommodityPrice(colonyId, commodityId, seed, 0);
       row = { price: seed, supply: 0 };
     }
-    const unitSell = Math.round(row.price * 100) / 100; // sell side: no tithe
+    // Anti-exploit: apply impact FIRST, then price the fill off the depressed
+    // price, so a sell eats its own slippage instead of selling into a stale mid.
+    const newPrice = nudgeAndBroadcast(colony, commodityId, 0.012 * Math.log10(1 + qty), 'player_sell');
+    const unitSell = Math.round(newPrice * 100) / 100; // sell side: no tithe
     const proceeds = Math.round(unitSell * qty * 100) / 100;
 
     removeCargo(p.id, commodityId, qty, colonyId);
     p.cash = Math.round((p.cash + proceeds) * 100) / 100;
     savePlayer(p);
-    // Selling floods local supply (price drifts down).
-    const newPrice = nudgeAndBroadcast(colony, commodityId, 0.012 * Math.log10(1 + qty), 'player_sell');
 
     res.json({ ok:true, sold:qty, unitPrice:unitSell, proceeds, cash:p.cash, newPrice,
                cargo:cargoSnapshot(p.id) });

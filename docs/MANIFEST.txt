@@ -1,4 +1,4 @@
-# FleshMarket v1.1.3.4 — MANIFEST
+# FleshMarket v1.1.3.5 — MANIFEST
 
 ## Structure
 
@@ -121,6 +121,7 @@ See `CHANGELOG.md` for full details.
 
 | Version | Key Change |
 |---|---|
+| v1.1.3.5 | Commodity round-trip exploit fix: fills price off post-impact price (buy/sell eat their own slippage) |
 | v1.0.2.4 | Capital Houses guild redesign: rename, passive faucets removed, per-share performance P&L, four-pane house view, and governance/voting (Executive/Vote/Council, share-weighted, owner-set voting window) |
 | v1.0.2.3 | Fund disband pays NAV share value (not deposit), drone enemies spawn outside aggro range, SWT hard-locked flat at Ƒ4500, Patreon webhook email matching hardened |
 | v1.0.1.9 | Discord button in header, dividend eligibility requires 7 trading-day hold |

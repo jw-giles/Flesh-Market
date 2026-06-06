@@ -4,6 +4,16 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.3.5 (2026-06-06) - fix commodity round-trip exploit
+
+- **Commodity exploit closed** (`server/server.js`): a same-colony buy then immediate sell of the same lot printed credits. Both legs priced off the same stored mid, and the buy committed its upward price impact before the sell read it, so a trader front-ran their own market impact; the sell's downward nudge only eased 60% back, so repeat cycling ratcheted the baseline up and compounded. There was no spread and no sell-side friction, so the round trip on any non-guild colony was pure profit (~Ƒ14.8M on a 100k lot of a high-base commodity). Fix: fills now price off the POST-impact price. `nudgeCommoditySupply` was split into a non-writing `previewCommodityPrice` plus a commit step; buys gate funds on the previewed post-impact price then commit the nudge; sells apply impact first then price the fill off the depressed price. A round trip now eats slippage both ways (the same 100k lot that printed ~Ƒ14.8M now costs ~Ƒ8.9M). Legitimate cross-colony arbitrage is unaffected.
+
+Files: `server/server.js`, `client/version.json`.
+
+Server-only logic change; no client cache-bust or hard-refresh needed.
+
+---
+
 ## v1.1.3.4 (2026-06-06) - temporarily disable codec calls
 
 - **Calls disabled** (`codec.js`): codec calls are gated behind a new `CALLS_ENABLED = false` flag until the quest system and fixes land. The Contacts list and rep profiles still open, but each call button is redded out (class `.off`), relabeled "Offline", and inactive; clicking it (or a card) only toasts. `FMCodec.call` also early-returns while disabled. Flip the one flag to re-enable.
