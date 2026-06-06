@@ -72,6 +72,7 @@ import {
   // Galaxy
   seedColoniesIfEmpty, getAllColonyStates, getColonyState, updateColonyState,
   recordFactionFunding, getColonyTopFunders, getPlayerFactionFunding,
+  getWarFundPending, setWarFundPending,
   setPlayerFaction, getPlayerFaction, getPlayerFactionData, getPlayerFactionsBulk,
   setVoidLocked, isVoidLocked, setVoidPresidentEscaped, isVoidPresidentEscaped,
   // Lane Shares
@@ -532,9 +533,9 @@ function smuggleBetRisk(amt) {
 // spend-to-lower-odds bet, not an insurance safety net.
 const GUARD_TIERS = [
   { id:'none',   name:'No Escort',      feeFrac:0.00, riskCut:0.00, desc:'Run it cold. Cheapest, riskiest.' },
-  { id:'light',  name:'Light Escort',   feeFrac:0.04, riskCut:0.08, desc:'A couple of hired guns.' },
-  { id:'medium', name:'Armed Convoy',   feeFrac:0.10, riskCut:0.16, desc:'Serious muscle riding shotgun.' },
-  { id:'heavy',  name:'Private Army',   feeFrac:0.22, riskCut:0.26, desc:'Overwhelming force. Expensive insurance against the void.' },
+  { id:'light',  name:'Light Escort',   feeFrac:0.0533, riskCut:0.08, desc:'A couple of hired guns.' },
+  { id:'medium', name:'Armed Convoy',   feeFrac:0.1333, riskCut:0.16, desc:'Serious muscle riding shotgun.' },
+  { id:'heavy',  name:'Private Army',   feeFrac:0.2933, riskCut:0.26, desc:'Overwhelming force. Expensive insurance against the void.' },
 ];
 const GUARD_BY_ID = Object.fromEntries(GUARD_TIERS.map(g => [g.id, g]));
 function guardFee(tierId, stake) {
@@ -1168,7 +1169,7 @@ function distributeLaneKickback(laneKey, profit, rate, excludePlayerId) {
 
 // ─── Blockade System ──────────────────────────────────────────────────────────
 const activeBlockades = new Map();
-const BLOCKADE_THRESHOLD   = 50000;
+const BLOCKADE_THRESHOLD   = 1_000_000;
 const BLOCKADE_DURATION_MS = 2 * 60 * 60 * 1000;
 const BLOCKADE_STOCK_HIT   = 0.005;
 
@@ -1272,10 +1273,13 @@ function applyCargoInterception(s) {
     if (p) { const pf = JSON.stringify({type:'portfolio',data:snapshotPortfolio(p)}); for (const ws of sockets){ try{ if(ws.readyState===1) ws.send(pf);}catch(_){} } }
   };
   if (s.insured && p) {
-    safeAddCash(p, s.buy_cost); savePlayer(p);
-    pushHeadline(`Cargo insured: ${com?com.name:s.commodity_id} lost on ${s.from_colony.replace(/_/g,' ')} → ${s.to_colony.replace(/_/g,' ')} — claim paid`, 'neutral', '🛡');
+    // Half-cover: insurance pays back 50% of the cargo cost, not the whole stake.
+    // Premium and any escort fee are already gone, so an insured loss still stings.
+    const refund = Math.round(s.buy_cost * 0.5 * 100) / 100;
+    safeAddCash(p, refund); savePlayer(p);
+    pushHeadline(`Cargo insured: ${com?com.name:s.commodity_id} lost on ${s.from_colony.replace(/_/g,' ')} → ${s.to_colony.replace(/_/g,' ')} — half claim paid`, 'neutral', '🛡');
     send('cargo_ship_result', { success:false, insured:true, id:s.id, commodity:com?com.name:s.commodity_id,
-      qty:s.qty, from:s.from_colony, to:s.to_colony, refund:s.buy_cost, cash:p?p.cash:0 });
+      qty:s.qty, from:s.from_colony, to:s.to_colony, refund, cash:p?p.cash:0 });
   } else {
     pushHeadline(`Cargo seized: ${s.qty}× ${com?com.name:s.commodity_id} lost on ${s.from_colony.replace(/_/g,' ')} → ${s.to_colony.replace(/_/g,' ')}`, 'bad', '📦');
     try {
@@ -3830,7 +3834,7 @@ app.get('/api/cargo/quote', (req, res) => {
     // Unit cost: player's avg at origin if held, else current price.
     let unitCost = getCommodityPrice(from, commodityId)?.price || com.basePrice;
     if (p) { const cr = getPlayerCargo(p.id).find(r => r.commodity_id===commodityId && r.colony_id===from); if (cr) unitCost = cr.avg_cost; }
-    const flyByRisk = (hops - 1) * 0.025;
+    const flyByRisk = (hops - 1) * 0.10;
     const ship = p ? shipClassFor(p.id) : null;
     const shipMod = ship ? (ship.riskMod||0) : 0;
     // Guard escort (same tiers as smuggling): cuts the roll, fee is a % of cargo value.
@@ -3838,6 +3842,12 @@ app.get('/api/cargo/quote', (req, res) => {
     const guardCut = guardRiskCut(guardTier);
     const buyCost = Math.round(unitCost * qty * 100) / 100;
     const gFee = guardFee(guardTier, buyCost);
+    // Insurance: a premium that refunds the cargo cost if the run is intercepted.
+    // It does not lower the interception roll (that's what escort does) — it makes
+    // a loss harmless, so the new per-hop risk can't take your stake. Stacking it
+    // with an escort means paying both off the top, which eats most of the spread.
+    const wantInsure = req.query.insure === '1' || req.query.insure === 'true';
+    const insPremium = wantInsure ? Math.round(buyCost * insurancePremiumRate(buyCost) * 100) / 100 : 0;
     // If we have a player, use their faction-aware risk; otherwise base estimate.
     let interceptChance;
     if (p) interceptChance = cargoShipmentInterceptChance(p.id, from, to, routeLaneType, qty, unitCost);
@@ -3849,6 +3859,8 @@ app.get('/api/cargo/quote', (req, res) => {
       interceptChance: Math.round(interceptChance*100),
       flyByRisk: Math.round(flyByRisk*100),
       guardTier, guardFee: gFee, guardCut: Math.round(guardCut*100),
+      insured: wantInsure, insurancePremium: insPremium,
+      upfrontTotal: Math.round((gFee + insPremium) * 100) / 100,
       hasShip: !!ship, shipName: ship?ship.name:null });
   } catch(e) { res.json({ ok:false, error:String(e) }); }
 });
@@ -3914,7 +3926,7 @@ app.post('/api/cargo/ship', (req, res) => {
     // Interception chance, plus the ship-class risk modifier. Multi-hop adds a small
     // fly-by risk per extra hop (2.5% each) for skipping past colonies without docking.
     // Guard escort cut is baked into the stored chance, so the resolution roll uses it.
-    const flyByRisk = (hops - 1) * 0.025;
+    const flyByRisk = (hops - 1) * 0.10;
     const guardCut = guardRiskCut(guardTier);
     let interceptChance = cargoShipmentInterceptChance(p.id, from, to, routeLaneType, qty, unitCost);
     interceptChance = Math.min(0.50, Math.max(0.03, interceptChance + (ship.riskMod || 0) + flyByRisk - guardCut));
@@ -3958,8 +3970,14 @@ app.post('/api/galaxy/fund', (req, res) => {
     // Record funding
     recordFactionFunding(p.id, colonyId, factionId, amt);
 
-    // Adjust control % — Ƒ100,000 = 1% control, capped at 12% per donation
-    const boost = Math.min(12, Math.max(1, Math.round(amt / 100000)));
+    // Pooled control — everyone's contributions to this (colony, faction) bank into
+    // a shared pool; every full Ƒ10,000,000 in the pool converts to 1% control. The
+    // remainder carries forward (persisted), so a Ƒ3M donation isn't wasted — it sits
+    // in the pool until later contributions push it over the next 10M line. No per-
+    // donation cap: the pool size and the 96% control ceiling are the only limits.
+    const WAR_FUND_PER_PCT = 10_000_000;
+    let pending = getWarFundPending(colonyId, factionId) + amt;
+    const boost = Math.floor(pending / WAR_FUND_PER_PCT); // whole 1% increments now affordable
     const ctrl = {
       coalition: colony.control_coalition || 0,
       syndicate: colony.control_syndicate || 0,
@@ -3995,8 +4013,15 @@ app.post('/api/galaxy/fund', (req, res) => {
     const total = ctrl.coalition + ctrl.syndicate + ctrl.void + ctrl.guild;
     if (total !== 100) ctrl[factionId] = Math.min(97, Math.max(1, ctrl[factionId] + (100 - total)));
 
-    // Update tension
-    const newTension = Math.min(95, colony.tension + Math.round(boost * 1.8));
+    // Subtract only the control we actually applied. If the 96% ceiling blocked some
+    // of the boost, that SC stays in the pool rather than vanishing.
+    pending -= actualBoost * WAR_FUND_PER_PCT;
+    setWarFundPending(colonyId, factionId, pending);
+    const pctToNext = Math.max(0, WAR_FUND_PER_PCT - pending);
+
+    // Update tension — scales with control actually gained, so pure banking (no
+    // crossed 1% line) doesn't spike tension.
+    const newTension = Math.min(95, colony.tension + Math.round(actualBoost * 1.8));
     const leading = VALID.reduce((best, f) => ctrl[f] > ctrl[best] ? f : best, 'coalition');
     const contested = ctrl[leading] < 60 ? 1 : 0;
 
@@ -4041,7 +4066,9 @@ app.post('/api/galaxy/fund', (req, res) => {
       broadcastToPlayer(p.id, { type:'portfolio', data: snapshotPortfolio(p) });
     } catch(_) {}
 
-    res.json({ ok: true, cash: p.cash, colonyId, factionId, boost, newControl: ctrl });
+    res.json({ ok: true, cash: p.cash, colonyId, factionId,
+      pctGained: actualBoost, pending: Math.round(pending), pctToNext: Math.round(pctToNext),
+      boost: actualBoost, newControl: ctrl });
   } catch(e) {
     console.error('[Galaxy] fund error:', e);
     res.status(500).json({ ok: false, error: e.message });
@@ -6477,14 +6504,14 @@ wss.on('connection',(ws,req)=>{
       ws.send(JSON.stringify({ type:'counter_blockade_result', data:{ laneKey, contributed:amt, broken, cash:actor.cash } }));
     }
 
-    // ── Private Army: instantly break an active blockade for Ƒ50,000 ─────────
+    // ── Private Army: instantly break an active blockade for BLOCKADE_THRESHOLD ──
     if (msg.type === 'private_army') {
       const { from, to } = msg;
       if (!from || !to) { ws.send(JSON.stringify({ type:'blockade_error', error:'Missing lane endpoints' })); return; }
       const laneKey = getLaneKey(from, to);
       const blk = activeBlockades.get(laneKey);
       if (!blk || !blk.active) { ws.send(JSON.stringify({ type:'blockade_error', error:'No active blockade on this lane' })); return; }
-      const cost = BLOCKADE_THRESHOLD; // same price as activating a blockade: Ƒ50,000
+      const cost = BLOCKADE_THRESHOLD; // same price as activating a blockade
       if (actor.cash < cost) {
         ws.send(JSON.stringify({ type:'blockade_error', error:`Insufficient funds. Private army costs Ƒ${cost.toLocaleString()}` }));
         return;

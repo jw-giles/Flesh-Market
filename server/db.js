@@ -131,6 +131,12 @@ export function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_ff_colony ON faction_funding(colony_id, faction_id);
     CREATE INDEX IF NOT EXISTS idx_ff_player ON faction_funding(player_id);
+    CREATE TABLE IF NOT EXISTS war_fund_pool (
+      colony_id  TEXT NOT NULL,
+      faction_id TEXT NOT NULL,
+      pending    REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (colony_id, faction_id)
+    );
     CREATE TABLE IF NOT EXISTS lane_shares (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       lane_key      TEXT NOT NULL,
@@ -1746,6 +1752,20 @@ export function recordFactionFunding(playerId, colonyId, factionId, amount) {
 export function getPlayerFactionFunding(playerId, colonyId) {
   return stmt(`SELECT faction_id, SUM(amount) as total FROM faction_funding
                WHERE player_id=? AND colony_id=? GROUP BY faction_id`).all(playerId, colonyId);
+}
+
+// Pooled war funding: contributions to a (colony, faction) accumulate here until
+// they cross a full 1%-worth (Ƒ10M), at which point that whole increment is
+// converted to control and subtracted out. The remainder persists across restarts
+// so nobody's partial contribution is lost.
+export function getWarFundPending(colonyId, factionId) {
+  const row = stmt('SELECT pending FROM war_fund_pool WHERE colony_id=? AND faction_id=?').get(colonyId, factionId);
+  return row ? (Number(row.pending) || 0) : 0;
+}
+export function setWarFundPending(colonyId, factionId, pending) {
+  const v = Math.max(0, Number(pending) || 0);
+  stmt(`INSERT INTO war_fund_pool(colony_id,faction_id,pending) VALUES(?,?,?)
+        ON CONFLICT(colony_id,faction_id) DO UPDATE SET pending=excluded.pending`).run(colonyId, factionId, v);
 }
 
 // ─── Galaxy: Player Faction ───────────────────────────────────────────────────

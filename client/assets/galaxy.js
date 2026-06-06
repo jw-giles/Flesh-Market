@@ -1382,7 +1382,12 @@ window.spDoFund = function(cid, fid){
     body:JSON.stringify({colonyId:cid,factionId:fid,amount:amt,token:gToken})})
     .then(function(r){return r.json();}).then(function(d){
       if(d.ok){
-        if(typeof gToast==='function') gToast('Funded '+FACTIONS[fid].short,'#4ecdc4');
+        if(typeof gToast==='function'){
+          var _m='Funded '+FACTIONS[fid].short;
+          if(d.pctGained>0){ _m+=' +'+d.pctGained+'%'; if(d.pctToNext>0) _m+=' (\u0192'+Number(d.pctToNext).toLocaleString()+' to next 1%)'; }
+          else if(typeof d.pctToNext==='number'){ _m+=' \u2014 banked, \u0192'+Number(d.pctToNext).toLocaleString()+' to next 1%'; }
+          gToast(_m,'#4ecdc4');
+        }
         galaxyFetch();
         setTimeout(function(){
           var s=gState[cid]||{};
@@ -2050,10 +2055,13 @@ function renderMarketsTab(){
         +'<div style="flex:1;min-width:140px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">Escort</div>'
           +'<select id="gShipConGuard" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'
             +'<option value="none">No escort \u2014 free</option>'
-            +'<option value="light">Light escort \u2014 4% fee, -8% risk</option>'
-            +'<option value="medium">Armed convoy \u2014 10% fee, -16% risk</option>'
-            +'<option value="heavy">Private army \u2014 22% fee, -26% risk</option>'
+            +'<option value="light">Light escort \u2014 ~5% fee, -8% risk</option>'
+            +'<option value="medium">Armed convoy \u2014 ~13% fee, -16% risk</option>'
+            +'<option value="heavy">Private army \u2014 ~29% fee, -26% risk</option>'
           +'</select></div>'
+        +'<div style="flex:0 0 auto;display:flex;flex-direction:column;justify-content:flex-end"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">Insurance</div>'
+          +'<label style="display:flex;align-items:center;gap:5px;font-size:.66rem;color:#bbb;cursor:pointer;padding:6px 8px;border:1px solid #2a2a3e;border-radius:2px;background:#0a0a14;white-space:nowrap">'
+            +'<input type="checkbox" id="gShipConInsure" onchange="window.gShipQuote()" style="accent-color:#f39c12"> half cover</label></div>'
         +'<button onclick="window.gShipConsoleGo()" style="flex:0 0 auto;background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:7px 16px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">SHIP</button>'
       +'</div>'
       +'<div id="gShipConPreview" style="font-size:.68rem;color:#888;margin-top:8px;min-height:15px;padding:6px 8px;background:#070710;border:1px solid #14141f;border-radius:3px">Select a commodity and two colonies to preview the route and risk.</div>'
@@ -2271,9 +2279,11 @@ window.gShipQuote = function(){
     var qty=Math.max(1,Math.floor(Number(qtyI&&qtyI.value)||1));
     var guardEl=document.getElementById('gShipConGuard');
     var guard=(guardEl&&guardEl.value)||'none';
+    var insEl=document.getElementById('gShipConInsure');
+    var insure=insEl&&insEl.checked;
     var nm=window._gColNameOf||function(x){return x;};
     prev.innerHTML='<span style="color:#666">Calculating route\u2026</span>';
-    var qs='commodityId='+encodeURIComponent(comId)+'&from='+encodeURIComponent(from.value)+'&to='+encodeURIComponent(to.value)+'&qty='+qty+'&guard='+encodeURIComponent(guard)+(gToken?'&token='+encodeURIComponent(gToken):'');
+    var qs='commodityId='+encodeURIComponent(comId)+'&from='+encodeURIComponent(from.value)+'&to='+encodeURIComponent(to.value)+'&qty='+qty+'&guard='+encodeURIComponent(guard)+(insure?'&insure=1':'')+(gToken?'&token='+encodeURIComponent(gToken):'');
     fetch('/api/cargo/quote?'+qs).then(function(r){return r.json();}).then(function(d){
       if(!d.ok){
         var msg=d.error==='no_lane'?'No route exists between those colonies.':d.error==='same_colony'?'Pick two different colonies.':(d.error||'No route.');
@@ -2290,6 +2300,8 @@ window.gShipQuote = function(){
         +(d.flyByRisk>0?' <span style="color:#777">(+'+d.flyByRisk+'% fly-by)</span>':'')
         +((d.guardCut>0)?' <span style="color:#2ecc71">(\u2212'+d.guardCut+'% escort)</span>':'')
         +((d.guardFee>0)?'<br><span style="color:#9ab">Escort fee:</span> <span style="color:#72e09c">\u0192'+Number(d.guardFee).toLocaleString()+'</span> <span style="color:#555">(lost if intercepted)</span>':'')
+        +((d.insured&&d.insurancePremium>0)?'<br><span style="color:#9ab">Insurance:</span> <span style="color:#f39c12">\u0192'+Number(d.insurancePremium).toLocaleString()+'</span> <span style="color:#555">(refunds half the cargo cost if intercepted)</span>':'')
+        +((d.upfrontTotal>0)?'<br><span style="color:#9ab">Upfront (escort + insurance):</span> <span style="color:#e0a040">\u0192'+Number(d.upfrontTotal).toLocaleString()+'</span> <span style="color:#555">off the top</span>':'')
         +(d.hasShip?'':' <span style="color:#e74c3c">\u2014 no ship yet</span>');
       prev.innerHTML=html;
     }).catch(function(){ prev.innerHTML='<span style="color:#777">Could not load route preview.</span>'; });
@@ -2312,8 +2324,10 @@ window.gShipConsoleGo = function(){
   if(from.value===to.value){ if(hint){hint.textContent='\u2717 Pick two different colonies';hint.style.color='#ff6b6b';} return; }
   var guardEl=document.getElementById('gShipConGuard');
   var guard=(guardEl&&guardEl.value)||'none';
+  var insEl=document.getElementById('gShipConInsure');
+  var insure=!!(insEl&&insEl.checked);
   fetch('/api/cargo/ship',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({token:gToken,commodityId:comId,from:from.value,to:to.value,qty:qty,guardTier:guard})})
+    body:JSON.stringify({token:gToken,commodityId:comId,from:from.value,to:to.value,qty:qty,guardTier:guard,insured:insure})})
     .then(function(r){return r.json();}).then(function(d){
       if(!d.ok){
         var msg=d.error==='no_ship'?'Commission a ship first (Shipyard below)':
@@ -2939,7 +2953,7 @@ function renderDetail(id){
         +'<button onclick="window._gFundBlockade()" style="background:#2d1a00;border:1px solid #f39c12;color:#f39c12;padding:4px 8px;cursor:pointer;font-size:.58rem;font-family:inherit;letter-spacing:.06em">FUND</button>'
         +'<button onclick="window._gCounterBlk()" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:4px 8px;cursor:pointer;font-size:.56rem;font-family:inherit;letter-spacing:.04em">COUNTER</button>'
         +'</div>'
-        +'<button onclick="window._gPrivateArmy()" style="width:100%;margin-bottom:4px;background:linear-gradient(135deg,#1a0a00,#0d0400);border:1px solid #e74c3c;color:#ff6b6b;padding:5px 8px;cursor:pointer;font-size:.64rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">\u2694 PRIVATE ARMY \u2014 Break Blockade (\u019250,000)</button>'
+        +'<button onclick="window._gPrivateArmy()" style="width:100%;margin-bottom:4px;background:linear-gradient(135deg,#1a0a00,#0d0400);border:1px solid #e74c3c;color:#ff6b6b;padding:5px 8px;cursor:pointer;font-size:.64rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">\u2694 PRIVATE ARMY \u2014 Break Blockade (\u01921,000,000)</button>'
         +'<div style="font-size:.60rem;color:#444">\u01925\u0030k activates a 2-hour blockade</div>';
     }
     sh += '</div>';
@@ -3007,7 +3021,10 @@ window.gDoFund=function(cid,fid){
         gState[cid].control_guild=d.newControl.guild;
         gState[cid].war_chest=(gState[cid].war_chest||0)+amt;
       }
-      gToast('\u0192'+Number(amt).toLocaleString()+' deployed to '+FACTIONS[fid].name,FACTIONS[fid].color);
+      var _msg='\u0192'+Number(amt).toLocaleString()+' deployed to '+FACTIONS[fid].name;
+      if(d.pctGained>0){ _msg+=' \u2014 +'+d.pctGained+'% control'; if(d.pctToNext>0) _msg+=' (\u0192'+Number(d.pctToNext).toLocaleString()+' to next 1%)'; }
+      else if(typeof d.pctToNext==='number'){ _msg+=' \u2014 banked, \u0192'+Number(d.pctToNext).toLocaleString()+' to next 1%'; }
+      gToast(_msg,FACTIONS[fid].color);
       renderDetail(cid); renderMap();
     } else {
       gToast(d.error||'Error','#e74c3c');
@@ -3291,7 +3308,7 @@ document.addEventListener('fm_ws_msg',function(e){
   }
   if(msg.type==='blockade_funded'&&msg.data){
     _gSyncCash(msg.data.cash);
-    gToast('\u0192'+Number(msg.data.contributed).toLocaleString()+' invested in blockade (pool: \u0192'+Number(msg.data.pool).toLocaleString()+'/50,000)','#f39c12');
+    gToast('\u0192'+Number(msg.data.contributed).toLocaleString()+' invested in blockade (pool: \u0192'+Number(msg.data.pool).toLocaleString()+'/1,000,000)','#f39c12');
   }
   if(msg.type==='blockade_error') gToast(msg.error||'Blockade error','#e74c3c');
   if(msg.type==='counter_blockade_result'&&msg.data){
@@ -3664,7 +3681,7 @@ window._gSelectLane = function(from, to){
     +'<button onclick="window._gLaneBlkFund(\''+from+'\',\''+to+'\')" style="background:#2d1a00;border:1px solid #f39c12;color:#f39c12;padding:4px 8px;cursor:pointer;font-size:.58rem;font-family:inherit;border-radius:2px">FUND</button>'
     +'<button onclick="window._gLaneBlkCounter(\''+from+'\',\''+to+'\')" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:4px 8px;cursor:pointer;font-size:.56rem;font-family:inherit;border-radius:2px">COUNTER</button></div>';
   // Private Army: instant blockade break
-  h += '<button onclick="window._gLanePrivateArmy(\''+from+'\',\''+to+'\')" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#1a0a00,#0d0400);border:1px solid #e74c3c;color:#ff6b6b;padding:6px 8px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">\u2694 PRIVATE ARMY \u2014 Break Blockade (\u019250,000)</button>';
+  h += '<button onclick="window._gLanePrivateArmy(\''+from+'\',\''+to+'\')" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#1a0a00,#0d0400);border:1px solid #e74c3c;color:#ff6b6b;padding:6px 8px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">\u2694 PRIVATE ARMY \u2014 Break Blockade (\u01921,000,000)</button>';
   el.innerHTML = h;
 };
 
@@ -3692,7 +3709,7 @@ window._gLaneBlkCounter = function(from, to){
 };
 window._gLanePrivateArmy = function(from, to){
   if(!gToken){ gToast('Log in first','#e74c3c'); return; }
-  if(!confirm('Deploy a private army to break this blockade? Cost: \u019250,000')) return;
+  if(!confirm('Deploy a private army to break this blockade? Cost: \u01921,000,000')) return;
   _sendWSGalaxy({type:'private_army',from:from,to:to});
 };
 
@@ -3754,7 +3771,7 @@ window._gPrivateArmy = function(){
   if(!gToken){ gToast('Log in first','#e74c3c'); return; }
   var lnSel=document.getElementById('gBlkLane'); if(!lnSel) return;
   var parts=lnSel.value.split('|');
-  if(!confirm('Deploy a private army to break this blockade? Cost: \u019250,000')) return;
+  if(!confirm('Deploy a private army to break this blockade? Cost: \u01921,000,000')) return;
   _sendWSGalaxy({type:'private_army',from:parts[0],to:parts[1]});
 };
 
@@ -4696,9 +4713,9 @@ window.renderShippingTab = function(){
   h += '<div class="ship-label">Guard Escort <span style="color:#666;text-transform:none;letter-spacing:0">\u2014 cuts risk, fee lost if caught</span></div>';
   var guards = (smug.guards&&smug.guards.length)?smug.guards:[
     {id:'none',name:'No Escort',feeFrac:0,riskCut:0,desc:'Run it cold.'},
-    {id:'light',name:'Light Escort',feeFrac:0.04,riskCut:0.08,desc:'A couple of hired guns.'},
-    {id:'medium',name:'Armed Convoy',feeFrac:0.10,riskCut:0.16,desc:'Serious muscle.'},
-    {id:'heavy',name:'Private Army',feeFrac:0.22,riskCut:0.26,desc:'Overwhelming force.'}
+    {id:'light',name:'Light Escort',feeFrac:0.0533,riskCut:0.08,desc:'A couple of hired guns.'},
+    {id:'medium',name:'Armed Convoy',feeFrac:0.1333,riskCut:0.16,desc:'Serious muscle.'},
+    {id:'heavy',name:'Private Army',feeFrac:0.2933,riskCut:0.26,desc:'Overwhelming force.'}
   ];
   if(!window._gSmugGuard) window._gSmugGuard='none';
   h += '<div id="gSmugGuards">';

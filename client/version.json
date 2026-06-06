@@ -1,7 +1,7 @@
 {
-  "version": "1.1.1.6",
-  "built": "2026-06-04T02:51:06Z",
+  "version": "1.1.2.0",
+  "built": "2026-06-06T03:03:04Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.1.6",
-  "notes": "More glow cleanup: the company detail panel (#companyDetail), Capital House fund view (#guild-detail), and Wire Credits panel (#transferSection) were still inheriting the global phosphor glow, blurring the 'No base dividend' line, the Capital House type badge, the fund sub-tabs, and the wire transfer-tax disclaimer. All three added to the text-shadow:none exclusion list."
+  "patch": "1.1.2.0",
+  "notes": "Shipping risk rebalance, insurance, and faction-funding rework. Per-hop fly-by risk raised from 2.5% to 10% per intermediate colony. Escort fees up by one third (light ~5%, convoy ~13%, private army ~29%). The cargo console has a new Insurance toggle next to Escort; an insured run that is intercepted refunds half the cargo cost (not the full stake), so losses still bite, and premium plus escort fee are gone regardless. Blockades now cost 1,000,000 to raise and 1,000,000 to break (was 50,000). Faction war funding is now pooled: every contribution to a colony's faction banks into a shared pool, and each full 10,000,000 converts to 1% control with the remainder carried forward, so partial contributions are never lost. Removed the outdated 0.040%/hr savings text from Capital House cards."
 }

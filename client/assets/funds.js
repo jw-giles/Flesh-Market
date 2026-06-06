@@ -42,7 +42,6 @@ function renderGuildDirectory(funds) {
     const color  = TYPE_COLOR[f.type] || '#aaa';
     const label  = TYPE_LABEL[f.type] || '';
     const memberStr = `${f.memberCount}/${f.maxMembers}`;
-    const savStr    = `${(f.savingsRate*100).toFixed(3)}%/hr`;
     const badge     = f.isMember ? '<span style="color:#86ff6a;font-size:.72rem">● MEMBER</span>' : '';
 
     // Lock indicators — server now sends f.locked
@@ -70,7 +69,6 @@ function renderGuildDirectory(funds) {
         </div>
         <div style="font-size:.75rem;opacity:.55;margin-top:3px;display:flex;gap:14px">
           <span>👥 ${memberStr}</span>
-          <span>💰 ${savStr}</span>
           ${f.description ? `<span style="opacity:.5;font-style:italic">${f.description.slice(0,80)}${f.description.length>80?'…':''}</span>` : ''}
         </div>
       </div>`;

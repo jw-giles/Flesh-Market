@@ -4,6 +4,19 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.2.0 (2026-06-06) - shipping risk rebalance, escort/insurance, blockade + war-funding repricing
+
+- **Per-hop shipping risk up 4x** (`server.js`): cargo arbitrage fly-by risk raised from `(hops-1)*0.025` to `(hops-1)*0.10` in both `/api/cargo/quote` and `/api/cargo/ship`. Each intermediate colony now adds 10% interception risk instead of 2.5%, pushing multi-hop runs toward the 10-25% band. NOTE: direct (1-hop) runs are unaffected and still sit at base (~10% corporate, ~15% grey); raise `SHIPPING_BASE_RISK` if those also need to move.
+- **Escort fees +1/3** (`server.js`, `galaxy.js`): `GUARD_TIERS` feeFrac light 0.04 to 0.0533, medium 0.10 to 0.1333, heavy 0.22 to 0.2933. Shared with smuggling, so smuggling escort costs the same 1/3 more. Cargo dropdown labels and the smuggling fallback array updated to match.
+- **Insurance in the cargo console** (`galaxy.js`, `server.js`): added an Insurance checkbox beside Escort. Wires `insure` into `/api/cargo/quote` (now returns `insurancePremium` + `upfrontTotal`) and `insured` into `/api/cargo/ship`. On interception, insurance now refunds **half** the cargo cost (not the full stake), so an insured loss still hurts; premium and escort fee are gone regardless. It does not lower the interception roll. Stacking with an escort pays both off the top.
+- **Blockades repriced 50k to 1M** (`server.js`, `galaxy.js`): `BLOCKADE_THRESHOLD` 50000 to 1_000_000. Governs raise, counter-break, and the Private Army instant-break (all tied to the constant). All five client text strings + stale comments updated.
+- **War funding pooled, 10M per 1%** (`server.js`, `db.js`, `galaxy.js`): `/api/galaxy/fund` no longer converts per-donation. All contributions to a (colony, faction) bank into a shared pool (`war_fund_pool` table, persisted); every full Ƒ10,000,000 in the pool converts to +1% control, remainder carries forward so partial contributions are never wasted. No per-donation cap (pool size + the 96% ceiling are the only limits); SC blocked by the ceiling stays banked. Min donation restored to Ƒ1,000. Endpoint returns `pctGained`/`pctToNext`; both fund toasts show control gained or SC banked toward the next 1%.
+- **Removed outdated savings text** (`funds.js`): dropped the `0.040%/hr` line from Capital House directory cards (fund savings interest has been disabled since v1.0.2.4).
+
+Files: `server/server.js`, `server/db.js`, `client/assets/galaxy.js`, `client/assets/funds.js`, `client/version.json`.
+
+---
+
 ## v1.1.1.6 (2026-06-04) — de-fog company + fund detail panels
 
 - **Crisp detail panels** (`style.css`): extended the glow-exclusion rule to `#companyDetail` (market company detail), `#guild-detail` (Capital House fund view), and `#transferSection` (Wire Credits panel). They were inheriting the global `body` phosphor glow, blurring the "No base dividend" / "Dividend eligible" line, the fund type badge ("Capital House" / "Guild" / "FLSH"), the Overview/Portfolio/Governance/Manage sub-tabs, and the wire transfer-tax disclaimer. One-line CSS change; no logic touched. Follows the same v1.1.1.5 store fix.
