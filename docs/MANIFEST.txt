@@ -1,4 +1,4 @@
-# FleshMarket v1.1.2.1 — MANIFEST
+# FleshMarket v1.1.2.6 — MANIFEST
 
 ## Structure
 
@@ -32,6 +32,7 @@ game/
       account-persist.js    account persistence helpers
       auth-ui.js            auth UI components
       dev-comms.js          dev communications
+      fleshbook.js          Fleshbook in-house social feed (lazy-loaded)
       pnl-livepatch.js      P&L live patching
       pnl-panel.js          P&L panel logic
       pnl-panel.css         P&L panel styles

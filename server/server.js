@@ -89,6 +89,10 @@ import {
   addBugReport, getBugReports, toggleBugUpvote, toggleBugResolved, getBugUpvoters,
   addPlayerReport, getPlayerReports,
   addDevRequest, getDevRequests, handleDevRequest,
+  addAnnouncement, getActiveAnnouncements, clearAnnouncement, pruneExpiredAnnouncements,
+  fbAddPost, fbGetFeed, fbGetReplies, fbAddReply, fbToggleVote,
+  fbDeletePost, fbDeleteReply, fbAddNotification, fbUnreadCount, fbMarkSeen,
+  fbPostOwner, fbReplyOwner, fbEditPost, fbEditReply, fbSetPinned,
   executeStockSplit,
   // Dividend eligibility (7-trading-day holding requirement)
   snapshotAllHoldings, getEligibleDividendQtyBulk, getEligibleFundDividendQtyBulk, DIVIDEND_HOLD_CYCLES,
@@ -4205,6 +4209,155 @@ app.post('/api/comms/requests/handle', requireAdmin, (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, error: 'db_error' }); }
 });
 
+// ─── Fleshbook (in-house social feed) ─────────────────────────────────────────
+function fbPostBlock(p) {
+  if (isDunced(p.id)) return 'dunced';
+  if (isMuted(p.id)) return 'muted';
+  return null;
+}
+const _fbPostTs = new Map(), _fbReplyTs = new Map();
+const FB_POST_COOLDOWN_MS = 30_000, FB_REPLY_COOLDOWN_MS = 12_000;
+function fbCooldownLeft(map, id, ms, isAdmin) {
+  if (isAdmin) return 0;
+  const rem = (map.get(id) || 0) + ms - Date.now();
+  return rem > 0 ? Math.ceil(rem / 1000) : 0;
+}
+function fbNotify(recipientId, postId, fromName, text) {
+  try { fbAddNotification(recipientId, postId, fromName); } catch(_) {}
+  try {
+    broadcastToPlayer(recipientId, { type: 'chat', data: {
+      id: uuidv4(), t: Date.now(), user: 'SYSTEM', text, badge: '💬', color: '#a78bfa', ttlMs: 60000 }});
+    broadcastToPlayer(recipientId, { type: 'fleshbook_unread', data: { count: fbUnreadCount(recipientId) } });
+  } catch(_) {}
+}
+// Resolve @mentions in a body to player ids (deduped, excludes the author, capped)
+function fbMentionIds(body, authorId) {
+  const ids = new Set(); const seen = new Set();
+  const re = /@([A-Za-z0-9_\-]{2,40})/g; let m, iters = 0;
+  while ((m = re.exec(body)) && iters < 12) {
+    iters++;
+    const key = m[1].toLowerCase();
+    if (seen.has(key)) continue; seen.add(key);
+    try { const t = getPlayerByName(m[1]); if (t && t.id !== authorId && t.id !== 'GM') ids.add(t.id); } catch(_) {}
+  }
+  return ids;
+}
+app.get('/api/fleshbook/feed', (req, res) => {
+  try {
+    const viewer = (() => { const t = tokenFrom(req); return t ? getPlayer(t) : null; })();
+    const sort = req.query?.sort === 'top' ? 'top' : 'new';
+    res.json({ ok: true, posts: fbGetFeed(viewer ? viewer.id : null, 50, sort) });
+  } catch(e) { res.json({ ok: false, posts: [] }); }
+});
+app.get('/api/fleshbook/post/:id/replies', (req, res) => {
+  try { res.json({ ok: true, replies: fbGetReplies(Number(req.params.id)) }); }
+  catch(e) { res.json({ ok: false, replies: [] }); }
+});
+app.post('/api/fleshbook/post', requirePlayer, (req, res) => {
+  const p = req.player;
+  const body = String(req.body?.body || '').trim().slice(0, 1000);
+  if (!body) return res.status(400).json({ ok: false, error: 'empty' });
+  const block = fbPostBlock(p);
+  if (block) return res.status(403).json({ ok: false, error: block });
+  const cd = fbCooldownLeft(_fbPostTs, p.id, FB_POST_COOLDOWN_MS, isAdminAccount(p.id));
+  if (cd) return res.status(429).json({ ok: false, error: 'cooldown', seconds: cd });
+  let faction = null; try { faction = getPlayerFaction(p.id); } catch(_) {}
+  const post = fbAddPost({ authorId: p.id, authorName: p.name, faction, body, isGm: false });
+  _fbPostTs.set(p.id, Date.now());
+  for (const mid of fbMentionIds(body, p.id)) fbNotify(mid, post.id, p.name, `📣 ${p.name} mentioned you on Fleshbook.`);
+  res.json({ ok: true, post });
+});
+app.post('/api/fleshbook/reply', requirePlayer, (req, res) => {
+  const p = req.player;
+  const postId = Number(req.body?.postId);
+  const body = String(req.body?.body || '').trim().slice(0, 500);
+  if (!postId || !body) return res.status(400).json({ ok: false, error: 'invalid' });
+  const block = fbPostBlock(p);
+  if (block) return res.status(403).json({ ok: false, error: block });
+  const cd = fbCooldownLeft(_fbReplyTs, p.id, FB_REPLY_COOLDOWN_MS, isAdminAccount(p.id));
+  if (cd) return res.status(429).json({ ok: false, error: 'cooldown', seconds: cd });
+  let faction = null; try { faction = getPlayerFaction(p.id); } catch(_) {}
+  const out = fbAddReply({ postId, authorId: p.id, authorName: p.name, faction, body, isGm: false });
+  if (!out) return res.status(404).json({ ok: false, error: 'post_gone' });
+  _fbReplyTs.set(p.id, Date.now());
+  const notified = new Set([p.id]);
+  if (out.postAuthorId && !notified.has(out.postAuthorId) && out.postAuthorId !== 'GM') {
+    fbNotify(out.postAuthorId, postId, p.name, `💬 ${p.name} replied to your Fleshbook post.`);
+    notified.add(out.postAuthorId);
+  }
+  for (const mid of fbMentionIds(body, p.id)) {
+    if (notified.has(mid)) continue;
+    fbNotify(mid, postId, p.name, `📣 ${p.name} mentioned you on Fleshbook.`);
+    notified.add(mid);
+  }
+  res.json({ ok: true, reply: out.reply });
+});
+app.post('/api/fleshbook/vote', requirePlayer, (req, res) => {
+  const postId = Number(req.body?.postId);
+  if (!postId) return res.status(400).json({ ok: false, error: 'invalid' });
+  res.json({ ok: true, ...fbToggleVote(postId, req.player.id) });
+});
+app.get('/api/fleshbook/unread', requirePlayer, (req, res) => {
+  res.json({ ok: true, count: fbUnreadCount(req.player.id) });
+});
+app.post('/api/fleshbook/seen', requirePlayer, (req, res) => {
+  fbMarkSeen(req.player.id);
+  res.json({ ok: true });
+});
+// Delete: owner or admin (soft delete)
+app.post('/api/fleshbook/delete', requirePlayer, (req, res) => {
+  const p = req.player; const admin = isAdminAccount(p.id);
+  const postId = Number(req.body?.postId);
+  const replyId = Number(req.body?.replyId);
+  if (postId) {
+    const owner = fbPostOwner(postId);
+    if (owner === null) return res.json({ ok: true });
+    if (!admin && owner !== p.id) return res.status(403).json({ ok: false, error: 'forbidden' });
+    fbDeletePost(postId);
+  }
+  if (replyId) {
+    const owner = fbReplyOwner(replyId);
+    if (owner === null) return res.json({ ok: true });
+    if (!admin && owner !== p.id) return res.status(403).json({ ok: false, error: 'forbidden' });
+    fbDeleteReply(replyId);
+  }
+  res.json({ ok: true });
+});
+// Edit: owner or admin
+app.post('/api/fleshbook/edit', requirePlayer, (req, res) => {
+  const p = req.player; const admin = isAdminAccount(p.id);
+  const postId = Number(req.body?.postId);
+  const replyId = Number(req.body?.replyId);
+  const body = String(req.body?.body || '').trim();
+  if (!body) return res.status(400).json({ ok: false, error: 'empty' });
+  if (postId) {
+    const owner = fbPostOwner(postId);
+    if (owner === null) return res.status(404).json({ ok: false, error: 'gone' });
+    if (!admin && owner !== p.id) return res.status(403).json({ ok: false, error: 'forbidden' });
+    const b = body.slice(0, 1000); fbEditPost(postId, b); return res.json({ ok: true, body: b });
+  }
+  if (replyId) {
+    const owner = fbReplyOwner(replyId);
+    if (owner === null) return res.status(404).json({ ok: false, error: 'gone' });
+    if (!admin && owner !== p.id) return res.status(403).json({ ok: false, error: 'forbidden' });
+    const b = body.slice(0, 500); fbEditReply(replyId, b); return res.json({ ok: true, body: b });
+  }
+  res.status(400).json({ ok: false, error: 'invalid' });
+});
+// Pin / unpin (admin)
+app.post('/api/fleshbook/pin', requireAdmin, (req, res) => {
+  const postId = Number(req.body?.postId);
+  if (!postId) return res.status(400).json({ ok: false, error: 'invalid' });
+  fbSetPinned(postId, !!req.body?.pinned);
+  res.json({ ok: true, pinned: !!req.body?.pinned });
+});
+app.post('/api/fleshbook/gm-post', requireAdmin, (req, res) => {
+  const author = (String(req.body?.author || '').trim().slice(0, 40)) || 'Mr. Flesh';
+  const body = String(req.body?.body || '').trim().slice(0, 1000);
+  if (!body) return res.status(400).json({ ok: false, error: 'empty' });
+  res.json({ ok: true, post: fbAddPost({ authorId: 'GM', authorName: author, faction: 'flesh', body, isGm: true }) });
+});
+
 app.get('/health',(req,res)=>{res.json({status:'ok',uptime:process.uptime(),companies:companies.length,time:Date.now()});});
 
 // ─── REST: Admin / Moderation ─────────────────────────────────────────────────
@@ -4413,16 +4566,29 @@ app.post('/api/admin/timeout', requireAdmin, (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, error: String(e) }); }
 });
 
-// Server-wide admin broadcast message
+// Persisted, pinned, expiring announcement. Shared by REST + god_broadcast WS cmd.
+function postAnnouncement(text, author, durationMin) {
+  const dur = Math.max(1, Math.min(10080, Number(durationMin) || 30)); // 1 min .. 7 days
+  const a = addAnnouncement(String(text).slice(0, 500), author, dur * 60 * 1000);
+  broadcast({ type: 'announcement_set', data: a });
+  return a;
+}
+
+// Server-wide admin announcement (REST) - persisted + pinned + expiring
 app.post('/api/admin/broadcast', requireAdmin, (req, res) => {
   try {
-    const { text } = req.body || {};
+    const { text, durationMin } = req.body || {};
     if (!text) return res.status(400).json({ ok: false, error: 'text_required' });
-    broadcast({ type: 'admin_broadcast', data: {
-      text: String(text).slice(0, 500),
-      from: req.admin.name,
-      t: Date.now()
-    }});
+    const a = postAnnouncement(text, req.admin.name, durationMin);
+    res.json({ ok: true, id: a.id });
+  } catch(e) { res.status(500).json({ ok: false, error: String(e) }); }
+});
+
+// Clear a single pinned announcement early
+app.post('/api/admin/broadcast/clear', requireAdmin, (req, res) => {
+  try {
+    const id = Number(req.body?.id);
+    if (id) { clearAnnouncement(id); broadcast({ type: 'announcement_clear', data: { id } }); }
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, error: String(e) }); }
 });
@@ -4474,27 +4640,45 @@ function tokenFrom(req){
   return null;
 }
 
-// ── Chat history ring buffer (30 min window, max 200 msgs) ──────────────────
-const CHAT_HISTORY = [];
-const CHAT_HISTORY_MS = 30 * 60 * 1000; // 30 minutes
+// ── Chat history: per-room count-bounded rings, no time expiry ───────────────
+// Count-bounded (not time-bounded) so quiet rooms keep scrollback and do not read
+// as dead. Per-room (not per-user) so memory is fixed at rooms x CHAT_RING_MAX
+// regardless of population. Transient notifications (data.transient) never persist.
+const CHAT_RING_MAX = 200; // per room. ~20 rooms x 200 x ~0.4KB is well under 2MB.
+const chatRings = new Map(); // "channel:room" -> msg[]
+function ringKey(d) {
+  const ch = (d && d.channel) || 'global';
+  const room = Math.min(5, Math.max(1, parseInt(d && d.room) || 1));
+  return ch + ':' + room;
+}
 function pushChatHistory(msg) {
-  const now = Date.now();
-  CHAT_HISTORY.push({ ...msg, _ts: now });
-  // Prune messages older than 30 min
-  while (CHAT_HISTORY.length && (now - CHAT_HISTORY[0]._ts) > CHAT_HISTORY_MS) {
-    CHAT_HISTORY.shift();
-  }
-  if (CHAT_HISTORY.length > 200) CHAT_HISTORY.shift();
+  const d = msg.data || {};
+  if (d.transient) return; // notifications are not scrollback
+  const key = ringKey(d);
+  let ring = chatRings.get(key);
+  if (!ring) { ring = []; chatRings.set(key, ring); }
+  ring.push(msg);
+  if (ring.length > CHAT_RING_MAX) ring.shift();
 }
 function getChatHistory() {
-  const cutoff = Date.now() - CHAT_HISTORY_MS;
-  return CHAT_HISTORY.filter(m => m._ts >= cutoff);
+  // Flatten all rooms. Client routes each by data.channel/room; intra-room order kept.
+  const out = [];
+  for (const ring of chatRings.values()) for (const m of ring) out.push(m);
+  return out;
 }
 
 function broadcast(msg){const data=JSON.stringify(msg);wss.clients.forEach(ws=>{if(ws.readyState===1)ws.send(data);});
   // Track chat messages for new-login history
   if (msg.type === 'chat' || msg.type === 'system_message') pushChatHistory(msg);
 }
+
+// Expire pinned announcements and tell clients to drop them
+setInterval(() => {
+  try {
+    const cleared = pruneExpiredAnnouncements();
+    for (const id of cleared) broadcast({ type: 'announcement_clear', data: { id } });
+  } catch(_) {}
+}, 30_000);
 
 const playerSockets = new Map();
 function broadcastToPlayer(playerId, msg) {
@@ -4984,6 +5168,11 @@ wss.on('connection',(ws,req)=>{
     // Send last 30min of chat history to new connection
     const hist = getChatHistory();
     if (hist.length) ws.send(JSON.stringify({type:'chat_history',data:{messages:hist}}));
+    // Send active pinned announcements (survives reconnect / alt-login)
+    try {
+      const anns = getActiveAnnouncements();
+      if (anns.length) ws.send(JSON.stringify({ type:'announcements', data: anns }));
+    } catch(_) {}
     // Send open limit orders on connect
     ws.send(JSON.stringify({type:'orders',data:getPlayerOrders(player.id)}));
     // Auto-enroll dev/admin accounts into guild on connect
@@ -5894,12 +6083,13 @@ wss.on('connection',(ws,req)=>{
         ws.send(JSON.stringify({ type: 'god_player_list', data: { players: lb } }));
       }
 
-      // ── god_broadcast: styled broadcast with GOD badge ────────────────────
+      // ── god_broadcast: persisted, pinned, expiring announcement ───────────
       else if (cmd === 'god_broadcast') {
         const text = String(msg.text || '').trim().slice(0, 500);
         if (!text) return err('Text required.');
-        broadcast({ type: 'admin_broadcast', data: { text, from: `⚡ ${actor.name}`, t: Date.now(), is_god: true } });
-        ack(`✓ God broadcast sent.`);
+        const a = postAnnouncement(text, `⚡ ${actor.name}`, msg.durationMin);
+        const mins = Math.round((a.expires_at - a.created_at) / 60000);
+        ack(`✓ Announcement pinned for ${mins} min.`);
       }
 
       // ── dunce: throw a player into the dunce corner ───────────────────────

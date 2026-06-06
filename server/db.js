@@ -2169,7 +2169,57 @@ export function initItemTables() {
     ts          INTEGER NOT NULL,
     handled     INTEGER NOT NULL DEFAULT 0
   );
+  CREATE TABLE IF NOT EXISTS announcements (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    text        TEXT NOT NULL,
+    author      TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    expires_at  INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS fb_posts (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    author_id   TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    faction     TEXT,
+    body        TEXT NOT NULL,
+    is_gm       INTEGER NOT NULL DEFAULT 0,
+    created_at  INTEGER NOT NULL,
+    deleted     INTEGER NOT NULL DEFAULT 0,
+    edited      INTEGER NOT NULL DEFAULT 0,
+    pinned      INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS fb_replies (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id     INTEGER NOT NULL,
+    author_id   TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    faction     TEXT,
+    body        TEXT NOT NULL,
+    is_gm       INTEGER NOT NULL DEFAULT 0,
+    created_at  INTEGER NOT NULL,
+    deleted     INTEGER NOT NULL DEFAULT 0,
+    edited      INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS fb_votes (
+    post_id     INTEGER NOT NULL,
+    player_id   TEXT NOT NULL,
+    PRIMARY KEY (post_id, player_id)
+  );
+  CREATE TABLE IF NOT EXISTS fb_notifications (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient_id TEXT NOT NULL,
+    post_id      INTEGER NOT NULL,
+    from_name    TEXT NOT NULL,
+    created_at   INTEGER NOT NULL,
+    seen         INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_fb_replies_post ON fb_replies(post_id);
+  CREATE INDEX IF NOT EXISTS idx_fb_notif_recip ON fb_notifications(recipient_id, seen);
   `);
+  // Migrations for fb tables created before edited/pinned existed (e.g. test DBs)
+  try { db.exec('ALTER TABLE fb_posts ADD COLUMN edited INTEGER NOT NULL DEFAULT 0'); } catch(_){}
+  try { db.exec('ALTER TABLE fb_posts ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0'); } catch(_){}
+  try { db.exec('ALTER TABLE fb_replies ADD COLUMN edited INTEGER NOT NULL DEFAULT 0'); } catch(_){}
 }
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
@@ -2462,6 +2512,102 @@ export function getDevRequests() {
 export function handleDevRequest(id) {
   stmt('UPDATE comms_requests SET handled=1 WHERE id=?').run(id);
 }
+
+// ─── Announcements (DB-persisted, pinned, expiring) ──────────────────────────
+// Survive PM2 restarts and alt-logins, unlike the old in-flight admin_broadcast.
+export function addAnnouncement(text, author, durationMs) {
+  const now = Date.now();
+  const expires_at = now + Math.max(1000, durationMs | 0);
+  const info = stmt('INSERT INTO announcements(text, author, created_at, expires_at) VALUES(?,?,?,?)')
+    .run(text, author, now, expires_at);
+  return { id: Number(info.lastInsertRowid), text, author, created_at: now, expires_at };
+}
+export function getActiveAnnouncements() {
+  return stmt('SELECT id, text, author, created_at, expires_at FROM announcements WHERE expires_at > ? ORDER BY created_at ASC')
+    .all(Date.now());
+}
+export function clearAnnouncement(id) {
+  stmt('DELETE FROM announcements WHERE id=?').run(id | 0);
+}
+export function pruneExpiredAnnouncements() {
+  const now = Date.now();
+  const expired = stmt('SELECT id FROM announcements WHERE expires_at <= ?').all(now).map(r => r.id);
+  if (expired.length) stmt('DELETE FROM announcements WHERE expires_at <= ?').run(now);
+  return expired; // ids to broadcast as cleared
+}
+
+// ─── Fleshbook (in-house social feed) ────────────────────────────────────────
+export function fbAddPost({ authorId, authorName, faction, body, isGm }) {
+  const ts = Date.now();
+  const info = stmt('INSERT INTO fb_posts(author_id,author_name,faction,body,is_gm,created_at) VALUES(?,?,?,?,?,?)')
+    .run(authorId, authorName, faction || null, body, isGm ? 1 : 0, ts);
+  return { id: Number(info.lastInsertRowid), author_id: authorId, author_name: authorName,
+    faction: faction || null, body, is_gm: !!isGm, created_at: ts, upvotes: 0, reply_count: 0, voted: false };
+}
+export function fbGetFeed(viewerId, limit, sort) {
+  const lim = Math.min(100, Math.max(1, limit || 50));
+  const order = sort === 'top'
+    ? 'p.pinned DESC, upvotes DESC, p.created_at DESC, p.id DESC'
+    : 'p.pinned DESC, p.created_at DESC, p.id DESC';
+  const posts = stmt(`
+    SELECT p.id, p.author_id, p.author_name, p.faction, p.body, p.is_gm, p.created_at, p.edited, p.pinned,
+      (SELECT COUNT(*) FROM fb_votes WHERE post_id=p.id) AS upvotes,
+      (SELECT COUNT(*) FROM fb_replies WHERE post_id=p.id AND deleted=0) AS reply_count
+    FROM fb_posts p WHERE p.deleted=0
+    ORDER BY ${order} LIMIT ?
+  `).all(lim);
+  const voted = new Set(viewerId
+    ? stmt('SELECT post_id FROM fb_votes WHERE player_id=?').all(viewerId).map(r => r.post_id) : []);
+  return posts.map(p => ({ ...p, is_gm: !!p.is_gm, edited: !!p.edited, pinned: !!p.pinned, voted: voted.has(p.id) }));
+}
+export function fbGetReplies(postId) {
+  return stmt(`SELECT id,post_id,author_id,author_name,faction,body,is_gm,created_at,edited
+    FROM fb_replies WHERE post_id=? AND deleted=0 ORDER BY created_at ASC LIMIT 200`)
+    .all(postId | 0).map(r => ({ ...r, is_gm: !!r.is_gm, edited: !!r.edited }));
+}
+export function fbAddReply({ postId, authorId, authorName, faction, body, isGm }) {
+  const post = stmt('SELECT id, author_id, deleted FROM fb_posts WHERE id=?').get(postId | 0);
+  if (!post || post.deleted) return null;
+  const ts = Date.now();
+  const info = stmt('INSERT INTO fb_replies(post_id,author_id,author_name,faction,body,is_gm,created_at) VALUES(?,?,?,?,?,?,?)')
+    .run(postId | 0, authorId, authorName, faction || null, body, isGm ? 1 : 0, ts);
+  return {
+    reply: { id: Number(info.lastInsertRowid), post_id: postId | 0, author_id: authorId,
+      author_name: authorName, faction: faction || null, body, is_gm: !!isGm, created_at: ts },
+    postAuthorId: post.author_id
+  };
+}
+export function fbToggleVote(postId, playerId) {
+  const ex = stmt('SELECT 1 FROM fb_votes WHERE post_id=? AND player_id=?').get(postId | 0, playerId);
+  if (ex) stmt('DELETE FROM fb_votes WHERE post_id=? AND player_id=?').run(postId | 0, playerId);
+  else stmt('INSERT OR IGNORE INTO fb_votes(post_id,player_id) VALUES(?,?)').run(postId | 0, playerId);
+  const c = stmt('SELECT COUNT(*) AS c FROM fb_votes WHERE post_id=?').get(postId | 0);
+  return { upvotes: c?.c || 0, voted: !ex };
+}
+export function fbDeletePost(postId) { stmt('UPDATE fb_posts SET deleted=1 WHERE id=?').run(postId | 0); }
+export function fbDeleteReply(replyId) { stmt('UPDATE fb_replies SET deleted=1 WHERE id=?').run(replyId | 0); }
+export function fbAddNotification(recipientId, postId, fromName) {
+  stmt('INSERT INTO fb_notifications(recipient_id,post_id,from_name,created_at) VALUES(?,?,?,?)')
+    .run(recipientId, postId | 0, fromName, Date.now());
+}
+export function fbUnreadCount(playerId) {
+  const r = stmt('SELECT COUNT(*) AS c FROM fb_notifications WHERE recipient_id=? AND seen=0').get(playerId);
+  return r?.c || 0;
+}
+export function fbMarkSeen(playerId) {
+  stmt('UPDATE fb_notifications SET seen=1 WHERE recipient_id=? AND seen=0').run(playerId);
+}
+export function fbPostOwner(id) {
+  const r = stmt('SELECT author_id FROM fb_posts WHERE id=? AND deleted=0').get(id | 0);
+  return r ? r.author_id : null;
+}
+export function fbReplyOwner(id) {
+  const r = stmt('SELECT author_id FROM fb_replies WHERE id=? AND deleted=0').get(id | 0);
+  return r ? r.author_id : null;
+}
+export function fbEditPost(id, body) { stmt('UPDATE fb_posts SET body=?, edited=1 WHERE id=?').run(body, id | 0); }
+export function fbEditReply(id, body) { stmt('UPDATE fb_replies SET body=?, edited=1 WHERE id=?').run(body, id | 0); }
+export function fbSetPinned(id, pinned) { stmt('UPDATE fb_posts SET pinned=? WHERE id=?').run(pinned ? 1 : 0, id | 0); }
 
 // ─── Stock Split Helper ─────────────────────────────────────────────────────
 // Multiplies all holdings of a symbol by a ratio and adjusts basis per-share.

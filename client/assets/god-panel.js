@@ -232,8 +232,22 @@
   window.godBroadcast = function() {
     const text = document.getElementById('god-bcast-text')?.value?.trim();
     if (!text) { godFeedback('Enter broadcast text', '#ff9900'); return; }
-    godSend({ cmd: 'god_broadcast', text });
+    const mins = parseInt(document.getElementById('god-bcast-mins')?.value, 10) || 30;
+    godSend({ cmd: 'god_broadcast', text, durationMin: mins });
     document.getElementById('god-bcast-text').value = '';
+  };
+  window.godFleshbookPost = function() {
+    const author = document.getElementById('god-fb-author')?.value?.trim() || 'Mr. Flesh';
+    const body = document.getElementById('god-fb-body')?.value?.trim();
+    if (!body) { godFeedback('Enter post body', '#ff9900'); return; }
+    fetch('/api/fleshbook/gm-post', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-auth-token': (window.FM_TOKEN || window.__fmToken || '') },
+      body: JSON.stringify({ author, body })
+    }).then(r => r.json()).then(d => {
+      if (d.ok) { godFeedback('✓ Posted to Fleshbook', '#86ff6a'); document.getElementById('god-fb-body').value = ''; }
+      else { godFeedback('Post failed: ' + (d.error || '?'), '#ff6644'); }
+    }).catch(() => godFeedback('Post failed', '#ff6644'));
   };
   window.godResetPlayer = function() {
     const name = document.getElementById('god-reset-name')?.value?.trim();

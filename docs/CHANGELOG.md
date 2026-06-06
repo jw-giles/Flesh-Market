@@ -4,6 +4,80 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.2.6 (2026-06-06) - Fleshbook UI reskin (in-universe terminal feed)
+
+- **Removed the top blurb** (`fleshbook.js`): the "the colonies talk, Mr. Flesh listens..." line read as filler and contained an em dash (an AI tell banned from player-visible text). Gone.
+- **Platform-matched chrome** (`fleshbook.js`, `index.html`): the panel previously used `#4ecdc4` (the Coalition faction colour) as its accent and Courier, so it looked like a teal app bolted onto the game. Now uses the platform tokens: amber (`#f0b454`) and green chrome, `IBM Plex Mono` inherited from the body, dark green-tinted surfaces. A compact sticky terminal header replaces the paragraph: FLESHBOOK wordmark, a dim PUBLIC FEED label, and a small live indicator.
+- **Faction colour reserved for identity** (`fleshbook.js`): each post carries a left accent stripe in the author's faction colour (gold if pinned), and the faction label is uppercased next to the name. GM posts are tagged FLESH CORP in gold.
+- **Vocabulary** (`fleshbook.js`): upvote is reframed as a signal boost (▲) since boost is already the platform's language; replies collapse to a ↳ glyph with a count; the post button reads BROADCAST; empty state reads "No broadcasts yet." No em dashes in any player-visible string.
+- **Layout fix** (`index.html`): the Fleshbook tab overlapped the tab bar. Cause: every other pane is listed in the `#marketTab,...,#bugsTab{flex:1;min-height:0;overflow-y:auto}` rule in `style.css`, but `#fleshbookTab` was not, so it had no height constraint while still carrying the `margin:-8px` copied from bugsTab, pulling it up into the tabs. Gave the container `flex:1;min-height:0` inline and dropped the negative margin so it sits below the tabs like the other panes.
+- No behaviour or API changes; this is presentation only.
+
+Files: `client/assets/fleshbook.js`, `client/index.html`, `client/version.json`.
+
+Cumulative over v1.1.2.5 / v1.1.2.4 / v1.1.2.3 / v1.1.2.2.
+
+---
+
+## v1.1.2.5 (2026-06-06) - Fleshbook features: rate limit, edit/delete own, sort, pin, mentions, composer polish
+
+- **Rate limits** (`server.js`): per-author cooldowns via in-memory maps, 30s for posts and 12s for replies, returned as HTTP 429 with `seconds` remaining. Admin/dev accounts are exempt so seeding is not throttled.
+- **Edit + delete own content** (`db.js`, `server.js`, `fleshbook.js`): `/api/fleshbook/delete` changed from admin-only to owner-or-admin; new `/api/fleshbook/edit`. Added `edited` columns to `fb_posts` and `fb_replies` (with ALTER migrations for already-created test DBs), `fbPostOwner` / `fbReplyOwner` / `fbEditPost` / `fbEditReply`. Client shows edit/delete on your own items (and devs on anything), inline edit box, and an "(edited)" marker. Server enforces ownership by `author_id` regardless of the client.
+- **New vs Top sort** (`db.js`, `server.js`, `fleshbook.js`): `fbGetFeed` takes a sort arg; Top orders by upvote count. Added `p.id DESC` as a final tiebreaker so newest-first is deterministic even when two posts land in the same millisecond. Client sort toggle re-fetches.
+- **Dev pin** (`db.js`, `server.js`, `fleshbook.js`): new `pinned` column + `fbSetPinned` + `/api/fleshbook/pin` (admin). Pinned posts sort first in both New and Top and show a 📌 marker; dev gets a pin/unpin control.
+- **@mention notifications** (`server.js`): both posts and replies parse `@name` (deduped, capped at 12 scans, excludes self/GM), resolve via `getPlayerByName`, and notify each mentioned player through the shared `fbNotify` helper (chat cross-post + unread dot), reusing the reply-notification path. Reply recipients are deduped so the OP is not pinged twice when also mentioned. Client highlights `@mentions` in post and reply bodies.
+- **Composer polish** (`fleshbook.js`): live character counter (`n / 1000`) and Enter-to-post with Shift+Enter for a newline. Reply inputs already send on Enter.
+- **Fix**: the "No posts yet" empty-state line was removed by a selector matching the `style` attribute for text it never contained, so it lingered under the first post. Tagged it `.fb-empty` and remove by class.
+
+Files: `server/db.js`, `server/server.js`, `client/assets/fleshbook.js`, `client/version.json`.
+
+Cumulative over v1.1.2.4 (Fleshbook base), v1.1.2.3 (chat liveliness), v1.1.2.2 (chat robustness). One deploy ships all of them.
+
+---
+
+## v1.1.2.4 (2026-06-06) - Fleshbook: in-house social feed
+
+- **Feed + schema** (`db.js`): new `fb_posts`, `fb_replies`, `fb_votes`, `fb_notifications` tables with indices on `fb_replies(post_id)` and `fb_notifications(recipient_id, seen)`. Functions: `fbAddPost`, `fbGetFeed` (returns upvote count, reply count, and the viewer's own vote state in one query), `fbGetReplies`, `fbAddReply` (returns the post author for notification routing), `fbToggleVote`, `fbDeletePost` / `fbDeleteReply` (soft delete via a `deleted` flag), `fbAddNotification`, `fbUnreadCount`, `fbMarkSeen`. All DB functions runtime-tested end to end against a temp database.
+- **Routes** (`server.js`): `GET /api/fleshbook/feed` (open; reads token if present for vote state), `GET /api/fleshbook/post/:id/replies`, `POST /api/fleshbook/post`, `POST /api/fleshbook/reply`, `POST /api/fleshbook/vote`, `GET /api/fleshbook/unread`, `POST /api/fleshbook/seen`, `POST /api/fleshbook/delete` (admin), `POST /api/fleshbook/gm-post` (admin, in-character). Posting and replying are gated on mute/dunce state via `fbPostBlock`, reusing the existing moderation system.
+- **Reply notification loop** (`server.js`): when someone replies to your post, the server cross-posts a transient 60s line into your chat ("X replied to your Fleshbook post") and pushes a `fleshbook_unread` count so the tab dot lights even before the module loads. Self-replies and replies to GM posts do not notify.
+- **Client module** (`fleshbook.js`, new, lazy-loaded): composer, feed render with faction-coloured author tags and GM gold badge, per-post upvote toggle, expand-to-replies with an inline reply box, relative timestamps refreshed every 60s, and dev-only soft-delete controls. Mirrors the existing lazy-tab pattern (`window.fleshbookTabLoad`).
+- **Layout fix** (`index.html`): `#fleshbookTab` was first inserted just outside the center panel close, so it rendered in the chat column with the main area blank. Moved inside the center `panel` as a sibling of the other tab panes (mirrors `#bugsTab`), so it renders in the main content area.
+- **Wiring** (`index.html`, `core.js`, `god-panel.js`): new "📣 Fleshbook" main tab with an unread dot; `core.js` shows/hides + lazy-loads it, handles `fleshbook_unread`, and fetches the unread count on `fm:authed` so the dot is correct on login. New God panel control posts to the feed in character (default author "Mr. Flesh", tagged GM). Added `fleshbook.js` to the MANIFEST.
+
+Anti-ghost-town note: the GM posting path exists so the feed is never empty and reads as in-fiction corporate bulletins rather than an abandoned board. Seed it before pointing players at it.
+
+Files: `server/db.js`, `server/server.js`, `client/assets/fleshbook.js` (new), `client/assets/core.js`, `client/assets/god-panel.js`, `client/index.html`, `client/version.json`, `docs/MANIFEST.txt`.
+
+Cumulative over v1.1.2.3 (chat liveliness) and v1.1.2.2 (chat robustness).
+
+---
+
+## v1.1.2.3 (2026-06-06) - chat liveliness: display cap, ring match, relative timestamps
+
+- **Client display cap 15 to 200** (`core.js`): `addChat` trimmed each pane to 15 nodes, so even though the server hands a new connection up to a full room of history, the client showed only the most recent 15 and evicted one on every new line. This was the real reason chat felt short. Raised `MAX_CHAT_MSGS` to 200; the client now shows the scrollback the server actually keeps.
+- **Server ring 120 to 200** (`server.js`): bumped `CHAT_RING_MAX` to match the client cap so the model is simply "the client shows everything the server retained." Still well under ~2MB total, fixed regardless of population.
+- **Relative timestamps** (`core.js`): each chat line now carries a dim inline relative time (`now` / `5m` / `2h` / `1d`) with the absolute time on hover, refreshed in place every 60s via a single `.cm-time` sweep. Undated scrollback could not signal whether a room was active-now or stale; the timestamp is the dead-or-alive signal. Styled small and low-opacity in the line's own colour to sit inside the phosphor aesthetic rather than fight it. Falls back to render-time `Date.now()` for lines that ship without a `t` (e.g. local system notices).
+- Decided against a separate system room: mechanical notifications (income, confirms, dividends, fills) keep their 60s TTL and remain in the active room. Lore/social broadcasts (faction, president, splits) stay in global as ambient liveliness.
+
+Files: `server/server.js`, `client/assets/core.js`, `client/version.json`.
+
+Cumulative over v1.1.2.2 (per-room history, transient TTL, pinned announcements).
+
+---
+
+## v1.1.2.2 (2026-06-06) - chat robustness: per-room history, transient TTL, pinned announcements
+
+- **Per-room count-bounded chat history** (`server.js`): replaced the single 30-minute, 200-message global ring (`CHAT_HISTORY` / `CHAT_HISTORY_MS`) with per-room rings keyed by `channel:room`, capped at `CHAT_RING_MAX` (120) each with no time expiry. Quiet rooms now keep scrollback instead of pruning to empty and reading as a dead server. Memory is fixed at rooms x 120 regardless of population (rejected the per-user-cap idea: per-user is unbounded in population and would cost more memory, not less). Messages flagged `data.transient` are never stored.
+- **Transient notification TTL** (`core.js`): `addChat` now honours an optional `ttlMs` and self-removes the line after it elapses. Applied 60s TTL to passive income, `chat_system` confirms, dividend, and limit-fill lines. Faction / president / stock-split broadcasts (`type:'chat'`, `user:'SYSTEM'`) carry no TTL and remain as scrollback. Most of these notifications were already per-socket (never in history), so this is the client-side half of the same cut.
+- **Persisted pinned announcements** (`db.js`, `server.js`, `core.js`, `god-panel.js`, `index.html`): new `announcements` table (text, author, created_at, expires_at) with `addAnnouncement` / `getActiveAnnouncements` / `clearAnnouncement` / `pruneExpiredAnnouncements`. The dev-panel God Broadcast now pins a DB-backed announcement above every chat room for a duration set in the panel (new "Pin duration (min)" input, default 30, range 1 min .. 7 days). Active announcements are re-sent on every WS connect, so they survive PM2 restarts and alt-logins. A 30s server loop expires them and broadcasts `announcement_clear`; the client also self-expires each banner at its `expires_at`. New REST routes `/api/admin/broadcast` (now persists + takes `durationMin`) and `/api/admin/broadcast/clear`.
+- **Bug fixed**: admin announcements vanished when logging in on a second account. Root cause: the old `admin_broadcast` was broadcast live but never written to chat history and rendered as a scrolling line, so a fresh connection never received it. Announcements are now persistent server state, not an in-flight message.
+
+Files: `server/server.js`, `server/db.js`, `client/assets/core.js`, `client/assets/god-panel.js`, `client/index.html`, `client/version.json`.
+
+Note: Fleshbook (in-house social feed) is designed but not in this build. Backend + tab are gated on scope confirmation (single global feed, one-level replies, upvote, reply-notification dot, dev-pin).
+
+---
+
 ## v1.1.2.1 (2026-06-06) - blockade funding status bar + durability
 
 - **Two-phase blockade status bar** (`galaxy.js`): the blockade panel now shows a live bar for the selected lane. Building phase fills toward the Ƒ1,000,000 activation threshold; active phase shows remaining integrity as counter-funding drains the pool toward 0. Refreshes on lane select, on every `blockade_update`, and on panel open.

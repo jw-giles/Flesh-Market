@@ -1265,6 +1265,23 @@ try {
   }
 } catch(e) {}
 
+function fmtRel(ts) {
+  const s = Math.max(0, (Date.now() - ts) / 1000);
+  if (s < 45) return 'now';
+  if (s < 3600) return Math.round(s / 60) + 'm';
+  if (s < 86400) return Math.round(s / 3600) + 'h';
+  return Math.round(s / 86400) + 'd';
+}
+// Refresh relative timestamps in place so scrollback keeps signalling room age.
+setInterval(function(){
+  try {
+    document.querySelectorAll('.cm-time').forEach(function(el){
+      const ts = Number(el.dataset.ts);
+      if (ts) el.textContent = fmtRel(ts);
+    });
+  } catch(_) {}
+}, 60000);
+
 function addChat(item){
   const channel = item.channel || 'global';
   const ROOMED = ['global','patreon','guild','unmod'];
@@ -1308,7 +1325,9 @@ function addChat(item){
     : '';
   div.className = 'cm chat-msg';
   div.dataset.user = item.user || '';
-  div.innerHTML = `${badge}${userSpan}: <span style="color:${isSystem ? '#7fc090' : '#f0b454'}">${text}</span>${blockBtnHtml}`;
+  const _ts = Number(item.t) || Date.now();
+  const _timeSpan = `<span class="cm-time" data-ts="${_ts}" title="${new Date(_ts).toLocaleString()}" style="font-size:.6rem;opacity:.4;margin-left:6px;color:${color};white-space:nowrap">${fmtRel(_ts)}</span>`;
+  div.innerHTML = `${badge}${userSpan}: <span style="color:${isSystem ? '#7fc090' : '#f0b454'}">${text}</span>${_timeSpan}${blockBtnHtml}`;
 
   // Show block button on hover
   div.addEventListener('mouseenter', function(){ var b=div.querySelector('.chat-block-btn'); if(b) b.style.display='inline'; });
@@ -1347,8 +1366,12 @@ function addChat(item){
   const ph = box.querySelector('.chat-ph');
   if (ph) ph.remove();
   box.appendChild(div);
-  // Trim old messages to prevent infinite scroll — keep last 20 per pane
-  const MAX_CHAT_MSGS = 15;
+  // Transient notifications (passive income, confirms) self-remove after their TTL.
+  if (item.ttlMs && Number(item.ttlMs) > 0) {
+    setTimeout(function(){ try { div.remove(); } catch(_) {} }, Number(item.ttlMs));
+  }
+  // Keep last N per pane — matches the server ring so the client shows all retained history.
+  const MAX_CHAT_MSGS = 200;
   while (box.children.length > MAX_CHAT_MSGS) { box.removeChild(box.firstChild); }
   box.scrollTop = box.scrollHeight;
 
@@ -1368,6 +1391,52 @@ function addChat(item){
   }
 }
 
+// ── Pinned announcements (persisted server-side, shown above all chat rooms) ──
+function ensureAnnounceBar() {
+  let bar = document.getElementById('chatAnnounce');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'chatAnnounce';
+    bar.style.cssText = 'display:flex;flex-direction:column;gap:3px;padding:0;margin:0 0 4px';
+    const box = document.getElementById('chatBox');
+    if (box) box.insertBefore(bar, box.firstChild);
+  }
+  return bar;
+}
+function setAnnouncement(a) {
+  if (!a || !a.id) return;
+  const bar = ensureAnnounceBar();
+  let row = document.getElementById('ann-' + a.id);
+  if (!row) { row = document.createElement('div'); row.id = 'ann-' + a.id; bar.appendChild(row); }
+  row.style.cssText = 'background:#1a0f00;border:1px solid #ff9944;border-left:3px solid #ff9944;'
+    + 'color:#ffc38a;font-size:.74rem;padding:5px 8px;letter-spacing:.02em;line-height:1.3';
+  const safe = String(a.text || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  row.innerHTML = '<b style="color:#ff9944">📢 ' + (a.author || 'ADMIN') + ':</b> ' + safe;
+  const ms = (a.expires_at || 0) - Date.now();
+  if (ms > 0) setTimeout(function(){ removeAnnouncement(a.id); }, ms);
+  else removeAnnouncement(a.id);
+}
+function removeAnnouncement(id) {
+  const row = document.getElementById('ann-' + id);
+  if (row) row.remove();
+}
+window.setAnnouncement = setAnnouncement;
+window.removeAnnouncement = removeAnnouncement;
+
+// Fleshbook unread dot — works before the lazy module loads, so updates the DOM directly.
+function setFbBadge(n) {
+  const b = document.getElementById('unread-fleshbook');
+  if (!b) return;
+  if (n > 0) { b.style.display = 'inline-block'; b.textContent = String(n); }
+  else { b.style.display = 'none'; }
+}
+document.addEventListener('fm:authed', function(){
+  try {
+    fetch('/api/fleshbook/unread', { headers: { 'x-auth-token': (window.FM_TOKEN || '') } })
+      .then(r => r.json()).then(d => { if (d && d.ok) setFbBadge(d.count || 0); }).catch(()=>{});
+  } catch(_) {}
+});
+
 // Tabs
 $all('.tab').forEach(tab=>{
   tab.addEventListener('click', ()=>{
@@ -1379,10 +1448,12 @@ $all('.tab').forEach(tab=>{
     el('#casinoTab').style.display = sel==='casino'?'block':'none';
     const _gt = el('#guildTab'); if(_gt) _gt.style.display = sel==='guild'?'block':'none';
     const _bugsTab = el('#bugsTab'); if(_bugsTab) _bugsTab.style.display = sel==='bugs'?'flex':'none';
+    const _fbTab = el('#fleshbookTab'); if(_fbTab) _fbTab.style.display = sel==='fleshbook'?'flex':'none';
     const _galTab = el('#galacticTab'); if(_galTab) _galTab.style.display = sel==='galactic'?'flex':'none';
     const _mineTab = el('#miningTab'); if(_mineTab) _mineTab.style.display = sel==='mining'?'flex':'none';
     if (sel==='guild') { loadGuildDirectory(); }
     if (sel==='bugs') { if(window.bugsTabLoad) window.bugsTabLoad(); else lazyLoad('assets/dev-comms.js', ()=>window.bugsTabLoad&&window.bugsTabLoad()); }
+    if (sel==='fleshbook') { if(window.fleshbookTabLoad) window.fleshbookTabLoad(); else lazyLoad('assets/fleshbook.js', ()=>window.fleshbookTabLoad&&window.fleshbookTabLoad()); }
     if (sel==='mining') {
       try { window.__miningBriefRefresh && window.__miningBriefRefresh(); } catch(_){}
       // Fetch fresh leaderboard whenever the tab is opened
@@ -1693,6 +1764,10 @@ ws.addEventListener('message', (ev)=>{
     }
   }
   if (msg.type === 'chat') addChat(msg.data);
+  if (msg.type === 'announcements') { (msg.data || []).forEach(setAnnouncement); }
+  if (msg.type === 'announcement_set') setAnnouncement(msg.data);
+  if (msg.type === 'announcement_clear') removeAnnouncement(msg.data && msg.data.id);
+  if (msg.type === 'fleshbook_unread') setFbBadge(msg.data && msg.data.count || 0);
   if (msg.type === 'chat_history') {
     // Replay last 30min of messages on login/reconnect
     const msgs = (msg.data && msg.data.messages) || [];
@@ -1743,7 +1818,7 @@ ws.addEventListener('message', (ev)=>{
     const isPatreon = d.base > 25; // free tier base is 25; anything above is Patreon
     const color = hasBonus ? '#4ecdc4' : (isPatreon ? '#46ff7d' : '#888');
     const badge = hasBonus ? '⚖' : (isPatreon ? 'Ƒ' : 'Ƒ');
-    addChat({ user: 'SYSTEM', text: d.text, badge, color });
+    addChat({ user: 'SYSTEM', text: d.text, badge, color, ttlMs: 60000 });
   }
   // ── v5.0 handlers ────────────────────────────────────────────────────────
   if (msg.type === 'trade_feed') {
@@ -1755,7 +1830,7 @@ ws.addEventListener('message', (ev)=>{
   if (msg.type === 'limit_filled') {
     const d = msg.data;
     playSound('fill');
-    addChat({ user: 'SYSTEM', text: `✅ Limit ${d.side.toUpperCase()} filled: ${d.qty}× ${d.symbol} @ Ƒ${d.fillPrice.toFixed(2)}`, badge:'⚡', color:'#86ff6a' });
+    addChat({ user: 'SYSTEM', text: `✅ Limit ${d.side.toUpperCase()} filled: ${d.qty}× ${d.symbol} @ Ƒ${d.fillPrice.toFixed(2)}`, badge:'⚡', color:'#86ff6a', ttlMs: 60000 });
   }
   if (msg.type === 'earnings_alert') {
     const d = msg.data;
@@ -1767,13 +1842,13 @@ ws.addEventListener('message', (ev)=>{
   if (msg.type === 'dividend') {
     playSound('buy');
     showToast(`💰 Dividend received: +Ƒ${msg.data.amount.toFixed(2)}`, '#4ecdc4');
-    addChat({ user: 'SYSTEM', text: `💰 Dividend: +Ƒ${msg.data.amount.toFixed(2)}`, badge:'Ƒ', color:'#4ecdc4' });
+    addChat({ user: 'SYSTEM', text: `💰 Dividend: +Ƒ${msg.data.amount.toFixed(2)}`, badge:'Ƒ', color:'#4ecdc4', ttlMs: 60000 });
   }
   if (msg.type === 'borrow_fee') {
     showToast(`📉 Short borrow fee: -Ƒ${msg.data.amount.toFixed(2)}`, '#ff9966');
   }
   if (msg.type === 'chat_system') {
-    addChat({ user: 'SYSTEM', text: msg.data.text, badge:'⚡', color:'#86ff6a' });
+    addChat({ user: 'SYSTEM', text: msg.data.text, badge:'⚡', color:'#86ff6a', ttlMs: 60000 });
   }
   if (msg.type === 'error') {
     try { showToast('❌ ' + (msg.data?.msg || 'Trade rejected'), '#ff6a6a'); } catch(e) {}

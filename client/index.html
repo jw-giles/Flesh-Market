@@ -67,7 +67,7 @@
 <div class="tab active" data-tab="market">Market</div>
 <div class="tab" data-tab="heat">🔥 Heat</div>
 <div class="tab" data-tab="pnl">P&amp;L</div>
-<div class="tab" data-tab="casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none">⚖ Capital Houses</div><div class="tab" data-tab="store">Store</div><div class="tab" data-tab="galactic">⬡ Galaxy</div><div class="tab" data-tab="mining">⛏ Mining</div><div class="tab" data-tab="bugs">🐛 Bugs</div>
+<div class="tab" data-tab="casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none">⚖ Capital Houses</div><div class="tab" data-tab="store">Store</div><div class="tab" data-tab="galactic">⬡ Galaxy</div><div class="tab" data-tab="mining">⛏ Mining</div><div class="tab" data-tab="bugs">🐛 Bugs</div><div class="tab" data-tab="fleshbook">📣 Fleshbook<span id="unread-fleshbook" style="display:none;background:#a78bfa;color:#000;border-radius:8px;font-size:.6rem;padding:0 5px;margin-left:4px;font-weight:bold">0</span></div>
 </div>
 <div id="marketTab">
 <canvas id="chart"></canvas>
@@ -1038,6 +1038,7 @@ window.storeSubTab=storeSubTab;
 </div>
 
 
+<div id="fleshbookTab" style="display:none;flex:1;min-height:0;flex-direction:column;overflow:hidden;background:#02060a;border-radius:6px"></div>
 </div>
 
 
@@ -1916,7 +1917,17 @@ ws.addEventListener('message', function(ev){
     <div id="godTab-tools" class="god-tab-content" style="display:none">
       <div class="god-section-title">God Broadcast</div>
       <textarea id="god-bcast-text" placeholder="Broadcast message…" class="god-input" rows="2" style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:6px"></textarea>
-      <button class="god-btn god-btn-orange" onclick="godBroadcast()" style="width:100%;margin-bottom:12px">⚡ Broadcast to All</button>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <label style="font-size:.68rem;color:#999;white-space:nowrap">Pin duration (min)</label>
+        <input id="god-bcast-mins" type="number" min="1" max="10080" value="30" class="god-input" style="width:90px">
+      </div>
+      <button class="god-btn god-btn-orange" onclick="godBroadcast()" style="width:100%;margin-bottom:12px">⚡ Pin Announcement</button>
+
+      <div class="god-section-title">📣 Fleshbook (GM Post)</div>
+      <div style="font-size:.68rem;color:#666;margin-bottom:6px;line-height:1.5">Posts to the Fleshbook feed in character. Use a lore voice (Mr. Flesh, FLESH CORP, a faction desk). Tagged GM, gold.</div>
+      <input id="god-fb-author" placeholder="Author (default Mr. Flesh)" class="god-input" value="Mr. Flesh" style="width:100%;box-sizing:border-box;margin-bottom:6px">
+      <textarea id="god-fb-body" placeholder="In-character post…" class="god-input" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:6px"></textarea>
+      <button class="god-btn god-btn-orange" onclick="godFleshbookPost()" style="width:100%;margin-bottom:12px">📣 Post to Fleshbook</button>
 
       <div class="god-section-title">Display Name Override</div>
       <div style="font-size:.68rem;color:#666;margin-bottom:6px;line-height:1.5">Censors a player's visible display name without changing their login credentials. Use to replace offensive usernames. The player continues to log in with their original name.</div>

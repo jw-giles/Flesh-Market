@@ -1,7 +1,7 @@
 {
-  "version": "1.1.2.1",
-  "built": "2026-06-06T03:36:14Z",
+  "version": "1.1.2.6",
+  "built": "2026-06-06T15:55:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.2.1",
-  "notes": "Blockade UI and durability. Added a two-phase funding status bar to the blockade panel: while building it fills toward the 1,000,000 activation threshold; while active it shows the blockade's remaining integrity, draining as it is counter-funded. The bar fill clamps at 100% but the label shows the true percentage when a lane is over-funded. Fixed a map bug where lanes that were only accumulating funding (or a stale entry) were drawn as active blockades: the red marker now requires a genuinely active blockade, and the server clears any restored blockade that lacks a valid future expiry. Corrected stale panel text that still read 50k. Blockade contributions now persist the instant they happen, not only on the periodic autosave. Made the blockade panel text crisp (excluded from the phosphor glow) and larger for readability."
+  "patch": "1.1.2.6",
+  "notes": "Fleshbook UI reskin. Removed the descriptive blurb at the top of the feed. Restyled the panel to match the platform instead of looking like a separate app: amber and green chrome, IBM Plex Mono, a compact terminal-style header with a PUBLIC FEED label and a live indicator. Faction colours are now reserved for author identity (name plus a left accent stripe per post) rather than used as the panel accent. Upvote is reframed as a signal boost (the up-arrow), GM posts are tagged FLESH CORP, and the composer is tighter. No behaviour changes."
 }
