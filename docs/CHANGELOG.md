@@ -4,6 +4,17 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.2.7 (2026-06-06) - clear announcements + shipping-risk cap order fix
+
+- **Clear pinned announcements** (`core.js`): announcements were stuck until their duration expired with no way to remove one early. The pinned banner now shows an admin-only clear control (✕) that calls the existing `/api/admin/broadcast/clear` and removes the banner for everyone via the `announcement_clear` broadcast. No server change; the endpoint already existed from v1.1.2.2, it just had no UI.
+- **Shipping risk cap-before-subtract** (`server.js`): in `/api/cargo/quote` and `/api/cargo/ship` the interception chance was computed as `min(0.50, raw - guardCut)`, so a run whose raw risk exceeded 50% stayed pinned at 50% even after buying an escort, because the escort cut was subtracted from the pre-cap number and the result was still above the cap. Now the risk-increasing terms (base + ship mod + fly-by) are capped at 50% first, then the escort cut (including Private Army's 26%) is subtracted: `max(0.03, min(0.50, raw) - guardCut)`. Example: an 80% raw run with Private Army now shows 24% instead of 50%. Both endpoints use the identical formula so the quote preview matches the resolution roll. Runs already below the cap are unaffected.
+
+Files: `server/server.js`, `client/assets/core.js`, `client/version.json`.
+
+Cumulative over v1.1.2.6 and earlier.
+
+---
+
 ## v1.1.2.6 (2026-06-06) - Fleshbook UI reskin (in-universe terminal feed)
 
 - **Removed the top blurb** (`fleshbook.js`): the "the colonies talk, Mr. Flesh listens..." line read as filler and contained an em dash (an AI tell banned from player-visible text). Gone.

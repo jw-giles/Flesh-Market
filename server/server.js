@@ -3861,7 +3861,10 @@ app.get('/api/cargo/quote', (req, res) => {
     let interceptChance;
     if (p) interceptChance = cargoShipmentInterceptChance(p.id, from, to, routeLaneType, qty, unitCost);
     else   interceptChance = cargoShipmentInterceptChance('', from, to, routeLaneType, qty, unitCost);
-    interceptChance = Math.min(0.50, Math.max(0.03, interceptChance + shipMod + flyByRisk - guardCut));
+    // Cap the risk-increasing terms at 50% FIRST, then let the escort (incl. Private
+    // Army) subtract from the cap, so a paid reduction is always visible rather than
+    // eaten by the clamp when raw risk sits above 50%.
+    interceptChance = Math.max(0.03, Math.min(0.50, interceptChance + shipMod + flyByRisk) - guardCut);
     const totalMs = SHIPMENT_TOTAL_MS * hops;
     res.json({ ok:true, hops, route: route.path, laneType: routeLaneType,
       durSec: Math.round(totalMs/1000), durMin: Math.round(totalMs/60000),
@@ -3938,7 +3941,8 @@ app.post('/api/cargo/ship', (req, res) => {
     const flyByRisk = (hops - 1) * 0.10;
     const guardCut = guardRiskCut(guardTier);
     let interceptChance = cargoShipmentInterceptChance(p.id, from, to, routeLaneType, qty, unitCost);
-    interceptChance = Math.min(0.50, Math.max(0.03, interceptChance + (ship.riskMod || 0) + flyByRisk - guardCut));
+    // Same order as the quote: cap risk-increasing terms at 50%, then subtract escort.
+    interceptChance = Math.max(0.03, Math.min(0.50, interceptChance + (ship.riskMod || 0) + flyByRisk) - guardCut);
     const now = Date.now();
     // Each hop is a full leg, so total transit scales with hop count
     // (3 hops = 30 min, not 10). Phases still step across the whole journey.

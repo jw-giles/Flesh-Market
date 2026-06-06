@@ -1411,7 +1411,20 @@ function setAnnouncement(a) {
   row.style.cssText = 'background:#1a0f00;border:1px solid #ff9944;border-left:3px solid #ff9944;'
     + 'color:#ffc38a;font-size:.74rem;padding:5px 8px;letter-spacing:.02em;line-height:1.3';
   const safe = String(a.text || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  row.innerHTML = '<b style="color:#ff9944">📢 ' + (a.author || 'ADMIN') + ':</b> ' + safe;
+  const clearBtn = __isAdmin_g
+    ? '<span class="ann-clear" title="Clear announcement" style="float:right;cursor:pointer;color:#ff9944;opacity:.65;margin-left:8px;font-weight:bold">✕</span>'
+    : '';
+  row.innerHTML = clearBtn + '<b style="color:#ff9944">📢 ' + (a.author || 'ADMIN') + ':</b> ' + safe;
+  if (__isAdmin_g) {
+    const cb = row.querySelector('.ann-clear');
+    if (cb) cb.addEventListener('click', function () {
+      fetch('/api/admin/broadcast/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-auth-token': (window.FM_TOKEN || '') },
+        body: JSON.stringify({ id: a.id })
+      }).then(function () { removeAnnouncement(a.id); }).catch(function () {});
+    });
+  }
   const ms = (a.expires_at || 0) - Date.now();
   if (ms > 0) setTimeout(function(){ removeAnnouncement(a.id); }, ms);
   else removeAnnouncement(a.id);
