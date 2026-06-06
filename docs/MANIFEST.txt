@@ -1,4 +1,4 @@
-# FleshMarket v1.1.2.8 — MANIFEST
+# FleshMarket v1.1.3.3 — MANIFEST
 
 ## Structure
 
@@ -35,6 +35,10 @@ game/
       fleshbook.js          Fleshbook in-house social feed (lazy-loaded)
       calc.js               pixel-art trader calculator widget (Markets view)
       calc/buttons/         calculator key sprites (PNG)
+      portrait-manifest.js  generated list of selectable portraits (grouped)
+      portraits/            60 selectable player portrait PNGs
+      codec-data.js         faction rep contacts + conversations (GM-authored data)
+      codec.js              codec-call engine + contacts overlay
       pnl-livepatch.js      P&L live patching
       pnl-panel.js          P&L panel logic
       pnl-panel.css         P&L panel styles

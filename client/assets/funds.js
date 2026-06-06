@@ -1020,7 +1020,9 @@ document.addEventListener('fm:authed', (ev) => {
     is_dev:       !!(ev.detail?.is_dev),
     is_admin:     !!(ev.detail?.is_admin),
     is_prime:     !!(ev.detail?.is_prime),
+    portrait:     ev.detail?.portrait    || window.ME?.portrait || null,
   });
+  if (window.FMHeaderPortrait) window.FMHeaderPortrait(window.ME.portrait);
 
   // Restore tier badge in header + show account name
   const tierBadge  = document.getElementById('fm-tier-badge');

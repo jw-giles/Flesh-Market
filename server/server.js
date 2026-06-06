@@ -13,6 +13,7 @@ import { WebSocketServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { createHmac } from 'crypto';
 import http from 'http';
+import fs from 'fs';
 import path from 'path';
 import url  from 'url';
 
@@ -59,7 +60,7 @@ import {
   getColonyCommodityPrices, getAllCommodityPrices, getCommodityPrice, upsertCommodityPrice,
   getPlayerCargo, getCargoQty, getCargoTotal, addCargo, removeCargo,
   createCargoShipment, getCargoShipment, getPlayerCargoShipments, getDueCargoShipments, setCargoShipmentStatus,
-  getActiveCargoShipments, setCargoShipmentPhase, setPlayerShipClass, getPlayerShipClass,
+  getActiveCargoShipments, setCargoShipmentPhase, setPlayerShipClass, getPlayerShipClass, setPlayerPortrait,
   createShippingContract, getShippingContract, getPlayerShippingContracts, getExpiredOpenContracts, settleShippingContract,
   kickFundMember, deleteFund, updateFundInfo,
   initFundPolls, createFundPoll, getFundPolls, voteFundPoll, closeFundPoll, expireOldFundPolls,
@@ -2127,6 +2128,15 @@ app.use('/api/patreon/webhook', express.raw({type:'application/json'}));
 app.use(express.json());
 app.use('/',express.static(path.join(__dirname,'..','client')));
 
+// Selectable player portraits: allowlist built from the assets dir at boot so the
+// client can never set an arbitrary string into an <img src>. Filenames (sans .png).
+const PORTRAIT_DIR = path.join(__dirname,'..','client','assets','portraits');
+let PORTRAIT_SET = new Set();
+try {
+  PORTRAIT_SET = new Set(fs.readdirSync(PORTRAIT_DIR).filter(f=>/\.png$/i.test(f)).map(f=>f.replace(/\.png$/i,'')));
+  console.log(`[portraits] ${PORTRAIT_SET.size} selectable portraits loaded`);
+} catch(e) { console.error('[portraits] could not read', PORTRAIT_DIR, e.message); }
+
 // ─── REST: Auth ───────────────────────────────────────────────────────────────
 
 // ── Name validation ───────────────────────────────────────────────────────────
@@ -2174,7 +2184,7 @@ app.post('/api/login',(req,res)=>{
     if(!verifyPassword(password,player.password_hash,player.password_salt))
       return res.status(401).json({ok:false,error:'invalid_credentials'});
     touchPlayer(player.id);
-    res.json({ok:true,token:player.id,name:player.name,cash:player.cash,xp:player.xp,level:player.level,title:player.title,faction:player.faction||null,patreon_tier:player.patreon_tier||0,is_dev:!!(isDevAccount(player.id)),is_admin:!!(isAdminAccount(player.id)),is_prime:!!(isOwnerAccount(player.id)),void_locked:!!(isVoidLocked(player.id))});
+    res.json({ok:true,token:player.id,name:player.name,cash:player.cash,xp:player.xp,level:player.level,title:player.title,faction:player.faction||null,portrait:player.portrait||null,patreon_tier:player.patreon_tier||0,is_dev:!!(isDevAccount(player.id)),is_admin:!!(isAdminAccount(player.id)),is_prime:!!(isOwnerAccount(player.id)),void_locked:!!(isVoidLocked(player.id))});
   }catch(e){console.error('/api/login:',e);res.status(500).json({ok:false,error:'server_error'});}
 });
 
@@ -2187,7 +2197,7 @@ app.get('/api/whoami',(req,res)=>{
   const tok=tokenFrom(req);
   const p=tok?getPlayer(tok):null;
   if(!p) return res.status(404).json({ok:false,error:'not_found'});
-  res.json({ok:true,id:p.id,name:p.name,cash:p.cash,holdings:p.holdings,xp:p.xp,level:p.level,title:p.title,faction:p.faction||null,patreon_tier:p.patreon_tier||0,is_dev:!!(isDevAccount(p.id)),is_admin:!!(isAdminAccount(p.id)),is_dunced:!!(isDunced(p.id)),is_prime:!!(isOwnerAccount(p.id)),void_locked:!!(isVoidLocked(p.id))});
+  res.json({ok:true,id:p.id,name:p.name,cash:p.cash,holdings:p.holdings,xp:p.xp,level:p.level,title:p.title,faction:p.faction||null,portrait:p.portrait||null,patreon_tier:p.patreon_tier||0,is_dev:!!(isDevAccount(p.id)),is_admin:!!(isAdminAccount(p.id)),is_dunced:!!(isDunced(p.id)),is_prime:!!(isOwnerAccount(p.id)),void_locked:!!(isVoidLocked(p.id))});
 });
 
 app.post('/api/rename',(req,res)=>{
@@ -4398,7 +4408,18 @@ app.get('/api/items/profile/:name', (req, res) => {
       ...(ITEM_CATALOG[row.item_id] || {})
     }));
     res.json({ ok: true, name: target.name, title: target.title || null,
+      portrait: target.portrait || null, faction: target.faction || null,
       items, equipped: equipped || {}, passiveBonus: passive });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Set the caller's selectable portrait (validated against the boot allowlist).
+app.post('/api/portrait', requirePlayer, (req, res) => {
+  try {
+    let pid = String(req.body?.portrait || '').trim();
+    if (pid && !PORTRAIT_SET.has(pid)) return res.status(400).json({ ok: false, error: 'invalid_portrait' });
+    setPlayerPortrait(req.player.id, pid || null);
+    res.json({ ok: true, portrait: pid || null });
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -5166,7 +5187,7 @@ wss.on('connection',(ws,req)=>{
     if(!playerSockets.has(player.id))playerSockets.set(player.id,new Set());
     playerSockets.get(player.id).add(ws);
     ws.send(JSON.stringify({type:'hello',data:{playerId:player.id,name:player.name}}));
-    ws.send(JSON.stringify({type:'welcome',data:{id:player.id,name:player.name,cash:player.cash,faction:player.faction||null,is_dunced:isDunced(player.id),dunce_reason:(()=>{try{return getDunceRecord(player.id)?.dunce_reason||'';}catch(_){return '';}})(),is_prime:!!(isOwnerAccount(player.id)),is_dev:!!(isDevAccount(player.id)),is_admin:!!(isAdminAccount(player.id)),void_locked:!!(isVoidLocked(player.id)),tutorial_seen:getTutorialSeen(player.id)}}));
+    ws.send(JSON.stringify({type:'welcome',data:{id:player.id,name:player.name,cash:player.cash,faction:player.faction||null,portrait:player.portrait||null,is_dunced:isDunced(player.id),dunce_reason:(()=>{try{return getDunceRecord(player.id)?.dunce_reason||'';}catch(_){return '';}})(),is_prime:!!(isOwnerAccount(player.id)),is_dev:!!(isDevAccount(player.id)),is_admin:!!(isAdminAccount(player.id)),void_locked:!!(isVoidLocked(player.id)),tutorial_seen:getTutorialSeen(player.id)}}));
     ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(player)}));
     ws.send(JSON.stringify({type:'president_state',data:{holder:president}}));
     // Send last 30min of chat history to new connection
@@ -6408,7 +6429,7 @@ wss.on('connection',(ws,req)=>{
         }
         // Route dunce message: send to dunced player + all devs/admins
         const duncePayload = { type:'chat', data:{id:uuidv4(),t:Date.now(),user:actor.name,text:rawText,
-          badge:'🎓',color:'#ff4444',channel:'dunce',title:actor.title||null,is_dunced:true}};
+          badge:'🎓',color:'#ff4444',channel:'dunce',title:actor.title||null,portrait:actor.portrait||null,is_dunced:true}};
         wss.clients.forEach(c=>{
           if(c.readyState!==1) return;
           const cId = wsPlayers.get(c);
@@ -6467,7 +6488,7 @@ wss.on('connection',(ws,req)=>{
       const chatText = channel==='unmod' ? rawText : text;
       // For all channels (except dunce), include room number (1-15) for multi-room support
       const chatRoom = channel !== 'dunce' ? Math.min(5, Math.max(1, parseInt(msg.room) || 1)) : undefined;
-      const payload={type:'chat',data:{id:uuidv4(),t:Date.now(),user:actor.name,text:chatText,badge:chatBadge,color:chatColor,channel,title:actor.title||null,is_dev:_isDev,is_prime:_isOwner,faction:actor.faction||null,...(chatRoom !== undefined && {room:chatRoom})}};
+      const payload={type:'chat',data:{id:uuidv4(),t:Date.now(),user:actor.name,text:chatText,badge:chatBadge,color:chatColor,channel,title:actor.title||null,is_dev:_isDev,is_prime:_isOwner,faction:actor.faction||null,portrait:actor.portrait||null,...(chatRoom !== undefined && {room:chatRoom})}};
       if(channel==='global'){
         broadcast(payload);
       } else {

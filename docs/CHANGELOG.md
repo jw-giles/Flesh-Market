@@ -4,6 +4,63 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.3.3 (2026-06-06) - bigger chat avatar + glowing art credit
+
+- **Larger chat avatar** (`core.js`): chat-line portrait bumped from 30px to 40px.
+- **Glowing credit** (`player-profile.js`): the "Art by subotai" link now pulses with a phosphor glow and is larger/bolder so it reads clearly when the picker opens.
+
+Files: `client/assets/core.js`, `client/assets/player-profile.js`, `client/version.json`.
+
+Cumulative over v1.1.3.2, v1.1.3.1, v1.1.3.0, v1.1.2.9 (portraits) and earlier - none of which have been pushed yet.
+
+---
+
+## v1.1.3.2 (2026-06-06) - portrait artist credit
+
+- **Art credit** (`player-profile.js`): the portrait picker now shows an "Art by subotai" link under the title, opening https://subotai-khudozhnik.itch.io/ in a new tab (rel=noopener).
+
+Files: `client/assets/player-profile.js`, `client/version.json`.
+
+Cumulative over v1.1.3.1 and earlier.
+
+---
+
+## v1.1.3.1 (2026-06-06) - header portrait badge + bigger chat avatar
+
+- **Header identity face** (`client/index.html`, `funds.js`, `core.js`, `player-profile.js`): a circular portrait now sits left of your name in the header (`#fm-header-portrait`), styled like a company-account badge. Clicking it opens the portrait picker, so portraits are reachable from both the header and the profile popup. Empty state shows a + prompt. Portrait is now included in the login, session-restore, and WS welcome payloads so the face paints on load; `window.FMHeaderPortrait()` repaints it live on change and on auth.
+- **Chat avatar legibility** (`core.js`): chat-line avatar bumped from 20px to 30px with a 2px faction-colored ring.
+- **Rename** (`portrait-manifest.js`): the "Nano-Infected" portrait category is now "S'weet Addict".
+
+Files: `server/server.js`, `client/index.html`, `client/assets/core.js`, `client/assets/funds.js`, `client/assets/player-profile.js`, `client/assets/portrait-manifest.js`, `client/version.json`.
+
+Cumulative over v1.1.3.0 and earlier.
+
+---
+
+## v1.1.3.0 (2026-06-06) - faction rep contacts + codec calls
+
+- **Contacts + codec calls** (new `client/assets/codec.js`, new `client/assets/codec-data.js`, `client/index.html`): a "☎ Contacts" button in the chat tab bar opens a list of four faction reps. Calling one launches a codec-style transmission overlay (ring -> accept -> portraits + name + typewriter dialogue -> contract offer with accept/decline), faction-themed via a `--fac` CSS var, using the real portrait set. The player's own selected portrait appears in the outgoing window.
+  - Three-layer split from the prototype is preserved: `codec.js` is the dumb engine (knows nothing about quests), `codec-data.js` is GM-authored rep/conversation data, and the quest payload is handed to a single `onQuestAccepted` hook. That hook is a thin stub for now: it records the accepted contract in an in-memory `window.FM_QUESTS` and toasts. No server changes this patch; live quest tracking + persistence is the next decision.
+  - Reps: Captain Trisha McHallan (Coalition, corpo2), Rahtan (Merchant Guild, corpo7), Jaquet (Syndicate, hacker1), Father Xen (Void Collective, cyborg11). Rep portraits are assigned from the selectable set and easy to swap. The Contacts button is intentionally not a `.chat-tab` so it does not trigger channel switching.
+
+Files: `client/assets/codec.js` (new), `client/assets/codec-data.js` (new), `client/index.html`, `client/version.json`, `docs/MANIFEST.txt`.
+
+Cumulative over v1.1.2.9 and earlier.
+
+---
+
+## v1.1.2.9 (2026-06-06) - player portraits in chat + profile
+
+- **Selectable player portraits** (new `client/assets/portraits/` 60 PNGs, new `portrait-manifest.js`): players choose a portrait and it renders as a small avatar next to their name in every chat room.
+  - Server: new `portrait` column on `players` (migration in db.js `_migrations`), exposed on the hydrated player and via `setPlayerPortrait`. New `POST /api/portrait` validates the chosen id against `PORTRAIT_SET`, an allowlist read from the portraits dir at boot (so the client can never inject an arbitrary `<img src>`). Portrait is added to the main + dunce chat payloads and to the `/api/items/profile/:name` response (alongside `faction`).
+  - Client: `addChat` renders a 20px avatar from `item.portrait` (sanitized, clickable to open the profile). The profile popup shows the portrait; on your own profile a "change" link / clickable avatar opens a grouped picker modal (`window.openPortraitPicker`) that POSTs the choice and updates live. Manifest is generated from the asset filenames, grouped Corporate/Cyborg/Hacker/Nano-Infected/Street.
+
+Files: `server/db.js`, `server/server.js`, `client/assets/core.js`, `client/assets/player-profile.js`, `client/index.html`, `client/assets/portrait-manifest.js` (new), `client/assets/portraits/` (60 PNGs, new), `client/version.json`, `docs/MANIFEST.txt`.
+
+Cumulative over v1.1.2.8 and earlier.
+
+---
+
 ## v1.1.2.8 (2026-06-06) - trader's calculator under Ship Cargo
 
 - **Pixel-art calculator** (`calc.js` new, `calc/buttons/*.png` new, `galaxy.js`, `index.html`): added a self-contained calculator widget below the Ship Cargo console in the Galaxy Markets view, for working out spreads and shipping math without leaving the tab. Uses the supplied key sprites with a CSS body and screen matched to the art palette (body #736fa1, screen #4b4173/#2e2747, keys are the sprite PNGs). Supports digits, decimal, + - * /, square root, percent, sign toggle, clear, and delete via an accumulator state machine (no eval). Mouse/touch only so it never steals keystrokes from the adjacent commodity search field. Mounted by `renderMarketsTab` after render; state is module-level so the displayed value survives a view re-render. Arithmetic verified against the same state machine (chained ops, sqrt, percent, divide-by-zero -> ERR).

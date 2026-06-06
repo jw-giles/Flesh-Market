@@ -307,6 +307,7 @@ export function initDB() {
     ['owned_titles',          "TEXT NOT NULL DEFAULT '[]'"],
     ['tutorial_seen',         'INTEGER NOT NULL DEFAULT 0'],
     ['ship_class',            "TEXT NOT NULL DEFAULT ''"],
+    ['portrait',              'TEXT'],
   ];
   for (const [col, def] of _migrations) {
     if (!_existingCols.has(col)) {
@@ -443,6 +444,7 @@ function hydratePlayer(row) {
     patreon_member_id: row.patreon_member_id||null,
     patreon_expires_at: row.patreon_expires_at||null,
     faction: row.faction||null,
+    portrait: row.portrait||null,
     holdings, basisC,
     tutorial_seen: row.tutorial_seen || 0,
     shipClass: row.ship_class || '',
@@ -470,6 +472,7 @@ export function touchPlayer(id) { stmt('UPDATE players SET last_seen=? WHERE id=
 export function renamePlayer(id,newName) { stmt('UPDATE players SET name=?,updated_at=? WHERE id=?').run(newName.trim(),Date.now(),id); }
 export function markTutorialSeen(id) { stmt('UPDATE players SET tutorial_seen=1,updated_at=? WHERE id=?').run(Date.now(),id); }
 export function setPlayerShipClass(id, shipClass) { stmt('UPDATE players SET ship_class=?,updated_at=? WHERE id=?').run(shipClass, Date.now(), id); }
+export function setPlayerPortrait(id, portrait) { stmt('UPDATE players SET portrait=?,updated_at=? WHERE id=?').run(portrait || null, Date.now(), id); }
 export function getPlayerShipClass(id) { const r = stmt('SELECT ship_class FROM players WHERE id=?').get(id); return r ? (r.ship_class||'') : ''; }
 export function countCEOs() { return (stmt('SELECT COUNT(*) as n FROM players WHERE patreon_tier=3').get()||{n:0}).n; }
 

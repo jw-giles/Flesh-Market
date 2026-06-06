@@ -24,6 +24,10 @@
     document.getElementById('ppEquipped').innerHTML = '<div style="color:#332222;font-size:.68rem;grid-column:1/-1">Loading…</div>';
     document.getElementById('ppAssets').innerHTML   = '';
     document.getElementById('ppPassive').textContent = '';
+    const _ppReset = document.getElementById('ppPortrait');
+    if (_ppReset) { _ppReset.style.display = 'none'; _ppReset.onclick = null; }
+    const _ppcReset = document.getElementById('ppChangePortrait');
+    if (_ppcReset) _ppcReset.remove();
 
     // Show admin bar if admin
     const adminBar = document.getElementById('ppAdminBar');
@@ -51,6 +55,28 @@
 
     const titleEl = document.getElementById('ppTitle');
     if (titleEl && d.title) titleEl.textContent = d.title;
+
+    // Portrait avatar + self-serve change link
+    const portEl = document.getElementById('ppPortrait');
+    const me = (window.ME && window.ME.name) ? window.ME.name : '';
+    const isSelf = me && _ppTarget && me.toLowerCase() === String(_ppTarget).toLowerCase();
+    if (portEl) {
+      const pid = d.portrait ? String(d.portrait).replace(/[^a-z0-9_]/gi, '') : '';
+      if (pid) { portEl.src = 'assets/portraits/' + pid + '.png'; portEl.style.display = 'block'; }
+      else { portEl.style.display = 'none'; }
+      if (isSelf) {
+        portEl.style.cursor = 'pointer'; portEl.title = 'Change portrait';
+        portEl.onclick = function (e) { e.stopPropagation(); window.openPortraitPicker(); };
+        if (!document.getElementById('ppChangePortrait')) {
+          const lk = document.createElement('div');
+          lk.id = 'ppChangePortrait';
+          lk.textContent = '✎ portrait';
+          lk.style.cssText = 'font-size:.6rem;color:#5f8f74;cursor:pointer;letter-spacing:.06em;margin-top:2px';
+          lk.onclick = function (e) { e.stopPropagation(); window.openPortraitPicker(); };
+          if (titleEl && titleEl.parentNode) titleEl.parentNode.appendChild(lk);
+        }
+      }
+    }
 
     const equippedItems = d.equipped || {};
     const allSlots = ['hat','glasses','upperbody','necklace','watch','pants','shoes','ring','earring','bracelet','implant','vehicle','property'];
@@ -189,6 +215,69 @@
   const _origOpenMod = window.openModPanel;
   window.openModPanel = function(userName, x, y) {
     openPlayerProfile(userName, x, y);
+  };
+
+  // ── Portrait picker ──────────────────────────────────────────────────────
+  window.FMHeaderPortrait = function (pid) {
+    const el = document.getElementById('fm-header-portrait');
+    if (!el) return;
+    el.style.display = 'inline-flex';
+    const id = String(pid || '').replace(/[^a-z0-9_]/gi, '');
+    if (id) { el.style.backgroundImage = "url('assets/portraits/" + id + ".png')"; el.textContent = ''; }
+    else { el.style.backgroundImage = 'none'; el.textContent = '\uFF0B'; }
+  };
+
+  function savePortrait(id) {
+    const token = window.FM_TOKEN || (window.ME && window.ME.token) || '';
+    fetch('/api/portrait', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'x-auth-token': token } : {}) },
+      body: JSON.stringify({ portrait: id, token })
+    }).then(r => r.json()).then(function (res) {
+      if (!res || !res.ok) return;
+      if (window.ME) window.ME.portrait = res.portrait;
+      if (window.FMHeaderPortrait) window.FMHeaderPortrait(res.portrait);
+      const ov = document.getElementById('portraitPickerOverlay'); if (ov) ov.remove();
+      const portEl = document.getElementById('ppPortrait');
+      if (portEl) {
+        if (res.portrait) { portEl.src = 'assets/portraits/' + res.portrait + '.png'; portEl.style.display = 'block'; }
+        else { portEl.style.display = 'none'; }
+      }
+      if (window.showToast) window.showToast(res.portrait ? 'Portrait updated' : 'Portrait removed', '#42ff7e', 2500);
+    }).catch(function () {});
+  }
+
+  window.openPortraitPicker = function () {
+    if (!window.FM_PORTRAITS) return;
+    const old = document.getElementById('portraitPickerOverlay'); if (old) old.remove();
+    const cur = (window.ME && window.ME.portrait) ? window.ME.portrait : '';
+    const ov = document.createElement('div');
+    ov.id = 'portraitPickerOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:11000;background:#000a;display:flex;align-items:center;justify-content:center;font-family:inherit';
+    let h = '<div style="background:#060f0b;border:1px solid #1c3a30;border-radius:10px;max-width:560px;width:92%;max-height:82vh;overflow:auto;box-shadow:0 10px 40px #000c">';
+    h += '<div style="position:sticky;top:0;background:#08120d;border-bottom:1px solid #1c3a30;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;z-index:2">';
+    h += '<style>@keyframes ppCreditGlow{0%,100%{text-shadow:0 0 5px #42ff7e,0 0 10px #42ff7e66}50%{text-shadow:0 0 10px #6dffa0,0 0 20px #42ff7eaa}}.pp-credit{color:#6dffa0;font-size:.74rem;letter-spacing:.08em;text-decoration:none;display:inline-block;margin-top:4px;font-weight:600;animation:ppCreditGlow 2.2s ease-in-out infinite}.pp-credit:hover{color:#bfffd6}</style>';
+    h += '<div><div style="color:#42ff7e;letter-spacing:.16em;font-size:.8rem;text-transform:uppercase">Select Portrait</div>'
+      + '<a class="pp-credit" href="https://subotai-khudozhnik.itch.io/" target="_blank" rel="noopener noreferrer">Art by subotai \u2197</a></div>';
+    h += '<button id="ppPickClose" style="background:none;border:none;color:#5f8f74;font-size:1rem;cursor:pointer">✕</button></div>';
+    h += '<div style="padding:14px 16px">';
+    h += '<button id="ppPickClear" style="background:transparent;border:1px solid #3a2a2a;color:#c7a9a9;border-radius:4px;padding:5px 12px;font:inherit;font-size:.62rem;cursor:pointer;margin-bottom:12px;letter-spacing:.1em">REMOVE PORTRAIT</button>';
+    window.FM_PORTRAITS.groups.forEach(function (g) {
+      h += '<div style="color:#5f8f74;font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;margin:6px 0 7px">' + g[0] + '</div>';
+      h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:8px;margin-bottom:14px">';
+      g[1].forEach(function (id) {
+        const sel = id === cur;
+        h += '<img class="pp-pick" data-id="' + id + '" src="assets/portraits/' + id + '.png" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid ' + (sel ? '#42ff7e' : 'transparent') + ';box-shadow:' + (sel ? '0 0 8px #42ff7e88' : 'none') + '">';
+      });
+      h += '</div>';
+    });
+    h += '</div></div>';
+    ov.innerHTML = h;
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+    ov.querySelector('#ppPickClose').onclick = function () { ov.remove(); };
+    ov.querySelector('#ppPickClear').onclick = function () { savePortrait(''); };
+    ov.querySelectorAll('.pp-pick').forEach(function (img) { img.onclick = function () { savePortrait(img.dataset.id); }; });
   };
 
 })();

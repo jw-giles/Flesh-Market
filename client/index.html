@@ -37,6 +37,7 @@
 <input class="input" id="name" placeholder="Your name" style="display:none"/><!-- legacy hidden -->
 <button class="btn" id="helloBtn" style="display:none">Join</button>
 <span id="fm-header-user" style="display:none;align-items:center;gap:6px;font-size:.85rem">
+  <span id="fm-header-portrait" onclick="window.openPortraitPicker&&window.openPortraitPicker()" title="Change portrait" style="display:none;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1px solid #2e6b4a;background:#0a1813 center/cover no-repeat;cursor:pointer;font-size:.85rem;color:#46ff7d;flex:0 0 auto">＋</span>
   <span id="fm-header-name" style="color:#46ff7d;opacity:.85"></span>
   <span id="fm-tier-badge-hdr" style="font-size:.95rem"></span>
   <span id="invNavBtn" style="display:none"></span><span id="slotNavBtn" style="display:none"><span id="slotNavSpinCount"></span></span>
@@ -1055,6 +1056,7 @@ window.storeSubTab=storeSubTab;
     <div class="chat-tab" data-channel="whisper" id="whisper-chat-tab" style="color:#a78bfa;border-color:transparent">💬<span class="chat-unread" id="unread-whisper" style="display:none">0</span></div>
     <div class="chat-tab" data-channel="unmod" id="unmod-chat-tab" style="color:#ff8c00;border-color:transparent">🔞 Unmod<span class="chat-unread" id="unread-unmod" style="display:none">0</span></div>
     <div class="chat-tab" data-channel="dunce" id="dunce-chat-tab" style="display:none;color:#ff4444;border-color:#ff2222">🎓 Dunce<span class="chat-unread" id="unread-dunce" style="display:none">0</span></div>
+    <div id="contacts-chat-tab" onclick="window.FMContacts&&FMContacts.open()" title="Faction rep contacts" style="margin-left:auto;align-self:center;color:#42ff7e;cursor:pointer;font-size:.72rem;letter-spacing:.06em;padding:4px 10px;border:1px solid #1c3a30;border-radius:4px">☎ Contacts</div>
   </div>
 
   <!-- Global Room Pager -->
@@ -2323,9 +2325,12 @@ ws.addEventListener('message', function(ev){
   box-shadow:0 8px 32px #000d;font-family:inherit;
 ">
   <div style="background:linear-gradient(135deg,#120303,#060303);padding:10px 14px 8px;border-bottom:1px solid #2a1010;display:flex;align-items:center;justify-content:space-between">
-    <div>
-      <div id="ppName" style="font-size:.9rem;font-weight:500;color:#7fc090"></div>
-      <div id="ppTitle" style="font-size:.65rem;color:#553333;letter-spacing:.06em"></div>
+    <div style="display:flex;align-items:center;gap:9px">
+      <img id="ppPortrait" alt="" title="" style="display:none;width:40px;height:40px;border-radius:6px;object-fit:cover;border:1px solid #3a1010">
+      <div>
+        <div id="ppName" style="font-size:.9rem;font-weight:500;color:#7fc090"></div>
+        <div id="ppTitle" style="font-size:.65rem;color:#553333;letter-spacing:.06em"></div>
+      </div>
     </div>
     <button onclick="closePlayerProfile()" style="background:none;border:none;color:#553333;font-size:.9rem;cursor:pointer;padding:0 2px;line-height:1">✕</button>
   </div>
@@ -2350,6 +2355,9 @@ ws.addEventListener('message', function(ev){
 
 <link rel="stylesheet" href="assets/player-profile.css">
 
+<script src="assets/portrait-manifest.js"></script>
+<script src="assets/codec-data.js"></script>
+<script src="assets/codec.js"></script>
 <script src="assets/player-profile.js"></script>
 
 <!-- ══ Tutorial (UNIT-7 Onboarding) ═══════════════════════════════════════ -->

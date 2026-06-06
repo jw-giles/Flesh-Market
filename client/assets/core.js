@@ -1327,7 +1327,11 @@ function addChat(item){
   div.dataset.user = item.user || '';
   const _ts = Number(item.t) || Date.now();
   const _timeSpan = `<span class="cm-time" data-ts="${_ts}" title="${new Date(_ts).toLocaleString()}" style="font-size:.6rem;opacity:.4;margin-left:6px;color:${color};white-space:nowrap">${fmtRel(_ts)}</span>`;
-  div.innerHTML = `${badge}${userSpan}: <span style="color:${isSystem ? '#7fc090' : '#f0b454'}">${text}</span>${_timeSpan}${blockBtnHtml}`;
+  const _pid = (!isSystem && item.portrait) ? String(item.portrait).replace(/[^a-z0-9_]/gi,'') : '';
+  const avatar = _pid
+    ? `<img class="chat-avatar" data-user="${item.user}" src="assets/portraits/${_pid}.png" alt="" loading="lazy" style="width:40px;height:40px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:9px;border:2px solid ${color};cursor:pointer" onerror="this.style.display='none'">`
+    : '';
+  div.innerHTML = `${avatar}${badge}${userSpan}: <span style="color:${isSystem ? '#7fc090' : '#f0b454'}">${text}</span>${_timeSpan}${blockBtnHtml}`;
 
   // Show block button on hover
   div.addEventListener('mouseenter', function(){ var b=div.querySelector('.chat-block-btn'); if(b) b.style.display='inline'; });
@@ -1362,6 +1366,10 @@ function addChat(item){
       openPlayerProfile(item.user, e.clientX, e.clientY);
     });
   }
+  div.querySelector('.chat-avatar')?.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!isSystem) openPlayerProfile(item.user, e.clientX, e.clientY);
+  });
 
   const ph = box.querySelector('.chat-ph');
   if (ph) ph.remove();
@@ -1648,6 +1656,8 @@ ws.addEventListener('message', (ev)=>{
     if (!ME.id)    ME.id    = window.FM_TOKEN || '';
     // Sync faction to window.ME so lazy-loaded modules (galaxy.js) can read it
     if (window.ME) window.ME.faction = ME.faction || null;
+    if (window.ME && ME.portrait != null) window.ME.portrait = ME.portrait;
+    if (window.FMHeaderPortrait && ME.portrait != null) window.FMHeaderPortrait(ME.portrait);
     // Update guild chat placeholder based on guild eligibility
     var gph = document.getElementById('guildPlaceholder');
     if (gph) {
