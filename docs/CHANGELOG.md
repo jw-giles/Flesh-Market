@@ -4,6 +4,16 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.3.4 (2026-06-06) - temporarily disable codec calls
+
+- **Calls disabled** (`codec.js`): codec calls are gated behind a new `CALLS_ENABLED = false` flag until the quest system and fixes land. The Contacts list and rep profiles still open, but each call button is redded out (class `.off`), relabeled "Offline", and inactive; clicking it (or a card) only toasts. `FMCodec.call` also early-returns while disabled. Flip the one flag to re-enable.
+
+Files: `client/assets/codec.js`, `client/version.json`.
+
+Cumulative over v1.1.3.3 and earlier (note: 1.1.2.9 through here are one combined push if you have not pushed since the portraits upload).
+
+---
+
 ## v1.1.3.3 (2026-06-06) - bigger chat avatar + glowing art credit
 
 - **Larger chat avatar** (`core.js`): chat-line portrait bumped from 30px to 40px.

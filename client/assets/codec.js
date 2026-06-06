@@ -7,6 +7,8 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
+  // Calls are disabled until the quest system ships. Flip to true to re-enable.
+  var CALLS_ENABLED = false;
   let st = { rep:null, idx:0, typing:false, typer:null };
 
   function styleOnce() {
@@ -59,6 +61,7 @@
     .fmc-crole{color:var(--fac);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;margin:1px 0 3px}
     .fmc-cblurb{color:#5f8f74;font-size:.66rem;line-height:1.4}
     .fmc-callbtn{flex:0 0 auto;align-self:center;border:1px solid var(--fac);color:var(--fac);background:transparent;border-radius:4px;padding:7px 12px;font:inherit;font-size:.62rem;letter-spacing:.08em;cursor:pointer;text-transform:uppercase}
+    .fmc-callbtn.off{border-color:#7a3030;color:#ff6a6a;cursor:not-allowed;opacity:.85}
     `;
     document.head.appendChild(s);
   }
@@ -96,7 +99,7 @@
           + '<div class="fmc-cmeta"><div class="fmc-cname">' + r.name + '</div>'
           + '<div class="fmc-crole">' + r.role + '</div>'
           + '<div class="fmc-cblurb">' + r.blurb + '</div></div>'
-          + '<button class="fmc-callbtn" data-call="' + r.id + '">☎ Call</button></div>';
+          + '<button class="fmc-callbtn' + (CALLS_ENABLED ? '' : ' off') + '" data-call="' + r.id + '"' + (CALLS_ENABLED ? '' : ' title="Calls offline until quests ship"') + '>☎ ' + (CALLS_ENABLED ? 'Call' : 'Offline') + '</button></div>';
       });
       h += '</div>';
       ov.innerHTML = h;
@@ -104,17 +107,26 @@
       ov.addEventListener('click', function (e) { if (e.target === ov) closeAll(); });
       $('fmcContactsClose').onclick = closeAll;
       ov.querySelectorAll('[data-call]').forEach(function (b) {
-        b.onclick = function (e) { e.stopPropagation(); FMCodec.call(b.dataset.call); };
+        b.onclick = function (e) {
+          e.stopPropagation();
+          if (!CALLS_ENABLED) { if (window.showToast) window.showToast('Calls are offline until quests ship', '#ff6a6a', 2500); return; }
+          FMCodec.call(b.dataset.call);
+        };
       });
-      ov.querySelectorAll('.fmc-card').forEach(function (card) {
-        card.onclick = function () { FMCodec.call(card.dataset.rep); };
-      });
+      if (CALLS_ENABLED) {
+        ov.querySelectorAll('.fmc-card').forEach(function (card) {
+          card.onclick = function () { FMCodec.call(card.dataset.rep); };
+        });
+      } else {
+        ov.querySelectorAll('.fmc-card').forEach(function (card) { card.style.cursor = 'default'; });
+      }
     }
   };
 
   // ── Codec call engine ────────────────────────────────────────────────────────
   window.FMCodec = {
     call: function (repId) {
+      if (!CALLS_ENABLED) { if (window.showToast) window.showToast('Calls are offline until quests ship', '#ff6a6a', 2500); return; }
       if (!window.FM_CODEC) return;
       const rep = FM_CODEC.reps.find(function (r) { return r.id === repId; });
       if (!rep) return;
