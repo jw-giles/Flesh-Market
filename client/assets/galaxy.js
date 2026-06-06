@@ -2499,9 +2499,13 @@ function renderLanes(){
     ln.classList.add('g-la');ln.setAttribute('data-spd',spd);
     g.appendChild(ln);
 
-    // Blockade indicator: red pulsing X at lane midpoint
+    // Blockade indicator: red pulsing X at lane midpoint — ONLY for active
+    // blockades. A lane that's merely accumulating funding (pool>0, not active)
+    // is not blockaded and must not paint the lane.
     var lk=[l.from,l.to].sort().join('|');
-    if(window._FM_BLOCKADES && window._FM_BLOCKADES[lk]){
+    var _blk = window._FM_BLOCKADES && window._FM_BLOCKADES[lk];
+    var _blkActive = !!(_blk && _blk.active);
+    if(_blkActive){
       var mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
       var bTxt=document.createElementNS('http://www.w3.org/2000/svg','text');
       bTxt.setAttribute('x',mx);bTxt.setAttribute('y',my+3);
@@ -2513,7 +2517,7 @@ function renderLanes(){
     // Share indicator: blue number at lane midpoint showing supply
     var shData = window._FM_SHARES && window._FM_SHARES[lk];
     if(shData && shData.supply > 0){
-      var cx2=(a.x+b.x)/2+(window._FM_BLOCKADES&&window._FM_BLOCKADES[lk]?12:0);
+      var cx2=(a.x+b.x)/2+(_blkActive?12:0);
       var cy2=(a.y+b.y)/2;
       var cTxt=document.createElementNS('http://www.w3.org/2000/svg','text');
       cTxt.setAttribute('x',cx2);cTxt.setAttribute('y',cy2+3);
@@ -2936,15 +2940,16 @@ function renderDetail(id){
     sh += '</div>';
 
     // ── BLOCKADE PANEL ──
-    sh += '<div style="margin-bottom:14px">'
-      +'<div style="font-size:.68rem;color:#f39c12;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\u26D4 BLOCKADES</div>';
+    sh += '<div id="gBlkPanel" style="margin-bottom:14px">'
+      +'<div style="font-size:.74rem;color:#f39c12;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\u26D4 BLOCKADES</div>';
     if (connLanes.length > 0) {
-      sh += '<select id="gBlkLane" style="width:100%;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px;font-size:.64rem;font-family:inherit;margin-bottom:4px">';
+      sh += '<select id="gBlkLane" onchange="window._gRenderBlkStatus&&window._gRenderBlkStatus()" style="width:100%;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px;font-size:.64rem;font-family:inherit;margin-bottom:4px">';
       connLanes.forEach(function(l) {
         var dest = l.from===id ? l.to : l.from;
         var dn = (COLONY_META[dest]||{name:dest}).name;
         var lk = [l.from,l.to].sort().join('|');
-        var st = (window._FM_BLOCKADES && window._FM_BLOCKADES[lk]) ? ' [ACTIVE]' : '';
+        var _bk=(window._FM_BLOCKADES||{})[lk];
+        var st = _bk && _bk.active ? ' [ACTIVE]' : (_bk && _bk.pool>0 ? ' [FUNDING]' : '');
         sh += '<option value="'+l.from+'|'+l.to+'">'+dn+st+'</option>';
       });
       sh += '</select>'
@@ -2954,7 +2959,8 @@ function renderDetail(id){
         +'<button onclick="window._gCounterBlk()" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:4px 8px;cursor:pointer;font-size:.56rem;font-family:inherit;letter-spacing:.04em">COUNTER</button>'
         +'</div>'
         +'<button onclick="window._gPrivateArmy()" style="width:100%;margin-bottom:4px;background:linear-gradient(135deg,#1a0a00,#0d0400);border:1px solid #e74c3c;color:#ff6b6b;padding:5px 8px;cursor:pointer;font-size:.64rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">\u2694 PRIVATE ARMY \u2014 Break Blockade (\u01921,000,000)</button>'
-        +'<div style="font-size:.60rem;color:#444">\u01925\u0030k activates a 2-hour blockade</div>';
+        +'<div id="gBlkStatus" style="font-size:.74rem;color:#999;margin-top:3px;line-height:1.45"></div>'
+        +'<div style="font-size:.68rem;color:#6a6a6a;margin-top:2px">\u01921,000,000 activates a 2-hour blockade</div>';
     }
     sh += '</div>';
 
@@ -2981,6 +2987,7 @@ function renderDetail(id){
 
     sysDiv.innerHTML = sh;
     el.appendChild(sysDiv);
+    if(typeof window._gRenderBlkStatus==='function') setTimeout(window._gRenderBlkStatus,0);
   }
 }
 
@@ -3300,10 +3307,17 @@ document.addEventListener('fm_ws_msg',function(e){
   if(msg.type==='blockade_update'&&msg.data){
     var bd=msg.data;
     window._FM_BLOCKADES = window._FM_BLOCKADES||{};
-    if(bd.active) window._FM_BLOCKADES[bd.laneKey]={active:true,pool:bd.pool,faction:bd.faction,expiresAt:bd.expiresAt};
-    else delete window._FM_BLOCKADES[bd.laneKey];
+    // Keep the lane if it's active OR still building (pool>0). Only drop it when it's
+    // truly gone (broken/expired, or a zeroed pool).
+    if(bd.active || (typeof bd.pool==='number' && bd.pool>0 && !bd.broken)){
+      window._FM_BLOCKADES[bd.laneKey]={active:!!bd.active,pool:bd.pool||0,
+        threshold:bd.threshold||1000000,faction:bd.faction,expiresAt:bd.expiresAt};
+    } else {
+      delete window._FM_BLOCKADES[bd.laneKey];
+    }
     if(bd.broken) gToast('Blockade broken! Trade flow restored','#2ecc71');
     else if(bd.active) gToast('Blockade active on '+bd.laneKey.replace(/\|/g,' \u2194 ').replace(/_/g,' '),'#f39c12');
+    if(typeof window._gRenderBlkStatus==='function') window._gRenderBlkStatus();
     if(gMapActive) renderLanes();
   }
   if(msg.type==='blockade_funded'&&msg.data){
@@ -3745,6 +3759,42 @@ window._gStartSmuggle = function(){
   var stake=sInp?Number(sInp.value):0;
   if(!stake||stake<100){ gToast('Min stake: \u0192100','#e74c3c'); return; }
   _sendWSGalaxy({type:'smuggling_start',from:parts[0],to:parts[1],cargoId:cSel?cSel.value:'synth_organs',stake:stake});
+};
+
+// Two-phase blockade status bar for the selected lane. Building: pool fills toward
+// the Ƒ1M activation threshold. Active: the same pool is the blockade's integrity,
+// drained by counter-funding toward 0 (broken).
+window._gRenderBlkStatus = function(){
+  var el=document.getElementById('gBlkStatus'); var lnSel=document.getElementById('gBlkLane');
+  if(!el||!lnSel||!lnSel.value) return;
+  var parts=lnSel.value.split('|');
+  var lk=parts.slice().sort().join('|');
+  var blk=(window._FM_BLOCKADES||{})[lk];
+  if(!blk||!(blk.pool>0)){
+    el.innerHTML='<span style="color:#7a8a7a">No blockade funding on this lane yet.</span>';
+    return;
+  }
+  var thr=blk.threshold||1000000;
+  var rawPct=blk.pool/thr;                       // true ratio (active over-funding can exceed 1)
+  var pct=Math.max(0,Math.min(1,rawPct));        // bar fill is clamped for layout
+  var pctTxt=Math.round(rawPct*100)+'%';         // label shows the real number
+  var poolTxt='\u0192'+Number(Math.round(blk.pool)).toLocaleString();
+  var thrTxt='\u0192'+Number(thr).toLocaleString();
+  var building=!blk.active;
+  var barColor=building?'#f39c12':'#e74c3c';
+  var label, sub;
+  if(building){
+    label='<span style="color:#f39c12">Building blockade</span> '+poolTxt+' / '+thrTxt+' ('+pctTxt+')';
+    sub='Fill the bar to lock the lane. Anyone can chip in.';
+  } else {
+    label='<span style="color:#e74c3c">ACTIVE \u2014 integrity</span> '+poolTxt+' / '+thrTxt+' ('+pctTxt+')';
+    var mins=blk.expiresAt?Math.max(0,Math.round((blk.expiresAt-Date.now())/60000)):null;
+    sub=(rawPct>1?'Over-funded \u2014 needs '+poolTxt+' of counter-funding to break. ':'Counter-fund drains it to 0 to break. ')+(mins!==null?('Expires in ~'+mins+' min.'):'');
+  }
+  el.innerHTML=label
+    +'<div style="height:7px;background:#0d0d16;border:1px solid #222;border-radius:3px;margin:3px 0;overflow:hidden">'
+      +'<div style="height:100%;width:'+(pct*100)+'%;background:'+barColor+';transition:width .3s"></div></div>'
+    +'<span style="color:#8a8a8a">'+sub+'</span>';
 };
 
 window._gFundBlockade = function(){

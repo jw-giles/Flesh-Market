@@ -1195,7 +1195,7 @@ function activateBlockade(laneKey) {
 
   const headline = `⛔ BLOCKADE ACTIVE: ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} shipping lane locked down — supply chains disrupted`;
   pushHeadline(headline, 'bad', '⛔');
-  broadcast({ type:'blockade_update', data:{ laneKey, active:true, expiresAt:blk.expiresAt, faction:blk.faction, pool:blk.pool } });
+  broadcast({ type:'blockade_update', data:{ laneKey, active:true, expiresAt:blk.expiresAt, faction:blk.faction, pool:blk.pool, threshold:BLOCKADE_THRESHOLD } });
 
   blk.timer = setTimeout(() => { expireBlockade(laneKey); }, BLOCKADE_DURATION_MS);
 }
@@ -1222,7 +1222,7 @@ function fundCounterBlockade(laneKey, amount) {
     broadcast({ type:'blockade_update', data:{ laneKey, active:false, broken:true } });
     return true;
   }
-  broadcast({ type:'blockade_update', data:{ laneKey, active:true, pool:blk.pool, faction:blk.faction } });
+  broadcast({ type:'blockade_update', data:{ laneKey, active:true, pool:blk.pool, threshold:BLOCKADE_THRESHOLD, faction:blk.faction } });
   return false;
 }
 
@@ -1472,10 +1472,15 @@ function restoreGalaxySystems() {
         if (blk.contributors) for (const [pid, amt] of Object.entries(blk.contributors)) contribs.set(pid, amt);
         const restored = { pool: blk.pool, faction: blk.faction, contributors: contribs, active: blk.active, activatedAt: blk.activatedAt, expiresAt: blk.expiresAt, timer: null };
         activeBlockades.set(blk.laneKey, restored);
-        if (blk.active && blk.expiresAt) {
-          const remaining = blk.expiresAt - now;
-          if (remaining <= 0) { expireBlockade(blk.laneKey); }
-          else { restored.timer = setTimeout(() => expireBlockade(blk.laneKey), remaining); }
+        if (blk.active) {
+          const remaining = (blk.expiresAt || 0) - now;
+          if (!blk.expiresAt || remaining <= 0) {
+            // Active but already expired (or missing an expiry) — don't resurrect an
+            // immortal blockade; clear it so the lane reads open.
+            expireBlockade(blk.laneKey);
+          } else {
+            restored.timer = setTimeout(() => expireBlockade(blk.laneKey), remaining);
+          }
         }
       }
       if (data.blockades.length) console.log(`[Galaxy restore] ${data.blockades.length} blockades restored`);
@@ -6486,6 +6491,7 @@ wss.on('connection',(ws,req)=>{
         broadcast({ type:'blockade_update', data:{ laneKey, active:false, pool:blk.pool, threshold:BLOCKADE_THRESHOLD, faction:blk.faction } });
       }
       ws.send(JSON.stringify({ type:'blockade_funded', data:{ laneKey, contributed:amt, pool:blk.pool, threshold:BLOCKADE_THRESHOLD, cash:actor.cash } }));
+      try { saveGalaxySystems(); } catch(_){}  // durable immediately, not just on the 60s autosave
     }
 
     // ── Counter-blockade: fund against an active blockade ────────────────────
@@ -6502,6 +6508,7 @@ wss.on('connection',(ws,req)=>{
       savePlayer(actor);
       const broken = fundCounterBlockade(laneKey, amt);
       ws.send(JSON.stringify({ type:'counter_blockade_result', data:{ laneKey, contributed:amt, broken, cash:actor.cash } }));
+      try { saveGalaxySystems(); } catch(_){}
     }
 
     // ── Private Army: instantly break an active blockade for BLOCKADE_THRESHOLD ──
@@ -6525,6 +6532,7 @@ wss.on('connection',(ws,req)=>{
       pushHeadline(`⚔ Private army breaks the ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} blockade — ${actor.name} deploys mercenaries to restore trade`, 'good', '⚔');
       broadcast({ type:'blockade_update', data:{ laneKey, active:false, broken:true } });
       ws.send(JSON.stringify({ type:'private_army_result', data:{ laneKey, cost, cash:actor.cash } }));
+      try { saveGalaxySystems(); } catch(_){}
       broadcastTradeFeed({side:'buy', symbol:'ARMY', qty:1, price:cost});
     }
 

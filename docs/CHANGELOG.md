@@ -4,6 +4,20 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.2.1 (2026-06-06) - blockade funding status bar + durability
+
+- **Two-phase blockade status bar** (`galaxy.js`): the blockade panel now shows a live bar for the selected lane. Building phase fills toward the Ƒ1,000,000 activation threshold; active phase shows remaining integrity as counter-funding drains the pool toward 0. Refreshes on lane select, on every `blockade_update`, and on panel open.
+- **Building-phase pools no longer discarded client-side** (`galaxy.js`): `blockade_update` with `active:false` used to delete the lane entry, throwing away partial funding so it was invisible until activation. Now the entry is retained whenever `pool > 0`, and only dropped on break/expiry. `threshold` added to the active + counter broadcasts so the bar has its denominator.
+- **Stale text fixed** (`galaxy.js`): the blockade panel helper line read "Ƒ50k activates a 2-hour blockade" (encoded `\u01925\u0030k`, missed by the earlier 50k sweep); now reads Ƒ1,000,000.
+- **False-blockade on the map fixed** (`galaxy.js`): the map painted the red ⛔ for any lane present in the blockade map, including lanes merely accumulating funding. The indicator (and the share-count offset, and the lane dropdown label) now require `active === true`; building lanes show `[FUNDING]` in the dropdown instead. Also hardened the server restore (`server.js`): an active blockade restored without a valid future expiry is cleared rather than resurrected as a permanent lockdown, so a stuck entry can't keep showing a lane as blockaded.
+- **Over-funded bar** (`galaxy.js`): the bar fill clamps to 100% for layout, but the label shows the true percentage (e.g. 140%) and notes how much counter-funding a over-funded active blockade actually needs to break.
+- **Immediate blockade persistence** (`server.js`): blockade fund / counter / Private Army handlers now call `saveGalaxySystems()` right after mutating, instead of relying solely on the 60s autosave. Pools already survived restarts via `restoreGalaxySystems()` (market_state table) on boot + graceful shutdown; this closes the up-to-60s window where a hard crash could drop recent contributions. No new table.
+- **Legible blockade panel** (`style.css`, `galaxy.js`): the panel inherited the global phosphor glow, blurring the status bar and helper text. Added `#gBlkPanel` (and its children) to the glow-exclusion list and bumped the status/helper font sizes and contrast so the funding bar reads clearly.
+
+Files: `server/server.js`, `client/assets/galaxy.js`, `client/style.css`, `client/version.json`.
+
+---
+
 ## v1.1.2.0 (2026-06-06) - shipping risk rebalance, escort/insurance, blockade + war-funding repricing
 
 - **Per-hop shipping risk up 4x** (`server.js`): cargo arbitrage fly-by risk raised from `(hops-1)*0.025` to `(hops-1)*0.10` in both `/api/cargo/quote` and `/api/cargo/ship`. Each intermediate colony now adds 10% interception risk instead of 2.5%, pushing multi-hop runs toward the 10-25% band. NOTE: direct (1-hop) runs are unaffected and still sit at base (~10% corporate, ~15% grey); raise `SHIPPING_BASE_RISK` if those also need to move.

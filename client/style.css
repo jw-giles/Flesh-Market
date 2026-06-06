@@ -203,7 +203,7 @@ h1, h2, .tab, .subtab, .chat-tab,
 }
 
 /* Dense data reads crisper without the phosphor glow; chrome keeps it. */
-#gMarketsInner, #tickers, #news, #heatGrid, #board, .ticker, .heat-cell, .store-pane, #companyDetail, #guild-detail, #transferSection { text-shadow:none; }
+#gMarketsInner, #tickers, #news, #heatGrid, #board, .ticker, .heat-cell, .store-pane, #companyDetail, #guild-detail, #transferSection, #gBlkPanel, #gBlkPanel * { text-shadow:none; }
 
 /* amber navigation chrome glow */
 .tab,.subtab,.chat-tab{text-shadow:0 0 4px rgba(240,180,84,0.35)}
