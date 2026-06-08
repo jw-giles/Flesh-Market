@@ -50,16 +50,16 @@
     .fmc-accept{border:1px solid var(--fac);color:var(--fac)}.fmc-accept:hover{background:color-mix(in srgb,var(--fac) 18%,transparent)}
     .fmc-decline{border:1px solid #7a3030;color:#ff7a7a}.fmc-decline:hover{background:#ff7a7a18}
     /* contacts */
-    .fmc-contacts{background:#060f0b;border:1px solid #1c3a30;border-radius:12px;width:min(460px,94vw);max-height:84vh;overflow:auto;box-shadow:0 10px 40px #000c}
+    .fmc-contacts{background:#060f0b;border:1px solid #1c3a30;border-radius:12px;width:min(520px,94vw);max-height:84vh;overflow:auto;box-shadow:0 10px 40px #000c}
     .fmc-chead{position:sticky;top:0;background:#08120d;border-bottom:1px solid #1c3a30;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;z-index:2}
     .fmc-ctitle{color:#42ff7e;letter-spacing:.18em;font-size:.78rem;text-transform:uppercase}
-    .fmc-card{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid #102219;cursor:pointer;transition:background .12s}
+    .fmc-card{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;border-bottom:1px solid #102219;cursor:pointer;transition:background .12s}
     .fmc-card:hover{background:#0a1813}
-    .fmc-cav{width:48px;height:48px;border-radius:8px;object-fit:cover;border:2px solid var(--fac);flex:0 0 auto}
+    .fmc-cav{width:76px;height:76px;border-radius:8px;object-fit:cover;border:2px solid var(--fac);flex:0 0 auto}
     .fmc-cmeta{flex:1;min-width:0}
-    .fmc-cname{color:#cdebe0;font-size:.82rem;font-weight:600}
-    .fmc-crole{color:var(--fac);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;margin:1px 0 3px}
-    .fmc-cblurb{color:#5f8f74;font-size:.66rem;line-height:1.4}
+    .fmc-cname{color:#cdebe0;font-size:.86rem;font-weight:600}
+    .fmc-crole{color:var(--fac);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;margin:2px 0 5px}
+    .fmc-cblurb{color:#9fc7b5;font-size:.74rem;line-height:1.55}
     .fmc-callbtn{flex:0 0 auto;align-self:center;border:1px solid var(--fac);color:var(--fac);background:transparent;border-radius:4px;padding:7px 12px;font:inherit;font-size:.62rem;letter-spacing:.08em;cursor:pointer;text-transform:uppercase}
     .fmc-callbtn.off{border-color:#7a3030;color:#ff6a6a;cursor:not-allowed;opacity:.85}
     `;

@@ -16,7 +16,7 @@ window.FM_CODEC = {
     {
       id:'mchallan', name:'Captain Trisha McHallan', faction:'coalition',
       portrait:'corpo2', role:'Coalition Liaison',
-      blurb:'Coalition naval officer turned trade marshal. Runs clean lanes and expects the same from her couriers.',
+      blurb:"A Coalition officer posted to FLSH station. Our treaty requires one assigned to us at all times. Security is their business, and as the galaxy's government, their rules are the rules we follow. She runs hard, so stay polite if you can manage it.",
       ver:'v2.01',
       lines:[
         {from:'them', text:"Trader. The Coalition has been reading your volume on the Aurora lanes."},
@@ -31,7 +31,7 @@ window.FM_CODEC = {
     {
       id:'rahtan', name:'Rahtan', faction:'guild',
       portrait:'corpo7', role:'Merchant Guild Factor',
-      blurb:'Guild factor who never touches cargo, only the paper that moves it. Every favor is a ledger entry.',
+      blurb:"A religious representative of the Merchant Guild, posted here under our lane shipping agreements and the debts that come with them. He preaches, but the Guild holds our contracts, so we listen. Bring him S'weet wine when you get the chance.",
       ver:'v3.40',
       lines:[
         {from:'them', text:"You answer fast. The Guild appreciates a punctual debtor."},
@@ -46,7 +46,7 @@ window.FM_CODEC = {
     {
       id:'jaquet', name:'Jaquet', faction:'syndicate',
       portrait:'hacker1', role:'Syndicate Broker',
-      blurb:'Syndicate broker who deals in panic. If the tape bleeds, Jaquet already sold you the knife.',
+      blurb:"The Coalition hates having him here, but without him its read on Syndicate operations goes dark. He is a mole, a rat, a criminal. Pay a shady man well enough and he turns into an indispensable asset. Keep him on a need-to-know basis, for our sake.",
       ver:'v1.88',
       lines:[
         {from:'them', text:"You picked up. The Syndicate does not dial twice."},
@@ -61,7 +61,7 @@ window.FM_CODEC = {
     {
       id:'xen', name:'Father Xen', faction:'void',
       portrait:'cyborg11', role:'Void Collective Tech Priest',
-      blurb:'Tech priest of the Void Collective. Speaks for the machine, or lets it speak through him. Hard to tell which.',
+      blurb:"Another religious representative. I would call him a man, but he is closer to a machine now. The Void Collective locks away tech we need and likes to pick at our OPSEC. Since he arrived, the hacks have stopped, and he has been useful enough to justify the trade secrets we lost for the quiet. Try not to let him preach too long.",
       ver:'v0.13',
       lines:[
         {from:'them', text:"The Collective felt your pulse on the network. Steady. Wasteful. Human."},
