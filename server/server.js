@@ -87,6 +87,8 @@ import {
   getSlotRecord, addSpins, recordMilestoneTrade, useSpinAndDrop, grantMonthlySpins,
   // Quests (layer 3)
   initQuestTables, acceptQuest, getPlayerQuests, getQuestStatus, completeQuest,
+  MARKET_UPGRADE_CATALOG, initMarketUpgradeTables, getMarketUpgrades, hasMarketUpgrade, grantMarketUpgrade,
+  getAutoAccum, getAutoAccumRow, getArmedAutoAccum, setAutoAccumConfig, adjustAutoAccumReserve, spendAutoAccumReserve,
   listItemOnMarket, getMarketListings, buyMarketItem, cancelMarketListing, scrapItem, getPatreonSubscribers,
   getTutorialSeen,
   // Dev Communications (DB-persisted)
@@ -120,6 +122,7 @@ initFundPolls();
 seedColoniesIfEmpty();
 initItemTables();
 initQuestTables();
+initMarketUpgradeTables();
 
 function savePlayer(p) { try { savePlayerFn(p); } catch(e) { console.error('savePlayer:', e); } }
 function recordNetWorth(id, net, cash, equity) { try { recordNetWorthFn(id, net, cash, equity); } catch(e) {} }
@@ -4837,6 +4840,59 @@ function broadcast(msg){const data=JSON.stringify(msg);wss.clients.forEach(ws=>{
   if (msg.type === 'chat' || msg.type === 'system_message') pushChatHistory(msg);
 }
 
+// ── Auto-Accumulate engine ────────────────────────────────────────────────────
+// Buys a clip from a player's segregated reserve when a held long drops below
+// their average cost by the configured threshold. Online players only (v1) — runs
+// while connected, fitting passive second-monitor play. Each fill is sourced ONLY
+// from reserve_c (never main cash), atomically debited, and self-throttles: buying
+// below avg lowers avg, which lowers the next trigger.
+const AUTO_ACCUM_INTERVAL_MS = 15000;
+const AUTO_ACCUM_COOLDOWN_MS = 60000;
+setInterval(() => {
+  try {
+    const armed = getArmedAutoAccum();
+    if (!armed.length) return;
+    const now = Date.now();
+    const taxRate = TRADE_TAX_BPS / 10000;
+    for (const cfg of armed) {
+      try {
+        if (now - (cfg.last_buy_t || 0) < AUTO_ACCUM_COOLDOWN_MS) continue;
+        if (!playerSockets.has(cfg.player_id)) continue;               // online only (v1)
+        if (!hasMarketUpgrade(cfg.player_id, 'auto_accumulate')) continue;
+        const c = companies.find(x => x.symbol === cfg.symbol);
+        if (!c) continue;
+        const actor = getPlayer(cfg.player_id);
+        if (!actor) continue;
+        const qty = Number(actor.holdings?.[cfg.symbol] || 0);
+        if (qty <= 0) continue;                                        // need a long to have an avg cost
+        const basisC = Number(actor.basisC?.[cfg.symbol] || 0);
+        if (basisC <= 0) continue;
+        const avgC = basisC / qty;                                     // cents/share
+        const priceC = toCents(c.price);
+        if (priceC <= 0) continue;
+        if (priceC > avgC * (1 - cfg.drop_bps / 10000)) continue;      // not below threshold
+        const budgetC = Math.min(Number(cfg.clip_c || 0), Number(cfg.reserve_c || 0));
+        const buyQty = Math.floor(budgetC / (priceC * (1 + taxRate)));
+        if (buyQty <= 0) continue;
+        const costC = priceC * buyQty;
+        const taxC = Math.floor(costC * TRADE_TAX_BPS / 10000);
+        const totalC = costC + taxC;
+        // Atomically debit the reserve; proceed only if it covered the buy.
+        if (!spendAutoAccumReserve(cfg.player_id, cfg.symbol, totalC, now)) continue;
+        actor.holdings = actor.holdings || {}; actor.basisC = actor.basisC || {};
+        actor.holdings[cfg.symbol] = (actor.holdings[cfg.symbol] || 0) + buyQty;
+        actor.basisC[cfg.symbol] = (actor.basisC[cfg.symbol] || 0) + costC;
+        FMI.treasury += taxC / 100; FMI.hourlyTaxAccrual += taxC / 100;
+        try { addFundCash('FLSH', fromCents(costC) * FLSH_TRADE_PCT); } catch(_) {}
+        savePlayer(actor);
+        broadcastTradeFeed({ side:'buy', symbol:cfg.symbol, qty:buyQty, price:c.price });
+        const socks = playerSockets.get(cfg.player_id);
+        if (socks) { const m = JSON.stringify({ type:'chat_system', data:{ text:`🤖 Auto-Accumulate: bought ${buyQty}x ${cfg.symbol} @ Ƒ${c.price.toFixed(2)} from reserve` } }); for (const w of socks) { try { if (w.readyState === 1) w.send(m); } catch(_) {} } }
+      } catch (_) {}
+    }
+  } catch (_) {}
+}, AUTO_ACCUM_INTERVAL_MS);
+
 // Expire pinned announcements and tell clients to drop them
 setInterval(() => {
   try {
@@ -5990,7 +6046,66 @@ wss.on('connection',(ws,req)=>{
     }
 
     // ── Chart ────────────────────────────────────────────────────────────────
-    if(msg.type==='chart'){const s=String(msg.symbol||'').toUpperCase(),c=companies.find(x=>x.symbol===s);if(c){const bars=c.ohlc.slice(-199);if(c._bar)bars.push({t:c._bar.t,o:c._bar.o,h:c._bar.h,l:c._bar.l,c:c._bar.c,v:0});ws.send(JSON.stringify({type:'chart',data:{symbol:s,ohlc:bars}}));}}
+    if(msg.type==='chart'){const s=String(msg.symbol||'').toUpperCase(),c=companies.find(x=>x.symbol===s);if(c){const _hl=(actor&&hasMarketUpgrade(actor.id,'price_history'))?400:199;const bars=c.ohlc.slice(-_hl);if(c._bar)bars.push({t:c._bar.t,o:c._bar.o,h:c._bar.h,l:c._bar.l,c:c._bar.c,v:0});ws.send(JSON.stringify({type:'chart',data:{symbol:s,ohlc:bars}}));}}
+
+    // ── Market upgrades: list / buy ────────────────────────────────────────────
+    function _muCatalog(pid){ const owned=getMarketUpgrades(pid); return { catalog:Object.entries(MARKET_UPGRADE_CATALOG).map(([id,d])=>({id,name:d.name,desc:d.desc,price:d.price,owned:owned.includes(id)})), owned }; }
+    if (msg.type === 'market_upgrades_list') {
+      if (!actor) return;
+      ws.send(JSON.stringify({ type:'market_upgrades_state', data:_muCatalog(actor.id) }));
+      return;
+    }
+    if (msg.type === 'market_upgrade_buy') {
+      if (!actor) return;
+      const id = String(msg.upgradeId || '');
+      const def = MARKET_UPGRADE_CATALOG[id];
+      if (!def) { ws.send(JSON.stringify({type:'error',data:{msg:'Unknown upgrade.'}})); return; }
+      if (hasMarketUpgrade(actor.id, id)) { ws.send(JSON.stringify({type:'error',data:{msg:'You already own this upgrade.'}})); return; }
+      if (Number(actor.cash||0) < def.price) { ws.send(JSON.stringify({type:'error',data:{msg:'Not enough credits.'}})); return; }
+      safeAddCash(actor, -def.price);
+      grantMarketUpgrade(actor.id, id);
+      savePlayer(actor);
+      ws.send(JSON.stringify({ type:'market_upgrade_purchased', data:Object.assign({ id, cash:actor.cash }, _muCatalog(actor.id)) }));
+      try { ws.send(JSON.stringify({type:'chat_system',data:{text:`✅ Purchased ${def.name}.`}})); } catch(_){}
+      return;
+    }
+
+    // ── Auto-accumulate: config + reserve funding ──────────────────────────────
+    if (msg.type === 'auto_accum_get') {
+      if (!actor) return;
+      ws.send(JSON.stringify({ type:'auto_accum_state', data:{ owned:hasMarketUpgrade(actor.id,'auto_accumulate'), configs:getAutoAccum(actor.id), cash:actor.cash } }));
+      return;
+    }
+    if (msg.type === 'auto_accum_set') {
+      if (!actor) return;
+      if (!hasMarketUpgrade(actor.id,'auto_accumulate')) { ws.send(JSON.stringify({type:'error',data:{msg:'Auto-Accumulate not unlocked.'}})); return; }
+      const sym = String(msg.symbol||'').toUpperCase();
+      if (!companies.find(x=>x.symbol===sym)) { ws.send(JSON.stringify({type:'error',data:{msg:'Unknown symbol.'}})); return; }
+      const dropPct = Math.max(0.1, Math.min(90, Number(msg.dropPct)||5));
+      const clipC = toCents(Math.max(0, Number(msg.clipCash)||0));
+      setAutoAccumConfig(actor.id, sym, { enabled:!!msg.enabled, drop_bps:Math.round(dropPct*100), clip_c:clipC });
+      ws.send(JSON.stringify({ type:'auto_accum_state', data:{ owned:true, configs:getAutoAccum(actor.id), cash:actor.cash } }));
+      return;
+    }
+    if (msg.type === 'auto_accum_fund' || msg.type === 'auto_accum_withdraw') {
+      if (!actor) return;
+      if (!hasMarketUpgrade(actor.id,'auto_accumulate')) { ws.send(JSON.stringify({type:'error',data:{msg:'Auto-Accumulate not unlocked.'}})); return; }
+      const sym = String(msg.symbol||'').toUpperCase();
+      if (!companies.find(x=>x.symbol===sym)) { ws.send(JSON.stringify({type:'error',data:{msg:'Unknown symbol.'}})); return; }
+      const amtC = toCents(Math.max(0, Number(msg.amount)||0));
+      if (amtC <= 0) { ws.send(JSON.stringify({type:'error',data:{msg:'Enter an amount.'}})); return; }
+      if (msg.type === 'auto_accum_fund') {
+        if (Number(actor.cash||0) < fromCents(amtC)) { ws.send(JSON.stringify({type:'error',data:{msg:'Not enough credits.'}})); return; }
+        safeAddCash(actor, -fromCents(amtC)); savePlayer(actor);   // cash leaves first
+        adjustAutoAccumReserve(actor.id, sym, amtC);               // then reserve gains
+      } else {
+        const next = adjustAutoAccumReserve(actor.id, sym, -amtC); // reserve debited (guarded) first
+        if (next < 0) { ws.send(JSON.stringify({type:'error',data:{msg:'Reserve has less than that.'}})); return; }
+        safeAddCash(actor, fromCents(amtC)); savePlayer(actor);    // then cash credited
+      }
+      ws.send(JSON.stringify({ type:'auto_accum_state', data:{ owned:true, configs:getAutoAccum(actor.id), cash:actor.cash } }));
+      return;
+    }
 
     // ── Request state ─────────────────────────────────────────────────────────
     if(msg.type==='request_state'){

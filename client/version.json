@@ -1,7 +1,7 @@
 {
-  "version": "1.1.4.0",
-  "built": "2026-06-09T16:00:00Z",
+  "version": "1.1.5.0",
+  "built": "2026-06-09T19:10:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.4.0",
-  "notes": "Codec quest system goes live: RE4-style calls, server-persistent quests with a declarative completion framework, COLD OPEN as the first quest. Live-gated portraits (equip an item to unlock its portrait; unequip reverts). Mr. Flesh added as a contact. This deploy: four faction reps Offline, only Mr. Flesh callable; re-enable faction reps after testing. SERVER change: pm2 restart."
+  "patch": "1.1.5.0",
+  "notes": "Market upgrades tier (from help-desk requests): purchasable SMA chart overlay, extended price history (400 bars vs 199), and Auto-Accumulate (reserve-funded auto-buys when a held position drops below your average cost; reserve only, never touches main cash). P&L tickers now click through to the market chart (positions list + bar chart). SERVER change: pm2 restart; new tables auto-create on boot."
 }

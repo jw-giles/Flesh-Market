@@ -392,17 +392,7 @@ function renderNews(item) {
     div.style.cursor = 'pointer';
     div.addEventListener('click', (e) => {
       try {
-        const symEl = document.getElementById('sym');
-        if (symEl) symEl.value = clickSym;
-        window.CURRENT = clickSym;
-        if (typeof sendWS === 'function') sendWS({ type: 'chart', symbol: clickSym });
-        if (typeof showTab === 'function') {
-          showTab('market');
-        } else {
-          const mktTab = document.querySelector('[data-tab="market"]');
-          if (mktTab) mktTab.click();
-        }
-        try { document.querySelector('.panel #chart')?.scrollIntoView({behavior:'smooth', block:'nearest'}); } catch(_) {}
+        window.FMGotoSymbol(clickSym);
       } catch(err) {}
     });
   }
@@ -561,6 +551,11 @@ function renderPositions(p) {
   p.positions.forEach(po => {
     const row = document.createElement('div');
     row.innerHTML = `${po.sym} — ${po.qty} @ ${fmt(po.px)} = ${fmt(po.val)}`;
+    if (po.sym) {
+      row.style.cursor = 'pointer';
+      row.title = 'View ' + po.sym + ' in Market';
+      row.addEventListener('click', () => window.FMGotoSymbol(po.sym));
+    }
     box.appendChild(row);
   });
   // charts drawn by liveUpdatePnL on next tick
@@ -813,6 +808,21 @@ function _drawBars(posArrIn) {
     ctx.textAlign = 'left';
     ctx.fillText(sign + pct.toFixed(2)+'%', W - PAD_R + 4, y + BAR_H/2);
   });
+
+  // Click a bar row to open that symbol in Market. Row y is deterministic
+  // (PAD_T + i*ROW_H), so map the click's y to a row index.
+  canvas._pnlRows = posArr;
+  if (!canvas._pnlClickBound) {
+    canvas._pnlClickBound = true;
+    canvas.style.cursor = 'pointer';
+    canvas.addEventListener('click', function (e) {
+      try {
+        const rows = canvas._pnlRows || [];
+        const idx = Math.floor((e.offsetY - PAD_T) / ROW_H);
+        if (idx >= 0 && idx < rows.length && rows[idx] && rows[idx].sym) window.FMGotoSymbol(rows[idx].sym);
+      } catch (_) {}
+    });
+  }
 }
 
 // Called by ResizeObserver and tab activation — just redraws current state
@@ -825,6 +835,22 @@ function drawEquity() {
   } catch(e) {}
 }
 
+
+// Navigate to a symbol's chart in the Market tab. Shared by news lines, P&L
+// rows, and the P&L bar chart so click-to-navigate behaves identically.
+window.FMGotoSymbol = function (sym) {
+  try {
+    sym = String(sym || '').toUpperCase();
+    if (!sym) return;
+    const symEl = document.getElementById('sym');
+    if (symEl) symEl.value = sym;
+    window.CURRENT = sym;
+    if (typeof sendWS === 'function') sendWS({ type: 'chart', symbol: sym });
+    if (typeof showTab === 'function') showTab('market');
+    else { const t = document.querySelector('[data-tab="market"]'); if (t) t.click(); }
+    setTimeout(function () { try { document.querySelector('.panel #chart')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_) {} }, 60);
+  } catch (_) {}
+};
 
 function renderPnLDetail(p) {
   // Called on portfolio msg — seeds __MY_POSITIONS then delegates to live renderer
@@ -1147,6 +1173,26 @@ function drawChart() {
     ctx.restore();
   }
 
+  // ── SMA overlay (gated on the 'sma' market upgrade) ──
+  try {
+    const SMA_PERIOD = 20;
+    if (window.FM_MARKET_UPGRADES && window.FM_MARKET_UPGRADES.has && window.FM_MARKET_UPGRADES.has('sma') && n >= SMA_PERIOD) {
+      let sum = 0; ctx.beginPath(); let started = false;
+      for (let i = 0; i < n; i++) {
+        sum += data[i];
+        if (i >= SMA_PERIOD) sum -= data[i - SMA_PERIOD];
+        if (i >= SMA_PERIOD - 1) {
+          const avg = sum / SMA_PERIOD;
+          const x = (i / (n - 1)) * CW, y = pY(avg);
+          if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+        }
+      }
+      ctx.setLineDash([]); ctx.strokeStyle = 'rgba(214,184,122,0.85)'; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.fillStyle = 'rgba(214,184,122,0.8)'; ctx.font = '10px monospace'; ctx.textAlign = 'left';
+      ctx.fillText('SMA ' + SMA_PERIOD, 6, MT + 12);
+    }
+  } catch (_) {}
+
   // ── Pulsing endpoint ──
   const pt = (Date.now() % 1200) / 1200;
   const pr = 3.5 + Math.sin(pt * Math.PI * 2) * 1.5;
@@ -1282,6 +1328,31 @@ setInterval(function(){
   } catch(_) {}
 }, 60000);
 
+// Item-backed chat avatars (clothing/implant portraits, Mr. Flesh's brain) resolve
+// from the lazy-loaded item catalog. A viewer who hasn't opened inventory/store
+// doesn't have it yet, so those avatars come back blank. Load it on demand and
+// refill any chat avatars that couldn't resolve.
+function _refillChatAvatars() {
+  if (!window.FMPortraitSrc) return;
+  document.querySelectorAll('img.chat-avatar[data-portrait]').forEach(function (im) {
+    var p = im.getAttribute('data-portrait');
+    if (!p) return;
+    var src = window.FMPortraitSrc(p);
+    if (src) {
+      im.src = src;
+      im.style.display = '';
+      if (window.FMPortraitPixelated && window.FMPortraitPixelated(p)) im.style.imageRendering = 'pixelated';
+    }
+  });
+}
+var _chatCatLoading = false;
+function _ensureChatItemCatalog() {
+  if (window.ITEM_CATALOG_CLIENT) { _refillChatAvatars(); return; }
+  if (_chatCatLoading || !window.lazyLoad) return;
+  _chatCatLoading = true;
+  window.lazyLoad('assets/inventory.js', function () { _chatCatLoading = false; _refillChatAvatars(); });
+}
+
 function addChat(item){
   const channel = item.channel || 'global';
   const ROOMED = ['global','patreon','guild','unmod'];
@@ -1328,9 +1399,12 @@ function addChat(item){
   const _ts = Number(item.t) || Date.now();
   const _timeSpan = `<span class="cm-time" data-ts="${_ts}" title="${new Date(_ts).toLocaleString()}" style="font-size:.6rem;opacity:.4;margin-left:6px;color:${color};white-space:nowrap">${fmtRel(_ts)}</span>`;
   const _psrc = (!isSystem && item.portrait && window.FMPortraitSrc) ? window.FMPortraitSrc(item.portrait) : '';
-  const _pIR = (_psrc && window.FMPortraitPixelated && window.FMPortraitPixelated(item.portrait)) ? 'image-rendering:pixelated;' : '';
-  const avatar = _psrc
-    ? `<img class="chat-avatar" data-user="${item.user}" src="${_psrc}" alt="" loading="lazy" style="width:40px;height:40px;border-radius:50%;object-fit:cover;${_pIR}vertical-align:middle;margin-right:9px;border:2px solid ${color};cursor:pointer" onerror="this.style.display='none'">`
+  const _needsCat = !isSystem && item.portrait && window.FMPortraitNeedsCatalog && window.FMPortraitNeedsCatalog(item.portrait) && !window.ITEM_CATALOG_CLIENT;
+  const _pIR = ((_psrc || _needsCat) && window.FMPortraitPixelated && window.FMPortraitPixelated(item.portrait)) ? 'image-rendering:pixelated;' : '';
+  // Transparent 1x1 placeholder while the item catalog loads; refilled by _refillChatAvatars.
+  const _placeholder = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+  const avatar = (_psrc || _needsCat)
+    ? `<img class="chat-avatar" data-user="${item.user}" data-portrait="${item.portrait}" src="${_psrc || _placeholder}" alt="" loading="lazy" style="width:40px;height:40px;border-radius:50%;object-fit:cover;${_pIR}vertical-align:middle;margin-right:9px;border:2px solid ${color};cursor:pointer"${_psrc ? ` onerror="this.style.display='none'"` : ''}>`
     : '';
   div.innerHTML = `${avatar}${badge}${userSpan}: <span style="color:${isSystem ? '#7fc090' : '#f0b454'}">${text}</span>${_timeSpan}${blockBtnHtml}`;
 
@@ -1375,6 +1449,7 @@ function addChat(item){
   const ph = box.querySelector('.chat-ph');
   if (ph) ph.remove();
   box.appendChild(div);
+  if (_needsCat) _ensureChatItemCatalog();
   // Transient notifications (passive income, confirms) self-remove after their TTL.
   if (item.ttlMs && Number(item.ttlMs) > 0) {
     setTimeout(function(){ try { div.remove(); } catch(_) {} }, Number(item.ttlMs));
@@ -1646,6 +1721,8 @@ ws.addEventListener('open', ()=>{
   try{ ws.send(JSON.stringify({type:'request_state'})); }catch(e){}
   // Re-request chart if we already have a symbol selected (e.g. after reconnect)
   try{ if (CURRENT) ws.send(JSON.stringify({type:'chart', symbol:CURRENT})); }catch(e){}
+  try{ ws.send(JSON.stringify({type:'market_upgrades_list'})); }catch(e){}
+  try{ ws.send(JSON.stringify({type:'auto_accum_get'})); }catch(e){}
 });
 ws.addEventListener('message', (ev)=>{
   const _evData = ev && ev.data != null ? ev.data : (ev && ev.detail && ev.detail.data);
@@ -1786,6 +1863,19 @@ ws.addEventListener('message', (ev)=>{
       _waveOpenPrice = msg.data.ohlc.length ? msg.data.ohlc[0].o : 0;
       drawChart();
     }
+  }
+  if (msg.type === 'market_upgrades_state' || msg.type === 'market_upgrade_purchased') {
+    const d = msg.data || {};
+    window.FM_MARKET_UPGRADES = new Set(d.owned || []);
+    if (Array.isArray(d.catalog)) window.FM_MARKET_CATALOG = d.catalog;
+    if (typeof d.cash === 'number') window.FM_UPG_CASH = d.cash;
+    try { window.FMUpgradesRender && window.FMUpgradesRender(); } catch(_){}
+    try { if (typeof _waveBuffer !== 'undefined' && _waveBuffer.length) drawChart(); } catch(_){}
+  }
+  if (msg.type === 'auto_accum_state') {
+    window.FM_AUTO_ACCUM = msg.data || { owned:false, configs:[] };
+    if (msg.data && typeof msg.data.cash === 'number') window.FM_UPG_CASH = msg.data.cash;
+    try { window.FMUpgradesRender && window.FMUpgradesRender(); } catch(_){}
   }
   if (msg.type === 'chat') addChat(msg.data);
   if (msg.type === 'announcements') { (msg.data || []).forEach(setAnnouncement); }

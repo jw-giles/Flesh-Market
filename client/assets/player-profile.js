@@ -250,6 +250,12 @@
     return /^item:/.test(String(s)) || /^data:/.test(String(s));
   };
 
+  // True when resolving this portrait needs the lazy-loaded item catalog.
+  window.FMPortraitNeedsCatalog = function (id) {
+    var g = window.FM_GATED_PORTRAITS[id];
+    return /^item:/.test(String(g ? g.img : id || ''));
+  };
+
   window.FMHeaderPortrait = function (pid) {
     const el = document.getElementById('fm-header-portrait');
     if (!el) return;

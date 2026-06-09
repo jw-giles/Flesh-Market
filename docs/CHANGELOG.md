@@ -4,6 +4,29 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.5.0 (2026-06-09) - market upgrades tier + P&L click-to-navigate (SERVER)
+
+Help-desk feature drop. A purchasable market-upgrades tier (modeled on the mining-upgrade system) plus a P&L navigation fix.
+
+**Market upgrades (`server/db.js`, `server/server.js`)**
+- New `MARKET_UPGRADE_CATALOG`: `sma` (Ƒ250k), `price_history` (Ƒ500k), `auto_accumulate` (Ƒ5M). Ownership in new `player_market_upgrades` table; `initMarketUpgradeTables` / `getMarketUpgrades` / `hasMarketUpgrade` / `grantMarketUpgrade`. WS: `market_upgrades_list`, `market_upgrade_buy` -> `market_upgrades_state` / `market_upgrade_purchased`.
+- SMA overlay (`client/assets/core.js` `drawChart`): SMA-20 line drawn in the chart's own coordinate space, gated on owning `sma`.
+- Extended price history: chart handler serves up to 400 bars (vs 199) when the player owns `price_history`. Data was already retained server-side; this lifts the send cap.
+
+**Auto-Accumulate (`server/db.js`, `server/server.js`)**
+- Segregated-reserve model: a per-symbol reserve funded out of main cash up front. The engine spends ONLY from reserve_c; main cash is never touched by auto-buys. `player_auto_accum` table; `setAutoAccumConfig`, `adjustAutoAccumReserve` (overdraw-guarded), `getArmedAutoAccum`, `spendAutoAccumReserve` (atomic debit guard). All money in cents, no bitwise ops (values exceed 32-bit).
+- Engine (`setInterval`, 15s; 60s per-symbol cooldown): for each armed config on an online player, if last price <= avg cost * (1 - drop_bps/10000), buy a clip sized by min(clip, reserve) accounting for trade tax, atomically debit the reserve, update holdings + basis, take the FLSH cut + treasury tax, broadcast the fill, notify the player. Self-throttling: buying below avg lowers avg, which lowers the next trigger. Online players only (v1); offline is a future extension.
+- WS: `auto_accum_get` / `auto_accum_set` / `auto_accum_fund` / `auto_accum_withdraw` -> `auto_accum_state`. Fund deducts cash first then credits reserve; withdraw debits reserve (guarded) first then credits cash, so a failure can never create credits.
+- Control surface: `client/assets/market-upgrades.js` panel in the market tab (buy upgrades; configure threshold/clip; fund/withdraw reserve; arm/pause per symbol).
+
+**P&L click-to-navigate (`client/assets/core.js`)**
+- Shared `window.FMGotoSymbol(sym)` helper (set symbol input, request chart, switch to Market, scroll). Wired to the positions list rows and the P&L bar chart (canvas click hit-test by row height). News lines now route through the same helper.
+
+**Chat avatar fix for item-backed portraits (`client/assets/core.js`, `client/assets/player-profile.js`)**
+- Item-backed chat avatars (clothing/implant portraits, Mr. Flesh's Preserved Brain) resolve from the item catalog, which is lazy-loaded only on the inventory/store tab. Viewers who had not opened those tabs saw a blank avatar; the owner saw their own fine. Chat now lazy-loads the catalog on demand when an item-backed avatar appears and refills any avatars that could not resolve. New shared `FMPortraitNeedsCatalog` helper mirrors the existing header/picker pattern. Note: Mr. Flesh's avatar only shows if his account portrait is actually set (select the Preserved Brain in his profile).
+
+---
+
 ## v1.1.4.0 (2026-06-09) - codec quest system + gated portraits + Mr. Flesh (SERVER)
 
 One feature drop, built across several internal checkpoints and shipped together. Codec calls go live, quests persist and complete server-side, portraits can be unlocked by equipping items, and Mr. Flesh joins the contact list.

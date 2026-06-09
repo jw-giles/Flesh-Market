@@ -2411,6 +2411,87 @@ export function completeQuest(playerId, questId, outcome) {
   return !!(r && (r.changes || 0) > 0);
 }
 
+// ── Market upgrades (purchasable tools) + auto-accumulate ─────────────────────
+
+export const MARKET_UPGRADE_CATALOG = {
+  sma:             { name:'Moving Average Overlay', price: 250000,  desc:'Adds a simple moving average line to the market chart.' },
+  price_history:   { name:'Extended Price History', price: 500000,  desc:'Loads up to 400 bars of chart history instead of 199.' },
+  auto_accumulate: { name:'Auto-Accumulate',        price: 5000000, desc:'Auto-buys from a funded reserve when a position drops below your average cost. Reserve only; never touches your main balance.' },
+};
+
+export function initMarketUpgradeTables() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_market_upgrades (
+      player_id   TEXT NOT NULL,
+      upgrade_id  TEXT NOT NULL,
+      acquired_at INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (player_id, upgrade_id)
+    );
+    CREATE TABLE IF NOT EXISTS player_auto_accum (
+      player_id  TEXT NOT NULL,
+      symbol     TEXT NOT NULL,
+      enabled    INTEGER NOT NULL DEFAULT 0,
+      drop_bps   INTEGER NOT NULL DEFAULT 500,
+      clip_c     INTEGER NOT NULL DEFAULT 0,
+      reserve_c  INTEGER NOT NULL DEFAULT 0,
+      last_buy_t INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (player_id, symbol)
+    );
+    CREATE INDEX IF NOT EXISTS idx_aa_enabled ON player_auto_accum(enabled);
+  `);
+}
+
+export function getMarketUpgrades(playerId) {
+  return stmt(`SELECT upgrade_id FROM player_market_upgrades WHERE player_id=?`).all(playerId).map(r => r.upgrade_id);
+}
+export function hasMarketUpgrade(playerId, upgradeId) {
+  return !!stmt(`SELECT 1 FROM player_market_upgrades WHERE player_id=? AND upgrade_id=?`).get(playerId, upgradeId);
+}
+export function grantMarketUpgrade(playerId, upgradeId) {
+  stmt(`INSERT OR IGNORE INTO player_market_upgrades(player_id,upgrade_id,acquired_at) VALUES(?,?,?)`).run(playerId, upgradeId, Date.now());
+}
+
+// Auto-accumulate config: one row per player+symbol. reserve_c is SEGREGATED cents
+// (funded out of main cash up front); the engine spends only from it.
+export function getAutoAccum(playerId) {
+  return stmt(`SELECT symbol, enabled, drop_bps, clip_c, reserve_c, last_buy_t FROM player_auto_accum WHERE player_id=?`).all(playerId);
+}
+export function getAutoAccumRow(playerId, symbol) {
+  return stmt(`SELECT symbol, enabled, drop_bps, clip_c, reserve_c, last_buy_t FROM player_auto_accum WHERE player_id=? AND symbol=?`).get(playerId, symbol) || null;
+}
+// All armed configs (enabled, funded, sized). Engine reads this.
+export function getArmedAutoAccum() {
+  return stmt(`SELECT player_id, symbol, drop_bps, clip_c, reserve_c, last_buy_t FROM player_auto_accum WHERE enabled=1 AND reserve_c>0 AND clip_c>0`).all();
+}
+export function setAutoAccumConfig(playerId, symbol, cfg) {
+  const drop = Math.max(0, Math.floor(Number(cfg.drop_bps) || 0));
+  const clip = Math.max(0, Math.floor(Number(cfg.clip_c) || 0));
+  const en = cfg.enabled ? 1 : 0;
+  if (getAutoAccumRow(playerId, symbol)) {
+    stmt(`UPDATE player_auto_accum SET enabled=?, drop_bps=?, clip_c=? WHERE player_id=? AND symbol=?`).run(en, drop, clip, playerId, symbol);
+  } else {
+    stmt(`INSERT INTO player_auto_accum(player_id,symbol,enabled,drop_bps,clip_c,reserve_c) VALUES(?,?,?,?,?,0)`).run(playerId, symbol, en, drop, clip);
+  }
+}
+// Move cents into (delta>0) or out of (delta<0) a symbol's reserve. Returns the new
+// reserve cents, or -1 if a withdrawal would overdraw (no change made).
+export function adjustAutoAccumReserve(playerId, symbol, deltaC) {
+  const d = Math.trunc(Number(deltaC) || 0);
+  let row = getAutoAccumRow(playerId, symbol);
+  if (!row) { stmt(`INSERT INTO player_auto_accum(player_id,symbol,reserve_c) VALUES(?,?,0)`).run(playerId, symbol); row = { reserve_c: 0 }; }
+  const next = Number(row.reserve_c || 0) + d;
+  if (next < 0) return -1;
+  stmt(`UPDATE player_auto_accum SET reserve_c=? WHERE player_id=? AND symbol=?`).run(next, playerId, symbol);
+  return next;
+}
+// Engine: atomically debit totalC from the reserve on a fill. True only if covered,
+// so an auto-buy can never overspend the reserve even under concurrent ticks.
+export function spendAutoAccumReserve(playerId, symbol, totalC, atT) {
+  const t = Math.max(0, Math.floor(Number(totalC) || 0));
+  const r = stmt(`UPDATE player_auto_accum SET reserve_c=reserve_c-?, last_buy_t=? WHERE player_id=? AND symbol=? AND reserve_c>=?`).run(t, atT, playerId, symbol, t);
+  return !!(r && (r.changes || 0) > 0);
+}
+
 // ── Item Market ───────────────────────────────────────────────────────────────
 
 export function listItemOnMarket(sellerId, invId, price) {
