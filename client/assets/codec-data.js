@@ -10,23 +10,35 @@ window.FM_CODEC = {
     syndicate:{ color:'#e74c3c', sys:'SYNDICATE DARKLINE' },
     void:     { color:'#9b59b6', sys:'VOID COLLECTIVE NODE' },
     guild:    { color:'#2ecc71', sys:'GUILD LEDGERNET' },
+    flesh:    { color:'#f0b454', sys:'FLESH STATION CORE' },
   },
   // Order here is the order they appear in the contacts list.
   reps: [
     {
       id:'mchallan', name:'Captain Trisha McHallan', faction:'coalition',
-      portrait:'corpo2', role:'Coalition Liaison',
+      portrait:'corpo2', role:'Coalition Liaison', enabled:false,
+      presidentLock:true, presidentLine:"President, I have nothing for you at this time.",
+      allDoneLine:"The cores did their work. Nothing new from me right now. Stay close.",
       blurb:"A Coalition officer posted to FLSH station. Our treaty requires one assigned to us at all times. Security is their business, and as the galaxy's government, their rules are the rules we follow. She runs hard, so stay polite if you can manage it.",
-      ver:'v2.01',
-      lines:[
-        {from:'them', text:"Trader. The Coalition has been reading your volume on the Aurora lanes."},
-        {from:'you',  text:"And?"},
-        {from:'them', text:"And we would rather you ran cargo for us than against us. Move medical stock to The Escrow before the cycle turns. Quiet, clean, on time."},
-        {from:'them', text:"Do that and the Coalition counts you a friend. We are short on those."},
-      ],
-      quest:{ id:'coalition_cold_chain', title:'COLD CHAIN',
-        desc:'Ship a load of medical cargo to The Escrow within one market cycle.',
-        reward:'Coalition standing +1.' }
+      ver:'v3.00',
+      quests:[
+        {
+          id:'coalition_cold_open', title:'COLD OPEN',
+          activeLine:"You're still running that crate to The Hollow. Finish the job, then we talk.",
+          lines:[
+            {from:'them', text:"Hey, {name}. You're late. Doesn't matter, it's slow today."},
+            {from:'you',  text:"You called."},
+            {from:'them', text:"New Anchor wants eyes on how the Syndicate runs product through The Hollow. We can't put a Coalition hull on that lane without it turning into an incident. You can."},
+            {from:'them', text:"I'm giving you a crate of data cores. They're hacked. If some grey-market hand seizes them on the way, the cores wake up and burn whoever opened them. If they reach the buyer, they sit quiet and tell us who's buying."},
+            {from:'them', text:"Either way New Anchor wins. Either way you're just a courier who never knew."},
+            {from:'you',  text:"And if I'm the one holding them when it goes wrong?"},
+            {from:'them', text:"Then you got robbed and the Coalition covers your loss. I don't lose couriers over cargo. Be discreet, run it straight, don't get clever with the route."},
+          ],
+          quest:{ id:'coalition_cold_open', title:'COLD OPEN',
+            desc:'Smuggle Encrypted Data Cores from New Anchor to The Hollow.',
+            reward:'Coalition standing. Slot spins. Cargo loss reimbursed.' }
+        },
+      ]
     },
     {
       id:'rahtan', name:'Rahtan', faction:'guild',
@@ -72,6 +84,17 @@ window.FM_CODEC = {
       quest:{ id:'void_communion', title:'COMMUNION',
         desc:'Travel to a colony in the Abaddon cluster and dock.',
         reward:'Void standing +1, opens a hidden contact (placeholder).' }
+    },
+    {
+      // Employer / story frame. Portrait reuses the Preserved Brain item art via
+      // the client item catalog (item:<id> -> ITEM_CATALOG_CLIENT[id].img data URI).
+      // role/blurb are functional stand-ins - replace with Mr. Flesh's real voice.
+      id:'mrflesh', name:'Mr. Flesh', faction:'flesh',
+      portrait:'item:jarred_brain', role:'The Proprietor', enabled:true,
+      blurb:"The proprietor of FLSH. He signs the checks. Mind the work and he will not mind you.",
+      idleLine:"Get back to work...",
+      ver:'v0.11',
+      quests:[]
     },
   ],
 };

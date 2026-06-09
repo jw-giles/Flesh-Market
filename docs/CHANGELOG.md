@@ -4,6 +4,30 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.4.0 (2026-06-09) - codec quest system + gated portraits + Mr. Flesh (SERVER)
+
+One feature drop, built across several internal checkpoints and shipped together. Codec calls go live, quests persist and complete server-side, portraits can be unlocked by equipping items, and Mr. Flesh joins the contact list.
+
+**Codec calls + quests**
+- Codec calls enabled. RE4-style call UI with a BACK control (Backspace) and tuned panel/portrait sizing.
+- Quest persistence (`server/db.js`): new `player_quests` table (CREATE TABLE IF NOT EXISTS) with `initQuestTables`, `acceptQuest`, `getPlayerQuests`, `getQuestStatus`, `completeQuest`. `completeQuest` transitions `active -> completed` once only, so a quest can never pay out twice.
+- Declarative completion framework (`server/server.js`): `QUEST_DEFS` maps quest id -> objective + reward; `tryCompleteQuest(player, eventType, ev)` completes the first matching active quest and grants the reward in one place. Objective types: smuggle, ship_arrive, war_fund, blockade, short_hold. Reward supports delivered/seized branches, spins, cash, stake refund, item drops.
+- Multi-quest-per-rep engine (`client/assets/codec.js`, `codec-data.js`): reps carry `quests:[]` (linear chain; current = first not completed), with legacy single-`quest` fallback and a rep-level `allDoneLine`.
+- COLD OPEN is the first wired quest: smuggle Encrypted Data Cores (`data_cores`) New Anchor -> The Hollow; seized = stake refund + 1 spin, delivered = 3 spins. Hooked via `resolveSmuggling`; `resolveShipping` success calls `ship_arrive` (no-op until a deliver quest exists).
+  - LIMITS: only COLD OPEN has a def + dialogue. war_fund / blockade / short_hold types exist in the matcher but have no call sites yet (one-line hook each when those quests are written). "Standing" still cosmetic.
+
+**Live-gated portraits** (`server/server.js`, `server/db.js`, `client/assets/player-profile.js`, `core.js`)
+- A portrait can require a specific equipped item: equip to unlock it as your avatar, unequip (or equip over it) and the avatar reverts. First entry: the Preserved Brain (`jarred_brain` implant). Server gates `/api/portrait` and clears the stored portrait on unequip (`enforcePortraitGate`); `isItemEquipped` added. Shared `FMPortraitSrc` resolver feeds header, profile, chat, and picker; the picker shows gated portraits under "Equipped Unlocks" only while their item is equipped.
+
+**Mr. Flesh contact** (`client/assets/codec-data.js`)
+- Added as a fifth contact under a new `flesh` faction (gold). Portrait reuses item art via an `item:<id>` form resolved from `ITEM_CATALOG_CLIENT` (data-URI sprites); item-backed portraits render `image-rendering:pixelated` so they stay crisp scaled up. The item catalog (lazy `inventory.js`) is loaded on demand by the codec / picker / header when an `item:` portrait needs it. role/blurb are functional stand-ins pending his real voice.
+
+**This deploy's call state:** all four faction reps (McHallan, Rahtan, Jaquet, Xen) Offline; only Mr. Flesh callable ("Get back to work..."). Re-enable faction reps for testing after the push.
+
+SERVER + client change; `pm2 restart` required (new `player_quests` table auto-creates), then hard-refresh.
+
+---
+
 ## v1.1.3.6 (2026-06-08) - codec contacts copy + portrait pass
 
 - **Contact descriptions rewritten** (`client/assets/codec-data.js`): all four faction-rep blurbs (McHallan, Rahtan, Jaquet, Father Xen) replaced with in-world briefing text framing each rep's relationship to FLSH station. No em dashes in player-visible copy. Roles and faction ids unchanged; Xen stays Void Collective (resolved a "Null Syndicate" naming collision with Jaquet's Syndicate).

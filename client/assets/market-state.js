@@ -460,6 +460,8 @@
   // Update president state from WS
   window._onPresidentState = function(data) {
     presidentHolder = data.holder || null;
+    window.FM_PRESIDENT = presidentHolder; // global read for codec name-resolver + rep locks
+
     const holderLine = document.getElementById('president-holder-line');
     if (holderLine) {
       holderLine.textContent = presidentHolder

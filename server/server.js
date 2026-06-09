@@ -83,7 +83,10 @@ import {
   ITEM_CATALOG, RARITY_CONFIG, ITEM_SLOTS,
   initItemTables, rollItemDrop, giveItem,
   getInventory, getEquipped, equipItem, unequipItem, getEquippedPassiveBonus, getPassiveIncome,
+  isItemEquipped,
   getSlotRecord, addSpins, recordMilestoneTrade, useSpinAndDrop, grantMonthlySpins,
+  // Quests (layer 3)
+  initQuestTables, acceptQuest, getPlayerQuests, getQuestStatus, completeQuest,
   listItemOnMarket, getMarketListings, buyMarketItem, cancelMarketListing, scrapItem, getPatreonSubscribers,
   getTutorialSeen,
   // Dev Communications (DB-persisted)
@@ -116,6 +119,7 @@ initModerationTable();
 initFundPolls();
 seedColoniesIfEmpty();
 initItemTables();
+initQuestTables();
 
 function savePlayer(p) { try { savePlayerFn(p); } catch(e) { console.error('savePlayer:', e); } }
 function recordNetWorth(id, net, cash, equity) { try { recordNetWorthFn(id, net, cash, equity); } catch(e) {} }
@@ -893,6 +897,87 @@ function findRoute(from, to) {
   return { path, lanes };
 }
 
+// ─── Quest completion framework (layer 3) ────────────────────────────────────
+// Declarative quest definitions: an objective (the in-game event that completes
+// it) plus a reward. Adding a quest = add an entry here + make sure the relevant
+// system calls tryCompleteQuest at its resolve point. Dialogue/desc live
+// client-side (codec-data.js); this is the server-authoritative truth.
+const QUEST_DEFS = {
+  coalition_cold_open: {
+    title: 'COLD OPEN',
+    objective: { type:'smuggle', from:'new_anchor', to:'the_hollow', cargo:'data_cores' },
+    reward: {
+      delivered: { spins:3 },
+      seized:    { spins:1, refundStake:true },
+    },
+  },
+};
+
+function objectiveMatches(obj, eventType, ev) {
+  if (!obj || obj.type !== eventType) return false;
+  switch (eventType) {
+    case 'smuggle':
+    case 'ship_arrive':
+      return (!obj.from  || obj.from  === ev.from)
+          && (!obj.to    || obj.to    === ev.to)
+          && (!obj.cargo || obj.cargo === ev.cargo);
+    case 'war_fund':
+      return (!obj.colony  || obj.colony  === ev.colony)
+          && (!obj.faction || obj.faction === ev.faction);
+    case 'blockade':   return (!obj.lane   || obj.lane   === ev.lane);
+    case 'short_hold': return (!obj.target || obj.target === ev.target);
+    default:           return false;
+  }
+}
+
+function pickRewardBranch(reward, ev) {
+  if (!reward) return null;
+  if (ev.outcome && reward[ev.outcome]) return reward[ev.outcome];
+  if (reward.default) return reward.default;
+  if (reward.spins != null || reward.cash != null || reward.refundStake || reward.itemRarity) return reward;
+  return null;
+}
+
+function grantQuestReward(p, branch, ev) {
+  const out = { spins:0, cash:0, refund:0, item:null };
+  if (!branch) return out;
+  if (branch.spins) { addSpins(p.id, branch.spins); out.spins = branch.spins; }
+  if (branch.cash)  { safeAddCash(p, branch.cash); out.cash = branch.cash; }
+  if (branch.refundStake && ev.stake) { safeAddCash(p, ev.stake); out.refund = ev.stake; }
+  if (branch.itemRarity) {
+    try { const it = rollItemDrop(branch.itemRarity); if (it) { giveItem(p.id, it.id, 'quest'); out.item = it.id; } } catch(_){}
+  }
+  if (out.cash || out.refund) savePlayer(p);
+  return out;
+}
+
+// Game systems call this at their resolve points. Completes the first ACTIVE
+// quest whose objective matches, grants its reward, notifies the player. Takes
+// the player OBJECT (not id) so cash mutations stay on the caller's instance.
+function tryCompleteQuest(p, eventType, ev) {
+  if (!p || !p.id) return;
+  try {
+    const quests = getPlayerQuests(p.id);
+    for (const q of quests) {
+      if (q.status !== 'active') continue;
+      const def = QUEST_DEFS[q.id];
+      if (!def || !objectiveMatches(def.objective, eventType, ev)) continue;
+      if (!completeQuest(p.id, q.id, ev.outcome || 'done')) continue; // single transition guard
+      const granted = grantQuestReward(p, pickRewardBranch(def.reward, ev), ev);
+      const sockets = playerSockets.get(p.id);
+      if (sockets) {
+        const out = [ JSON.stringify({ type:'quest_complete', data:{
+          questId:q.id, title:def.title || q.id, outcome: ev.outcome || 'done',
+          spins:granted.spins, refund:granted.refund, cash:granted.cash, item:granted.item } }) ];
+        if (granted.spins) out.push(JSON.stringify({ type:'spin_grant', data:{ spins:granted.spins, reason:(def.title||q.id) } }));
+        if (granted.cash || granted.refund) out.push(JSON.stringify({ type:'portfolio', data:snapshotPortfolio(p) }));
+        for (const ws of sockets) { for (const m of out) { try { if (ws.readyState===1) ws.send(m); } catch(_){} } }
+      }
+      return; // one quest per event
+    }
+  } catch(e) { console.error('tryCompleteQuest:', e); }
+}
+
 function resolveSmuggling(playerId) {
   const run = activeSmuggling.get(playerId);
   if (!run) return;
@@ -953,6 +1038,9 @@ function resolveSmuggling(playerId) {
     laneRisk.intercept + cargo.riskMod + betRisk + tensionMod + factionMod + syndicateRisk + blockadeMod - guardCut
   ));
   const intercepted = Math.random() < interceptChance;
+
+  // Layer 3: declarative quest completion (see QUEST_DEFS / tryCompleteQuest).
+  tryCompleteQuest(p, 'smuggle', { from:run.from, to:run.to, cargo:run.cargoId, stake:run.stake, outcome: intercepted ? 'seized' : 'delivered' });
 
   const sockets = playerSockets.get(playerId);
   if (intercepted) {
@@ -1128,6 +1216,9 @@ function resolveShipping(playerId) {
     const payout = Math.round(run.stake * cargo.mult * 100) / 100;
     safeAddCash(p, payout);
     savePlayer(p);
+
+    // Layer 3: deliver-quest completion on successful arrival (no-op until a def matches).
+    tryCompleteQuest(p, 'ship_arrive', { to:run.to, cargo:run.cargoId, stake:run.stake, outcome:'delivered' });
 
     // Lane share kickback: shareholders get 2% of shipping profit
     const laneKey = getLaneKey(run.from, run.to);
@@ -2136,6 +2227,32 @@ try {
   PORTRAIT_SET = new Set(fs.readdirSync(PORTRAIT_DIR).filter(f=>/\.png$/i.test(f)).map(f=>f.replace(/\.png$/i,'')));
   console.log(`[portraits] ${PORTRAIT_SET.size} selectable portraits loaded`);
 } catch(e) { console.error('[portraits] could not read', PORTRAIT_DIR, e.message); }
+
+// Gated portraits: not free-select. Selectable only WHILE a specific item is
+// equipped (live-gated, so the item stays valuable as a collectable). Their art
+// is item art served from the web root, not the portraits dir, so they are not
+// in PORTRAIT_SET and are validated separately.
+const GATED_PORTRAITS = {
+  jarred_brain: { requiresItem: 'jarred_brain', img: 'cyberpunk_jarred_brain.png', name: 'Preserved Brain' },
+};
+
+// If the player's current portrait is gated and the gate is no longer satisfied
+// (the required item was unequipped), clear it so the avatar reverts.
+function enforcePortraitGate(playerId) {
+  try {
+    const p = getPlayer(playerId);
+    if (!p || !p.portrait) return;
+    const g = GATED_PORTRAITS[p.portrait];
+    if (g && !isItemEquipped(playerId, g.requiresItem)) {
+      setPlayerPortrait(playerId, null);
+      const sockets = playerSockets.get(playerId);
+      if (sockets) {
+        const m = JSON.stringify({ type:'portrait_reverted', data:{ portrait:null, reason:'unequipped' } });
+        for (const ws of sockets) { try { if (ws.readyState===1) ws.send(m); } catch(_){} }
+      }
+    }
+  } catch(_){}
+}
 
 // ─── REST: Auth ───────────────────────────────────────────────────────────────
 
@@ -4431,7 +4548,14 @@ app.get('/api/items/profile/:name', (req, res) => {
 app.post('/api/portrait', requirePlayer, (req, res) => {
   try {
     let pid = String(req.body?.portrait || '').trim();
-    if (pid && !PORTRAIT_SET.has(pid)) return res.status(400).json({ ok: false, error: 'invalid_portrait' });
+    if (pid) {
+      if (GATED_PORTRAITS[pid]) {
+        if (!isItemEquipped(req.player.id, GATED_PORTRAITS[pid].requiresItem))
+          return res.status(400).json({ ok: false, error: 'portrait_locked' });
+      } else if (!PORTRAIT_SET.has(pid)) {
+        return res.status(400).json({ ok: false, error: 'invalid_portrait' });
+      }
+    }
     setPlayerPortrait(req.player.id, pid || null);
     res.json({ ok: true, portrait: pid || null });
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -4458,6 +4582,7 @@ app.post('/api/items/equip', requirePlayer, (req, res) => {
     if (!invId || !slot) return res.status(400).json({ ok: false, error: 'missing_params' });
     const ok = equipItem(req.player.id, slot, invId);
     if (!ok) return res.status(400).json({ ok: false, error: 'equip_failed' });
+    enforcePortraitGate(req.player.id);
     const passiveBonus = getEquippedPassiveBonus(req.player.id);
     res.json({ ok: true, passiveBonus });
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -4469,6 +4594,7 @@ app.post('/api/items/unequip', requirePlayer, (req, res) => {
     const { slot } = req.body;
     if (!slot) return res.status(400).json({ ok: false, error: 'missing_slot' });
     unequipItem(req.player.id, slot);
+    enforcePortraitGate(req.player.id);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -5547,6 +5673,15 @@ wss.on('connection',(ws,req)=>{
       ws.send(JSON.stringify({ type: 'president_state', data: { holder: president } }));
     }
 
+    if (msg.type === 'quest_accept') {
+      const qid = String((msg.data && msg.data.questId) || msg.questId || '').trim().slice(0, 64);
+      if (qid) { acceptQuest(actor.id, qid); ws.send(JSON.stringify({ type:'quest_state', data:{ quests: getPlayerQuests(actor.id) } })); }
+    }
+
+    if (msg.type === 'get_quest_state') {
+      ws.send(JSON.stringify({ type:'quest_state', data:{ quests: getPlayerQuests(actor.id) } }));
+    }
+
     if (msg.type === 'buy_president') {
       if (actor.cash < PRESIDENT_COST) {
         ws.send(JSON.stringify({ type: 'error', data: { msg: `Need Ƒ1,000,000,000 to seize the Presidency.` } }));
@@ -5862,6 +5997,7 @@ wss.on('connection',(ws,req)=>{
       ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
       ws.send(JSON.stringify({type:'leaderboard',data:_leaderboardSnapshot||getLeaderboard(companies)}));
       ws.send(JSON.stringify({type:'orders',data:getPlayerOrders(playerId)}));
+      ws.send(JSON.stringify({type:'quest_state',data:{quests:getPlayerQuests(playerId)}}));
     }
 
     // ── Portfolio request (lightweight refresh) ───────────────────────────────

@@ -61,8 +61,8 @@
     const me = (window.ME && window.ME.name) ? window.ME.name : '';
     const isSelf = me && _ppTarget && me.toLowerCase() === String(_ppTarget).toLowerCase();
     if (portEl) {
-      const pid = d.portrait ? String(d.portrait).replace(/[^a-z0-9_]/gi, '') : '';
-      if (pid) { portEl.src = 'assets/portraits/' + pid + '.png'; portEl.style.display = 'block'; }
+      const pid = d.portrait ? String(d.portrait) : '';
+      if (pid) { portEl.src = window.FMPortraitSrc(pid); portEl.style.imageRendering = window.FMPortraitPixelated(pid) ? 'pixelated' : ''; portEl.style.display = 'block'; }
       else { portEl.style.display = 'none'; }
       if (isSelf) {
         portEl.style.cursor = 'pointer'; portEl.title = 'Change portrait';
@@ -218,12 +218,51 @@
   };
 
   // ── Portrait picker ──────────────────────────────────────────────────────
+  // Gated portraits: selectable only while the required item is equipped (the
+  // server enforces this). Art is item art served from the web root, not the
+  // portraits dir. Keep this in sync with server GATED_PORTRAITS.
+  window.FM_GATED_PORTRAITS = window.FM_GATED_PORTRAITS || {
+    jarred_brain: { img: 'item:jarred_brain', name: 'Preserved Brain', requiresItem: 'jarred_brain' }
+  };
+  // Resolve any portrait id to an <img src>/background url.
+  //   gated id     -> resolve its configured img
+  //   'item:<id>'  -> that item's image from the client catalog (data URI art)
+  //   'data:...'   -> used as-is
+  //   real path    -> as-is; bare stem -> the portraits dir
+  window.FMPortraitSrc = function (id) {
+    function resolve(s) {
+      s = String(s || '');
+      if (!s) return '';
+      if (/^data:/.test(s)) return s;
+      var m = /^item:(.+)$/.exec(s);
+      if (m) { var it = (window.ITEM_CATALOG_CLIENT || {})[m[1]]; return (it && it.img) || ''; }
+      if (/[./]/.test(s)) return s.replace(/[^a-z0-9_./-]/gi, '');
+      return 'assets/portraits/' + s.replace(/[^a-z0-9_]/gi, '') + '.png';
+    }
+    var g = window.FM_GATED_PORTRAITS[id];
+    return resolve(g ? g.img : id);
+  };
+  // Item-backed portraits are low-res pixel art; render nearest-neighbor so they
+  // stay crisp when scaled up. Full-res portraits-dir images are left smooth.
+  window.FMPortraitPixelated = function (id) {
+    var g = window.FM_GATED_PORTRAITS[id];
+    var s = g ? g.img : id;
+    return /^item:/.test(String(s)) || /^data:/.test(String(s));
+  };
+
   window.FMHeaderPortrait = function (pid) {
     const el = document.getElementById('fm-header-portrait');
     if (!el) return;
+    var g = pid && window.FM_GATED_PORTRAITS[pid];
+    var needsCat = /^item:/.test(String(g ? g.img : pid || ''));
+    if (needsCat && !window.ITEM_CATALOG_CLIENT && window.lazyLoad) {
+      window.lazyLoad('assets/inventory.js', function () { window.FMHeaderPortrait(pid); });
+      return;
+    }
     el.style.display = 'inline-flex';
-    const id = String(pid || '').replace(/[^a-z0-9_]/gi, '');
-    if (id) { el.style.backgroundImage = "url('assets/portraits/" + id + ".png')"; el.textContent = ''; }
+    el.style.imageRendering = window.FMPortraitPixelated(pid) ? 'pixelated' : '';
+    const src = window.FMPortraitSrc(pid);
+    if (src) { el.style.backgroundImage = "url('" + src + "')"; el.textContent = ''; }
     else { el.style.backgroundImage = 'none'; el.textContent = '\uFF0B'; }
   };
 
@@ -234,13 +273,16 @@
       headers: { 'Content-Type': 'application/json', ...(token ? { 'x-auth-token': token } : {}) },
       body: JSON.stringify({ portrait: id, token })
     }).then(r => r.json()).then(function (res) {
-      if (!res || !res.ok) return;
+      if (!res || !res.ok) {
+        if (res && res.error === 'portrait_locked' && window.showToast) window.showToast('Equip the item to use that portrait', '#f0b454', 3000);
+        return;
+      }
       if (window.ME) window.ME.portrait = res.portrait;
       if (window.FMHeaderPortrait) window.FMHeaderPortrait(res.portrait);
       const ov = document.getElementById('portraitPickerOverlay'); if (ov) ov.remove();
       const portEl = document.getElementById('ppPortrait');
       if (portEl) {
-        if (res.portrait) { portEl.src = 'assets/portraits/' + res.portrait + '.png'; portEl.style.display = 'block'; }
+        if (res.portrait) { portEl.src = window.FMPortraitSrc(res.portrait); portEl.style.imageRendering = window.FMPortraitPixelated(res.portrait) ? 'pixelated' : ''; portEl.style.display = 'block'; }
         else { portEl.style.display = 'none'; }
       }
       if (window.showToast) window.showToast(res.portrait ? 'Portrait updated' : 'Portrait removed', '#42ff7e', 2500);
@@ -249,6 +291,29 @@
 
   window.openPortraitPicker = function () {
     if (!window.FM_PORTRAITS) return;
+    const token = window.FM_TOKEN || (window.ME && window.ME.token) || '';
+    // Which gated portraits are unlocked right now (required item equipped)?
+    fetch('/api/items/inventory', { headers: token ? { 'x-auth-token': token } : {} })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var unlocked = [];
+        try {
+          if (data && data.ok) {
+            var eqIds = Object.values(data.equipped || {}).filter(Boolean);
+            var equippedItems = (data.inventory || []).filter(function (it) { return eqIds.indexOf(it.invId) >= 0; }).map(function (it) { return it.itemId; });
+            Object.keys(window.FM_GATED_PORTRAITS).forEach(function (pid) {
+              if (equippedItems.indexOf(window.FM_GATED_PORTRAITS[pid].requiresItem) >= 0) unlocked.push(pid);
+            });
+          }
+        } catch (_) {}
+        var needCat = unlocked.some(function (pid) { var g = window.FM_GATED_PORTRAITS[pid]; return g && /^item:/.test(String(g.img)); });
+        if (needCat && !window.ITEM_CATALOG_CLIENT && window.lazyLoad) window.lazyLoad('assets/inventory.js', function () { buildPortraitPicker(unlocked); });
+        else buildPortraitPicker(unlocked);
+      })
+      .catch(function () { buildPortraitPicker([]); });
+  };
+
+  function buildPortraitPicker(unlocked) {
     const old = document.getElementById('portraitPickerOverlay'); if (old) old.remove();
     const cur = (window.ME && window.ME.portrait) ? window.ME.portrait : '';
     const ov = document.createElement('div');
@@ -262,12 +327,22 @@
     h += '<button id="ppPickClose" style="background:none;border:none;color:#5f8f74;font-size:1rem;cursor:pointer">✕</button></div>';
     h += '<div style="padding:14px 16px">';
     h += '<button id="ppPickClear" style="background:transparent;border:1px solid #3a2a2a;color:#c7a9a9;border-radius:4px;padding:5px 12px;font:inherit;font-size:.62rem;cursor:pointer;margin-bottom:12px;letter-spacing:.1em">REMOVE PORTRAIT</button>';
+    if (unlocked && unlocked.length) {
+      h += '<div style="color:#f0b454;font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;margin:6px 0 7px">Equipped Unlocks</div>';
+      h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:8px;margin-bottom:14px">';
+      unlocked.forEach(function (pid) {
+        const sel = pid === cur;
+        const g = window.FM_GATED_PORTRAITS[pid] || {};
+        h += '<img class="pp-pick" data-id="' + pid + '" title="' + (g.name || '') + '" src="' + window.FMPortraitSrc(pid) + '" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;image-rendering:pixelated;border-radius:6px;cursor:pointer;border:2px solid ' + (sel ? '#f0b454' : '#3a2f1a') + ';box-shadow:' + (sel ? '0 0 8px #f0b45488' : 'none') + '">';
+      });
+      h += '</div>';
+    }
     window.FM_PORTRAITS.groups.forEach(function (g) {
       h += '<div style="color:#5f8f74;font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;margin:6px 0 7px">' + g[0] + '</div>';
       h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:8px;margin-bottom:14px">';
       g[1].forEach(function (id) {
         const sel = id === cur;
-        h += '<img class="pp-pick" data-id="' + id + '" src="assets/portraits/' + id + '.png" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid ' + (sel ? '#42ff7e' : 'transparent') + ';box-shadow:' + (sel ? '0 0 8px #42ff7e88' : 'none') + '">';
+        h += '<img class="pp-pick" data-id="' + id + '" src="' + window.FMPortraitSrc(id) + '" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid ' + (sel ? '#42ff7e' : 'transparent') + ';box-shadow:' + (sel ? '0 0 8px #42ff7e88' : 'none') + '">';
       });
       h += '</div>';
     });
@@ -278,6 +353,6 @@
     ov.querySelector('#ppPickClose').onclick = function () { ov.remove(); };
     ov.querySelector('#ppPickClear').onclick = function () { savePortrait(''); };
     ov.querySelectorAll('.pp-pick').forEach(function (img) { img.onclick = function () { savePortrait(img.dataset.id); }; });
-  };
+  }
 
 })();

@@ -2243,6 +2243,19 @@ export function getEquipped(playerId) {
   return stmt(`SELECT * FROM player_equipped WHERE player_id=?`).get(playerId) || null;
 }
 
+// True if the player currently has the given item_id equipped in any slot.
+export function isItemEquipped(playerId, itemId) {
+  const eq = getEquipped(playerId);
+  if (!eq) return false;
+  for (const slot of ITEM_SLOTS) {
+    const invId = eq[slot];
+    if (!invId) continue;
+    const inv = stmt(`SELECT item_id FROM player_inventory WHERE id=?`).get(invId);
+    if (inv && inv.item_id === itemId) return true;
+  }
+  return false;
+}
+
 export function equipItem(playerId, slot, invId) {
   const row = stmt(`SELECT * FROM player_inventory WHERE id=? AND player_id=?`).get(invId, playerId);
   if (!row) return false;
@@ -2354,6 +2367,48 @@ export function grantMonthlySpins(playerId, patreonTier) {
   getSlotRecord(playerId);
   stmt(`UPDATE slot_machine SET spins_remaining=spins_remaining+?, last_monthly_grant=? WHERE player_id=?`).run(spins, Date.now(), playerId);
   return spins;
+}
+
+// ── Quests (layer 3: persistent quest state) ─────────────────────────────────
+// One row per (player, quest). status: 'active' | 'completed'. outcome records
+// how a quest resolved (e.g. 'delivered' | 'seized') for branching reward/flavor.
+export function initQuestTables() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_quests (
+      player_id    TEXT NOT NULL,
+      quest_id     TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'active',
+      outcome      TEXT,
+      accepted_at  INTEGER NOT NULL DEFAULT 0,
+      completed_at INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (player_id, quest_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pq_player ON player_quests(player_id);
+  `);
+}
+
+// Accept a quest. No re-accept once a row exists (active or completed).
+export function acceptQuest(playerId, questId) {
+  const existing = stmt(`SELECT status FROM player_quests WHERE player_id=? AND quest_id=?`).get(playerId, questId);
+  if (existing) return { ok:false, already:existing.status };
+  stmt(`INSERT INTO player_quests(player_id,quest_id,status,accepted_at) VALUES(?,?,'active',?)`).run(playerId, questId, Date.now());
+  return { ok:true };
+}
+
+export function getPlayerQuests(playerId) {
+  return stmt(`SELECT quest_id AS id, status, outcome, accepted_at, completed_at FROM player_quests WHERE player_id=?`).all(playerId);
+}
+
+export function getQuestStatus(playerId, questId) {
+  return stmt(`SELECT quest_id AS id, status, outcome FROM player_quests WHERE player_id=? AND quest_id=?`).get(playerId, questId) || null;
+}
+
+// Transition active -> completed exactly once. Returns true ONLY on the real
+// transition, so a quest can never pay out twice even if the trigger fires again.
+export function completeQuest(playerId, questId, outcome) {
+  const r = stmt(`UPDATE player_quests SET status='completed', outcome=?, completed_at=? WHERE player_id=? AND quest_id=? AND status='active'`)
+    .run(outcome || null, Date.now(), playerId, questId);
+  return !!(r && (r.changes || 0) > 0);
 }
 
 // ── Item Market ───────────────────────────────────────────────────────────────

@@ -1327,9 +1327,10 @@ function addChat(item){
   div.dataset.user = item.user || '';
   const _ts = Number(item.t) || Date.now();
   const _timeSpan = `<span class="cm-time" data-ts="${_ts}" title="${new Date(_ts).toLocaleString()}" style="font-size:.6rem;opacity:.4;margin-left:6px;color:${color};white-space:nowrap">${fmtRel(_ts)}</span>`;
-  const _pid = (!isSystem && item.portrait) ? String(item.portrait).replace(/[^a-z0-9_]/gi,'') : '';
-  const avatar = _pid
-    ? `<img class="chat-avatar" data-user="${item.user}" src="assets/portraits/${_pid}.png" alt="" loading="lazy" style="width:40px;height:40px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:9px;border:2px solid ${color};cursor:pointer" onerror="this.style.display='none'">`
+  const _psrc = (!isSystem && item.portrait && window.FMPortraitSrc) ? window.FMPortraitSrc(item.portrait) : '';
+  const _pIR = (_psrc && window.FMPortraitPixelated && window.FMPortraitPixelated(item.portrait)) ? 'image-rendering:pixelated;' : '';
+  const avatar = _psrc
+    ? `<img class="chat-avatar" data-user="${item.user}" src="${_psrc}" alt="" loading="lazy" style="width:40px;height:40px;border-radius:50%;object-fit:cover;${_pIR}vertical-align:middle;margin-right:9px;border:2px solid ${color};cursor:pointer" onerror="this.style.display='none'">`
     : '';
   div.innerHTML = `${avatar}${badge}${userSpan}: <span style="color:${isSystem ? '#7fc090' : '#f0b454'}">${text}</span>${_timeSpan}${blockBtnHtml}`;
 
@@ -1940,6 +1941,27 @@ ws.addEventListener('message', (ev)=>{
   if (msg.type === 'president_ousted') {
     const d = msg.data || {};
     showToast('⬡ ' + d.ousted + ' HAS BEEN REMOVED FROM OFFICE', '#ff4444', 5000);
+  }
+  if (msg.type === 'quest_state') {
+    window.FM_QUESTS = (msg.data && msg.data.quests) || [];
+  }
+  if (msg.type === 'portrait_reverted') {
+    if (window.ME) window.ME.portrait = null;
+    if (window.FMHeaderPortrait) window.FMHeaderPortrait(null);
+    if (window.showToast) window.showToast('Portrait reverted: the item is no longer equipped', '#f0b454', 4000);
+  }
+  if (msg.type === 'quest_complete') {
+    const d = msg.data || {};
+    window.FM_QUESTS = window.FM_QUESTS || [];
+    let row = window.FM_QUESTS.find(q => q.id === d.questId);
+    if (row) { row.status = 'completed'; row.outcome = d.outcome; }
+    else window.FM_QUESTS.push({ id: d.questId, status: 'completed', outcome: d.outcome });
+    const delivered = d.outcome === 'delivered';
+    const parts = [];
+    if (d.spins)  parts.push(d.spins + ' spin' + (d.spins === 1 ? '' : 's'));
+    if (d.refund) parts.push('Ƒ' + Math.round(d.refund).toLocaleString() + ' reimbursed');
+    const detail = parts.length ? (': ' + parts.join(', ')) : '';
+    showToast('◈ ' + (d.title || 'Contract') + (delivered ? ' complete' : ' resolved') + detail, delivered ? '#4ecdc4' : '#f0b454', 5000);
   }
 });
 
