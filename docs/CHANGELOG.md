@@ -4,6 +4,15 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.5.3 (2026-06-09) - Capital House holdings click-to-ticker nav (CLIENT)
+
+**Capital House portfolio (`client/assets/funds.js`)**
+- Applied the personal-P&L click-to-navigate behavior to Capital House / fund holdings. Clicking a holding row in the text list, or a bar in the portfolio chart, now opens that symbol in Market (via `window.FMGotoSymbol`). Bar-chart hit-test uses the deterministic row geometry (`PAD_T + i*ROW_H`), the same pattern as the personal P&L chart, and reads `canvas._gRows` live so it stays correct across re-marks, filtering, and sector grouping.
+
+CLIENT-ONLY: hard-refresh, no server restart needed.
+
+---
+
 ## v1.1.5.2 (2026-06-09) - ticker-list separator + Galaxy contracts legibility (CLIENT)
 
 **Companies list (`client/assets/core.js`)**

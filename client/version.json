@@ -1,7 +1,7 @@
 {
-  "version": "1.1.5.2",
-  "built": "2026-06-09T22:30:00Z",
+  "version": "1.1.5.3",
+  "built": "2026-06-09T22:50:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.5.2",
-  "notes": "Restored the dash separator in the companies ticker list (the em-dash sweep had replaced it with a comma); scoped exception, it is a data label not prose. Galaxy > Contracts legibility: brightened the dulled hardcoded grays (route separator, column headers, labels, strike/expiry) that the global --muted brighten never reached. CLIENT-only, no server logic change."
+  "patch": "1.1.5.3",
+  "notes": "Capital House / fund holdings now use the personal-P&L click-to-navigate behavior: clicking a holding row or a portfolio-chart bar opens that symbol in Market. CLIENT-only, no server logic change."
 }

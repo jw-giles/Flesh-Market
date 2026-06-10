@@ -289,7 +289,7 @@ function _renderGuildHoldings(f){
             const sign = h.pct >= 0 ? '+' : '';
             const col  = h.pct >= 0 ? '#86ff6a' : '#ff6b6b';
             const secTag = bySector ? ` <span style="font-size:.6rem;color:#7a6a4a;letter-spacing:.04em">${_gSectorName(_gSectorOf(h.symbol))}</span>` : '';
-            return `<div class="ticker"><span class="sym">${h.symbol}${secTag}</span>`
+            return `<div class="ticker" style="cursor:pointer" title="Open ${h.symbol} in Market" onclick="window.FMGotoSymbol('${h.symbol}')"><span class="sym">${h.symbol}${secTag}</span>`
               + `<span style="display:flex;gap:12px;align-items:baseline;justify-content:flex-end">`
               + `<span style="color:#b6ffcf">Ƒ${h.price.toFixed(2)}</span>`
               + `<span style="color:${col};min-width:64px;text-align:right">${sign}${h.pct.toFixed(2)}%</span>`
@@ -420,6 +420,21 @@ function _drawGuildBars(rowsIn){
     ctx.textAlign = 'left';
     ctx.fillText(sign + pct.toFixed(2)+'%', W - PAD_R + 4, y + BAR_H/2);
   });
+
+  // Click a bar to open that symbol in Market (mirrors personal P&L bar-chart nav).
+  // Row y is deterministic (PAD_T + i*ROW_H), so map click y to a row index.
+  canvas._gRows = rows;
+  if (!canvas._gClickBound){
+    canvas._gClickBound = true;
+    canvas.style.cursor = 'pointer';
+    canvas.addEventListener('click', function(e){
+      try {
+        const rr = canvas._gRows || [];
+        const idx = Math.floor((e.offsetY - PAD_T) / ROW_H);
+        if (idx >= 0 && idx < rr.length && rr[idx] && rr[idx].symbol) window.FMGotoSymbol(rr[idx].symbol);
+      } catch(_){}
+    });
+  }
 }
 
 function renderFundDetail(f) {
