@@ -82,6 +82,7 @@
                 '<button class="btn muFund" data-sym="' + c.symbol + '" style="font-size:.74rem">Fund</button>' +
                 '<button class="btn muWdr" data-sym="' + c.symbol + '" style="font-size:.74rem">Withdraw</button>' +
                 '<button class="btn muToggle" data-sym="' + c.symbol + '" data-en="' + (c.enabled ? 0 : 1) + '" data-drop="' + c.drop_bps + '" data-clip="' + c.clip_c + '" style="font-size:.74rem">' + (c.enabled ? 'Pause' : 'Arm') + '</button>' +
+                '<button class="btn muCancel" data-sym="' + c.symbol + '" data-res="' + c.reserve_c + '" style="font-size:.74rem;color:#e06b5a;border-color:#5a2a2a">Cancel</button>' +
               '</div>' +
             '</div>';
         });
@@ -127,6 +128,16 @@
           dropPct: (parseInt(b.getAttribute('data-drop'), 10) || 500) / 100,
           clipCash: (parseInt(b.getAttribute('data-clip'), 10) || 0) / 100
         });
+      });
+    });
+    body.querySelectorAll('.muCancel').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var s = b.getAttribute('data-sym');
+        var res = (parseInt(b.getAttribute('data-res'), 10) || 0) / 100;
+        var prompt = res > 0
+          ? 'Cancel auto-accumulate on ' + s + '? Reserve ' + fmtF(res) + ' returns to your balance.'
+          : 'Cancel auto-accumulate on ' + s + '?';
+        if (window.confirm(prompt)) send({ type: 'auto_accum_cancel', symbol: s });
       });
     });
   }

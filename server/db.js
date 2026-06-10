@@ -2467,6 +2467,10 @@ export function getAutoAccum(playerId) {
 export function getAutoAccumRow(playerId, symbol) {
   return stmt(`SELECT symbol, enabled, drop_bps, clip_c, reserve_c, last_buy_t FROM player_auto_accum WHERE player_id=? AND symbol=?`).get(playerId, symbol) || null;
 }
+// Remove a config entirely (used by cancel; caller refunds the reserve first).
+export function deleteAutoAccum(playerId, symbol) {
+  return stmt(`DELETE FROM player_auto_accum WHERE player_id=? AND symbol=?`).run(playerId, symbol);
+}
 // All armed configs (enabled, funded, sized). Engine reads this.
 export function getArmedAutoAccum() {
   return stmt(`SELECT player_id, symbol, drop_bps, clip_c, reserve_c, last_buy_t FROM player_auto_accum WHERE enabled=1 AND reserve_c>0 AND clip_c>0`).all();

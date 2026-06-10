@@ -88,7 +88,7 @@ import {
   // Quests (layer 3)
   initQuestTables, acceptQuest, getPlayerQuests, getQuestStatus, completeQuest,
   MARKET_UPGRADE_CATALOG, initMarketUpgradeTables, getMarketUpgrades, hasMarketUpgrade, grantMarketUpgrade,
-  getAutoAccum, getAutoAccumRow, getArmedAutoAccum, setAutoAccumConfig, adjustAutoAccumReserve, spendAutoAccumReserve,
+  getAutoAccum, getAutoAccumRow, getArmedAutoAccum, setAutoAccumConfig, adjustAutoAccumReserve, spendAutoAccumReserve, deleteAutoAccum,
   listItemOnMarket, getMarketListings, buyMarketItem, cancelMarketListing, scrapItem, getPatreonSubscribers,
   getTutorialSeen,
   // Dev Communications (DB-persisted)
@@ -6204,6 +6204,23 @@ wss.on('connection',(ws,req)=>{
         const next = adjustAutoAccumReserve(actor.id, sym, -amtC); // reserve debited (guarded) first
         if (next < 0) { ws.send(JSON.stringify({type:'error',data:{msg:'Reserve has less than that.'}})); return; }
         safeAddCash(actor, fromCents(amtC)); savePlayer(actor);    // then cash credited
+      }
+      ws.send(JSON.stringify({ type:'auto_accum_state', data:{ owned:true, configs:getAutoAccum(actor.id), cash:actor.cash } }));
+      return;
+    }
+
+    if (msg.type === 'auto_accum_cancel') {
+      if (!actor) return;
+      if (!hasMarketUpgrade(actor.id,'auto_accumulate')) { ws.send(JSON.stringify({type:'error',data:{msg:'Auto-Accumulate not unlocked.'}})); return; }
+      const sym = String(msg.symbol||'').toUpperCase();
+      const row = getAutoAccumRow(actor.id, sym);
+      if (row) {
+        // Single-threaded + synchronous SQLite: read reserve, delete row, refund cash
+        // run to completion before the accumulate engine can fire again, so the
+        // reserve can't be spent between the read and the delete.
+        const refundC = Math.max(0, Math.trunc(Number(row.reserve_c)||0));
+        deleteAutoAccum(actor.id, sym);                                          // config + reserve gone
+        if (refundC > 0) { safeAddCash(actor, fromCents(refundC)); savePlayer(actor); } // reserve returned to main balance
       }
       ws.send(JSON.stringify({ type:'auto_accum_state', data:{ owned:true, configs:getAutoAccum(actor.id), cash:actor.cash } }));
       return;

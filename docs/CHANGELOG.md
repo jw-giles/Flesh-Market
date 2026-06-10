@@ -4,6 +4,16 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.5.5 (2026-06-10) - cancel auto-accumulate (SERVER + CLIENT)
+
+**Auto-Accumulate cancel (`server/server.js`, `server/db.js`, `client/assets/market-upgrades.js`)**
+- You could arm/pause/fund/withdraw an auto-accumulate but never remove one. Added a Cancel button per config: it deletes the config and returns the full segregated reserve to your main balance.
+- New `auto_accum_cancel` WS handler reads the reserve, deletes the row (`deleteAutoAccum`), then credits cash by the exact reserve. Single-threaded + synchronous SQLite means the read/delete/refund completes before the accumulate engine can fire again, so there is no overspend race; money is conserved by construction, and cancelling a nonexistent config is a no-op. Verified against an in-memory SQLite copy of the schema (row removed, sibling configs and other players untouched, cash up by exactly the reserve).
+
+SERVER CHANGE: requires `pm2 restart`, then hard-refresh the client.
+
+---
+
 ## v1.1.5.4 (2026-06-09) - Ƒbay listings show item art (CLIENT)
 
 **Ƒbay market listings (`client/assets/inventory.js`)**
