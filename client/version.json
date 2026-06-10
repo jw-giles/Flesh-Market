@@ -1,7 +1,7 @@
 {
-  "version": "1.1.5.3",
-  "built": "2026-06-09T22:50:00Z",
+  "version": "1.1.5.4",
+  "built": "2026-06-09T23:05:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.5.3",
-  "notes": "Capital House / fund holdings now use the personal-P&L click-to-navigate behavior: clicking a holding row or a portfolio-chart bar opens that symbol in Market. CLIENT-only, no server logic change."
+  "patch": "1.1.5.4",
+  "notes": "Ƒbay market listings now show the item sprite instead of a generic slot glyph (they were rendering the slot emoji and never reading item.img). CLIENT-only, no server logic change."
 }

@@ -4,6 +4,15 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.5.4 (2026-06-09) - Ƒbay listings show item art (CLIENT)
+
+**Ƒbay market listings (`client/assets/inventory.js`)**
+- Listings rendered the slot emoji (`SLOT_ICONS[item.slot]`) instead of the item sprite, so every entry showed a generic glyph. Swapped in the existing `itemIcon()` helper, which renders the pixel-art `item.img` when present and falls back to the slot emoji otherwise. Catalog art is available for all listings regardless of ownership (`ITEM_CATALOG_CLIENT` lives in this module), so no lazy-load was needed. Inventory/equip views already used `itemIcon`; only the market list was missing it. The SLOTS spin reels keep slot emojis on the outer reels by design.
+
+CLIENT-ONLY: hard-refresh, no server restart needed.
+
+---
+
 ## v1.1.5.3 (2026-06-09) - Capital House holdings click-to-ticker nav (CLIENT)
 
 **Capital House portfolio (`client/assets/funds.js`)**

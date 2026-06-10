@@ -753,7 +753,7 @@ window.applyMarketFilters = function(){
     const rc = RARITY_COLORS[item.rarity]||'#888';
     const isOwn = l.seller_id === getToken();
     return `<div class="market-row">
-      <span style="font-size:1.3rem">${SLOT_ICONS[item.slot]||'📦'}</span>
+      <span style="width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center">${itemIcon(item,'32px')}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:.78rem;color:${rc};font-weight:500">${item.name}</div>
         <div style="font-size:.63rem;color:#553333">${(item.rarity||'').toUpperCase()} · +${item.passive||0} Ƒ/30min · ${l.seller_name||'Unknown'}</div>
