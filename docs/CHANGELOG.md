@@ -4,6 +4,18 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.5.2 (2026-06-09) - ticker-list separator + Galaxy contracts legibility (CLIENT)
+
+**Companies list (`client/assets/core.js`)**
+- Restored the dash separator between ticker and lore name (the em-dash sweep had turned "SYM — Name" into "SYM, Name"). Deliberate scoped exception to the no-em-dash rule: this separator is a data label, not prose.
+
+**Galaxy > Contracts legibility (`client/assets/galaxy.js`)**
+- The lane-shares positions/table and shipping-contracts board read dulled. Cause: hardcoded dim grays (#444 route separator, #555 labels/column headers, #666 label dash + expiry, #778 strike/expiry) that the --muted brighten never reached (galaxy.js uses literal hex, not the CSS var). Brightened those values inside the contracts render only; other Galaxy sub-pages untouched.
+
+NOTE: the v1.1.5.1 "net zero player-visible em dashes" claim was incomplete. The sweep matched the literal "—" character only; galaxy.js still has \u2014 unicode-escaped em dashes (contracts description, contract toasts) the sweep never saw. Not addressed here.
+
+---
+
 ## v1.1.5.1 (2026-06-09) - news overhaul + live header + dev breaking-news + FLSH/BRNC + phosphor + em-dash cleanup (SERVER)
 
 **Phosphor legibility (`client/style.css`, `client/assets/core.js`)**

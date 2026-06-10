@@ -1,7 +1,7 @@
 {
-  "version": "1.1.5.1",
-  "built": "2026-06-09T22:10:00Z",
+  "version": "1.1.5.2",
+  "built": "2026-06-09T22:30:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.5.1",
-  "notes": "News overhaul (faction / Mr. Flesh / rare-weird categories, cross-sector pool, expanded market+colony pools), live news header with dev breaking-news control, FLSH dev fund pinned to 100T, BRNC hard-locked flat at Ƒ0.50. Phosphor legibility pass: brighter --muted token, reduced CRT overlay dimming so text reads less faded. Em-dash cleanup: all player-visible game text is now em-dash-free (comments unchanged). SERVER change: pm2 restart."
+  "patch": "1.1.5.2",
+  "notes": "Restored the dash separator in the companies ticker list (the em-dash sweep had replaced it with a comma); scoped exception, it is a data label not prose. Galaxy > Contracts legibility: brightened the dulled hardcoded grays (route separator, column headers, labels, strike/expiry) that the global --muted brighten never reached. CLIENT-only, no server logic change."
 }

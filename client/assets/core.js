@@ -329,7 +329,7 @@ function renderTickers() {
       const loreText = COMPANY_LORE[loreName] || '';
       row.innerHTML = `<div style="flex:1;min-width:0">
         <div style="display:flex;align-items:baseline;gap:4px">
-          <span class="sym">${t.symbol}</span><span style="color:#b6ffcf;opacity:.9">, ${loreName}</span>
+          <span class="sym">${t.symbol}</span><span style="color:#b6ffcf;opacity:.9"> — ${loreName}</span>
         </div>
         ${isActive && loreText ? `<div style="font-size:.72rem;color:#b6ffcf;line-height:1.55;margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.07);padding-bottom:2px;opacity:.96">${loreText}</div>` : ''}
       </div>

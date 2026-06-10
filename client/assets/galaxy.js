@@ -3478,22 +3478,22 @@ function renderContractsTable(){
     h += '</div>';
     h += '<div style="font-size:.82rem;color:#f0b454;margin-bottom:6px">'+_colonyName(parts[0])+' \u2194 '+_colonyName(parts[1])+'</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:.72rem">';
-    h += '<div><div style="color:#555;font-size:.62rem">PAID</div><div style="color:#aaa">\u0192'+Number(myShare.purchasePrice||0).toLocaleString()+'</div></div>';
-    h += '<div><div style="color:#555;font-size:.62rem">VALUE</div><div style="color:#3498db">\u0192'+Number(mSellPrice).toLocaleString()+'</div></div>';
-    h += '<div><div style="color:#555;font-size:.62rem">GAIN</div><div style="color:'+gainCol+'">'+(mGain>=0?'+':'')+'\u0192'+Number(mGain).toLocaleString()+'</div></div>';
-    h += '<div><div style="color:#555;font-size:.62rem">DIVIDENDS</div><div style="color:#2ecc71">\u0192'+Number(mDivs).toLocaleString()+'</div></div>';
+    h += '<div><div style="color:#9197a3;font-size:.62rem">PAID</div><div style="color:#aaa">\u0192'+Number(myShare.purchasePrice||0).toLocaleString()+'</div></div>';
+    h += '<div><div style="color:#9197a3;font-size:.62rem">VALUE</div><div style="color:#3498db">\u0192'+Number(mSellPrice).toLocaleString()+'</div></div>';
+    h += '<div><div style="color:#9197a3;font-size:.62rem">GAIN</div><div style="color:'+gainCol+'">'+(mGain>=0?'+':'')+'\u0192'+Number(mGain).toLocaleString()+'</div></div>';
+    h += '<div><div style="color:#9197a3;font-size:.62rem">DIVIDENDS</div><div style="color:#2ecc71">\u0192'+Number(mDivs).toLocaleString()+'</div></div>';
     h += '</div>';
-    h += '<div style="margin-top:6px;font-size:.68rem;color:#555">Total return: <span style="color:'+(mTotal>=0?'#2ecc71':'#e74c3c')+'">'+(mTotal>=0?'+':'')+'\u0192'+Number(mTotal).toLocaleString()+'</span></div>';
+    h += '<div style="margin-top:6px;font-size:.68rem;color:#9197a3">Total return: <span style="color:'+(mTotal>=0?'#2ecc71':'#e74c3c')+'">'+(mTotal>=0?'+':'')+'\u0192'+Number(mTotal).toLocaleString()+'</span></div>';
     h += '</div>';
   }
 
   h += '<div style="display:grid;grid-template-columns:2.5fr 0.8fr 0.7fr 0.8fr 1.2fr 0.6fr;gap:0;font-size:.78rem;letter-spacing:.05em">';
-  h += '<div style="color:#555;padding:7px 8px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Route</div>';
-  h += '<div style="color:#555;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Type</div>';
-  h += '<div style="color:#555;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Slots</div>';
-  h += '<div style="color:#555;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Div</div>';
-  h += '<div style="color:#555;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem;text-align:right">Price</div>';
-  h += '<div style="color:#555;padding:7px 6px;border-bottom:1px solid #1a1a2e;font-size:.68rem"></div>';
+  h += '<div style="color:#9197a3;padding:7px 8px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Route</div>';
+  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Type</div>';
+  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Slots</div>';
+  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Div</div>';
+  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem;text-align:right">Price</div>';
+  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;font-size:.68rem"></div>';
 
   rows.forEach(function(r){
     var tc = LANE_TYPE_COLOR[r.type]||'#888';
@@ -3505,7 +3505,7 @@ function renderContractsTable(){
 
     h += '<div style="padding:8px;border-bottom:1px solid '+borderCol+';background:'+rowBg+';cursor:pointer" onclick="window._gSelectLane(\''+r.from+'\',\''+r.to+'\')">'
       +'<span style="color:#f0b454">'+_colonyName(r.from)+'</span>'
-      +'<span style="color:#444"> \u2194 </span>'
+      +'<span style="color:#8a90a0"> \u2194 </span>'
       +'<span style="color:#f0b454">'+_colonyName(r.to)+'</span>'
       +(r.blockaded?'<span style="color:#e74c3c"> \u26D4</span>':'')
       +(r.isMine?'<span style="color:#3498db"> \u2605</span>':'')
@@ -3518,13 +3518,13 @@ function renderContractsTable(){
     h += '<div style="padding:8px 6px;border-bottom:1px solid '+borderCol+';background:'+rowBg+';color:#2ecc71">\u0192'+r.dividend+'</div>';
     h += '<div style="padding:8px 6px;border-bottom:1px solid '+borderCol+';background:'+rowBg+';text-align:right">'
       +'<div style="color:#3498db">\u0192'+Number(r.buyPrice).toLocaleString()+'</div>'
-      +'<div style="font-size:.62rem;color:#555">sell: \u0192'+Number(r.sellPrice).toLocaleString()+'</div>'
+      +'<div style="font-size:.62rem;color:#9197a3">sell: \u0192'+Number(r.sellPrice).toLocaleString()+'</div>'
       +'</div>';
     h += '<div style="padding:7px 4px;border-bottom:1px solid '+borderCol+';background:'+rowBg+';text-align:center">';
     if(r.isMine){
       h += '<button onclick="event.stopPropagation();window._gSellShare()" style="background:#1a0a0a;border:1px solid #e74c3c88;color:#e74c3c;padding:5px 10px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px">SELL</button>';
     } else if(r.supply>=100){
-      h += '<span style="color:#555;font-size:.68rem">FULL</span>';
+      h += '<span style="color:#9197a3;font-size:.68rem">FULL</span>';
     } else if(hasMyShare){
       h += '<button onclick="event.stopPropagation();window._gSwapShare(\''+r.from+'\',\''+r.to+'\')" style="background:#0a1020;border:1px solid #f39c1288;color:#f39c12;padding:5px 10px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px">SWAP</button>';
     } else {
@@ -3548,7 +3548,7 @@ function renderShippingContracts(){
   ]).then(function(res){
     var off=res[0], mine=res[1];
     var nameOf=function(cid){ return (COLONY_META[cid]||{name:cid}).name; };
-    var h='<div style="font-size:.82rem;color:#f39c12;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Shipping Contracts <span style="color:#666;text-transform:none;letter-spacing:0">\u2014 buy the right to a lane\u2019s spread. No ship, no cargo. Profit if the spread widens past your strike before expiry.</span></div>';
+    var h='<div style="font-size:.82rem;color:#f39c12;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Shipping Contracts <span style="color:#9ba1ad;text-transform:none;letter-spacing:0">\u2014 buy the right to a lane\u2019s spread. No ship, no cargo. Profit if the spread widens past your strike before expiry.</span></div>';
     // My open positions first
     if(mine && mine.ok && mine.open && mine.open.length){
       h+='<div style="font-size:.8rem;color:#9ab;margin-bottom:5px">Your open contracts</div>';
@@ -3556,19 +3556,19 @@ function renderShippingContracts(){
         var itm=c.inTheMoney;
         return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;margin-bottom:3px;background:#0a0a14;border:1px solid '+(itm?'#2ecc71':'#1a1a2e')+';border-radius:3px;font-size:.8rem">'
           +'<span style="flex:1;color:#9bffba">'+c.size+'u '+c.commodity+' <span style="color:#f0b454">'+nameOf(c.from)+'\u2192'+nameOf(c.to)+'</span></span>'
-          +'<span style="color:#778">strike \u0192'+Math.round(c.strikeSpread).toLocaleString()+'</span>'
+          +'<span style="color:#a4aeba">strike \u0192'+Math.round(c.strikeSpread).toLocaleString()+'</span>'
           +'<span style="color:'+(itm?'#2ecc71':'#888')+'">now \u0192'+Math.round(c.curSpread).toLocaleString()+' ('+(itm?'+':'')+Math.round(c.intrinsic).toLocaleString()+')</span>'
-          +'<span style="color:#666">'+c.expiresInMin+'m</span>'
+          +'<span style="color:#9ba1ad">'+c.expiresInMin+'m</span>'
           +'<button onclick="window.gExerciseContract(\''+c.id+'\')" style="background:'+(itm?'#0d2818':'#1a1a1a')+';border:1px solid '+(itm?'#2ecc71':'#444')+';color:'+(itm?'#2ecc71':'#777')+';padding:2px 8px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">EXERCISE</button>'
           +'</div>';
       }).join('');
       h+='<div style="height:10px"></div>';
     }
     // Offer board
-    h+='<div style="font-size:.8rem;color:#9ab;margin-bottom:5px">Available contracts <span style="color:#555">(reshuffles periodically)</span></div>';
+    h+='<div style="font-size:.8rem;color:#9ab;margin-bottom:5px">Available contracts <span style="color:#9197a3">(reshuffles periodically)</span></div>';
     if(off && off.ok && off.offers && off.offers.length){
       h+='<table style="width:100%;border-collapse:collapse;font-size:.82rem">';
-      h+='<tr style="color:#666;text-align:left"><th style="padding:4px 6px">Commodity</th><th style="padding:4px 6px">Lane</th><th style="padding:4px 6px;text-align:right">Strike</th><th style="padding:4px 6px;text-align:right">Premium</th><th style="padding:4px 6px;text-align:right">Expiry</th><th></th></tr>';
+      h+='<tr style="color:#9ba1ad;text-align:left"><th style="padding:4px 6px">Commodity</th><th style="padding:4px 6px">Lane</th><th style="padding:4px 6px;text-align:right">Strike</th><th style="padding:4px 6px;text-align:right">Premium</th><th style="padding:4px 6px;text-align:right">Expiry</th><th></th></tr>';
       h+=off.offers.map(function(o){
         var ico=o.icon?'<img src="assets/'+o.icon+'" style="width:18px;height:18px;vertical-align:middle;margin-right:5px;image-rendering:pixelated" onerror="this.style.display=\'none\'">':'';
         return '<tr style="border-top:1px solid #14141f">'
@@ -3576,13 +3576,13 @@ function renderShippingContracts(){
           +'<td style="padding:4px 6px;color:#f0b454">'+nameOf(o.from)+'\u2192'+nameOf(o.to)+(o.blockaded?' <span style="color:#e74c3c">\u26d4</span>':'')+'</td>'
           +'<td style="padding:4px 6px;text-align:right;color:#aaa">\u0192'+Math.round(o.strikeSpread).toLocaleString()+'</td>'
           +'<td style="padding:4px 6px;text-align:right;color:#f39c12">\u0192'+Math.round(o.premiumTotal).toLocaleString()+'</td>'
-          +'<td style="padding:4px 6px;text-align:right;color:#778">'+o.expiresInMin+'m</td>'
+          +'<td style="padding:4px 6px;text-align:right;color:#a4aeba">'+o.expiresInMin+'m</td>'
           +'<td style="padding:4px 6px;text-align:right"><button onclick="window.gBuyContract(\''+o.offerId+'\')" style="background:#1a1408;border:1px solid #f39c12;color:#f39c12;padding:2px 8px;cursor:pointer;font-size:.64rem;font-family:inherit;border-radius:2px">BUY</button></td>'
           +'</tr>';
       }).join('');
       h+='</table>';
-    } else { h+='<div style="font-size:.7rem;color:#666">No contracts on offer right now</div>'; }
-    h+='<div id="gContractHint" style="font-size:.68rem;color:#888;margin-top:6px;min-height:13px"></div>';
+    } else { h+='<div style="font-size:.7rem;color:#9ba1ad">No contracts on offer right now</div>'; }
+    h+='<div id="gContractHint" style="font-size:.68rem;color:#aab0bb;margin-top:6px;min-height:13px"></div>';
     box.innerHTML=h;
   }).catch(function(){ box.innerHTML='<div style="color:#e74c3c;font-size:.7rem">Contracts unavailable</div>'; });
 }

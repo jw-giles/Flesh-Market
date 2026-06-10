@@ -1,4 +1,4 @@
-# FleshMarket v1.1.5.1 — MANIFEST
+# FleshMarket v1.1.5.2 — MANIFEST
 
 ## Structure
 
