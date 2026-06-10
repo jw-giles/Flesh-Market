@@ -136,6 +136,16 @@
     godSend({ cmd: 'inject_news', text, tone, symbol: sym || undefined });
     document.getElementById('god-news-text').value = '';
   };
+  window.godBreakingNews = function(mode) {
+    if (mode === 'custom') {
+      const text = document.getElementById('god-breaking-text')?.value?.trim();
+      const tone = document.getElementById('god-breaking-tone')?.value || 'bad';
+      if (!text) { godFeedback('Enter breaking news text', '#ff9900'); return; }
+      godSend({ cmd: 'breaking_news', mode: 'custom', text, tone });
+    } else {
+      godSend({ cmd: 'breaking_news', mode: 'default' });
+    }
+  };
   window.godPresetNews = function(preset) {
     // Colony-specific battle news: pick a random colony name for context
     const colonies = [
@@ -151,56 +161,56 @@
 
     const presets = {
       // ── Market Events ──────────────────────────────────────────────────
-      crash:    { text: '⚠ MARKET ALERT: Emergency session convened as multiple sectors collapse — sell orders flooding exchanges across all colonial markets', tone: 'bad' },
-      boom:     { text: '🚀 ECONOMIC BOOM: Record GDP growth sparks broad market rally — Coalition treasury announces surplus for first time in eight years', tone: 'good' },
-      raid:     { text: '🚔 ENFORCEMENT RAID: Authority units breach facility — trading suspended pending audit, suspect accounts frozen', tone: 'bad' },
-      blackout: { text: '⚡ GRID BLACKOUT: Rolling power outages disrupt operations across the sector — WraithEnergy and Aurora Electric scramble response teams', tone: 'neutral' },
+      crash:    { text: '⚠ MARKET ALERT: Emergency session convened as multiple sectors collapse, sell orders flooding exchanges across all colonial markets', tone: 'bad' },
+      boom:     { text: '🚀 ECONOMIC BOOM: Record GDP growth sparks broad market rally, Coalition treasury announces surplus for first time in eight years', tone: 'good' },
+      raid:     { text: '🚔 ENFORCEMENT RAID: Authority units breach facility, trading suspended pending audit, suspect accounts frozen', tone: 'bad' },
+      blackout: { text: '⚡ GRID BLACKOUT: Rolling power outages disrupt operations across the sector, WraithEnergy and Aurora Electric scramble response teams', tone: 'neutral' },
 
       // ── Colony Battle Events ────────────────────────────────────────────
       battle_start: {
-        text: () => `⚔ COLONY CONFLICT: ${fac()} mobilise at ${col()} — faction war declared, control percentages updating in real time`,
+        text: () => `⚔ COLONY CONFLICT: ${fac()} mobilise at ${col()}, faction war declared, control percentages updating in real time`,
         tone: 'bad'
       },
       battle_won: {
-        text: () => { const c=col(); const f=fac(); return `🏴 COLONY SEIZED: ${f} establish full control of ${c} — rival factions begin withdrawal, dividend bonuses now active for aligned players`; },
+        text: () => { const c=col(); const f=fac(); return `🏴 COLONY SEIZED: ${f} establish full control of ${c}, rival factions begin withdrawal, dividend bonuses now active for aligned players`; },
         tone: 'good'
       },
       battle_contested: {
-        text: () => `⚠ CONTESTED ZONE: ${col()} enters war status — ${fac()} and ${fac2()} locked in standoff, no clear controlling faction`,
+        text: () => `⚠ CONTESTED ZONE: ${col()} enters war status, ${fac()} and ${fac2()} locked in standoff, no clear controlling faction`,
         tone: 'neutral'
       },
       battle_lost: {
-        text: () => `💀 COLONY LOST: ${fac()} pushed out of ${col()} after sustained offensive — war chest depleted, control collapses`,
+        text: () => `💀 COLONY LOST: ${fac()} pushed out of ${col()} after sustained offensive, war chest depleted, control collapses`,
         tone: 'bad'
       },
 
       // ── Lore-specific Events ────────────────────────────────────────────
       baron_slowdown: {
-        text: '⛏ GLUTTONIS DISPATCH: Baron Corps reduces refining output by 12% — freight lanes across all factions begin showing delays within the hour',
+        text: '⛏ GLUTTONIS DISPATCH: Baron Corps reduces refining output by 12%, freight lanes across all factions begin showing delays within the hour',
         tone: 'bad'
       },
       sweet_shortage: {
-        text: "🍷 LUSTANDIA MARKETS: S'weet supply restricted following contested harvest season — grey-market prices triple overnight, Syndicate brokers implicated",
+        text: "🍷 LUSTANDIA MARKETS: S'weet supply restricted following contested harvest season, grey-market prices triple overnight, Syndicate brokers implicated",
         tone: 'neutral'
       },
       null_breach: {
-        text: '🔒 NULL POINT ALERT: NullSyndicate relay disruption detected — encrypted traffic rerouting, CipherHoldings and ShadowDynamics stocks volatile',
+        text: '🔒 NULL POINT ALERT: NullSyndicate relay disruption detected, encrypted traffic rerouting, CipherHoldings and ShadowDynamics stocks volatile',
         tone: 'bad'
       },
       signal_seized: {
-        text: '🚢 SIGNAL RUN UPDATE: Faction forces secure key freight relay — shipping corridor toll rates revised upward, logistics stocks reacting',
+        text: '🚢 SIGNAL RUN UPDATE: Faction forces secure key freight relay, shipping corridor toll rates revised upward, logistics stocks reacting',
         tone: 'neutral'
       },
       abaddon_tremor: {
-        text: '🔴 ABADDON CLUSTER: Seismic activity across Limbosis defence grid — automated targeting systems cycling, all approach vectors temporarily flagged hazardous',
+        text: '🔴 ABADDON CLUSTER: Seismic activity across Limbosis defence grid, automated targeting systems cycling, all approach vectors temporarily flagged hazardous',
         tone: 'bad'
       },
       guild_toll: {
-        text: '⬢ MERCHANT GUILD NOTICE: Inter-colony transit fees revised — all non-Guild vessels subject to updated tariff schedule effective immediately',
+        text: '⬢ MERCHANT GUILD NOTICE: Inter-colony transit fees revised, all non-Guild vessels subject to updated tariff schedule effective immediately',
         tone: 'neutral'
       },
       corporate_war: {
-        text: '💼 CORPORATE WAR BULLETIN: Proxy conflict escalates across three systems — Merchant Guild intermediaries scrambling to prevent full Corporate War declaration',
+        text: '💼 CORPORATE WAR BULLETIN: Proxy conflict escalates across three systems, Merchant Guild intermediaries scrambling to prevent full Corporate War declaration',
         tone: 'bad'
       },
     };
@@ -276,7 +286,7 @@
     if (!newName) { godFeedback('Enter a replacement display name', '#ff9900'); return; }
     if (newName.length < 2 || newName.length > 24) { godFeedback('Display name must be 2–24 characters', '#ff9900'); return; }
     if (USERNAME_BADWORDS.some(w => newName.toLowerCase().includes(w))) {
-      godFeedback('Replacement name also triggers the filter — choose another', '#ff4444'); return;
+      godFeedback('Replacement name also triggers the filter, choose another', '#ff4444'); return;
     }
     if (!confirm(`Override "${target}"'s visible name to "${newName}"?\nThey still log in as "${target}".`)) return;
     godSend({ cmd: 'rename_display', targetName: target, newDisplayName: newName });
@@ -434,7 +444,7 @@ window.godPresetEvent = function(type) {
     crash:            { cmd:'sector_shock', sector:0, pct:-0.18, text:'⚠ MARKET ALERT: Systemic selling pressure detected across all Finance sectors. Regulators watching.' },
     boom:             { cmd:'sector_shock', sector:0, pct: 0.12, text:'🚀 MARKET BULLETIN: Interstellar Growth Index hits 3-year high. Finance sector leads gains.' },
     raid:             { cmd:'market_event', eventType:'enforcement' },
-    blackout:         { cmd:'market_halt', seconds:20, reason:'Grid Blackout Event — trading suspended' },
+    blackout:         { cmd:'market_halt', seconds:20, reason:'Grid Blackout Event, trading suspended' },
     halt30:           { cmd:'market_halt', seconds:30, reason:'Scheduled maintenance halt' },
     volatility_spike: { cmd:'set_volatility', symbol:'ALL', sigma:0.08 },
   };

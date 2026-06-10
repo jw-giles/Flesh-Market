@@ -4,6 +4,34 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.5.1 (2026-06-09) - news overhaul + live header + dev breaking-news + FLSH/BRNC + phosphor + em-dash cleanup (SERVER)
+
+**Phosphor legibility (`client/style.css`, `client/assets/core.js`)**
+- Text read too faded. Root cause was the CRT overlay (`mix-blend-mode:multiply`) dimming the bright green, plus a dim `--muted` token. Brightened `--muted` (#72e09c -> #9af2bf), removed the .9 opacity on `small`/`.muted`, retargeted dim-as-text to muted, and reduced the CRT scanline/vignette darkening (0.22 -> 0.15, 0.35 -> 0.26) so text reads brighter while keeping the scanline look. Fixed the over-dark news-header subtitle. Primary `--green` left unchanged (it was already bright).
+
+**Em-dash cleanup (entire game)**
+- Removed em dashes from all player-visible text across server and client (news strings, headlines, chat/system messages, NPC dialogue, item text, UI labels, placeholders). Comments and changelogs keep em dashes per house rule. Net zero player-visible em dashes verified game-wide.
+
+
+**News content (`server/server.js`)**
+- Three new headline categories with their own `genHeadline` branches: faction political/economic moves (`FACTION_NEWS`, ~12%), Mr. Flesh / FLSH house flavor (`FLESH_NEWS`, ~5%), rare cosmic-weird drip (`RARE_WEIRD`, ~3%). All tickerless, no price impact.
+- New `COMPANY_GENERIC` good/bad/weird pool merged into the per-company branch so any ticker draws sector lore plus a cross-sector pool (roughly doubles company-headline variety).
+- Expanded `MARKET_WIDE` (+15) and `COLONY_FLAVOR` (+8). Routing rebalanced: 3% void / 12% faction / 5% flesh / 13% market / 10% colony / ~57% company. New strings are em-dash-free per the player-text rule; pre-existing strings still use them (not touched).
+
+**Live news header (`client/index.html`, `client/assets/core.js`, `server/server.js`)**
+- New `#news-header` bar above the feed. Default shows a LIVE NEWSFEED label; a dev can push custom breaking news (tone-colored banner). Server holds `breakingNews`, broadcasts `breaking_news`, and includes current state in the `init` payload. `renderNewsHeader` handles init + live updates + a default on DOM ready.
+
+**Dev breaking-news control (`client/index.html`, `client/assets/god-panel.js`, `server/server.js`)**
+- God panel News tab: text + tone + Set Breaking / Reset to Default. New dev-gated `god_cmd` sub-command `breaking_news` sets or clears the header for all clients.
+
+**FLSH fund -> 100T (`server/db.js`)**
+- Fee accrual was glitched/unused; pinned to a flat 100,000,000,000,000 marker via a one-shot guarded by a `fund_state` sentinel (`flsh_100t`). Runs once on deploy, never resets a later manual change. Fresh-DB seed bumped to 100T.
+
+**BRNC -> flat Ƒ0.50 (`server/server.js`)**
+- Hard-locked flat at Ƒ0.50 in `stepMarket`, identical treatment to SWT (price + lnP pinned, flat OHLC bars). Excluded from company-news nudges. Reprice from Ƒ65 — existing holders take the haircut.
+
+---
+
 ## v1.1.5.0 (2026-06-09) - market upgrades tier + P&L click-to-navigate (SERVER)
 
 Help-desk feature drop. A purchasable market-upgrades tier (modeled on the mining-upgrade system) plus a P&L navigation fix.

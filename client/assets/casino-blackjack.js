@@ -129,7 +129,7 @@
       if(fill){ fill.style.width=pct+'%'; fill.className= pct>=80?'hot':pct>=60?'warn':''; }
     }
     function needsShuffle(){ return idx>=cutAt; }
-    function doShuffle(){ bjLog('✦ Cut card reached — shuffling new shoe…'); reset(); }
+    function doShuffle(){ bjLog('✦ Cut card reached, shuffling new shoe…'); reset(); }
     function draw(){ if(idx>=cards.length){ reset(); } const c=cards[idx++]; updateShoe(); return c; }
     reset(); return {draw,reset,needsShuffle,doShuffle};
   }
@@ -139,7 +139,7 @@
     if(!shoe.needsShuffle()) return;
     const overlay=document.getElementById('bj-shuffle-overlay');
     if(overlay){ overlay.classList.add('show'); }
-    bjLog('✦ Cut card reached — shuffling new shoe…');
+    bjLog('✦ Cut card reached, shuffling new shoe…');
     await sleep(1500);
     shoe.doShuffle();
     if(overlay){ overlay.classList.remove('show'); }
@@ -234,13 +234,13 @@
     const pBJ=isBJ(playerHand);
     const dBJ=isBJ(dealerHand);
 
-    if(pBJ&&dBJ){ deltaBalance(playerBet); showResult('Push — both Blackjack!','push'); bjLog('Push (both BJ).'); }
+    if(pBJ&&dBJ){ deltaBalance(playerBet); showResult('Push, both Blackjack!','push'); bjLog('Push (both BJ).'); }
     else if(pBJ){ const pay=Math.floor(playerBet*1.5); deltaBalance(playerBet+pay); showResult(`BLACKJACK! +${fmtLocal(pay)}`, 'bj'); bjLog(`Blackjack! +${fmtLocal(pay)}`); }
-    else if(dBJ){ showResult('Dealer Blackjack — You lose.','lose'); bjLog(`Dealer BJ. -${fmtLocal(playerBet)}`); }
-    else if(isBust(playerHand)){ showResult('BUST — You lose.','lose'); bjLog(`Bust. -${fmtLocal(playerBet)}`); }
+    else if(dBJ){ showResult('Dealer Blackjack, You lose.','lose'); bjLog(`Dealer BJ. -${fmtLocal(playerBet)}`); }
+    else if(isBust(playerHand)){ showResult('BUST, You lose.','lose'); bjLog(`Bust. -${fmtLocal(playerBet)}`); }
     else if(isBust(dealerHand)||pTot>dTot){ deltaBalance(playerBet*2); showResult(`You win! +${fmtLocal(playerBet)}`, 'win'); bjLog(`Win. +${fmtLocal(playerBet)}`); }
-    else if(pTot===dTot){ deltaBalance(playerBet); showResult('Push — Bet returned.','push'); bjLog('Push.'); }
-    else { showResult('Dealer wins — You lose.','lose'); bjLog(`Lose. -${fmtLocal(playerBet)}`); }
+    else if(pTot===dTot){ deltaBalance(playerBet); showResult('Push, Bet returned.','push'); bjLog('Push.'); }
+    else { showResult('Dealer wins, You lose.','lose'); bjLog(`Lose. -${fmtLocal(playerBet)}`); }
 
     playerBet=0; setBtns('done'); setPhase('done');
     clearTmr=setTimeout(resetRound,4000);
@@ -318,7 +318,7 @@
     if(gamePhase!=='player'||!canDouble) return;
     if(getBalance()<playerBet){ bjLog('Not enough to double.'); return; }
     deltaBalance(-playerBet); playerBet*=2; canDouble=false;
-    bjLog(`Double down — bet now ${fmtLocal(playerBet)}.`);
+    bjLog(`Double down, bet now ${fmtLocal(playerBet)}.`);
     playerHand.push(shoe.draw());
     renderHands(true); setBtns('resolving'); setPhase('resolving');
     await sleep(500);

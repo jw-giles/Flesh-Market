@@ -109,7 +109,7 @@
         : `<span style="font-size:${Math.round(size*0.7)}px;line-height:1;display:block;text-align:center;opacity:${item?1:.2}">${SLOT_ICONS[slot]||'?'}</span>`;
       const nameHtml = item
         ? `<div style="font-size:.55rem;color:${rc};font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;margin-top:3px">${item.name}</div>`
-        : `<div style="font-size:.55rem;color:#2a1010;margin-top:3px">—</div>`;
+        : `<div style="font-size:.55rem;color:#2a1010;margin-top:3px">-</div>`;
       return `<div class="pp-item" data-slot="${slot}" style="background:${rbg};border-color:${item?rc+'44':'#1a0808'};cursor:${item?'pointer':'default'}" onclick="ppShowItemDetail('${slot}')">
         ${imgHtml}${nameHtml}
       </div>`;

@@ -64,7 +64,7 @@
     box.innerHTML = '';
     rows.forEach((p,i)=>{
       const row = document.createElement('div');
-      row.innerHTML = `${i+1}. <b>${p.name}</b> — ${fmt(p.net)} <span class="muted">Lv.${p.level} XP:${p.xp}</span>`;
+      row.innerHTML = `${i+1}. <b>${p.name}</b>, ${fmt(p.net)} <span class="muted">Lv.${p.level} XP:${p.xp}</span>`;
       box.appendChild(row);
     });
   }

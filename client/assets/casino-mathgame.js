@@ -33,16 +33,16 @@
     <div id="mq-wrap">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
         <span style="color:#72e09c;letter-spacing:.1em;font-size:.9rem">MATH TEST</span>
-        <span style="color:#888;font-size:.78rem">— 10 questions across all difficulties</span>
+        <span style="color:#888;font-size:.78rem">10 questions across all difficulties</span>
       </div>
       <div id="mq-cooldown-bar"><div id="mq-cooldown-fill" style="width:0%"></div></div>
       <div id="mq-score-row">
-        <span>Q: <b id="mq-qnum">—</b>/${TOTAL_Q}</span>
+        <span>Q: <b id="mq-qnum">-</b>/${TOTAL_Q}</span>
         <span>Score: <b id="mq-score">0</b></span>
         <span>Earned: <b id="mq-earned">Ƒ0</b></span>
       </div>
       <div id="mq-timer-bar" style="width:100%"></div>
-      <div id="mq-diff-badge">—</div>
+      <div id="mq-diff-badge">-</div>
       <div id="mq-question">Press Start Test to begin</div>
       <div id="mq-payout-preview"></div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
@@ -144,7 +144,7 @@
       const correct=Math.abs((val||0)-current.answer)<0.001;
       if(src==='timeout'||!correct){
         const fb=document.getElementById('mq-feedback');
-        fb.textContent=src==='timeout'?'⏱ Time up! Answer: '+current.answer:'✗ Wrong — answer was '+current.answer;
+        fb.textContent=src==='timeout'?'⏱ Time up! Answer: '+current.answer:'✗ Wrong, answer was '+current.answer;
         fb.style.color='#ff6b6b';
       } else {
         score++;
@@ -165,9 +165,9 @@
       document.getElementById('mq-input').disabled=true;
       document.getElementById('mq-submit').disabled=true;
       document.getElementById('mq-question').textContent='Test complete!';
-      document.getElementById('mq-diff-badge').textContent='—';
+      document.getElementById('mq-diff-badge').textContent='-';
       document.getElementById('mq-payout-preview').textContent='';
-      document.getElementById('mq-status').textContent=`Score: ${score}/${TOTAL_Q} — Total earned: Ƒ${totalEarned.toLocaleString()}`;
+      document.getElementById('mq-status').textContent=`Score: ${score}/${TOTAL_Q}, Total earned: Ƒ${totalEarned.toLocaleString()}`;
       // Set cooldown
       localStorage.setItem(COOLDOWN_KEY, Date.now());
       const startBtn=document.getElementById('mq-start');

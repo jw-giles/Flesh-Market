@@ -14,7 +14,7 @@ var FACTIONS = {
   },
   syndicate:{
     id:'syndicate', name:'The Syndicate', short:'SYNDICATE', color:'#e74c3c', dim:'#4d1a1a', bg:'#1a0606', sym:'◈', devOnly:false,
-    desc:'A distributed criminal network. No inspections, no tariffs — just a cut of every deal passing through Syndicate space.',
+    desc:'A distributed criminal network. No inspections, no tariffs, just a cut of every deal passing through Syndicate space.',
     bonusSummary:'Colony dividend bonuses on controlled territory + ƒ15/colony passive income',
   },
   void:{
@@ -171,11 +171,11 @@ var COLONY_META = {
   // ── New Frontier Colonies (uncontrolled) ─────────────────────────────────
   eyejog: {
     name:'Eyejog', x:110, y:430, pop:'2.3B',
-    lore:'Eyejog is the seat of the Merchant Guild. They rule the red-hazed sky and control from afar with the gifts of imported decadence — drinking and lounging as rivers of money coat their balances daily. You would be a fool to cross their webs of control.',
+    lore:'Eyejog is the seat of the Merchant Guild. They rule the red-hazed sky and control from afar with the gifts of imported decadence, drinking and lounging as rivers of money coat their balances daily. You would be a fool to cross their webs of control.',
     companies:['Oak Capital','Oak Ventures','Sycamore Partners','Sycamore Software'],
     planets:[
       { name:'Guild Market',  sector:0, sectorName:'Capital Syndicate', icon:'◉',
-        bonus:'Merchant Guild: Trade fee exemptions', contestBonus:'Cannot be contested — Guild sovereign territory' },
+        bonus:'Merchant Guild: Trade fee exemptions', contestBonus:'Cannot be contested, Guild sovereign territory' },
       { name:'Sand Exchange', sector:5, sectorName:'Transit Guild',    icon:'◌',
         bonus:'Merchant Guild: +0.6% Logistics dividends', contestBonus:'Cannot be contested' },
     ],
@@ -376,7 +376,7 @@ var COLONY_PLANET = {
   cascade_station:  {folder:'animated/barren_1',       frames:60},  // Three tidally-locked mining moons
   frontier_outpost: {folder:'animated/barren_4',       frames:60},  // Last regulated stop, rocky
   the_hollow:       {folder:'animated/barren_2',       frames:60},  // Dead rock bored out by pirates
-  vein_cluster:     {folder:'animated/barren_3',       frames:60},  // Tidally locked grey moon — permanent night side faces viewer
+  vein_cluster:     {folder:'animated/barren_3',       frames:60},  // Tidally locked grey moon, permanent night side faces viewer
   aurora_prime:     {folder:'animated/gas_giant_3',    frames:60},  // Gas giant relay/fusion hub
   null_point:       {folder:'animated/tundra_2',       frames:60},  // Cold debris field data haven
   // ── Abaddon cluster ─────────────────────────────────────────────────────
@@ -420,14 +420,14 @@ var COLONY_BANNER = {
 
 // sector id → 16x16 icon filename (no extension)
 var SECTOR_PLANET_ICON = {
-  0:'Terran',      // Finance — settled capital world
-  1:'Forest2',     // Biotech — organic green world
-  2:'Terran2',     // Insurance — stable inhabited world
-  3:'Barren4',     // Manufacturing — dark rocky asteroid
-  4:'Lava3',       // Energy — orange lava world
-  5:'GasGiant4',   // Logistics — pink gas giant relay world
-  6:'Tech',        // Tech — orbital station
-  7:'Asteroid2',   // Gray Bazaar — neutral blue-grey asteroid/rock
+  0:'Terran',      // Finance, settled capital world
+  1:'Forest2',     // Biotech, organic green world
+  2:'Terran2',     // Insurance, stable inhabited world
+  3:'Barren4',     // Manufacturing, dark rocky asteroid
+  4:'Lava3',       // Energy, orange lava world
+  5:'GasGiant4',   // Logistics, pink gas giant relay world
+  6:'Tech',        // Tech, orbital station
+  7:'Asteroid2',   // Gray Bazaar, neutral blue-grey asteroid/rock
 };
 
 // ── Animation state ────────────────────────────────────────────────────────
@@ -1316,7 +1316,7 @@ function spUpdateHUDPrices(colonyId){
     var priceHtml = price!=null
       ? '<span class="sp-price-val">Ƒ'+(price>=10000?(price/1000).toFixed(1)+'k':price.toFixed(2))+'</span>'
        +'<span class="sp-price-pct" style="color:'+(pct>=0?'#86ff6a':'#ff6b6b')+'">'+(pct!=null?((pct>=0?'+':'')+pct.toFixed(1)+'%'):'')+'</span>'
-      : '<span style="font-size:.65rem;color:#333">—</span>';
+      : '<span style="font-size:.65rem;color:#333">-</span>';
     var clickSym = t ? t.symbol : sym;
     var clickJs = 'try{var s=document.getElementById(\'sym\');'
       +'if(s)s.value=\''+clickSym+'\';'
@@ -1510,7 +1510,7 @@ var SHIP_TYPES = {
     thrustOffX: -12, thrustOffY: 0,
     thrustBotOffX: 9, thrustBotOffY: 14,
     traversal: true,
-    speed: 12,   // slower — these are big haulers
+    speed: 12,   // slower, these are big haulers
     frameMs: 120
   }
 };
@@ -2340,7 +2340,7 @@ window.gShipConsoleGo = function(){
           d.error==='over_capacity'?('Over capacity: '+d.shipName+' holds '+d.capacity):
           d.error==='no_lane'?'No route between those colonies':
           d.error==='same_colony'?'Pick two different colonies':
-          d.error==='shipment_in_progress'?'You already have a shipment in transit — only one at a time':(d.error||'Ship failed');
+          d.error==='shipment_in_progress'?'You already have a shipment in transit, only one at a time':(d.error||'Ship failed');
         if(hint){hint.textContent='\u2717 '+msg;hint.style.color='#ff6b6b';} return;
       }
       if(hint){
@@ -2829,8 +2829,8 @@ function renderDetail(id){
    +'</div>';
   h+='<div style="font-size:.76rem;color:#555;letter-spacing:.1em;margin-bottom:10px">'+(isFlesh?'MEGASTRUCTURE':'')+'</div>';
 
-  if(contested) h+='<div style="border:1px solid #f39c12;color:#f39c12;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9888; CONTESTED — Faction war active</div>';
-  if(isFlesh)   h+='<div style="border:1px solid #ffce4d66;color:#ffce4d;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9889; HOME OF MR. FLESH — Cannot be contested or funded</div>';
+  if(contested) h+='<div style="border:1px solid #f39c12;color:#f39c12;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9888; CONTESTED, Faction war active</div>';
+  if(isFlesh)   h+='<div style="border:1px solid #ffce4d66;color:#ffce4d;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9889; HOME OF MR. FLESH, Cannot be contested or funded</div>';
 
   // Space Asset: landscape banner
   var banner = COLONY_BANNER[id];
@@ -2911,7 +2911,7 @@ function renderDetail(id){
     h+='<div><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase">Fund a Faction</div>';
     ['coalition','syndicate','void','guild'].forEach(function(fid){
       var fc=FACTIONS[fid];
-      h+='<div style="margin-bottom:5px" id="gFR_'+id+'_'+fid+'"><button onclick="window.gShowFund(\''+id+'\',\''+fid+'\')" style="width:100%;background:transparent;border:1px solid '+fc.dim+';color:'+fc.color+';padding:5px 8px;cursor:pointer;font-size:.73rem;letter-spacing:.06em;font-family:inherit;text-align:left">'+fc.name+' — '+(ctrl[fid]||0)+'% ctrl</button></div>';
+      h+='<div style="margin-bottom:5px" id="gFR_'+id+'_'+fid+'"><button onclick="window.gShowFund(\''+id+'\',\''+fid+'\')" style="width:100%;background:transparent;border:1px solid '+fc.dim+';color:'+fc.color+';padding:5px 8px;cursor:pointer;font-size:.73rem;letter-spacing:.06em;font-family:inherit;text-align:left">'+fc.name+', '+(ctrl[fid]||0)+'% ctrl</button></div>';
     });
     h+='</div>';
   } else {
@@ -3168,7 +3168,7 @@ document.addEventListener('fm_ws_msg',function(e){
     var conquestNews = {
       t: Date.now(),
       tone: 'good',
-      text: '🏴 COLONY REPORT: '+fn.name+' establish control of '+msg.data.colonyName+' — faction bonuses now active for aligned investors, rival factions withdrawing'
+      text: '🏴 COLONY REPORT: '+fn.name+' establish control of '+msg.data.colonyName+', faction bonuses now active for aligned investors, rival factions withdrawing'
     };
     renderNews(conquestNews);
     galaxyFetch();
@@ -3202,13 +3202,13 @@ document.addEventListener('fm_ws_msg',function(e){
     try{ window.renderShippingTab(); }catch(_){}
     var ss=document.getElementById('gSmugStatus');
     if(ss) ss.innerHTML = d.success
-      ? '<span style="color:#2ecc71">\u2713 Delivered '+d.cargo+' — \u0192'+Number(d.payout).toLocaleString()+' earned ('+d.interceptChance+'% risk)</span>'
-      : '<span style="color:#e74c3c">\u2718 Intercepted — \u0192'+Number(d.stake).toLocaleString()+' lost ('+d.interceptChance+'% risk)</span>';
+      ? '<span style="color:#2ecc71">\u2713 Delivered '+d.cargo+', \u0192'+Number(d.payout).toLocaleString()+' earned ('+d.interceptChance+'% risk)</span>'
+      : '<span style="color:#e74c3c">\u2718 Intercepted, \u0192'+Number(d.stake).toLocaleString()+' lost ('+d.interceptChance+'% risk)</span>';
   }
   if(msg.type==='smuggling_started'&&msg.data){
     var d2=msg.data;
     _gSyncCash(d2.cash);
-    gToast('Smuggling run launched — '+d2.cargo+' via '+d2.laneType+' lane','#e74c3c');
+    gToast('Smuggling run launched, '+d2.cargo+' via '+d2.laneType+' lane','#e74c3c');
     window._activeSmugRun={from:d2.from,to:d2.to,cargo:d2.cargo,stake:d2.stake,resolveTs:d2.resolveTs,durSec:d2.durSec,type:'smuggling'};
     if(gMapActive) renderLanes();
     window._ensureSmugTicker(true);
@@ -3222,9 +3222,9 @@ document.addEventListener('fm_ws_msg',function(e){
     if(sd.success){
       gToast('Shipping delivered! +\u0192'+Number(sd.payout).toLocaleString()+' ('+sd.cargo+')','#2ecc71');
     } else if(sd.insured){
-      gToast('Cargo lost but INSURED — only lost \u0192'+Number(sd.insurancePaid||sd.netLoss||0).toLocaleString()+' premium','#f39c12');
+      gToast('Cargo lost but INSURED, only lost \u0192'+Number(sd.insurancePaid||sd.netLoss||0).toLocaleString()+' premium','#f39c12');
     } else {
-      gToast('CARGO LOST! \u0192'+Number(sd.stake).toLocaleString()+' gone — no insurance','#e74c3c');
+      gToast('CARGO LOST! \u0192'+Number(sd.stake).toLocaleString()+' gone, no insurance','#e74c3c');
     }
     window._activeShipRun=null;
     if(gMapActive) renderLanes();
@@ -3235,7 +3235,7 @@ document.addEventListener('fm_ws_msg',function(e){
     var sd2=msg.data;
     _gSyncCash(sd2.cash);
     var insLabel=sd2.insured?' (insured)':'';
-    gToast('Shipping run launched — '+sd2.cargo+insLabel,'#3498db');
+    gToast('Shipping run launched, '+sd2.cargo+insLabel,'#3498db');
     window._activeShipRun={from:sd2.from,to:sd2.to,cargo:sd2.cargo,stake:sd2.stake,insured:sd2.insured,resolveTs:sd2.resolveTs,durSec:sd2.durSec,type:'shipping'};
     if(gMapActive) renderLanes();
     // Start countdown timer
@@ -3244,7 +3244,7 @@ document.addEventListener('fm_ws_msg',function(e){
       if(!window._activeShipRun) { clearInterval(window._shipCountdownIv); return; }
       var left=Math.max(0,Math.ceil((window._activeShipRun.resolveTs-Date.now())/1000));
       var el=document.getElementById('gShipCountdownTimer');
-      if(el) el.textContent=left>0?'EN ROUTE — '+left+'s remaining...':'Resolving...';
+      if(el) el.textContent=left>0?'EN ROUTE, '+left+'s remaining...':'Resolving...';
       if(left<=0){ clearInterval(window._shipCountdownIv); window._activeShipRun=null; if(gMapActive) renderLanes(); }
     },1000);
     try{ window.renderShippingTab(); }catch(_){}
@@ -3349,7 +3349,7 @@ document.addEventListener('fm_ws_msg',function(e){
   if(msg.type==='share_bought'&&msg.data){
     _gSyncCash(msg.data.cash);
     window._FM_MY_SHARE={laneKey:msg.data.laneKey,slot:msg.data.slot,purchasePrice:msg.data.price,dividendsEarned:0};
-    gToast('Share acquired! Slot #'+msg.data.slot+' on '+msg.data.laneKey.replace(/\|/g,' \u2194 ').replace(/_/g,' ')+' — \u0192'+Number(msg.data.price).toLocaleString(),'#3498db');
+    gToast('Share acquired! Slot #'+msg.data.slot+' on '+msg.data.laneKey.replace(/\|/g,' \u2194 ').replace(/_/g,' ')+', \u0192'+Number(msg.data.price).toLocaleString(),'#3498db');
     try{ renderContractsTable(); }catch(_){}
   }
   if(msg.type==='share_sold'&&msg.data){
@@ -3380,7 +3380,7 @@ document.addEventListener('fm_ws_msg',function(e){
   if(msg.type==='tension_event'&&msg.data){
     var te=msg.data;
     var cMeta=COLONY_META[te.colonyId];
-    gToast('\u26A0 Tension '+te.bandLabel+' at '+(cMeta?cMeta.name:te.colonyId)+' — '+te.affected+' stocks hit','#f39c12');
+    gToast('\u26A0 Tension '+te.bandLabel+' at '+(cMeta?cMeta.name:te.colonyId)+', '+te.affected+' stocks hit','#f39c12');
   }
   if(msg.type==='galaxy_data'&&msg.data){
     window._FM_BLOCKADES = msg.data.blockades||{};
@@ -3915,39 +3915,39 @@ var CARGO_PROFILES = {
   new_anchor: {
     exports: [
       'Coalition licensing documentation (Class-A)',
-      'Regulated arbitration filings — batch {N}',
+      'Regulated arbitration filings, batch {N}',
       'Inner-system transit permits (bulk)',
-      'Nexus Financial — settlement ledgers',
-      'Catalyst Insurance — underwriting packets',
+      'Nexus Financial, settlement ledgers',
+      'Catalyst Insurance, underwriting packets',
     ],
     imports: [
-      'Raw ore feedstock — unprocessed',
-      'Unlicensed goods — pending classification',
+      'Raw ore feedstock, unprocessed',
+      'Unlicensed goods, pending classification',
       'Diplomatic courier pouches (sealed)',
-      'Coalition payroll credits — encrypted',
+      'Coalition payroll credits, encrypted',
     ]
   },
   cascade_station: {
     exports: [
-      'Refined titanium alloy — {N}.{M}t',
+      'Refined titanium alloy, {N}.{M}t',
       'Processed ore pellets (Grade 7)',
-      'Vertex Aerospace — hull plating components',
-      'Cascade Minerals — raw extract batch',
-      'Orbital elevator tolls — cleared manifest',
+      'Vertex Aerospace, hull plating components',
+      'Cascade Minerals, raw extract batch',
+      'Orbital elevator tolls, cleared manifest',
     ],
     imports: [
       'Atmospheric processing supplies',
       'Coalition-bonded labor contracts',
-      'Mining equipment — replacement parts',
-      'Cascade Pharma — compound reagents',
+      'Mining equipment, replacement parts',
+      'Cascade Pharma, compound reagents',
     ]
   },
   frontier_outpost: {
     exports: [
       'Cross-faction supply coordination logs',
-      'HollowLogistics — docking fee receipts',
+      'HollowLogistics, docking fee receipts',
       'Emergency ration stockpile (licensed)',
-      'Frontier Supplies — resupply manifest',
+      'Frontier Supplies, resupply manifest',
     ],
     imports: [
       'Contested territory provisions',
@@ -3959,44 +3959,44 @@ var CARGO_PROFILES = {
   the_hollow: {
     exports: [
       'Cargo manifest: [REDACTED BY PORT AUTHORITY]',
-      'HollowLogistics — rate schedule (private)',
-      'PhantomCourier — unlisted freight',
-      'Container batch 7-7-VOID — contents unverified',
-      'ApexContraband — transit clearance (forged)',
-      'SmugglerNetworks — route data, encrypted',
+      'HollowLogistics, rate schedule (private)',
+      'PhantomCourier, unlisted freight',
+      'Container batch 7-7-VOID, contents unverified',
+      'ApexContraband, transit clearance (forged)',
+      'SmugglerNetworks, route data, encrypted',
     ],
     imports: [
-      'Pirate contractor supplies — no manifest',
+      'Pirate contractor supplies, no manifest',
       'Enforcement equipment (unlicensed)',
       '[RECORD NOT FOUND]',
-      'Unknown — docking AI flagged, overridden',
+      'Unknown, docking AI flagged, overridden',
     ]
   },
   aurora_prime: {
     exports: [
-      'Aurora Electric — power grid contracts',
-      'Neon Technologies — data infrastructure uplinks',
-      'WraithEnergy — fusion plant output certs',
+      'Aurora Electric, power grid contracts',
+      'Neon Technologies, data infrastructure uplinks',
+      'WraithEnergy, fusion plant output certs',
       'Inner-system relay licensing (annual)',
-      'Zenith Automation — control system bundles',
+      'Zenith Automation, control system bundles',
     ],
     imports: [
-      'Fuel cell feedstock — outer rim grade',
-      'Coalition licensing fee — inbound',
+      'Fuel cell feedstock, outer rim grade',
+      'Coalition licensing fee, inbound',
       'WraithEnergy raw supply (disputed)',
       'Tech component assemblies',
     ]
   },
   null_point: {
     exports: [
-      'NullSyndicate — data relay packet (no logs)',
-      'UnderNet — encrypted routing bundle',
-      'CipherHoldings — anonymised ledgers',
-      'ShadowDynamics — signal relay manifest [NULL]',
+      'NullSyndicate, data relay packet (no logs)',
+      'UnderNet, encrypted routing bundle',
+      'CipherHoldings, anonymised ledgers',
+      'ShadowDynamics, signal relay manifest [NULL]',
       '[RECORD PURGED]',
     ],
     imports: [
-      'Unknown origin — flagged by Coalition sensor ghost',
+      'Unknown origin, flagged by Coalition sensor ghost',
       'GhostFoundry hardware (unregistered)',
       'Dark-net relay components',
       '[MANIFEST: NONE]',
@@ -4004,10 +4004,10 @@ var CARGO_PROFILES = {
   },
   limbosis: {
     exports: [
-      'Relic Deep — artifact extraction batch (unclassified)',
-      'Fog Bastion — weapons platform maintenance log',
+      'Relic Deep, artifact extraction batch (unclassified)',
+      'Fog Bastion, weapons platform maintenance log',
       '[WARNING: ORIGIN SYSTEM FLAGGED]',
-      'Defense grid status — CLASSIFIED',
+      'Defense grid status, CLASSIFIED',
     ],
     imports: [
       'Nobody has docked at Limbosis in {N} standard cycles',
@@ -4017,162 +4017,162 @@ var CARGO_PROFILES = {
   },
   lustandia: {
     exports: [
-      "S'weet Reserve — Vintage 94 · {N} cases",
-      "S'weet Vineyard — Pleasure Export License",
-      'Pleasure Quarter — entertainment contracts ({N} units)',
-      "S'weet uncut concentrate — {N}.{M}L (restricted)",
-      'Hedonism sector permits — inner system distribution',
+      "S'weet Reserve, Vintage 94 · {N} cases",
+      "S'weet Vineyard, Pleasure Export License",
+      'Pleasure Quarter, entertainment contracts ({N} units)',
+      "S'weet uncut concentrate, {N}.{M}L (restricted)",
+      'Hedonism sector permits, inner system distribution',
     ],
     imports: [
-      'Luxury goods — unrestricted import',
-      'Entertainment technology — licensed',
+      'Luxury goods, unrestricted import',
+      'Entertainment technology, licensed',
       'Defense system components (self-funded)',
       "Raw ingredients for S'weet fermentation process",
     ]
   },
   gluttonis: {
     exports: [
-      'Baron Corps — refined rare materials · {N}.{M}t',
-      'Orbital refinery output — Class-Omega grade',
+      'Baron Corps, refined rare materials · {N}.{M}t',
+      'Orbital refinery output, Class-Omega grade',
       'Fuel catalyst canisters (unlisted specification)',
-      'Baron Refinery I — batch manifest [PROPRIETARY]',
-      'Dark Core extraction — unmarked containers · {N}t',
-      'Universal fuel feedstock — all factions cleared',
+      'Baron Refinery I, batch manifest [PROPRIETARY]',
+      'Dark Core extraction, unmarked containers · {N}t',
+      'Universal fuel feedstock, all factions cleared',
     ],
     imports: [
-      'Labor contract shipment — outer rim sourced',
-      'Baron Corps — supply chain inputs (dark)',
+      'Labor contract shipment, outer rim sourced',
+      'Baron Corps, supply chain inputs (dark)',
       'Refinery maintenance equipment',
-      'Power cell arrays — high consumption rated',
+      'Power cell arrays, high consumption rated',
     ]
   },
   abaddon: {
     exports: [
       '[ABADDON TRANSIT AUTHORITY: NO MANIFEST REQUIRED]',
-      'Sovereign freight — inspection exemption filed',
-      'Contested zone goods — faction clearance varies',
-      'Greed Station — holding pattern cargo',
+      'Sovereign freight, inspection exemption filed',
+      'Contested zone goods, faction clearance varies',
+      'Greed Station, holding pattern cargo',
     ],
     imports: [
       'All three factions running parallel supply ops',
-      'Coalition forward supplies — unacknowledged',
-      'Syndicate transit goods — tariff disputed',
-      'Void Collective — signal zone hardware',
+      'Coalition forward supplies, unacknowledged',
+      'Syndicate transit goods, tariff disputed',
+      'Void Collective, signal zone hardware',
     ]
   },
   eyejog: {
     exports: [
-      'Merchant Guild — trade toll receipts · {N}k SC',
-      'Guild Market licensing — {N} new registrations',
-      'Oak Capital — portfolio redistribution',
-      'Sycamore Partners — investment mandate packets',
-      'Sand Exchange — inter-colony fee schedule',
-      'Guild transit levy — mandatory, all routes',
+      'Merchant Guild, trade toll receipts · {N}k SC',
+      'Guild Market licensing, {N} new registrations',
+      'Oak Capital, portfolio redistribution',
+      'Sycamore Partners, investment mandate packets',
+      'Sand Exchange, inter-colony fee schedule',
+      'Guild transit levy, mandatory, all routes',
     ],
     imports: [
       'Tribute flow from controlled colonies',
-      'Sycamore Software — infrastructure contracts',
+      'Sycamore Software, infrastructure contracts',
       'Guild-approved luxury goods (personal use)',
-      'Decadence supplies — unrestricted (Guild privilege)',
+      'Decadence supplies, unrestricted (Guild privilege)',
     ]
   },
   dust_basin: {
     exports: [
-      'Aurora Metals — ore extract · {N}.{M}t',
-      'GreyMining — disputed contract output',
-      'First Minerals — Ore Platform 7 batch',
-      'South Minerals — elevator shared manifest',
-      'RogueMinerals — off-schedule extraction log',
+      'Aurora Metals, ore extract · {N}.{M}t',
+      'GreyMining, disputed contract output',
+      'First Minerals, Ore Platform 7 batch',
+      'South Minerals, elevator shared manifest',
+      'RogueMinerals, off-schedule extraction log',
     ],
     imports: [
       'Mining equipment (disputed ownership)',
       'Orbital elevator maintenance supplies',
-      'Labor rotation — outer rim contractors',
-      'Infrastructure — infrastructure dispute pending',
+      'Labor rotation, outer rim contractors',
+      'Infrastructure, infrastructure dispute pending',
     ]
   },
   nova_reach: {
     exports: [
-      'Nimbus Biotech — unlicensed compound batch',
-      'North Biotech — research output (unregistered)',
-      'Nova Biotech — synthesis log (no Coalition stamp)',
-      'GreywaterLabs — compound · {N}.{M}g [CLASS UNKNOWN]',
-      'Willow Labs — biotech reagents (outer rim grade)',
+      'Nimbus Biotech, unlicensed compound batch',
+      'North Biotech, research output (unregistered)',
+      'Nova Biotech, synthesis log (no Coalition stamp)',
+      'GreywaterLabs, compound · {N}.{M}g [CLASS UNKNOWN]',
+      'Willow Labs, biotech reagents (outer rim grade)',
     ],
     imports: [
-      'Research equipment — no import license',
+      'Research equipment, no import license',
       'Coalition-restricted reagents (smuggled)',
-      'Lab Ring Kappa — supply manifest (sealed)',
+      'Lab Ring Kappa, supply manifest (sealed)',
       'Experimental substrate materials',
     ]
   },
   iron_shelf: {
     exports: [
-      'North Industries — ship component batch · {N} units',
-      'Nexus Aerospace — hull segment manifest',
-      'Pioneer Aerospace — weapons systems (buyer undisclosed)',
-      'River Aerospace — aerospace parts · {N}.{M}t',
-      'Drydock Omega — completed vessel components',
-      'Forge Station — manufacturing output (all factions)',
+      'North Industries, ship component batch · {N} units',
+      'Nexus Aerospace, hull segment manifest',
+      'Pioneer Aerospace, weapons systems (buyer undisclosed)',
+      'River Aerospace, aerospace parts · {N}.{M}t',
+      'Drydock Omega, completed vessel components',
+      'Forge Station, manufacturing output (all factions)',
     ],
     imports: [
-      'Raw metal feedstock — Gluttonis grade',
+      'Raw metal feedstock, Gluttonis grade',
       'Precision tooling components',
       'Coalition, Syndicate, Void purchase orders (simultaneous)',
-      'Forge Station — energy supply contracts',
+      'Forge Station, energy supply contracts',
     ]
   },
   the_ledger: {
     exports: [
-      'BlackCapital — shell entity registration · {N} filings',
-      'NightFinance — holding structure documents',
-      'MireInsurance — policy batch (offshore grade)',
-      'Shell Block Nine — {N},000 registered entities: manifest blank',
-      'SableSecurity — enforcement contracts (undisclosed)',
+      'BlackCapital, shell entity registration · {N} filings',
+      'NightFinance, holding structure documents',
+      'MireInsurance, policy batch (offshore grade)',
+      'Shell Block Nine, {N},000 registered entities: manifest blank',
+      'SableSecurity, enforcement contracts (undisclosed)',
     ],
     imports: [
-      'Clean credits — laundering intake',
+      'Clean credits, laundering intake',
       'Coalition inspection deferral notices',
-      'SmugglerMedia — influence contract shipment',
+      'SmugglerMedia, influence contract shipment',
       'Off-book financial instruments',
     ]
   },
   signal_run: {
     exports: [
-      'Orion Logistics — freight corridor schedule',
-      'Blue Shipping — outer rim cargo manifest',
-      'Vertex Logistics — transit lane allocation',
-      'Relay Alpha — cargo schedule (outer rim)',
-      'Copper Marine — bulk freight · {N}.{M}t',
-      'Summit Logistics — hub routing data',
+      'Orion Logistics, freight corridor schedule',
+      'Blue Shipping, outer rim cargo manifest',
+      'Vertex Logistics, transit lane allocation',
+      'Relay Alpha, cargo schedule (outer rim)',
+      'Copper Marine, bulk freight · {N}.{M}t',
+      'Summit Logistics, hub routing data',
     ],
     imports: [
-      'Outer rim supply loads — all factions',
-      'Depot Ring — neural net cargo (tech)',
-      'Fuel Platform — power cell restocking',
-      'Transit lane access fees — inbound',
+      'Outer rim supply loads, all factions',
+      'Depot Ring, neural net cargo (tech)',
+      'Fuel Platform, power cell restocking',
+      'Transit lane access fees, inbound',
     ]
   },
   the_escrow: {
     exports: [
-      'Silver Holdings — data vault access log',
-      'SpecterIndustries — contract mirror records',
-      'OccultMaterials — outer system financial instruments',
-      'ApexContraband — audited holdings [DENIED × 9]',
-      'Vault Deep One — outer system ledger mirror',
+      'Silver Holdings, data vault access log',
+      'SpecterIndustries, contract mirror records',
+      'OccultMaterials, outer system financial instruments',
+      'ApexContraband, audited holdings [DENIED × 9]',
+      'Vault Deep One, outer system ledger mirror',
     ],
     imports: [
-      'Financial data — all outer system contracts',
+      'Financial data, all outer system contracts',
       'Coalition audit requests [AUTO-DECLINED]',
       'Ocean-depth server maintenance supplies',
-      'Encrypted financial instruments — all origins',
+      'Encrypted financial instruments, all origins',
     ]
   },
   flesh_station: {
     exports: [
-      '[FLESH STATION: SOVEREIGN TERRITORY — NO MANIFEST FILED]',
-      'Mr. Flesh — personal freight (unexamined)',
-      'Station internal — data feed (this terminal)',
+      '[FLESH STATION: SOVEREIGN TERRITORY, NO MANIFEST FILED]',
+      'Mr. Flesh, personal freight (unexamined)',
+      'Station internal, data feed (this terminal)',
       'Outbound: unknown · Volume: unlogged',
     ],
     imports: [
@@ -4183,48 +4183,48 @@ var CARGO_PROFILES = {
   },
   scrub_yard: {
     exports: [
-      'BlackCapital — shell entity registration · {N} filings',
-      'NightFinance — holding structure documents',
-      'MireInsurance — policy batch (offshore grade)',
-      'Shell Block Nine — {N},000 registered entities: manifest blank',
-      'SableSecurity — enforcement contracts (undisclosed)',
-      'SmugglerMedia — influence contract shipment',
+      'BlackCapital, shell entity registration · {N} filings',
+      'NightFinance, holding structure documents',
+      'MireInsurance, policy batch (offshore grade)',
+      'Shell Block Nine, {N},000 registered entities: manifest blank',
+      'SableSecurity, enforcement contracts (undisclosed)',
+      'SmugglerMedia, influence contract shipment',
     ],
     imports: [
-      'Clean credits — laundering intake',
+      'Clean credits, laundering intake',
       'Coalition inspection deferral notices',
       'Off-book financial instruments',
-      'Transit fee income — all routes',
+      'Transit fee income, all routes',
     ]
   },
   margin_call: {
     exports: [
-      'BoneYards — liquidated asset batch · {N} units',
-      'CrimsonChains — debt enforcement manifest',
-      'GraveWorks — physical collateral transfer order',
-      'ObsidianShipping — recovered goods · {N}.{M}t',
-      'ToxicChains — smelter output (collateral processed)',
+      'BoneYards, liquidated asset batch · {N} units',
+      'CrimsonChains, debt enforcement manifest',
+      'GraveWorks, physical collateral transfer order',
+      'ObsidianShipping, recovered goods · {N}.{M}t',
+      'ToxicChains, smelter output (collateral processed)',
     ],
     imports: [
-      'The Ledger — debt collection orders (inbound)',
+      'The Ledger, debt collection orders (inbound)',
       'Syndicate enforcement personnel rotation',
-      'Smelter feedstock — collateral grade',
-      'Asset seizure paperwork — all outer systems',
+      'Smelter feedstock, collateral grade',
+      'Asset seizure paperwork, all outer systems',
     ]
   },
   vein_cluster: {
     exports: [
-      'VeinConsortium — orbital ring output [OFF-MANIFEST]',
-      'BloodWorks — processed biologics · {N}.{M}kg',
-      'OrganCorp — tissue batch (distribution downstream)',
-      'GraftBiotech — graft substrate · {N} units',
-      'BoneMarkets — skeletal components (industrial grade)',
-      'CarrionFarms — protein extract · {N}t',
+      'VeinConsortium, orbital ring output [OFF-MANIFEST]',
+      'BloodWorks, processed biologics · {N}.{M}kg',
+      'OrganCorp, tissue batch (distribution downstream)',
+      'GraftBiotech, graft substrate · {N} units',
+      'BoneMarkets, skeletal components (industrial grade)',
+      'CarrionFarms, protein extract · {N}t',
     ],
     imports: [
       'Biological source material (origin undisclosed)',
-      'Orbital processing supplies — VeinConsortium only',
-      'CarrionFarms — feedstock (unlisted)',
+      'Orbital processing supplies, VeinConsortium only',
+      'CarrionFarms, feedstock (unlisted)',
       'Cold-chain transport units',
     ]
   }
@@ -4234,14 +4234,14 @@ var CARGO_PROFILES = {
 var GENERIC_CARGO = {
   exports: [
     'Mixed freight · {N}.{M}t',
-    'Inter-colony goods — standard manifest',
+    'Inter-colony goods, standard manifest',
     'Commercial cargo batch {N}',
-    'Bulk materials — unclassified',
+    'Bulk materials, unclassified',
   ],
   imports: [
     'Inbound general freight',
     'Colony resupply batch',
-    'Mixed goods — standard receipt',
+    'Mixed goods, standard receipt',
   ]
 };
 
@@ -4432,7 +4432,7 @@ function injectManifestModal() {
           '<div class="smm-route-box" id="smm-route"></div>',
         '</div>',
         '<div>',
-          '<div class="smm-section-title">Cargo Manifest — Intercepted</div>',
+          '<div class="smm-section-title">Cargo Manifest, Intercepted</div>',
           '<div class="smm-cargo-list" id="smm-cargo"></div>',
         '</div>',
         '<div class="smm-crew-row" id="smm-crew"></div>',
@@ -4623,7 +4623,7 @@ window.openShipManifest = function(ship) {
 
   // Header
   document.getElementById('smm-header').textContent =
-    'FLESH STATION — INTERNAL TRANSIT LOG — VESSEL ' + manifest.ident + ' — INTERCEPTED IN TRANSIT';
+    'FLESH STATION, INTERNAL TRANSIT LOG, VESSEL ' + manifest.ident + ', INTERCEPTED IN TRANSIT';
 
   // Ident panel
   document.getElementById('smm-ident').textContent  = '[ ' + manifest.ident + ' ]';
@@ -4654,7 +4654,7 @@ window.openShipManifest = function(ship) {
 
   // Crew
   document.getElementById('smm-crew').textContent =
-    'CREW COMPLEMENT: ' + manifest.crew + ' REGISTERED  //  MANIFEST EXTRACTED VIA FLESH STATION DEEP-SCAN — NOT VISIBLE TO CREW';
+    'CREW COMPLEMENT: ' + manifest.crew + ' REGISTERED  //  MANIFEST EXTRACTED VIA FLESH STATION DEEP-SCAN, NOT VISIBLE TO CREW';
 
   // Stars
   var starCanvas = document.getElementById('smm-stars');

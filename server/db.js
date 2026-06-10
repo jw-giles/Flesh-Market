@@ -996,8 +996,16 @@ export function initFundsSystem() {
 
   if (!existing.includes('FLSH')) {
     stmt(`INSERT INTO funds(id,name,type,owner_id,description,max_members,slot_cost,savings_rate,cash,created_at)
-          VALUES('FLSH','FLSH Capital','flsh',null,'Developer fund. Revenue from all platform trade fees.',999,0,0.0004,1000000000000,?)`)
+          VALUES('FLSH','FLSH Capital','flsh',null,'Developer fund. Revenue from all platform trade fees.',999,0,0.0004,100000000000000,?)`)
       .run(now);
+  }
+
+  // One-shot: pin the FLSH dev fund to its fixed 100T valuation marker. The live
+  // fee accrual is unused/glitched, so this sets a clean flat value once and never
+  // repeats (guarded by a fund_state sentinel), preserving any future manual change.
+  if (!stmt('SELECT value FROM fund_state WHERE key=?').get('flsh_100t')) {
+    stmt(`UPDATE funds SET cash=100000000000000 WHERE id='FLSH'`).run();
+    stmt('INSERT OR REPLACE INTO fund_state VALUES(?,?)').run('flsh_100t', '1');
   }
 
   if (!existing.includes('MERCHANTS_GUILD')) {

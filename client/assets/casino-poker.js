@@ -92,7 +92,7 @@ function renderSeats(){
     seat.className='pk-seat'+(ai.folded?' folded':ai.hand.length>0?' active':'');
     seat.id=`pk-seat-${i}`;
 
-    const statusText=ai.folded?'folded':ai.allin?'ALL-IN':pkState.street==='idle'?'—':'';
+    const statusText=ai.folded?'folded':ai.allin?'ALL-IN':pkState.street==='idle'?'-':'';
     const betText=ai.bet>0&&!ai.folded?`bet: Ƒ${ai.bet}`:'';
     let handHtml='';
     if(ai.hand.length===2){
@@ -226,7 +226,7 @@ function advanceStreet(){
       endHand('player','All opponents folded! You win!');
     } else {
       const winner=pkState.ais.find(a=>!a.folded);
-      endHand('ai',`${winner.name} wins — everyone else folded.`);
+      endHand('ai',`${winner.name} wins, everyone else folded.`);
     }
     return;
   }
@@ -264,7 +264,7 @@ function showdown(){
   renderCards();
   pkLog('--- Showdown ---');
   contenders.forEach(c=>pkLog(`${c.who==='player'?'You':c.who}: ${c.rank.name}`));
-  if(!contenders.length){endHand('push','No contestants — pot returned.');return;}
+  if(!contenders.length){endHand('push','No contestants, pot returned.');return;}
   contenders.sort((a,b)=>b.rank.score-a.rank.score);
   const best=contenders[0];
   const winners=contenders.filter(c=>c.rank.score===best.rank.score);
@@ -272,7 +272,7 @@ function showdown(){
     const share=Math.floor(pkState.pot/winners.length);
     winners.forEach(w=>{if(w.who==='player'){pkAdjBalance(share);}else{w.ai.stack+=share;}});
     const names=winners.map(w=>w.who==='player'?'You':w.who).join(' & ');
-    endHand('push',`Split pot! ${names} — ${best.rank.name} — Ƒ${share} each`);
+    endHand('push',`Split pot! ${names}, ${best.rank.name}, Ƒ${share} each`);
   } else if(best.who==='player'){
     endHand('player',`You win with ${best.rank.name}!`);
   } else {
@@ -357,8 +357,8 @@ window.pkFold=function(){
   pkLog('You fold.');
   // Check if only AIs remain
   const remaining=pkState.ais.filter(a=>!a.folded);
-  if(remaining.length===1){endHand('ai',`${remaining[0].name} wins — everyone folded.`);return;}
-  if(remaining.length===0){endHand('push','Everyone folded — pot returned.');return;}
+  if(remaining.length===1){endHand('ai',`${remaining[0].name} wins, everyone folded.`);return;}
+  if(remaining.length===0){endHand('push','Everyone folded, pot returned.');return;}
   // Continue AI rounds to determine winner
   advanceStreet();
 };
@@ -366,7 +366,7 @@ window.pkFold=function(){
 window.pkCheck=function(){
   if(pkState.street==='idle')return;
   const maxBet=Math.max(...pkState.ais.filter(a=>!a.folded).map(a=>a.bet));
-  if(maxBet>pkState.playerBet){pkLog('Cannot check — call or fold.');return;}
+  if(maxBet>pkState.playerBet){pkLog('Cannot check, call or fold.');return;}
   pkLog('You check.');setActionsEnabled(false);
   advanceStreet();
 };

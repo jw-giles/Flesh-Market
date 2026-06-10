@@ -649,7 +649,7 @@ function updateSlotModalCount(){
 window.doSlotSpin = async function(){
   const token = getToken();
   if(!token){ try{showToast('Login required','#ff4444');}catch(_){} return; }
-  if((invState.spins||0) < 1){ try{showToast('No spins remaining — complete 9 day trades to earn one','#ff9900');}catch(_){} return; }
+  if((invState.spins||0) < 1){ try{showToast('No spins remaining, complete 9 day trades to earn one','#ff9900');}catch(_){} return; }
 
   const btn = document.getElementById('slotModalBtn');
   if(btn){ btn.disabled=true; btn.textContent='Spinning…'; }

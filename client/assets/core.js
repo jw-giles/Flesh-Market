@@ -329,7 +329,7 @@ function renderTickers() {
       const loreText = COMPANY_LORE[loreName] || '';
       row.innerHTML = `<div style="flex:1;min-width:0">
         <div style="display:flex;align-items:baseline;gap:4px">
-          <span class="sym">${t.symbol}</span><span style="color:#b6ffcf;opacity:.9"> — ${loreName}</span>
+          <span class="sym">${t.symbol}</span><span style="color:#b6ffcf;opacity:.9">, ${loreName}</span>
         </div>
         ${isActive && loreText ? `<div style="font-size:.72rem;color:#b6ffcf;line-height:1.55;margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.07);padding-bottom:2px;opacity:.96">${loreText}</div>` : ''}
       </div>
@@ -352,6 +352,27 @@ function renderTickers() {
     });
 }
 
+// Live news header: default "LIVE" bar, or a dev-set breaking-news banner.
+function renderNewsHeader(b) {
+  const elh = document.getElementById('news-header');
+  if (!elh) return;
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+  elh.style.cssText = 'padding:4px 9px;margin-bottom:5px;border-left:3px solid;border-radius:3px;font-size:.72rem;letter-spacing:.05em;display:flex;align-items:center;gap:9px';
+  if (b && b.active && b.text) {
+    const col = b.tone === 'good' ? '#86ff6a' : (b.tone === 'bad' ? '#ff5544' : '#f0b454');
+    elh.style.borderColor = col;
+    elh.style.background = b.tone === 'bad' ? '#180605' : (b.tone === 'good' ? '#06140a' : '#16100a');
+    elh.innerHTML = `<span style="color:${col};font-weight:bold;white-space:nowrap">\u26A0 BREAKING</span><span style="color:#d8c89a;letter-spacing:.02em">${esc(b.text)}</span>`;
+  } else {
+    elh.style.borderColor = '#1f3a1f';
+    elh.style.background = '#070a07';
+    elh.innerHTML = `<span style="color:#4ecdc4;font-weight:bold">\u25E2 LIVE NEWSFEED</span><span style="color:var(--muted);font-size:.66rem;letter-spacing:.1em">REALTIME MARKET WIRE</span>`;
+  }
+}
+window.FMRenderNewsHeader = renderNewsHeader;
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { try { renderNewsHeader(null); } catch (_) {} });
+else { try { renderNewsHeader(null); } catch (_) {} }
+
 function renderNews(item) {
   const box = el('#news');
   if (!box) { console.warn('renderNews: #news not mounted'); return; }
@@ -362,7 +383,7 @@ function renderNews(item) {
   const toneClass = item.tone === 'good' ? 'n-good' : (item.tone === 'bad' ? 'n-bad' : 'n-neutral');
 
   // Category badge
-  const catBadges = { market:'MKT', sector:'SEC', company:'', colony:'COL', system:'SYS', trade:'TRD' };
+  const catBadges = { market:'MKT', sector:'SEC', company:'', colony:'COL', system:'SYS', trade:'TRD', faction:'FAC', flesh:'FLSH', void:'\u2317' };
   const cat = item.cat || (item.symbol ? 'company' : 'system');
   const badge = catBadges[cat] || '';
   const badgeHtml = badge ? `<span class="n-badge n-badge-${cat}">${badge}</span>` : '';
@@ -550,7 +571,7 @@ function renderPositions(p) {
   box.innerHTML = '';
   p.positions.forEach(po => {
     const row = document.createElement('div');
-    row.innerHTML = `${po.sym} — ${po.qty} @ ${fmt(po.px)} = ${fmt(po.val)}`;
+    row.innerHTML = `${po.sym}, ${po.qty} @ ${fmt(po.px)} = ${fmt(po.val)}`;
     if (po.sym) {
       row.style.cursor = 'pointer';
       row.title = 'View ' + po.sym + ' in Market';
@@ -609,7 +630,7 @@ const FM_DONUT_PAL = [
 ];
 window.FM_DONUT_PAL = FM_DONUT_PAL;
 
-let EQUITY = []; // kept for legacy compat — nothing writes to it now
+let EQUITY = []; // kept for legacy compat, nothing writes to it now
 
 function drawPnLCharts(posArr, cashNow, netWorth) {
   _drawDonut(posArr, cashNow, netWorth);
@@ -985,7 +1006,7 @@ function liveUpdatePnL(tickData, portfolioSnap) {
   </div>${(window.gPlayerFaction && window.gPlayerFaction !== 'null') ? `<div style="display:flex;align-items:center;gap:6px;padding:4px 4px 8px;margin-bottom:2px;font-size:.64rem;opacity:.75">
     <span style="color:${window.gPlayerFaction==='coalition'?'#4ecdc4':window.gPlayerFaction==='syndicate'?'#e74c3c':window.gPlayerFaction==='void'?'#9b59b6':'#9dff5a'}">⬡</span>
     <span style="color:#888">Faction:</span>
-    <span style="color:${window.gPlayerFaction==='coalition'?'#4ecdc4':window.gPlayerFaction==='syndicate'?'#e74c3c':window.gPlayerFaction==='void'?'#9b59b6':'#9dff5a'};letter-spacing:.06em">${window.gPlayerFaction==='coalition'?'THE COALITION':window.gPlayerFaction==='syndicate'?'THE SYNDICATE':window.gPlayerFaction==='void'?'VOID COLLECTIVE':window.gPlayerFaction==='fleshstation'?'FLESH STATION ⚡':'—'}</span>
+    <span style="color:${window.gPlayerFaction==='coalition'?'#4ecdc4':window.gPlayerFaction==='syndicate'?'#e74c3c':window.gPlayerFaction==='void'?'#9b59b6':'#9dff5a'};letter-spacing:.06em">${window.gPlayerFaction==='coalition'?'THE COALITION':window.gPlayerFaction==='syndicate'?'THE SYNDICATE':window.gPlayerFaction==='void'?'VOID COLLECTIVE':window.gPlayerFaction==='fleshstation'?'FLESH STATION ⚡':'-'}</span>
     <span style="color:#555;font-size:.58rem">colony bonuses active</span>
   </div>` : ''}`;
 
@@ -1275,10 +1296,10 @@ function drawChart() {
   ctx.font = 'bold 16px monospace';
   ctx.textAlign = 'left';
   ctx.fillStyle = '#b6ffcf';
-  ctx.fillText(CURRENT || '—', 6, 18);
+  ctx.fillText(CURRENT || '-', 6, 18);
 
   // Price + pct + hi/lo
-  const symW = (CURRENT || '—').length * 10 + 14;
+  const symW = (CURRENT || '-').length * 10 + 14;
   ctx.font = 'bold 14px monospace';
   ctx.fillStyle = isUp ? '#00ff88' : '#ff5533';
   ctx.fillText('Ƒ' + lastP.toFixed(2), symW, 18);
@@ -1423,7 +1444,7 @@ function addChat(item){
         window.FM_Block.unblock(uname);
         blockBtn.title = 'Block this user';
       } else if (window.FM_Block) {
-        if (confirm('Block ' + uname + '? Their messages will be hidden for you. (Client-side only — resets on full page reload)')) {
+        if (confirm('Block ' + uname + '? Their messages will be hidden for you. (Client-side only, resets on full page reload)')) {
           window.FM_Block.block(uname);
         }
       }
@@ -1566,7 +1587,7 @@ $all('.tab').forEach(tab=>{
   const CASINO_PANES = ['roulette','blackjack','plinko','poker','horseraces','chess','sudoku','mathgame','minesweeper'];
   const CASINO_SCRIPTS = {
     'blackjack':   'assets/casino-blackjack.js',
-    'plinko':      null, // disabled — under repair
+    'plinko':      null, // disabled, under repair
     'poker':       'assets/casino-poker.js',
     'chess':       'assets/casino-chess.js',
     'sudoku':      'assets/casino-sudoku.js',
@@ -1752,6 +1773,7 @@ ws.addEventListener('message', (ev)=>{
     renderTickers();
     if (msg.data.leaderboard) { _lbCacheSave(msg.data.leaderboard); renderBoard(msg.data.leaderboard); }
     msg.data.headlines && msg.data.headlines.slice(-10).forEach(renderNews);
+    renderNewsHeader(msg.data.breaking || null);
     // Auto-select first stock on load so chart is never blank
     if (!CURRENT && TICKERS.length) {
       CURRENT = TICKERS[0].symbol;
@@ -1806,6 +1828,9 @@ ws.addEventListener('message', (ev)=>{
   }
   if (msg.type === 'news') {
     renderNews(msg.data);
+  }
+  if (msg.type === 'breaking_news') {
+    renderNewsHeader(msg.data || { active: false });
   }
   if (msg.type === 'leaderboard') {
     _lbCacheSave(msg.data);
@@ -2117,11 +2142,11 @@ ws.addEventListener('message', (ev)=>{
         <div style="display:flex;gap:6px;align-items:center">
           <div id="rl-history"></div>
         </div>
-        <div id="lastResult" class="muted" style="font-size:.85rem;letter-spacing:.06em;text-align:center">Last: —</div>
+        <div id="lastResult" class="muted" style="font-size:.85rem;letter-spacing:.06em;text-align:center">Last: -</div>
       </div>
       <div id="rl-controls">
         <div class="rl-info-row">
-          <span>Balance: <strong id="rouletteBalance">—</strong></span>
+          <span>Balance: <strong id="rouletteBalance">-</strong></span>
           <span>Bets Total: <strong id="rl-bets-total">Ƒ0</strong></span>
           <span id="rl-last-net" style="display:none"></span>
         </div>
@@ -2521,14 +2546,14 @@ ws.addEventListener('message', (ev)=>{
       banner.style.display='block';
       if(payout>0){
         banner.className='rl-result-banner win';
-        banner.textContent=`✓ ${result} ${col.toUpperCase()} — Won ${fmtLocal(net)} (paid ${fmtLocal(payout)})`;
+        banner.textContent=`✓ ${result} ${col.toUpperCase()}, Won ${fmtLocal(net)} (paid ${fmtLocal(payout)})`;
       } else {
         banner.className='rl-result-banner lose';
-        banner.textContent=`✗ ${result} ${col.toUpperCase()} — No win`;
+        banner.textContent=`✗ ${result} ${col.toUpperCase()}, No win`;
       }
       setTimeout(()=>{ if(banner) banner.style.display='none'; },4000);
     }
-    rlLog(`${result} (${col}) — ${payout>0?`+${fmtLocal(net)}`:'No win'} | bet ${fmtLocal(totalBet)}`);
+    rlLog(`${result} (${col}), ${payout>0?`+${fmtLocal(net)}`:'No win'} | bet ${fmtLocal(totalBet)}`);
     updateHistory(result);
     bets.length=0;
     renderBets(); refreshRouletteBalance();
@@ -2551,7 +2576,7 @@ ws.addEventListener('message', (ev)=>{
     bets.push({type,pick,amount:amt});
     adjustBalance(-amt);
     renderBets(); refreshRouletteBalance();
-    rlLog(`Bet placed: ${betLabel({type,pick})} — ${fmtLocal(amt)}`);
+    rlLog(`Bet placed: ${betLabel({type,pick})}, ${fmtLocal(amt)}`);
   };
 
   // ── Spin ────────────────────────────────────────────────────────────

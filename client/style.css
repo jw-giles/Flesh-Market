@@ -12,7 +12,7 @@
    ============================================================ */
 :root{
   --bg:#020703; --green:#42ff7e; --pale:#b6ffcf; --amber:#f0b454; --gold:#ffce4d; --dim:#1f7a3aaa; --good:#9bffba; --bad:#ff6a6a;
-  --muted:#72e09c; --hr:#0a3315; --input-bg:#010401; --surface:#031006; --surface-2:#04160a;
+  --muted:#9af2bf; --hr:#0a3315; --input-bg:#010401; --surface:#031006; --surface-2:#04160a;
   --scroll:#46ff7d;
   --body-bg:radial-gradient(ellipse at 50% 40%, #04130a 0%, #020703 80%);
   --panel-bg:rgba(8,30,14,0.22);
@@ -26,8 +26,8 @@
 #crtOverlay{
   position:fixed; inset:0; z-index:99990; pointer-events:none;
   background:
-    repeating-linear-gradient(0deg, rgba(0,0,0,0.22) 0px, rgba(0,0,0,0.22) 1px, transparent 1px, transparent 3px),
-    radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(0,0,0,0.35) 100%);
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 3px),
+    radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(0,0,0,0.26) 100%);
   mix-blend-mode:multiply;
 }
 #crtOverlay::after{
@@ -46,7 +46,7 @@ body{margin:0;background:var(--body-bg);color:var(--green);font:15px/1.5 'IBM Pl
 .wrap{width:100%; max-width:none;margin:0 auto;padding:12px;display:flex;flex-direction:column;height:100vh;box-sizing:border-box;overflow:hidden}
 .panel{border:1px solid var(--dim);padding:8px;border-radius:8px;background:var(--panel-bg);backdrop-filter:var(--panel-blur);-webkit-backdrop-filter:var(--panel-blur);box-shadow:var(--panel-shadow)}
 h2{margin:.2rem 0 .6rem 0;font-size:16px;text-transform:uppercase;letter-spacing:.12em;color:var(--amber)}
-small, .muted{color:var(--muted);opacity:.9}
+small, .muted{color:var(--muted);opacity:1}
 hr{border:0;border-top:2px solid var(--hr);margin:10px 0;box-shadow:0 1px 4px #46ff7d11}
 .input{width:100%;padding:6px 8px;background:var(--input-bg);border:1px solid var(--dim);color:var(--green);border-radius:6px;outline:none}
 /* P&L / Capital House filter + sector-sort controls */
@@ -84,7 +84,7 @@ hr{border:0;border-top:2px solid var(--hr);margin:10px 0;box-shadow:0 1px 4px #4
 .n-badge-market{background:#42ff7e22;color:var(--muted)}
 .n-badge-colony{background:#f0b45422;color:var(--amber)}
 .n-badge-sector{background:#9b59b622;color:#c99bff}
-.n-badge-company{background:#42ff7e14;color:var(--dim)}
+.n-badge-company{background:#42ff7e14;color:var(--muted)}
 .n-badge-system{background:#3aa0ff22;color:#7ec8ff}
 .n-badge-trade{background:#2dd4c422;color:#5fe6da}
 .n-ticker{color:var(--amber);font-weight:700;text-decoration:underline;text-decoration-color:#f0b45455;text-underline-offset:2px}

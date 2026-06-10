@@ -97,10 +97,10 @@
       const okEl     = document.getElementById('sho-ok');
       const confirmBtn = document.getElementById('sho-confirm-btn');
 
-      priceEl.textContent  = px ? fmt(px) : '—';
-      procEl.textContent = px ? fmt(px * qty * 0.997) : '—';
-      margEl.textContent = px ? fmt(px * qty * MARGIN_RATE) : '—';
-      feeEl.textContent  = px ? fmt(px * qty * BORROW_RATE) : '—';
+      priceEl.textContent  = px ? fmt(px) : '-';
+      procEl.textContent = px ? fmt(px * qty * 0.997) : '-';
+      margEl.textContent = px ? fmt(px * qty * MARGIN_RATE) : '-';
+      feeEl.textContent  = px ? fmt(px * qty * BORROW_RATE) : '-';
 
       warnEl.style.display='none'; okEl.style.display='none';
       confirmBtn.disabled = !sym;
@@ -152,19 +152,19 @@
       }
 
       const posQty = Math.abs(shortPos[sym]||0);
-      document.getElementById('shc-position').textContent = sym ? (posQty > 0 ? `-${posQty} shares` : 'No short position') : '—';
+      document.getElementById('shc-position').textContent = sym ? (posQty > 0 ? `-${posQty} shares` : 'No short position') : '-';
       const qty  = Math.max(1, Math.min(parseInt(document.getElementById('shc-qty').value||'1')||1, posQty||1));
       const px   = price(sym);
       const avg  = avgCost(sym);
-      document.getElementById('shc-price').textContent = px   ? fmt(px)  : '—';
-      document.getElementById('shc-avg').textContent   = avg  ? fmt(avg) : '—';
+      document.getElementById('shc-price').textContent = px   ? fmt(px)  : '-';
+      document.getElementById('shc-avg').textContent   = avg  ? fmt(avg) : '-';
       const costEl = document.getElementById('shc-cost');
       const pnlEl  = document.getElementById('shc-pnl');
       const warnEl = document.getElementById('shc-warn');
       const confirmBtn = document.getElementById('shc-confirm-btn');
 
       if(!sym || !px || posQty === 0){
-        costEl.textContent='—'; pnlEl.textContent='—';
+        costEl.textContent='-'; pnlEl.textContent='-';
         warnEl.style.display='none'; confirmBtn.disabled = !sym || posQty===0;
         return;
       }

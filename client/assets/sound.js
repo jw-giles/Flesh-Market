@@ -250,7 +250,7 @@ window.refreshHeatmap = function() {
           </div>
           <div class="heat-hdr-bot">
             <span class="heat-sub" style="color:${_secColor};opacity:.5">${lore.sub}</span>
-            <span class="heat-counts"><span style="color:#6c6">▲${up}</span> <span style="color:#4f8a64">—${flat}</span> <span style="color:#c66">▼${dn}</span></span>
+            <span class="heat-counts"><span style="color:#6c6">▲${up}</span> <span style="color:#4f8a64">-${flat}</span> <span style="color:#c66">▼${dn}</span></span>
           </div>
         </div>
       `;

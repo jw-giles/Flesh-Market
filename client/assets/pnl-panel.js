@@ -4,7 +4,7 @@
 
   // Lightweight DOM/helpers
   function el(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=String(text); return e; }
-  const fmt = n => Number.isFinite(+n) ? (+n).toLocaleString(undefined,{maximumFractionDigits:2}) : '—';
+  const fmt = n => Number.isFinite(+n) ? (+n).toLocaleString(undefined,{maximumFractionDigits:2}) : '-';
   const pct = (last, avg) => (!avg ? 0 : ((last/avg)-1)*100);
   function livePrice(sym){
     // rolling series for mini chart
@@ -160,7 +160,7 @@ btnCloseLosers.onclick = async ()=>{
 
     // KPIs
     const kpis = el('div','kpis'); card.appendChild(kpis);
-    const kpi = (label)=>{ const d=el('div','kpi'); d.appendChild(el('div','label',label)); d.appendChild(el('div','value','—')); return d; };
+    const kpi = (label)=>{ const d=el('div','kpi'); d.appendChild(el('div','label',label)); d.appendChild(el('div','value','-')); return d; };
     const kEquity=kpi('Equity'), kCash=kpi('Cash'), kUPL=kpi('Unrealized P&L'), kDailyIncome=kpi('Daily Income');
     kpis.append(kEquity,kCash,kDailyIncome);
 

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   TUTORIAL — UNIT-7 Onboarding Protocol
+   TUTORIAL, UNIT-7 Onboarding Protocol
    A callous robot walks new players through every mechanic.
    Triggered on first login (tutorial_seen === false in welcome msg).
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -67,19 +67,19 @@
     },
     {
       heading: 'STOCK TRADING',
-      text: `The ticker feed on the left displays live prices across <em>180+ companies</em> in 8 sectors. Click any stock to view its <em>real-time waveform chart</em> and a detail panel showing sector, HQ colony, dividend status, and your position. Use the <em>★ Watchlist</em> button to filter to your favorites. Prices drift slowly — trends develop over <strong>hours, not minutes</strong>. <em>Market Orders</em> execute instantly. <em>Limit Orders</em> let you set a target price and reserve cash. You get <strong>3 day trades</strong> per 30-minute cycle.`,
+      text: `The ticker feed on the left displays live prices across <em>180+ companies</em> in 8 sectors. Click any stock to view its <em>real-time waveform chart</em> and a detail panel showing sector, HQ colony, dividend status, and your position. Use the <em>★ Watchlist</em> button to filter to your favorites. Prices drift slowly, trends develop over <strong>hours, not minutes</strong>. <em>Market Orders</em> execute instantly. <em>Limit Orders</em> let you set a target price and reserve cash. You get <strong>3 day trades</strong> per 30-minute cycle.`,
       callout: 'Scalping is penalized. Buying and selling the same stock in one cycle costs 2x trade tax.',
       tab: 'market',
     },
     {
       heading: 'MARKET TOOLS',
-      text: `Below Limit Orders, <em>Price Alerts</em> let you set notifications for when a stock crosses a target price. The <em>News Feed</em> on the left reports earnings, colony events, and market activity — use the filter bar to search by keyword or tone. The news feed nudges prices, so watch for earnings reports and colony disruptions.`,
+      text: `Below Limit Orders, <em>Price Alerts</em> let you set notifications for when a stock crosses a target price. The <em>News Feed</em> on the left reports earnings, colony events, and market activity, use the filter bar to search by keyword or tone. The news feed nudges prices, so watch for earnings reports and colony disruptions.`,
       callout: 'Set a price alert on any ticker. You will hear a sound and see a toast when it triggers.',
       tab: 'market',
     },
     {
       heading: 'SHORT SELLING',
-      text: `Shorting with the <em>⬇ Short</em> button borrows shares and sells them at market price. You profit if the price drops and you cover cheaper. Requirements: <strong>50% of the short value as cash collateral</strong> stays locked while the position is open, the position accrues a <strong>0.1% borrow fee</strong> on position value every <strong>30 minutes</strong>, and you cannot short more than <strong>500 shares per symbol</strong>. To close, you buy back the symbol. Buying more than your short covers first and the excess is rejected — you must be flat before you can go long. Covering counts as a day trade. <span class="warn">Losses scale with how high the price goes. They are not capped.</span>`,
+      text: `Shorting with the <em>⬇ Short</em> button borrows shares and sells them at market price. You profit if the price drops and you cover cheaper. Requirements: <strong>50% of the short value as cash collateral</strong> stays locked while the position is open, the position accrues a <strong>0.1% borrow fee</strong> on position value every <strong>30 minutes</strong>, and you cannot short more than <strong>500 shares per symbol</strong>. To close, you buy back the symbol. Buying more than your short covers first and the excess is rejected, you must be flat before you can go long. Covering counts as a day trade. <span class="warn">Losses scale with how high the price goes. They are not capped.</span>`,
       callout: 'Borrow fees run until you cover. Sitting on a short that goes sideways will bleed you.',
       tab: 'market',
     },
@@ -98,41 +98,41 @@
     },
     {
       heading: 'FACTIONS',
-      text: `Three factions compete for colony control. <em style="color:#4ecdc4">The Coalition</em> focuses on stability — control both endpoints of a route for -5% risk. <em style="color:#e74c3c">The Syndicate</em> gets +15% smuggling payout but +5% risk on their own turf. <em style="color:#9b59b6">Void Collective</em> earns 2% of all intercepted cargo as raid income, plus permanent cybernetic conversion with +Ƒ15 passive bonus. <span class="warn">Void conversion is irreversible.</span> All factions earn <em>Ƒ15 per controlled colony</em> every 30 minutes. Faction allegiance is locked for <strong>30 days</strong> after joining.`,
+      text: `Three factions compete for colony control. <em style="color:#4ecdc4">The Coalition</em> focuses on stability, control both endpoints of a route for -5% risk. <em style="color:#e74c3c">The Syndicate</em> gets +15% smuggling payout but +5% risk on their own turf. <em style="color:#9b59b6">Void Collective</em> earns 2% of all intercepted cargo as raid income, plus permanent cybernetic conversion with +Ƒ15 passive bonus. <span class="warn">Void conversion is irreversible.</span> All factions earn <em>Ƒ15 per controlled colony</em> every 30 minutes. Faction allegiance is locked for <strong>30 days</strong> after joining.`,
       callout: 'Fund colony control to shift influence. When a faction hits 75%, a 24-hour conquest timer starts.',
       tab: 'galactic',
       galaxySub: 'factions',
     },
     {
       heading: 'COMMODITY MARKET',
-      text: `The <em>Markets</em> tab is the heart of trade: <em>120 commodities</em> across Tech, Med, and Agri, each priced differently at every colony based on who controls it and local demand. The <em>Arbitrage Board</em> shows the best spread per commodity right now — where to buy cheapest and sell dearest. Buy a ship in the <em>Shipyard</em> (commodity trade requires one), buy goods at a cheap colony, then <em>Ship</em> them to a dear one. Shipments run in real time through phases — loading, undocking, transit, dropoff — and can be intercepted en route. NPC trade fleets move prices too, so the board is always shifting. Prices update live like a stock ticker.`,
-      callout: 'Filter the board by class or search by name. Watch NPC ships — each one moves the markets it trades.',
+      text: `The <em>Markets</em> tab is the heart of trade: <em>120 commodities</em> across Tech, Med, and Agri, each priced differently at every colony based on who controls it and local demand. The <em>Arbitrage Board</em> shows the best spread per commodity right now, where to buy cheapest and sell dearest. Buy a ship in the <em>Shipyard</em> (commodity trade requires one), buy goods at a cheap colony, then <em>Ship</em> them to a dear one. Shipments run in real time through phases, loading, undocking, transit, dropoff, and can be intercepted en route. NPC trade fleets move prices too, so the board is always shifting. Prices update live like a stock ticker.`,
+      callout: 'Filter the board by class or search by name. Watch NPC ships, each one moves the markets it trades.',
       tab: 'galactic',
       galaxySub: 'markets',
     },
     {
       heading: 'SHIPPING CONTRACTS',
-      text: `On the <em>Contracts</em> tab, above Lane Shares, the house lists <em>shipping contracts</em> — options on a lane's commodity spread. You pay a <em>premium</em> for the right to capture a spread by an expiry (1h/4h/8h). If the spread <strong>widens past your strike</strong> before expiry, you exercise for profit; if not, it expires and you lose only the premium. <strong>No ship or cargo needed</strong>, so it's a way into the commodity game before you can afford a hauler. Blockaded lanes carry pricier premiums but bigger swings. <em>Lane Shares</em> still let you buy permanent equity in a lane on a bonding curve, earning a cut of all trade — including contract profits.`,
+      text: `On the <em>Contracts</em> tab, above Lane Shares, the house lists <em>shipping contracts</em>, options on a lane's commodity spread. You pay a <em>premium</em> for the right to capture a spread by an expiry (1h/4h/8h). If the spread <strong>widens past your strike</strong> before expiry, you exercise for profit; if not, it expires and you lose only the premium. <strong>No ship or cargo needed</strong>, so it's a way into the commodity game before you can afford a hauler. Blockaded lanes carry pricier premiums but bigger swings. <em>Lane Shares</em> still let you buy permanent equity in a lane on a bonding curve, earning a cut of all trade, including contract profits.`,
       callout: 'Contracts are pure market plays. Premiums are priced with a house edge, but players win about half.',
       tab: 'galactic',
       galaxySub: 'contracts',
     },
     {
       heading: 'SMUGGLING & GUARDS',
-      text: `The <em>💀 Smuggling</em> tab is the high-risk gamble. Stake credits on a <em>contraband</em> run between colonies (payouts up to ×3), pick a route, and launch. Interception risk runs <strong>15% to 55%+</strong> by lane type, raised by big stakes and lowered by tension (chaos is cover for smugglers). Hire a <em>Guard escort</em> to cut the odds — four tiers from Light to <em>Private Army</em>, cutting risk up to <strong>26%</strong> for a fee of up to 22% of your stake. <span class="warn">The guard fee is paid up front and lost if you're caught — guards die with the cargo. No refund.</span> It's a spend-to-lower-odds bet, not insurance. Runs share a <strong>15-minute cooldown</strong> with nothing else.`,
+      text: `The <em>💀 Smuggling</em> tab is the high-risk gamble. Stake credits on a <em>contraband</em> run between colonies (payouts up to ×3), pick a route, and launch. Interception risk runs <strong>15% to 55%+</strong> by lane type, raised by big stakes and lowered by tension (chaos is cover for smugglers). Hire a <em>Guard escort</em> to cut the odds, four tiers from Light to <em>Private Army</em>, cutting risk up to <strong>26%</strong> for a fee of up to 22% of your stake. <span class="warn">The guard fee is paid up front and lost if you're caught, guards die with the cargo. No refund.</span> It's a spend-to-lower-odds bet, not insurance. Runs share a <strong>15-minute cooldown</strong> with nothing else.`,
       callout: 'Blockaded lanes still allow smuggling at +10% risk. Syndicate gets +15% payout but +5% on home turf.',
       tab: 'galactic',
       galaxySub: 'shipping',
     },
     {
       heading: 'THE STORE',
-      text: `The Store tab contains four sections. <em>Titles</em> — purchasable display titles from Ƒ1K to Ƒ50M that show beside your name. <em>Inventory</em> — equip items across 9 gear slots for passive income bonuses. <em>Ƒbay</em> — a player marketplace to buy and sell items. <em>🎰 Slots</em> — the slot machine is the exclusive source of <strong>equipment drops</strong>. Items come in six rarity tiers from Common to Phantom. Every <strong>9 completed day trades</strong> earns a free spin. Patreon members receive monthly spin grants.`,
+      text: `The Store tab contains four sections. <em>Titles</em>, purchasable display titles from Ƒ1K to Ƒ50M that show beside your name. <em>Inventory</em>, equip items across 9 gear slots for passive income bonuses. <em>Ƒbay</em>, a player marketplace to buy and sell items. <em>🎰 Slots</em>, the slot machine is the exclusive source of <strong>equipment drops</strong>. Items come in six rarity tiers from Common to Phantom. Every <strong>9 completed day trades</strong> earns a free spin. Patreon members receive monthly spin grants.`,
       callout: 'Equip a full set (Neon Syndicate, Chrome Corp, etc.) for stacking set bonuses.',
       tab: 'store',
     },
     {
       heading: 'THE CASINO',
-      text: `Eight casino games are available. <em>Roulette</em> — 13 bet types with animated wheel. <em>Blackjack</em> — 6-deck shoe with card tracking. <em>Poker</em> — Texas Hold'em 6-max vs AI. <em>Horse Racing</em>, <em>Chess</em>, <em>Sudoku</em>, <em>Math Quiz</em>, and <em>Minesweeper</em>. All games use your Social Credit balance directly — wins are real, losses are real. No house tokens, no abstraction.`,
+      text: `Eight casino games are available. <em>Roulette</em>, 13 bet types with animated wheel. <em>Blackjack</em>, 6-deck shoe with card tracking. <em>Poker</em>, Texas Hold'em 6-max vs AI. <em>Horse Racing</em>, <em>Chess</em>, <em>Sudoku</em>, <em>Math Quiz</em>, and <em>Minesweeper</em>. All games use your Social Credit balance directly, wins are real, losses are real. No house tokens, no abstraction.`,
       callout: 'Casino winnings are the fastest way to grow early. Also the fastest way to go broke.',
       tab: 'casino',
     },
@@ -144,7 +144,7 @@
     },
     {
       heading: 'SOCIAL AND ECONOMY',
-      text: `The chat panel on the right has channels: <em>Global</em> (5 rooms), <em>Premium</em> (Patreon), <em>Guild</em> (Tier 2+), <em>Whisper</em> (private), and <em>Unmod</em> (18+, unfiltered). <em>Wire Credits</em> lets you send money to other players — <strong>12-hour cooldown</strong>, 2% base tax, and <strong>90% Guild surcharge</strong> above Ƒ10,000. Player-created <strong>Hedge Funds</strong> pool capital with proportional profit sharing. The <em>Merchants Guild</em> (Patreon Tier 2+) grants stacking dividend bonuses. The <em>Presidency</em> costs Ƒ1 billion and pays Ƒ15,000 per cycle.`,
+      text: `The chat panel on the right has channels: <em>Global</em> (5 rooms), <em>Premium</em> (Patreon), <em>Guild</em> (Tier 2+), <em>Whisper</em> (private), and <em>Unmod</em> (18+, unfiltered). <em>Wire Credits</em> lets you send money to other players, <strong>12-hour cooldown</strong>, 2% base tax, and <strong>90% Guild surcharge</strong> above Ƒ10,000. Player-created <strong>Hedge Funds</strong> pool capital with proportional profit sharing. The <em>Merchants Guild</em> (Patreon Tier 2+) grants stacking dividend bonuses. The <em>Presidency</em> costs Ƒ1 billion and pays Ƒ15,000 per cycle.`,
       callout: 'The leaderboard freezes each 30-minute cycle. XP is earned through trading activity.',
       tab: 'market',
     },

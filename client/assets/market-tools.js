@@ -267,27 +267,27 @@ function initMetricsPanel() {
     <div id="metricsGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
         <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Max Drawdown</div>
-        <div id="m-drawdown" style="font-size:1rem;font-weight:700;color:#ff6b6b">—</div>
+        <div id="m-drawdown" style="font-size:1rem;font-weight:700;color:#ff6b6b">-</div>
       </div>
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
         <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Best Period</div>
-        <div id="m-best" style="font-size:1rem;font-weight:700;color:#86ff6a">—</div>
+        <div id="m-best" style="font-size:1rem;font-weight:700;color:#86ff6a">-</div>
       </div>
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
         <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Worst Period</div>
-        <div id="m-worst" style="font-size:1rem;font-weight:700;color:#ff6b6b">—</div>
+        <div id="m-worst" style="font-size:1rem;font-weight:700;color:#ff6b6b">-</div>
       </div>
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
         <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Volatility</div>
-        <div id="m-vol" style="font-size:1rem;font-weight:700;color:#46ff7d">—</div>
+        <div id="m-vol" style="font-size:1rem;font-weight:700;color:#46ff7d">-</div>
       </div>
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
         <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Win Rate</div>
-        <div id="m-winrate" style="font-size:1rem;font-weight:700;color:#4ecdc4">—</div>
+        <div id="m-winrate" style="font-size:1rem;font-weight:700;color:#4ecdc4">-</div>
       </div>
       <div class="metric-card" style="text-align:center;padding:6px;border:1px solid #1a0a04;border-radius:4px">
         <div style="font-size:.6rem;color:#3a5f3a;text-transform:uppercase;letter-spacing:.08em">Total Return</div>
-        <div id="m-return" style="font-size:1rem;font-weight:700;color:#7fc090">—</div>
+        <div id="m-return" style="font-size:1rem;font-weight:700;color:#7fc090">-</div>
       </div>
     </div>`;
   pnlTab.appendChild(panel);
@@ -302,9 +302,9 @@ async function fetchAndComputeMetrics() {
     const resp = await fetch('/api/pnl/' + encodeURIComponent(token));
     const data = await resp.json();
     if (!data.ok || !Array.isArray(data.history) || data.history.length < 2) {
-      setMetric('m-drawdown', '—'); setMetric('m-best', '—');
-      setMetric('m-worst', '—'); setMetric('m-vol', '—');
-      setMetric('m-winrate', '—'); setMetric('m-return', '—');
+      setMetric('m-drawdown', '-'); setMetric('m-best', '-');
+      setMetric('m-worst', '-'); setMetric('m-vol', '-');
+      setMetric('m-winrate', '-'); setMetric('m-return', '-');
       return;
     }
     computeMetrics(data.history);
@@ -404,14 +404,14 @@ function updateCompanyDetail() {
   panel.style.display = 'block';
   const sector = SECTOR_NAMES[t.sector] || 'Unknown';
   const sectorColor = ['#3498db','#e91e63','#2ecc71','#ff9800','#f44336','#9c27b0','#00bcd4','#795548'][t.sector] || '#888';
-  const hq = HQ_DISPLAY[t.hq] || t.hq || '—';
+  const hq = HQ_DISPLAY[t.hq] || t.hq || '-';
   const pct = t.pct != null ? t.pct : 0;
   const pctColor = pct >= 0 ? '#86ff6a' : '#ff6b6b';
   const pctSign = pct >= 0 ? '+' : '';
   const isDivSector = DIVIDEND_SECTORS.has(t.sector);
 
   // Short interest from positions
-  let shortInfo = '—';
+  let shortInfo = '-';
   try {
     const pos = window.__MY_POSITIONS || {};
     const myPos = pos[sym];
@@ -421,7 +421,7 @@ function updateCompanyDetail() {
   } catch(_) {}
 
   // Holdings
-  let holdingInfo = '—';
+  let holdingInfo = '-';
   try {
     const pos = window.__MY_POSITIONS || {};
     const myPos = pos[sym];
@@ -605,7 +605,7 @@ function init() {
     setTimeout(() => { try { renderTickers(); } catch(_) {} }, 100);
   }
 
-  console.log('[Market Tools] Watchlist, Alerts, Metrics, Detail, News Filter — loaded');
+  console.log('[Market Tools] Watchlist, Alerts, Metrics, Detail, News Filter, loaded');
 }
 
 if (document.readyState === 'loading') {

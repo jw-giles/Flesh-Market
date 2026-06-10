@@ -125,7 +125,7 @@
     const submitBtn=document.getElementById('sdk-submit');
     const cellsLbl=document.getElementById('sdk-cells-left');
     if(submitBtn)submitBtn.disabled=!playing||empty>0;
-    if(cellsLbl)cellsLbl.textContent=playing?(empty>0?`${empty} cells remaining`:'Board complete — press Submit!'):'';
+    if(cellsLbl)cellsLbl.textContent=playing?(empty>0?`${empty} cells remaining`:'Board complete, press Submit!'):'';
   }
 
   // ── New puzzle ─────────────────────────────────────────────
@@ -137,7 +137,7 @@
     const elapsed=Date.now()-last;
     if(elapsed<SUDOKU_COOLDOWN_MS){
       const remMin=Math.ceil((SUDOKU_COOLDOWN_MS-elapsed)/60000);
-      document.getElementById('sdk-status').textContent=`⏳ ${d.name} on cooldown — ${remMin} min remaining.`;
+      document.getElementById('sdk-status').textContent=`⏳ ${d.name} on cooldown, ${remMin} min remaining.`;
       return;
     }
     const gen=generateSudoku(d.clues);
@@ -145,7 +145,7 @@
     userGrid=Array(81).fill(0);
     selected=-1;hintUses=0;playing=true;
     render();
-    document.getElementById('sdk-status').textContent=`${d.name} — fill the grid, then press Submit.`;
+    document.getElementById('sdk-status').textContent=`${d.name}, fill the grid, then press Submit.`;
     document.getElementById('sdk-hint').textContent='Hint (−20% reward)';
   }
 

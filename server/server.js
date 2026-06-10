@@ -233,7 +233,7 @@ function resolveHouseProposalDecision(fund, p) {
     if (wouldPass) {
       const r = executeFundTrade(fund.id, p.side, p.symbol, p.qty, p.proposer_id);
       resolveHouseProposal(p.id, r.ok ? 'passed' : 'failed_exec', r.ok);
-      pushHeadline(`${fund.name}: vote ${r.ok?'passed':'failed'} — ${p.side} ${p.qty}× ${p.symbol}`, r.ok?'good':'bad', p.symbol);
+      pushHeadline(`${fund.name}: vote ${r.ok?'passed':'failed'}, ${p.side} ${p.qty}× ${p.symbol}`, r.ok?'good':'bad', p.symbol);
     } else {
       resolveHouseProposal(p.id, totalCast > 0 ? 'rejected' : 'expired', false);
     }
@@ -396,9 +396,9 @@ companies.forEach(c=>{c.lnP=Math.log(c.price); c._spawnLnP=c.lnP;});
 companies.forEach(c => {
   c.beta             = Math.max(0.1, Math.min(2.5, Math.exp(randn() * 0.5)));
   c.ownTargetLnP     = c.lnP;
-  c.ownKappa         = 0.000005 + seededRand() * 0.000005; // ~7 ticks/day effective pull — balanced against target drift
-  c.targetDriftSigma = 0.00012 + seededRand() * 0.00012; // target wanders ~7%/day — creates trends without certainty
-  c.targetSectorKappa= 0.000008 + seededRand() * 0.000007; // very weak sector gravity — weeks to pull back
+  c.ownKappa         = 0.000005 + seededRand() * 0.000005; // ~7 ticks/day effective pull, balanced against target drift
+  c.targetDriftSigma = 0.00012 + seededRand() * 0.00012; // target wanders ~7%/day, creates trends without certainty
+  c.targetSectorKappa= 0.000008 + seededRand() * 0.000007; // very weak sector gravity, weeks to pull back
   c.sigma            = 0.00040 + seededRand() * 0.00035; // boosted ~2.5x vs old
 });
 
@@ -425,7 +425,7 @@ function rotateHotStocks() {
   // Announce hot stocks via headline
   const bulls = picked.slice(0, 5).map(id => companies[id].symbol);
   const bears = picked.slice(5).map(id => companies[id].symbol);
-  pushHeadline(`Market rotation: ${bulls.join(', ')} showing strength — ${bears.join(', ')} under pressure`, 'neutral', null);
+  pushHeadline(`Market rotation: ${bulls.join(', ')} showing strength, ${bears.join(', ')} under pressure`, 'neutral', null);
   console.log(`[Hot Stocks] Bulls: ${bulls.join(',')} | Bears: ${bears.join(',')}`);
 }
 // Initial rotation on boot
@@ -507,7 +507,7 @@ function fireTensionEvent(colonyId, band, tension) {
     c.lnP -= severity + Math.random() * (severity * 0.5);
     c.price = Math.max(0.5, Math.exp(c.lnP));
   }
-  const headline = `⚠ TENSION ${bandLabel} [${tension}%] at ${cName} — ${targets.length} companies affected, supply chains under strain`;
+  const headline = `⚠ TENSION ${bandLabel} [${tension}%] at ${cName}, ${targets.length} companies affected, supply chains under strain`;
   pushHeadline(headline, 'bad', '⚠');
   broadcast({ type: 'tension_event', data: { colonyId, band, tension, bandLabel, affected: targets.length } });
 }
@@ -1161,7 +1161,7 @@ function resolveShipping(playerId) {
     if (run.insured) {
       safeAddCash(p, run.stake); // refund stake
       savePlayer(p);
-      const headline = `Shipping loss insured: ${cargo.name} cargo on ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')} — claim paid`;
+      const headline = `Shipping loss insured: ${cargo.name} cargo on ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')}, claim paid`;
       pushHeadline(headline, 'neutral', '🛡');
       if (sockets) {
         const msg = JSON.stringify({ type:'shipping_result', data:{
@@ -1174,7 +1174,7 @@ function resolveShipping(playerId) {
       }
     } else {
       // Total loss — no insurance
-      const headline = `Shipping cargo lost: ${cargo.name} seized on ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')} lane — no insurance`;
+      const headline = `Shipping cargo lost: ${cargo.name} seized on ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')} lane, no insurance`;
       pushHeadline(headline, 'bad', '📦');
 
       // Void raiding kickback: online Void players split 2% of intercepted shipping cargo
@@ -1292,7 +1292,7 @@ function activateBlockade(laneKey) {
     }
   }
 
-  const headline = `⛔ BLOCKADE ACTIVE: ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} shipping lane locked down — supply chains disrupted`;
+  const headline = `⛔ BLOCKADE ACTIVE: ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} shipping lane locked down, supply chains disrupted`;
   pushHeadline(headline, 'bad', '⛔');
   broadcast({ type:'blockade_update', data:{ laneKey, active:true, expiresAt:blk.expiresAt, faction:blk.faction, pool:blk.pool, threshold:BLOCKADE_THRESHOLD } });
 
@@ -1305,7 +1305,7 @@ function expireBlockade(laneKey) {
   if (blk.timer) clearTimeout(blk.timer);
   activeBlockades.delete(laneKey);
   const [colA, colB] = laneKey.split('|');
-  pushHeadline(`Blockade on ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} lane expires — trade flow restored`, 'good', '✅');
+  pushHeadline(`Blockade on ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} lane expires, trade flow restored`, 'good', '✅');
   broadcast({ type:'blockade_update', data:{ laneKey, active:false } });
 }
 
@@ -1317,7 +1317,7 @@ function fundCounterBlockade(laneKey, amount) {
     if (blk.timer) clearTimeout(blk.timer);
     activeBlockades.delete(laneKey);
     const [colA, colB] = laneKey.split('|');
-    pushHeadline(`Counter-blockade breaks the ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} lockdown — trade resumes`, 'good', '💥');
+    pushHeadline(`Counter-blockade breaks the ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} lockdown, trade resumes`, 'good', '💥');
     broadcast({ type:'blockade_update', data:{ laneKey, active:false, broken:true } });
     return true;
   }
@@ -1376,7 +1376,7 @@ function applyCargoInterception(s) {
     // Premium and any escort fee are already gone, so an insured loss still stings.
     const refund = Math.round(s.buy_cost * 0.5 * 100) / 100;
     safeAddCash(p, refund); savePlayer(p);
-    pushHeadline(`Cargo insured: ${com?com.name:s.commodity_id} lost on ${s.from_colony.replace(/_/g,' ')} → ${s.to_colony.replace(/_/g,' ')} — half claim paid`, 'neutral', '🛡');
+    pushHeadline(`Cargo insured: ${com?com.name:s.commodity_id} lost on ${s.from_colony.replace(/_/g,' ')} → ${s.to_colony.replace(/_/g,' ')}, half claim paid`, 'neutral', '🛡');
     send('cargo_ship_result', { success:false, insured:true, id:s.id, commodity:com?com.name:s.commodity_id,
       qty:s.qty, from:s.from_colony, to:s.to_colony, refund, cash:p?p.cash:0 });
   } else {
@@ -1631,10 +1631,11 @@ const SWT_COMPANY = {
 };
 companies.push(SWT_COMPANY);
 
-// BRNC — Baron Corps (Gluttonis material refining). Normal beta-model ticker.
+// BRNC — Baron Corps (Gluttonis material refining). Hard-locked flat at Ƒ0.50
+// (penny stock; pinned the same way as SWT/FLSH, see stepMarket).
 const BRNC_COMPANY = {
   id: 9997, name: 'Baron Corps', symbol: 'BRNC',
-  price: 65, lnP: Math.log(65), _spawnLnP: Math.log(65),
+  price: 0.50, lnP: Math.log(0.50), _spawnLnP: Math.log(0.50),
   sigma: 0.00030, mu: -0.00001, kappa: 0.002,
   offset: 0.77,
   ohlc: [], sector: 3,
@@ -1707,6 +1708,8 @@ try {
 // ─── Market state restore ─────────────────────────────────────────────────────
 
 const headlines=[];
+// Live news header override. null = default "LIVE" header; object = dev-set breaking news.
+let breakingNews = null;
 function restoreMarketState(){
   const data=loadMarketState(); if(!data)return;
   if(Array.isArray(data.companies)){
@@ -1741,7 +1744,7 @@ console.log(`[SWT] Anchored at Ƒ${SWT_COMPANY.price} on startup`);
 
 // BRNC: one-time fixup if price is broken (negative, NaN, zero, or absurdly high)
 if (BRNC_COMPANY.price > 5000 || !isFinite(BRNC_COMPANY.price) || BRNC_COMPANY.price <= 0) {
-  console.log(`[FIXUP] BRNC price was Ƒ${BRNC_COMPANY.price} — resetting to compiled default Ƒ65`);
+  console.log(`[FIXUP] BRNC price was Ƒ${BRNC_COMPANY.price}, resetting to compiled default Ƒ65`);
   BRNC_COMPANY.price = 65;
   BRNC_COMPANY.lnP = Math.log(65);
   BRNC_COMPANY._spawnLnP = BRNC_COMPANY.lnP;
@@ -1852,7 +1855,7 @@ function processLimitOrders() {
 
       // Day-trade gate for limit fills
       if (_dtRemaining(playerId) <= 0) {
-        broadcastToPlayer(playerId, {type:'error',data:{msg:'❌ Limit order skipped — day-trade limit reached.'}});
+        broadcastToPlayer(playerId, {type:'error',data:{msg:'❌ Limit order skipped, day-trade limit reached.'}});
         continue;
       }
 
@@ -1952,7 +1955,7 @@ function runEarningsEvent() {
   // Broadcast global headline
   const dir = beat ? '▲' : '▼';
   const tone = beat ? 'good' : 'bad';
-  pushHeadline(`EARNINGS: ${c.name} (${c.symbol}) ${beat ? 'beats' : 'misses'} — ${dir}${(magnitude*100).toFixed(1)}% @ Ƒ${newPrice.toFixed(2)}`, tone, c.symbol);
+  pushHeadline(`EARNINGS: ${c.name} (${c.symbol}) ${beat ? 'beats' : 'misses'}, ${dir}${(magnitude*100).toFixed(1)}% @ Ƒ${newPrice.toFixed(2)}`, tone, c.symbol);
 
   // Notify holders specifically
   for (const [playerId, sockets] of playerSockets) {
@@ -2401,7 +2404,7 @@ app.post('/api/patreon/webhook', async (req, res) => {
       const tier = parseTierFromPatreon(member);
       if (!tier) return res.json({ok:true});
       if (tier === 3 && countCEOs() >= CEO_MAX) return res.status(409).json({ok:false,error:'ceo_slots_full'});
-      const expiresAt = Date.now() + 40*24*60*60*1000; // 40 days — buffer for late Patreon billing
+      const expiresAt = Date.now() + 40*24*60*60*1000; // 40 days, buffer for late Patreon billing
       let player = memberId ? getPlayerByPatreonMemberId(memberId) : null;
       if (!player && email) player = getPlayerByPatreonEmail(email);
       if (player) {
@@ -2890,7 +2893,7 @@ app.post('/api/funds/:id/golden/transfer', (req, res) => {
     if (!isInFund(fund.id, target.id)) return res.status(400).json({ ok:false, error:'not_a_member' });
     setGoldenHolder(fund.id, target.id);
     logFundActivity(fund.id, 'golden_transfer', actor.id, null, null, null, null, `${actor.name} handed the golden share to ${target.name}`);
-    broadcastToPlayer(target.id, { type:'system_message', data:{ text:`You now hold the golden share in "${fund.name}" — you can veto any proposal.`, color:'#e6c27a' }});
+    broadcastToPlayer(target.id, { type:'system_message', data:{ text:`You now hold the golden share in "${fund.name}", you can veto any proposal.`, color:'#e6c27a' }});
     broadcastHouseUpdate(fund.id);
     res.json({ ok:true });
   } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
@@ -3266,7 +3269,7 @@ app.post('/api/funds/:id/delete', (req, res) => {
       if (mp) {
         mp.cash = Math.round((mp.cash + payout) * 100) / 100;
         savePlayerFn(mp);
-        broadcastToPlayer(mp.id, { type:'income', data:{ base:payout, bonus:0, total:payout, text:`+Ƒ${payout.toLocaleString()} payout — hedge fund "${fund.name}" disbanded (current value)` }});
+        broadcastToPlayer(mp.id, { type:'income', data:{ base:payout, bonus:0, total:payout, text:`+Ƒ${payout.toLocaleString()} payout, hedge fund "${fund.name}" disbanded (current value)` }});
       }
     }
 
@@ -3362,7 +3365,7 @@ app.post('/api/galaxy/join-faction', (req, res) => {
         return res.json({ ok: true, faction: factionId, borgBetrayer: true, message: 'Borg Betrayer. The machines remember.' });
       }
 
-      return res.status(403).json({ ok: false, error: 'VOID LOCKED — Your cybernetic conversion is permanent. Only the Merchant Guild can extract you.' });
+      return res.status(403).json({ ok: false, error: 'VOID LOCKED, Your cybernetic conversion is permanent. Only the Merchant Guild can extract you.' });
     }
 
     // 30-day lock: cannot switch factions within 30 days of joining (non-void factions)
@@ -4938,7 +4941,7 @@ const SECTOR_NEWS = [
   // 1: Biotech
   { good: ['synthetic organ trials show 94% viability','gene therapy patent granted by colony board','receives emergency use authorization','clinical data exceeds analyst projections','bioweapon antidote contract awarded','tissue fabrication yield hits new high'],
     bad:  ['test subjects exhibit unexpected mutations','FDA-equivalent issues product hold','contamination shuts down growth vats','whistleblower alleges falsified trial data','organ rejection rates spike in Q3 batch','lab breach triggers quarantine protocol'],
-    weird:['researchers report specimen "behaving autonomously"','anonymous donor funds consciousness transfer study','vat-grown tissue found to contain memories','lab AI begins requesting ethical review','new compound classified — clearance level: void'] },
+    weird:['researchers report specimen "behaving autonomously"','anonymous donor funds consciousness transfer study','vat-grown tissue found to contain memories','lab AI begins requesting ethical review','new compound classified, clearance level: void'] },
   // 2: Insurance
   { good: ['claims ratio drops to sector-best levels','underwrites first intercolonial shipping policy','reinsurance treaty renewed at favorable terms','risk model upgrade reduces reserve requirements','captures market share in cargo insurance','colony stability bonus lowers premiums'],
     bad:  ['catastrophic loss event exceeds reserves','class action filed over denied claims','reinsurer pulls out of volatile corridor','smuggling losses blow through actuarial models','mass claims filed after colony tension spike','regulator mandates reserve increase'],
@@ -4949,10 +4952,10 @@ const SECTOR_NEWS = [
     weird:['assembly line produces items not in any schematic','night shift reports machinery operating on its own','metal alloy sample resists all known cutting tools','workers find organic material in ore shipment','factory floor camera feeds go dark for 4 hours'] },
   // 4: Energy
   { good: ['reactor output stable above rated capacity','new fuel cell patent slashes grid costs','awarded colony-wide power distribution contract','energy storage breakthrough extends reserve life','grid expansion approved for frontier corridor','fuel synthesis achieves cost parity'],
-    bad:  ['reactor scram forces emergency grid switch','fuel reserves contaminated — supply timeline unknown','grid failure blacks out two colony sectors','pipeline rupture halts fuel distribution','energy regulator imposes output cap','cooling system failure triggers safety lockdown'],
+    bad:  ['reactor scram forces emergency grid switch','fuel reserves contaminated, supply timeline unknown','grid failure blacks out two colony sectors','pipeline rupture halts fuel distribution','energy regulator imposes output cap','cooling system failure triggers safety lockdown'],
     weird:['power grid draws more than generation explains','fuel rod disposal site emitting unlisted frequencies','reactor core temperature readings defy physics model','blackout zone reported to have "different gravity"','technicians hear harmonics in reactor hum'] },
   // 5: Logistics
-  { good: ['lane transit times hit record efficiency','fleet expansion adds 12 cargo haulers','awarded exclusive shipping contract for new route','warehouse automation cuts turnaround 40%','intercolonial trade volume surges','fuel cost hedging pays off — margins expand'],
+  { good: ['lane transit times hit record efficiency','fleet expansion adds 12 cargo haulers','awarded exclusive shipping contract for new route','warehouse automation cuts turnaround 40%','intercolonial trade volume surges','fuel cost hedging pays off, margins expand'],
     bad:  ['convoy ambushed on contested shipping lane','fleet grounded by fuel contamination','port congestion delays cascade across network','pirate activity forces route diversion','warehouse fire destroys stockpiled inventory','crew shortage forces service cuts on key lanes'],
     weird:['cargo manifest lists items with no known origin','ship arrives at port with crew but no cargo','navigation beacon broadcasting in extinct language','shipping container contents reclassified mid-transit','pilot reports "something following" on Hollow route'] },
   // 6: Tech
@@ -4961,7 +4964,7 @@ const SECTOR_NEWS = [
     weird:['AI system files its own bug report','server farm power usage spikes during solar eclipse','deleted user accounts reappear with new activity','codebase contains functions no engineer wrote','neural net outputs include coordinates to unknown location'] },
   // 7: Misc
   { good: ['diversified portfolio outperforms sector benchmarks','consulting arm wins multi-colony advisory contract','conglomerate subsidiary posts surprise profit','brand licensing revenue doubles year-over-year','acquires distressed competitor at steep discount','expands into gray-market luxury goods'],
-    bad:  ['subsidiary caught in price-fixing investigation','mystery investor dumps large stake overnight','board infighting leaks to colonial press','asset seizure by faction enforcement arm','quarterly report delayed — auditor reassigned','shadow subsidiary discovered with unauthorized debts'],
+    bad:  ['subsidiary caught in price-fixing investigation','mystery investor dumps large stake overnight','board infighting leaks to colonial press','asset seizure by faction enforcement arm','quarterly report delayed, auditor reassigned','shadow subsidiary discovered with unauthorized debts'],
     weird:['corporate retreat held at undisclosed orbital facility','company name appears in intercepted void transmission','CEO spotted dining with known smuggler baron','annual report contains chapter written in cipher','office building floor plan doesn\'t match blueprints'] },
 ];
 
@@ -4970,34 +4973,56 @@ const MARKET_WIDE = [
   { text: 'Intercolonial trade index ticks higher on light volume', tone: 'good' },
   { text: 'Market breadth narrows as traders rotate into defensives', tone: 'neutral' },
   { text: 'Colonial Reserve hints at liquidity injection', tone: 'good' },
-  { text: 'Sector rotation underway — momentum names lagging', tone: 'neutral' },
+  { text: 'Sector rotation underway, momentum names lagging', tone: 'neutral' },
   { text: 'Dark pool activity surges across mid-cap tickers', tone: 'neutral' },
   { text: 'Broad market sell-off accelerates into close', tone: 'bad' },
   { text: 'Volatility index spikes on escalating faction tensions', tone: 'bad' },
-  { text: 'Risk-on sentiment returns — growth names lead rally', tone: 'good' },
+  { text: 'Risk-on sentiment returns, growth names lead rally', tone: 'good' },
   { text: 'Institutional flows shift toward frontier colony listings', tone: 'good' },
-  { text: 'Market-wide circuit breaker test scheduled — no disruption expected', tone: 'neutral' },
-  { text: 'Cross-sector correlation breaks down — stock-pickers rejoice', tone: 'neutral' },
+  { text: 'Market-wide circuit breaker test scheduled, no disruption expected', tone: 'neutral' },
+  { text: 'Cross-sector correlation breaks down, stock-pickers rejoice', tone: 'neutral' },
   { text: 'Leveraged positions approach record levels across all sectors', tone: 'bad' },
   { text: 'Trading volume dries up ahead of earnings cycle', tone: 'neutral' },
-  { text: 'Flash crash in off-hours trading — origin unknown', tone: 'bad' },
-  { text: 'Liquidity conditions tighten — bid-ask spreads widening', tone: 'bad' },
+  { text: 'Flash crash in off-hours trading, origin unknown', tone: 'bad' },
+  { text: 'Liquidity conditions tighten, bid-ask spreads widening', tone: 'bad' },
   { text: 'Anonymous whale accumulating across multiple sectors', tone: 'neutral' },
   { text: 'Flesh Station exchange reports record transaction volume', tone: 'good' },
   { text: 'Colonial oversight committee announces compliance review', tone: 'bad' },
-  { text: 'Void Collective economic sanctions rumored — markets cautious', tone: 'bad' },
-  { text: 'New shipping lane opens — logistics and energy names rally', tone: 'good' },
+  { text: 'Void Collective economic sanctions rumored, markets cautious', tone: 'bad' },
+  { text: 'New shipping lane opens, logistics and energy names rally', tone: 'good' },
+  { text: 'Bid-ask spreads compress as liquidity quietly returns', tone: 'good' },
+  { text: 'Momentum unwinds violently into the afternoon session', tone: 'bad' },
+  { text: 'Defensive sectors bid up as risk appetite fades', tone: 'neutral' },
+  { text: 'A single block trade moves the index more than the day\'s news', tone: 'neutral' },
+  { text: 'Margin debt ticks down for the first time in weeks', tone: 'good' },
+  { text: 'Correlations spike and everything moves together again', tone: 'bad' },
+  { text: 'Volume concentrates in a handful of names as breadth collapses', tone: 'bad' },
+  { text: 'Quiet session; the tape barely moves and no one trusts it', tone: 'neutral' },
+  { text: 'Reserve liquidity facility drawn down more than expected', tone: 'bad' },
+  { text: 'Sector leadership rotates for the third time this session', tone: 'neutral' },
+  { text: 'Off-exchange prints suggest accumulation under the surface', tone: 'neutral' },
+  { text: 'Volatility collapses to multi-month lows; complacency noted', tone: 'neutral' },
+  { text: 'Late tape shows aggressive buying into the close', tone: 'good' },
+  { text: 'Frontier listings outperform on subsidy speculation', tone: 'good' },
 ];
 
 // Colony-flavored headlines (inserted when tension exists)
 const COLONY_FLAVOR = [
-  { text: (col) => `Unrest simmers at ${col} — local businesses brace for disruption`, tone: 'bad' },
-  { text: (col) => `${col} garrison reinforced — security spending ticks up`, tone: 'neutral' },
+  { text: (col) => `Unrest simmers at ${col}, local businesses brace for disruption`, tone: 'bad' },
+  { text: (col) => `${col} garrison reinforced, security spending ticks up`, tone: 'neutral' },
   { text: (col) => `Trade flows stabilize at ${col} following diplomatic progress`, tone: 'good' },
-  { text: (col) => `${col} infrastructure spending approved — construction firms mobilize`, tone: 'good' },
+  { text: (col) => `${col} infrastructure spending approved, construction firms mobilize`, tone: 'good' },
   { text: (col) => `Smuggler activity near ${col} disrupts legitimate commerce`, tone: 'bad' },
   { text: (col) => `${col} workers stage walkout over hazard pay dispute`, tone: 'bad' },
   { text: (col) => `${col} exports surge as faction subsidies kick in`, tone: 'good' },
+  { text: (col) => `${col} levies emergency transit fees as throughput spikes`, tone: 'bad' },
+  { text: (col) => `${col} announces a free-trade window; brokers scramble to position`, tone: 'good' },
+  { text: (col) => `Power rationing at ${col} idles two production lines`, tone: 'bad' },
+  { text: (col) => `${col} council approves a sovereign stake in local industry`, tone: 'neutral' },
+  { text: (col) => `Curfew lifts at ${col} and the night markets reopen`, tone: 'good' },
+  { text: (col) => `${col} customs seize an unmanifested shipment bound offworld`, tone: 'bad' },
+  { text: (col) => `${col} signs a mutual-defense pact; insurers reprice the corridor`, tone: 'neutral' },
+  { text: (col) => `A quiet bank run at ${col} is contained before dawn`, tone: 'bad' },
 ];
 
 const NEWS_COLONY_NAMES = {
@@ -5010,18 +5035,84 @@ const NEWS_COLONY_NAMES = {
   the_escrow:'The Escrow',margin_call:'Margin Call',
 };
 
+// Cross-sector company lines (merged with sector pool for variety). Apply to any ticker.
+const COMPANY_GENERIC = {
+  good: ['beats consensus on quarterly margins','announces buyback funded by retained earnings','wins a multi-year supply contract from a rival colony','credit rating upgraded by colonial assessors','expands headcount across three colonies','settles a long-running dispute on favorable terms','spins off an underperforming unit at a premium','reports an unexpected jump in recurring revenue','secures an emergency liquidity line ahead of schedule','insider cluster-buying flagged by the surveillance desk'],
+  bad:  ['misses guidance and blames colony logistics','CFO resigns citing personal reasons','short interest hits an all-time high','cuts its dividend to preserve operating cash','placed under review by the oversight committee','warehouse inventory written down sharply','loses an anchor client to a Guild-backed competitor','faces a clawback demand over prior-year bonuses','halts its buyback amid liquidity concerns','downgraded after opaque related-party deals surface'],
+  weird:['board meeting minutes redacted in full','entire executive floor goes dark for an audit no one ordered','shareholder letter signed by a name not on any registry','books balance to the cent across every currency, including dead ones','staff reassigned to a project with no listed objective','company logo changed overnight with no announcement','investor hotline plays a recording in a language no employee speaks','annual gala held somewhere that appears on no map','every sick day company-wide filed in the same hour','product roadmap leaked with entries dated before the founding'],
+};
+
+// Faction political/economic news (no ticker, no price impact).
+const FACTION_NEWS = [
+  { text:'Coalition tightens capital controls on frontier listings, citing stability', tone:'neutral' },
+  { text:'Coalition subsidy package lifts logistics and energy names', tone:'good' },
+  { text:'Coalition oversight board opens a probe into cross-colony accounting', tone:'bad' },
+  { text:'Merchant Guild raises lane tariffs ahead of the trade season', tone:'bad' },
+  { text:'Merchant Guild brokers a ceasefire on a contested shipping corridor', tone:'good' },
+  { text:'Merchant Guild quietly corners the refined-materials market', tone:'neutral' },
+  { text:'Merchant Guild blacklists three brokers for fee evasion', tone:'bad' },
+  { text:'Syndicate proxy skirmish disrupts commerce near the contested belt', tone:'bad' },
+  { text:'Syndicate fronts post suspiciously clean quarterly numbers', tone:'neutral' },
+  { text:'Syndicate launders a record volume through gray-market desks', tone:'bad' },
+  { text:'Syndicate truce with a rival gang sends risk assets higher', tone:'good' },
+  { text:'Void Collective issues a statement consisting of a single repeated glyph', tone:'neutral' },
+  { text:'Void Collective sanctions rumored against two colonies', tone:'bad' },
+  { text:'Void Collective converts another mid-cap board to permanent membership', tone:'neutral' },
+  { text:'Void Collective recruitment drive spooks the defensive sectors', tone:'bad' },
+  { text:'Faction summit at Flesh Station ends with no communique', tone:'neutral' },
+];
+
+// Mr. Flesh / FLSH house flavor (no ticker). The proprietor, winking at the pyramid.
+const FLESH_NEWS = [
+  { text:'Mr. Flesh reminds the floor that the house has never posted a losing year', tone:'neutral' },
+  { text:'FLSH Station clears another record session as the spread widens in its favor', tone:'good' },
+  { text:'Mr. Flesh declines to comment on where the trade fees actually go', tone:'neutral' },
+  { text:'FLSH Capital reaffirms its valuation at exactly one billion per share, as always', tone:'neutral' },
+  { text:'The Proprietor adds a new game to the floor; the rules favor the floor', tone:'neutral' },
+  { text:'Flesh Station maintenance reclassifies a sealed wing as off-limits', tone:'neutral' },
+  { text:'Mr. Flesh thanks members for their continued participation in the arrangement', tone:'neutral' },
+  { text:'FLSH dividend schedule unchanged, recipients unchanged, questions discouraged', tone:'neutral' },
+  { text:'A welcome banner at FLSH Station is addressed to a player who has not yet registered', tone:'neutral' },
+  { text:'Mr. Flesh signs the quarterly checks personally; no one has seen him do it', tone:'neutral' },
+  { text:'House odds quietly revised; the notice scrolls past too fast to read', tone:'neutral' },
+  { text:'Flesh Station hospitality wing reports full occupancy with no recorded arrivals', tone:'neutral' },
+];
+
+// Rare cosmic-weird drip (no ticker). Low probability, deep-lore unease.
+const RARE_WEIRD = [
+  'A market-wide tick arrives forty milliseconds before the clock says it should',
+  'Every chart on the floor flatlines for one second, then resumes as if nothing happened',
+  'Intercepted on the Hollow band: a live price feed for companies that do not exist',
+  'Signal Run relay rebroadcasts yesterday with tomorrow\'s closing values',
+  'A single share trades hands at a price with no decimal places and no buyer',
+  'The order book briefly lists a counterparty named only as OBSERVER',
+  'Parapsychology desk reports the index correlating with collective dreams again',
+  'Null Point telemetry shows trading volume from a colony with no population',
+  'For ninety seconds all sell orders quietly become buy orders, then revert',
+  'A delisted ticker reappears, prints once, and delists itself',
+  'The ticker tape spells a coordinate string in the gaps between quotes',
+  'Something acknowledges the closing bell before it rings',
+  'An audit finds the books balanced against a ledger no one can locate',
+  'The feed pauses on a headline that is only the reader\'s own account name',
+];
+
 function genHeadline(){
   const roll = Math.random();
 
-  // 15% chance: market-wide headline (no ticker, no price impact)
-  if (roll < 0.15) {
-    const h = pick(MARKET_WIDE);
-    pushHeadline(h.text, h.tone, null, 'market');
-    return;
-  }
+  // 3%: rare cosmic-weird drip (no ticker)
+  if (roll < 0.03) { pushHeadline(pick(RARE_WEIRD), 'neutral', null, 'void'); return; }
 
-  // 10% chance: colony-flavored headline (no specific ticker)
-  if (roll < 0.25) {
+  // 12%: faction political/economic news (no ticker)
+  if (roll < 0.15) { const h = pick(FACTION_NEWS); pushHeadline(h.text, h.tone, null, 'faction'); return; }
+
+  // 5%: Mr. Flesh / house flavor (no ticker)
+  if (roll < 0.20) { const h = pick(FLESH_NEWS); pushHeadline(h.text, h.tone, null, 'flesh'); return; }
+
+  // 13%: market-wide headline (no ticker, no price impact)
+  if (roll < 0.33) { const h = pick(MARKET_WIDE); pushHeadline(h.text, h.tone, null, 'market'); return; }
+
+  // 10%: colony-flavored headline (no specific ticker)
+  if (roll < 0.43) {
     const colonyIds = Object.keys(COLONY_COMPANIES).filter(c => (COLONY_COMPANIES[c]||[]).length > 0);
     if (colonyIds.length) {
       const colId = pick(colonyIds);
@@ -5032,28 +5123,24 @@ function genHeadline(){
     }
   }
 
-  // 75% chance: company-specific headline with sector-aware lore
-  const c = pick(companies.filter(x => !x._special));
+  // ~57%: company-specific headline (sector lore + generic pool merged for variety)
+  const c = pick(companies.filter(x => !x._special && x.symbol !== 'SWT' && x.symbol !== 'BRNC'));
   if (!c) return;
-  const sectorIdx = c.sector || 0;
-  const sn = SECTOR_NEWS[sectorIdx] || SECTOR_NEWS[7];
-
+  const sn = SECTOR_NEWS[c.sector || 0] || SECTOR_NEWS[7];
   const r2 = Math.random();
   const bucket = r2 < 0.40 ? 'good' : (r2 < 0.80 ? 'bad' : 'weird');
   const tone = bucket === 'good' ? 'good' : (bucket === 'bad' ? 'bad' : 'neutral');
-  const line = pick(sn[bucket] || sn.weird);
+  const linePool = (sn[bucket] || []).concat(COMPANY_GENERIC[bucket] || []);
+  const line = pick(linePool.length ? linePool : sn.weird);
 
-  // Minimal price impact — flavor, not driver (0.02-0.08% move)
-  if (bucket === 'good') {
-    c.lnP += 0.0002 + Math.random() * 0.0006;
-    c.price = Math.max(0.5, Math.exp(c.lnP));
-  } else if (bucket === 'bad') {
-    c.lnP -= 0.0002 + Math.random() * 0.0006;
-    c.price = Math.max(0.5, Math.exp(c.lnP));
-  }
+  // Minimal price impact (flavor, not driver; 0.02-0.08% move)
+  if (bucket === 'good') { c.lnP += 0.0002 + Math.random() * 0.0006; c.price = Math.max(0.5, Math.exp(c.lnP)); }
+  else if (bucket === 'bad') { c.lnP -= 0.0002 + Math.random() * 0.0006; c.price = Math.max(0.5, Math.exp(c.lnP)); }
 
   pushHeadline(`${c.name} (${c.symbol}): ${line}`, tone, c.symbol, 'company');
 }
+
+
 
 // ─── Market sim ───────────────────────────────────────────────────────────────
 
@@ -5091,6 +5178,21 @@ function stepMarket(){
         c.ohlc.push({ t: c._bar.t, o: 4500, h: 4500, l: 4500, c: 4500, v: 0 });
         if (c.ohlc.length > 400) c.ohlc.shift();
         c._bar = { t: now, o: 4500, h: 4500, l: 4500, c: 4500, v: 0 };
+      }
+      return;
+    }
+    // BRNC — hard-locked flat at Ƒ0.50, same treatment as SWT.
+    if (c.symbol === 'BRNC') {
+      c.price = 0.50;
+      c.lnP   = Math.log(0.50);
+      const BAR_MS_BRNC = 5_000;
+      if (!c._bar) c._bar = { t: now, o: 0.50, h: 0.50, l: 0.50, c: 0.50, v: 0 };
+      c._bar.h = 0.50; c._bar.l = 0.50; c._bar.c = 0.50;
+      if (now - c._bar.t >= BAR_MS_BRNC) {
+        if (!Array.isArray(c.ohlc)) c.ohlc = [];
+        c.ohlc.push({ t: c._bar.t, o: 0.50, h: 0.50, l: 0.50, c: 0.50, v: 0 });
+        if (c.ohlc.length > 400) c.ohlc.shift();
+        c._bar = { t: now, o: 0.50, h: 0.50, l: 0.50, c: 0.50, v: 0 };
       }
       return;
     }
@@ -5193,7 +5295,7 @@ function stepMarket(){
         c.lnP -= pullback;
         c.sigma = Math.min(0.0015, (c.sigma || 0.0004) * 1.5);
         c.price = Math.max(0.50, Math.exp(c.lnP));
-        console.log(`[GRAVITY] ${c.symbol} @ Ƒ${c.price.toFixed(0)} — +${((Math.exp(c.lnP - (c._spawnLnP||0))-1)*100).toFixed(0)}% pullback triggered`);
+        console.log(`[GRAVITY] ${c.symbol} @ Ƒ${c.price.toFixed(0)}, +${((Math.exp(c.lnP - (c._spawnLnP||0))-1)*100).toFixed(0)}% pullback triggered`);
       }
     }
     if (c.lnP < c._trendCheckLnP - 0.3) c._trendCheckLnP = c.lnP;
@@ -5214,8 +5316,8 @@ function stepMarket(){
         if (p.basisC && p.basisC[c.symbol]) {}
         savePlayer(p);
       });
-      broadcast({ type: 'chat_system', data: { text: `📊 STOCK SPLIT: ${c.symbol} hit Ƒ5,000 — splits 1:${SPLIT_RATIO}. All holders now have ${SPLIT_RATIO}× shares at Ƒ5.` }});
-      console.log(`[SPLIT] ${c.symbol} — 1:${SPLIT_RATIO} split executed`);
+      broadcast({ type: 'chat_system', data: { text: `📊 STOCK SPLIT: ${c.symbol} hit Ƒ5,000, splits 1:${SPLIT_RATIO}. All holders now have ${SPLIT_RATIO}× shares at Ƒ5.` }});
+      console.log(`[SPLIT] ${c.symbol}, 1:${SPLIT_RATIO} split executed`);
       setTimeout(() => { c._splitting = false; }, 10000);
     }
 
@@ -5335,7 +5437,7 @@ let _leaderboardSnapshot = null;
 function snapshotLeaderboard(){
   _leaderboardSnapshot = getLeaderboard(companies);
   _leaderboardSnapshot._snapshotTs = Date.now();
-  console.log(`[Leaderboard] Snapshot taken — ${_leaderboardSnapshot.length} players`);
+  console.log(`[Leaderboard] Snapshot taken, ${_leaderboardSnapshot.length} players`);
 }
 
 function broadcastLeaderboard(){
@@ -5404,7 +5506,7 @@ wss.on('connection',(ws,req)=>{
     ws.send(JSON.stringify({type:'welcome',data:{id:null,name:'Guest',cash:START_CASH}}));
   }
 
-  ws.send(JSON.stringify({type:'init',data:{companies:companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector,hq:c.hq||null})).sort((a,b)=>a.name.localeCompare(b.name)),headlines:headlines.slice(-30),leaderboard:_leaderboardSnapshot||getLeaderboard(companies)}}));
+  ws.send(JSON.stringify({type:'init',data:{companies:companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector,hq:c.hq||null})).sort((a,b)=>a.name.localeCompare(b.name)),headlines:headlines.slice(-30),leaderboard:_leaderboardSnapshot||getLeaderboard(companies),breaking:(breakingNews?{active:true,text:breakingNews.text,tone:breakingNews.tone}:{active:false})}}));
 
   ws.on('message',(buf)=>{
     let msg; try{msg=JSON.parse(buf.toString());}catch{return;}
@@ -5482,11 +5584,11 @@ wss.on('connection',(ws,req)=>{
 
           // Notify player of cover result
           const pnlSign = pnl >= 0 ? '+' : '';
-          try { ws.send(JSON.stringify({type:'chat_system',data:{text:`✅ Covered ${coverQty}× ${s} short @ Ƒ${c.price.toFixed(2)} — P&L: ${pnlSign}Ƒ${pnl.toFixed(2)}`}})); } catch(_) {}
+          try { ws.send(JSON.stringify({type:'chat_system',data:{text:`✅ Covered ${coverQty}× ${s} short @ Ƒ${c.price.toFixed(2)}, P&L: ${pnlSign}Ƒ${pnl.toFixed(2)}`}})); } catch(_) {}
 
           // If player tried to buy more than their short, reject the excess (no long allocation through cover)
           if (qty > coverQty) {
-            try { ws.send(JSON.stringify({type:'error',data:{msg:`Covered ${coverQty} short shares. Remaining ${qty - coverQty} shares not purchased — close your short first before going long.`}})); } catch(_) {}
+            try { ws.send(JSON.stringify({type:'error',data:{msg:`Covered ${coverQty} short shares. Remaining ${qty - coverQty} shares not purchased, close your short first before going long.`}})); } catch(_) {}
           }
 
         // ── NORMAL LONG BUY ──────────────────────────────────────────────────
@@ -5754,7 +5856,7 @@ wss.on('connection',(ws,req)=>{
           broadcastToPlayer(prev.id, { type: 'portfolio', data: snapshotPortfolio(prev) });
         }
         broadcast({ type: 'president_ousted', data: { ousted: president.name } });
-        pushHeadline(`⬡ ${president.name} REMOVED FROM OFFICE — ${actor.name} SEIZES THE PRESIDENCY`, 'bad', null);
+        pushHeadline(`⬡ ${president.name} REMOVED FROM OFFICE, ${actor.name} SEIZES THE PRESIDENCY`, 'bad', null);
       }
       // Charge, assign, rally
       safeAddCash(actor, -PRESIDENT_COST);
@@ -5768,7 +5870,7 @@ wss.on('connection',(ws,req)=>{
       for (const c of companies) {
         if (!c._special) { c.lnP += 0.008 * (0.5 + Math.random()); c.price = Math.max(0.5, Math.exp(c.lnP)); }
       }
-      pushHeadline(`⬡ ${actor.name} ELECTED PRESIDENT OF THE COALITION — MARKETS SURGE`, 'good', null);
+      pushHeadline(`⬡ ${actor.name} ELECTED PRESIDENT OF THE COALITION, MARKETS SURGE`, 'good', null);
       broadcast({ type: 'president_elected', data: { name: actor.name, id: actor.id } });
       broadcast({ type: 'president_state',   data: { holder: president } });
       ws.send(JSON.stringify({ type: 'title_updated', data: { title: actor.title, owned: actor.ownedTitles } }));
@@ -6029,7 +6131,7 @@ wss.on('connection',(ws,req)=>{
       global._lastWire.set(actor.id, Date.now());
       // Update sender portfolio
       ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
-      const feeNote=guildTax>0?` (Ƒ${baseFee.toLocaleString()} tax + Ƒ${guildTax.toLocaleString()} Guild surcharge)`:baseFee>0?` (Ƒ${baseFee.toLocaleString()} tax sink)`:' (no fee — CEO tier)';
+      const feeNote=guildTax>0?` (Ƒ${baseFee.toLocaleString()} tax + Ƒ${guildTax.toLocaleString()} Guild surcharge)`:baseFee>0?` (Ƒ${baseFee.toLocaleString()} tax sink)`:' (no fee, CEO tier)';
       // Confirm to sender via chat system message
       ws.send(JSON.stringify({type:'chat_system',data:{text:`You wired Ƒ${amt.toLocaleString()} to ${recipient.name}${feeNote}.`}}));
       // Notify recipient via portfolio update + chat system message
@@ -6203,6 +6305,25 @@ wss.on('connection',(ws,req)=>{
         ack(`✓ ${amount >= 0 ? 'Gave' : 'Removed'} $${Math.abs(amount).toLocaleString()} ${amount >= 0 ? 'to' : 'from'} ${target.name}. New balance: $${target.cash.toLocaleString(undefined,{maximumFractionDigits:2})}`);
       }
 
+      // ── breaking_news: set or clear the live news header ──────────────────
+      else if (cmd === 'breaking_news') {
+        const mode = String(msg.mode || 'default');
+        if (mode === 'custom') {
+          const text = String(msg.text || '').trim().slice(0, 240);
+          if (!text) return err('Breaking news text is empty.');
+          const tone = ['good','bad','neutral'].includes(msg.tone) ? msg.tone : 'bad';
+          breakingNews = { text, tone, t: Date.now(), by: actor.name };
+          broadcast({ type: 'breaking_news', data: { active: true, text, tone } });
+          broadcastToAdmins({ type: 'admin_log', data: { action: 'breaking_news_set', by: actor.name, text } });
+          ack('✓ Breaking news broadcast to all clients.');
+        } else {
+          breakingNews = null;
+          broadcast({ type: 'breaking_news', data: { active: false } });
+          broadcastToAdmins({ type: 'admin_log', data: { action: 'breaking_news_default', by: actor.name } });
+          ack('✓ News header reset to default.');
+        }
+      }
+
       // ── set_price: override a ticker price ────────────────────────────────
       else if (cmd === 'set_price') {
         const sym = String(msg.symbol || '').toUpperCase();
@@ -6220,7 +6341,7 @@ wss.on('connection',(ws,req)=>{
         // Suppress sigma during transition so it doesn't fight the drift
         c.sigma = 0.012;
         broadcastToAdmins({ type: 'admin_log', data: { action: 'god_set_price', by: actor.name, symbol: sym, targetPrice: price, currentPrice: oldPrice } });
-        ack(`✓ ${sym} drifting toward Ƒ${price.toFixed(2)} (currently Ƒ${oldPrice.toFixed(2)}) — chart will show natural movement over ~40s`);
+        ack(`✓ ${sym} drifting toward Ƒ${price.toFixed(2)} (currently Ƒ${oldPrice.toFixed(2)}), chart will show natural movement over ~40s`);
       }
 
             // ── market_event: pump or crash all tickers ───────────────────────────
@@ -6235,7 +6356,7 @@ wss.on('connection',(ws,req)=>{
           c.price = Math.max(0.5, Math.exp(c.lnP));
         }
         const label = direction === 'pump' ? '📈 MARKET SURGE' : '📉 MARKET CRASH';
-        pushHeadline(`[GOD EVENT] ${label} — all tickers affected (${(pct*100).toFixed(1)}%)`, direction === 'pump' ? 'good' : 'bad', null);
+        pushHeadline(`[GOD EVENT] ${label}, all tickers affected (${(pct*100).toFixed(1)}%)`, direction === 'pump' ? 'good' : 'bad', null);
         broadcastToAdmins({ type: 'admin_log', data: { action: 'god_market_event', by: actor.name, direction, pct } });
         ack(`✓ Market ${direction} applied (${(pct*100).toFixed(1)}%)`);
       }
@@ -6460,7 +6581,7 @@ wss.on('connection',(ws,req)=>{
         if (!global._marketFrozen) {
           global._marketFrozen = true;
           broadcast({ type: 'system_message', data: { text: '⚠ Market trading suspended by administrator.', color: '#ff6b6b' } });
-          ack('✓ Market frozen — no tick or trading until unfreeze.');
+          ack('✓ Market frozen, no tick or trading until unfreeze.');
         } else { ack('Market is already frozen.'); }
       }
       else if (cmd === 'unfreeze_market') {
@@ -6497,7 +6618,7 @@ wss.on('connection',(ws,req)=>{
         const bps = Math.max(0, Math.min(1000, Math.floor(Number(msg.bps) || 25)));
         // TAX_RATE is the decimal (bps/10000) used in transfer handler
         global._godTaxOverride = bps;
-        ack(`✓ Transfer tax set to ${bps}bps (${(bps/100).toFixed(2)}%) — effective immediately`);
+        ack(`✓ Transfer tax set to ${bps}bps (${(bps/100).toFixed(2)}%), effective immediately`);
       }
 
       // ── clear_orders: wipe limit orders for a player or all ──────────────
@@ -6820,13 +6941,13 @@ wss.on('connection',(ws,req)=>{
       const guardTier = GUARD_BY_ID[msg.guardTier] ? msg.guardTier : 'none';
       if (!from || !to || !cargoId || !stake) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Missing fields' })); return; }
       if (activeSmuggling.has(actor.id)) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Smuggling run already in progress' })); return; }
-      if (activeShipping.has(actor.id)) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Shipping run in progress — shared cooldown' })); return; }
+      if (activeShipping.has(actor.id)) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Shipping run in progress, shared cooldown' })); return; }
       const lastRun = _lastTradeRun.get(actor.id) || 0;
       if (Date.now() - lastRun < TRADE_RUN_COOLDOWN_MS) {
         const remaining = Math.ceil((TRADE_RUN_COOLDOWN_MS - (Date.now() - lastRun)) / 1000);
         const mins = Math.floor(remaining / 60);
         const secs = remaining % 60;
-        ws.send(JSON.stringify({ type:'smuggling_error', error:`Cooldown active — ${mins}m ${secs}s remaining` }));
+        ws.send(JSON.stringify({ type:'smuggling_error', error:`Cooldown active, ${mins}m ${secs}s remaining` }));
         return;
       }
       const lane = findLane(from, to);
@@ -6869,13 +6990,13 @@ wss.on('connection',(ws,req)=>{
       const { from, to, cargoId, stake, insured } = msg;
       if (!from || !to || !cargoId || !stake) { ws.send(JSON.stringify({ type:'shipping_error', error:'Missing fields' })); return; }
       if (activeShipping.has(actor.id)) { ws.send(JSON.stringify({ type:'shipping_error', error:'Shipping run already in progress' })); return; }
-      if (activeSmuggling.has(actor.id)) { ws.send(JSON.stringify({ type:'shipping_error', error:'Smuggling run in progress — shared cooldown' })); return; }
+      if (activeSmuggling.has(actor.id)) { ws.send(JSON.stringify({ type:'shipping_error', error:'Smuggling run in progress, shared cooldown' })); return; }
       const lastRun = _lastTradeRun.get(actor.id) || 0;
       if (Date.now() - lastRun < TRADE_RUN_COOLDOWN_MS) {
         const remaining = Math.ceil((TRADE_RUN_COOLDOWN_MS - (Date.now() - lastRun)) / 1000);
         const mins = Math.floor(remaining / 60);
         const secs = remaining % 60;
-        ws.send(JSON.stringify({ type:'shipping_error', error:`Cooldown active — ${mins}m ${secs}s remaining` }));
+        ws.send(JSON.stringify({ type:'shipping_error', error:`Cooldown active, ${mins}m ${secs}s remaining` }));
         return;
       }
       const lane = findLane(from, to);
@@ -6885,7 +7006,7 @@ wss.on('connection',(ws,req)=>{
       const laneKey = getLaneKey(from, to);
       const blockade = activeBlockades.get(laneKey);
       if (blockade && blockade.active) {
-        ws.send(JSON.stringify({ type:'shipping_error', error:'⛔ Lane blockaded — shipping unavailable. Try smuggling instead.' }));
+        ws.send(JSON.stringify({ type:'shipping_error', error:'⛔ Lane blockaded, shipping unavailable. Try smuggling instead.' }));
         return;
       }
 
@@ -7009,7 +7130,7 @@ wss.on('connection',(ws,req)=>{
       if (blk.timer) clearTimeout(blk.timer);
       activeBlockades.delete(laneKey);
       const [colA, colB] = laneKey.split('|');
-      pushHeadline(`⚔ Private army breaks the ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} blockade — ${actor.name} deploys mercenaries to restore trade`, 'good', '⚔');
+      pushHeadline(`⚔ Private army breaks the ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} blockade, ${actor.name} deploys mercenaries to restore trade`, 'good', '⚔');
       broadcast({ type:'blockade_update', data:{ laneKey, active:false, broken:true } });
       ws.send(JSON.stringify({ type:'private_army_result', data:{ laneKey, cost, cash:actor.cash } }));
       try { saveGalaxySystems(); } catch(_){}
@@ -7321,7 +7442,7 @@ const _passiveIncomeTick = () => {
         const portfolioMsg=JSON.stringify({type:'portfolio',data:snapshotPortfolio(p)});
         let incomeText;
         if (payout.isDev) {
-          incomeText = `⚡ Dev passive: +Ƒ${payout.total.toLocaleString()} — FLSH Capital dividend`;
+          incomeText = `⚡ Dev passive: +Ƒ${payout.total.toLocaleString()}, FLSH Capital dividend`;
         } else if (coalBonus > 0) {
           const fName = (playerFaction||'faction').charAt(0).toUpperCase() + (playerFaction||'faction').slice(1);
           incomeText = `+Ƒ${payout.total} passive  ·  +Ƒ${coalBonus} ${fName} colony control (${factionColonyCounts[playerFaction]} colony)`;
@@ -7598,7 +7719,7 @@ function runGalaxyTick() {
         const cName = COLONY_NAMES[c.id] || c.id;
         const fName = FACTION_NAMES[newFaction] || newFaction;
         const oldName = FACTION_NAMES[oldFaction] || oldFaction;
-        const headline = `${fName} seizes ${cName} from ${oldName} — power shifts in the outer sectors`;
+        const headline = `${fName} seizes ${cName} from ${oldName}, power shifts in the outer sectors`;
         pushHeadline(headline, 'bad', '⚠');
         broadcast({ type:'colony_conquered', data:{
           colonyId: c.id, colonyName: cName, newFaction, oldFaction, warChest: c.war_chest
@@ -7715,7 +7836,7 @@ function voidSharesForColony(colonyId) {
     }
     if (totalVoided > 0) {
       const cName = colonyId.replace(/_/g, ' ');
-      pushHeadline(`⚠ CONQUEST VOID: ${totalVoided} lane shares destroyed — ${cName} colony seized, all connected lane contracts voided`, 'bad', '💀');
+      pushHeadline(`⚠ CONQUEST VOID: ${totalVoided} lane shares destroyed, ${cName} colony seized, all connected lane contracts voided`, 'bad', '💀');
       console.log(`[Lane Shares] Voided ${totalVoided} shares for colony ${colonyId}`);
     }
   } catch(e) { console.error('[Lane Shares void]', e); }
@@ -7729,7 +7850,7 @@ for(const sig of['SIGINT','SIGTERM']){
 
 server.listen(PORT,()=>{
   console.log(`\n╔══════════════════════════════════════╗`);
-  console.log(`║  Flesh Market v5.0  — port ${PORT}      ║`);
+  console.log(`║  Flesh Market v5.0 , port ${PORT}      ║`);
   console.log(`╚══════════════════════════════════════╝`);
   console.log(`   Companies: ${companies.length}`);
   console.log(`   Features: Limit Orders, Short Selling, Earnings, Dividends, Trade Feed, XP/Levels`);

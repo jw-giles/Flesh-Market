@@ -249,7 +249,7 @@ window.loadBugsList = function loadBugsList(listId, toastId) {
     .then(r => r.json()).then(d => {
       if (!d.ok) return;
       if (!d.bugs.length) {
-        el.innerHTML = '<div style="color:#555;font-size:.82rem;padding:8px">No reports yet — be the first!</div>';
+        el.innerHTML = '<div style="color:#555;font-size:.82rem;padding:8px">No reports yet, be the first!</div>';
         return;
       }
       el.innerHTML = '';
@@ -388,7 +388,7 @@ function loadReports() {
   if (!el) return;
   var isAdmin = document.body && document.body.classList.contains('is-admin');
   if (!isAdmin && !window.__isAdminUser) {
-    el.innerHTML = '<div style="color:#555;font-size:.82rem;padding:8px">Reports submitted — dev team will follow up in-game.</div>';
+    el.innerHTML = '<div style="color:#555;font-size:.82rem;padding:8px">Reports submitted, dev team will follow up in-game.</div>';
     return;
   }
   var tok = window.__fmToken || '';

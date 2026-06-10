@@ -178,7 +178,7 @@ async function renderFundPerformance(fundId) {
   const ids = ['gm-drawdown','gm-best','gm-worst','gm-vol','gm-winrate','gm-return'];
 
   if (spp.length < 2) {
-    ids.forEach(id=>_gSetMetric(id,'—'));
+    ids.forEach(id=>_gSetMetric(id,'-'));
     if (delta) delta.textContent = '';
     if (empty) empty.style.display = 'block';
     return;
@@ -442,7 +442,7 @@ function renderFundDetail(f) {
     typeEl.style.color  = TYPE_COLOR[f.type] || '#aaa';
     typeEl.style.borderColor = TYPE_COLOR[f.type] || '#aaa';
   }
-  if (descEl) descEl.textContent = f.type === 'patreon' ? 'Patreon tier — Capital House access + member perks. patreon.com/FLSH' : (f.description || '');
+  if (descEl) descEl.textContent = f.type === 'patreon' ? 'Patreon tier, Capital House access + member perks. patreon.com/FLSH' : (f.description || '');
 
   // Stats
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
@@ -486,7 +486,7 @@ function renderFundDetail(f) {
       if (guildCount > 0) {
         bonusBar.innerHTML = `⚖ Guild bonus: <b style="color:#2ecc71">+${bonusPct}%</b> passive income &nbsp;<span style="opacity:.45;font-size:.7rem">(${guildCount} member${guildCount===1?'':'s'} × 1% each)</span>`;
       } else {
-        bonusBar.innerHTML = `<span style="opacity:.4">No members yet — each member adds +1% to everyone's passive income</span>`;
+        bonusBar.innerHTML = `<span style="opacity:.4">No members yet, each member adds +1% to everyone's passive income</span>`;
       }
     } else {
       bonusBar.innerHTML = ''; // Player guilds do not have the passive bonus
@@ -497,7 +497,7 @@ function renderFundDetail(f) {
   const aBox = document.getElementById('g-d-activity');
   if (aBox) aBox.innerHTML = (f.activity||[]).map(a=>{
     const ts = new Date(a.ts).toLocaleTimeString();
-    return `<div>${ts} — ${a.note||a.type}</div>`;
+    return `<div>${ts}, ${a.note||a.type}</div>`;
   }).join('') || '<span style="opacity:.4">No activity yet</span>';
 
   // Panels visibility
@@ -544,7 +544,7 @@ function renderFundDetail(f) {
     joinBtn.textContent = '★ Become a Patron';
     joinBtn.style.borderColor = '#ffce4d';
     joinBtn.style.color = '#ffce4d';
-    if (joinHint) joinHint.textContent = 'Opens patreon.com/FLSH — membership unlocks the Guild';
+    if (joinHint) joinHint.textContent = 'Opens patreon.com/FLSH, membership unlocks the Guild';
   } else if (joinBtn) {
     joinBtn.textContent = 'Join Fund';
     if (joinHint) joinHint.textContent = 'Free to join, deposit anytime';
@@ -713,9 +713,9 @@ function renderGovernance(f) {
   const weight = f.voteWeight || 'equal';
   const wLabel = weight === 'shares' ? 'share-weighted' : weight === 'tenure' ? 'tenure-weighted' : 'one vote each';
   const badge = document.getElementById('g-gov-mode-badge');
-  const label = gov === 'executive' ? 'Executive — owner trades directly'
-    : gov === 'vote' ? `Majority Vote — members decide (${wLabel})`
-    : `Council — members vote, owner has final say (${wLabel})`;
+  const label = gov === 'executive' ? 'Executive, owner trades directly'
+    : gov === 'vote' ? `Majority Vote, members decide (${wLabel})`
+    : `Council, members vote, owner has final say (${wLabel})`;
   if (badge) badge.innerHTML = `<span style="opacity:.5">Mode:</span> <b style="color:#46ff7d">${label}</b>`;
 
   setDisp('g-gov-owner', f.isOwner);
@@ -969,7 +969,7 @@ function initGuildUI() {
     if (!__currentFundId) return;
     const targetName = document.getElementById('g-golden-target')?.value?.trim();
     if (!targetName) { const h=document.getElementById('g-golden-hint'); if(h){h.textContent='Enter a member name';h.style.color='#ff6b6b';} return; }
-    if (!confirm(`Hand the golden share to ${targetName}? This is permanent — they get full veto power and you lose it.`)) return;
+    if (!confirm(`Hand the golden share to ${targetName}? This is permanent, they get full veto power and you lose it.`)) return;
     const d = await guildPost(`/api/funds/${__currentFundId}/golden/transfer`, {targetName}, 'g-golden-hint', '✓ Golden share transferred');
     if (d?.ok) openFund(__currentFundId);
   });

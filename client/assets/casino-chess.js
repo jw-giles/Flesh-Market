@@ -23,8 +23,8 @@
         </div>
         <div class="card" style="padding:10px;margin-top:8px">
           <div class="row" style="justify-content:space-between">
-            <div id="chessTurn" class="muted">—</div>
-            <div id="chessBalance" class="muted">Balance: —</div>
+            <div id="chessTurn" class="muted">-</div>
+            <div id="chessBalance" class="muted">Balance: -</div>
           </div>
           <div id="chessStatus" class="muted" style="margin-top:6px"></div>
         </div>

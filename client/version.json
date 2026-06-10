@@ -1,7 +1,7 @@
 {
-  "version": "1.1.5.0",
-  "built": "2026-06-09T19:10:00Z",
+  "version": "1.1.5.1",
+  "built": "2026-06-09T22:10:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.5.0",
-  "notes": "Market upgrades tier (from help-desk requests): purchasable SMA chart overlay, extended price history (400 bars vs 199), and Auto-Accumulate (reserve-funded auto-buys when a held position drops below your average cost; reserve only, never touches main cash). P&L tickers now click through to the market chart (positions list + bar chart). SERVER change: pm2 restart; new tables auto-create on boot."
+  "patch": "1.1.5.1",
+  "notes": "News overhaul (faction / Mr. Flesh / rare-weird categories, cross-sector pool, expanded market+colony pools), live news header with dev breaking-news control, FLSH dev fund pinned to 100T, BRNC hard-locked flat at Ƒ0.50. Phosphor legibility pass: brighter --muted token, reduced CRT overlay dimming so text reads less faded. Em-dash cleanup: all player-visible game text is now em-dash-free (comments unchanged). SERVER change: pm2 restart."
 }
