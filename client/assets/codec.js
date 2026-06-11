@@ -233,12 +233,12 @@
     const ov = $('fmcodecOverlay'); if (!ov) return;
     if (e.code === 'Escape') { closeAll(); return; }
     if (e.code === 'Backspace') { e.preventDefault(); backToContacts(); return; }
-    // 1-9 select a dialogue option when the option list is on screen.
-    var dg = /^Digit([1-9])$/.exec(e.code);
+    // 1-9 select a dialogue option when the option list is on screen; 0 selects the 10th.
+    var dg = /^Digit([0-9])$/.exec(e.code);
     if (dg) {
       const c = $('fmcCtl');
       if (c && c.classList.contains('opts')) {
-        const b = c.children[+dg[1] - 1];
+        const b = c.children[dg[1] === '0' ? 9 : +dg[1] - 1];
         if (b) { e.preventDefault(); b.click(); }
         return;
       }
@@ -312,21 +312,22 @@
   }
   function advance(){
     if (st.typing) { finishLine(); return; }
-    if (st.tree) { treeAdvance(); return; }
+    if (st.tree) return;          // options are on screen; wait for a button/key pick
     st.idx++; play();
   }
   // ── Branching dialogue trees ────────────────────────────────────────────────
   // rep.tree = { start:'nodeId', nodes:{ id:{ text:'npc line', options:[
-  //   { text:'player line', next:'nodeId' } | { text:'player line', end:true } ] } } }
+  //   { text:'option label', next:'nodeId' } | { text:'option label', end:true } ] } } }
   // Plays in the idle/all-done slot only; quest pitches and active-quest lines win.
+  // Selecting an option jumps straight to the next NPC line - the option label is NOT
+  // re-spoken as a player line (the player already read it on the button).
   function startTree(tree){
-    st.tree = { nodes: tree.nodes || {}, mode:'npc', nextId:null };
+    st.tree = { nodes: tree.nodes || {} };
     showTreeNode(tree.start || 'root');
   }
   function showTreeNode(id){
     var n = st.tree.nodes[id];
     if (!n) { endCall('hangup'); return; }
-    st.tree.mode = 'npc';
     $('fmcName').textContent = st.rep.name;
     $('fmcName').style.background = 'var(--fac)';
     buttons([]);
@@ -347,17 +348,8 @@
     });
   }
   function pickOption(o){
-    st.tree.mode = 'you';
-    st.tree.nextId = o.end ? '__end' : (o.next || '__end');
-    buttons([]);
-    $('fmcName').textContent = 'YOU';
-    $('fmcName').style.background = '#f0b454';
-    typeLine(resolveTokens(o.text));
-  }
-  function treeAdvance(){
-    if (st.tree.mode !== 'you') return; // npc mode: the option buttons do the advancing
-    if (st.tree.nextId === '__end') { endCall('hangup'); return; }
-    showTreeNode(st.tree.nextId);
+    if (o.end || !o.next) { endCall('hangup'); return; }
+    showTreeNode(o.next);
   }
   function offerQuest(){
     const q = st.cur.quest; $('fmcHint').textContent = ''; $('fmcName').textContent = st.rep.name;

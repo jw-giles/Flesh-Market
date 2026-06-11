@@ -99,16 +99,30 @@ window.FM_CODEC = {
       //        | { text:'player line', end:true } ] }
       // Option order = on-screen order (keys 1-9). 'end:true' hangs up after the line.
       tree:{
-        start:'root',
+        start:'open',
         nodes:{
+          open:{ text:"Make it quick.", options:[
+            { text:"I have some questions", next:'root' },
+            { text:"Do you have any work?", next:'work' },
+          ]},
+          // 'Not now' is a stub: replace this node with the questline entry once it ships.
+          work:{ text:"Not now, but do you need anything?", options:[
+            { text:"A few things, yeah.", next:'open' },
+            { text:"No, I'll get back to work.", end:true },
+          ]},
           root:{ text:"Yeah?", options:[
             { text:"What can you tell me about the coalition?", next:'co1' },
             { text:"The Void Syndicate, who are they?", next:'vo1' },
             { text:"You seem friendlier with the Merchants Guild than other groups, why is that?", next:'gu1' },
             { text:"How come the Syndicate are so hostile?", next:'sy1' },
+            { text:"Were you ever human, or has it always been the jar?", next:'hu1' },
+            { text:"If everyone knows the game is rigged, why does anyone keep playing?", next:'pl1' },
+            { text:"Who decides what a Social Credit is actually worth?", next:'sc1' },
+            { text:"What happens to people who can't cover their debts here?", next:'db1' },
+            { text:"Why does a stock exchange need a casino floor?", next:'ca1' },
           ]},
           // ── Coalition ──
-          co1:{ text:"Coalition is a ruling council made up of the remaining corporations from the fifteenth corporate war. The war was so bloody it caused a pact between all known planets. Coalition was allowed by myself to take up the mantle as our front facing government sixty years ago. New Anchor is their main planet, but they operate on all planets officially.", options:[
+          co1:{ text:"Coalition is a ruling council made up of the remaining corporations from the fourteenth corporate war. The war was so bloody it caused a pact between all known planets. Coalition was allowed by myself to take up the mantle as our front facing government sixty years ago. The last war, the fifteenth, came twenty-nine years ago. Coalition won it and has held the ruling seat ever since, right up into the modern day. New Anchor is their main planet, but they operate on all planets officially.", options:[
             { text:"Coalition is the ruling government? What deal did you make for that level of power?", next:'co2' },
           ]},
           co2:{ text:"Limbosis is a former weapons lab, they built a giant fucking laser to aim at Abaddon's binary black holes. I wanted this weapon installed on site. So now they rule, and I have my weapon. This was a long time ago so don't expect much detail from me. Anything else you need?", options:[
@@ -154,6 +168,27 @@ window.FM_CODEC = {
           sy3:{ text:"Nothing I do is for fun, but yeah sort of. He is a bit slow in the head in a good way, we pay him more than his bosses for info and in exchange he gets to come and go as he pleases. Don't worry about him betraying us, I installed a recording device and tracker into his spine. If he talks about anything, tells anyone, writes anything down, thinks about betrayal. Ill trigger the tactical nuclear warhead sewn into the core of the implant. Trust that he enjoys the pay and his life. Anything else?", options:[
             { text:"No, thats all for now", end:true },
             { text:"Yes, have some more questions.", next:'root' },
+          ]},
+          // ── Single-answer lore questions ──
+          hu1:{ text:"What came first, the chicken or the egg? Of course I was Human before, what kind of question is that.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That's all for now.", end:true },
+          ]},
+          pl1:{ text:"This \"game\" is people's lives, your social credits afford freedoms, food, security, and health. You have no choice but to \"play.\"", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That's all for now.", end:true },
+          ]},
+          sc1:{ text:"I do, and everyone else does. Money has always been about perception regardless. The one hundred trillion sitting in Capital House FLSH keeps the pricing stable. A store of wealth and time you could think of it as.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That's all for now.", end:true },
+          ]},
+          db1:{ text:"Depends, what planet are they on? This isn't my concern you see, governance of single planets doesn't concern me; my mandate is stable pricing.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That's all for now.", end:true },
+          ]},
+          ca1:{ text:"Why not, 99% of gamblers quit just before hitting big. You should try the wheel sometime, you look lucky.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That's all for now.", end:true },
           ]},
         }
       }
