@@ -84,6 +84,25 @@ export function initDB() {
       basis_c   INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (player_id, symbol)
     );
+    -- Locked short collateral (cents) per symbol. Holds the proceeds of a short that
+    -- were withheld from spendable cash (collateral model). Absent / 0 for shorts opened
+    -- before the collateral model, whose proceeds are already in cash - this grandfathers
+    -- legacy positions with no migration and no net-worth double-count.
+    CREATE TABLE IF NOT EXISTS short_coll (
+      player_id TEXT    NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      symbol    TEXT    NOT NULL,
+      coll_c    INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (player_id, symbol)
+    );
+    -- Active margin calls. One per player: the deadline by which they must cover (or have
+    -- the position recover) or be liquidated. Persisted so the clock survives restarts and
+    -- logoff - otherwise logging off would freeze or dodge the timer.
+    CREATE TABLE IF NOT EXISTS margin_calls (
+      player_id TEXT    PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+      symbol    TEXT    NOT NULL,
+      called_at INTEGER NOT NULL,
+      deadline  INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS net_worth_history (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
       player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -385,6 +404,10 @@ export function setupTransactions() {
     for (const [sym, bc] of Object.entries(player.basisC||{})) {
       if (bc !== 0) stmt('INSERT OR REPLACE INTO basis VALUES(?,?,?)').run(player.id,sym,Math.floor(bc));
     }
+    stmt('DELETE FROM short_coll WHERE player_id=?').run(player.id);
+    for (const [sym, cc] of Object.entries(player.shortCollC||{})) {
+      if (cc > 0) stmt('INSERT OR REPLACE INTO short_coll VALUES(?,?,?)').run(player.id,sym,Math.floor(cc));
+    }
   });
 
   recordNetWorthFn = transaction((playerId, net, cash, equity) => {
@@ -427,11 +450,13 @@ export function verifyPassword(password, hash, salt) {
 
 function hydratePlayer(row) {
   if (!row) return null;
-  const holdings={}, basisC={};
+  const holdings={}, basisC={}, shortCollC={};
   stmt('SELECT symbol,qty FROM holdings WHERE player_id=?').all(row.id)
     .forEach(h=>{ if(h.qty !== 0) holdings[h.symbol]=h.qty; });
   stmt('SELECT symbol,basis_c FROM basis WHERE player_id=?').all(row.id)
     .forEach(b=>{ if(b.basis_c !== 0) basisC[b.symbol]=b.basis_c; });
+  stmt('SELECT symbol,coll_c FROM short_coll WHERE player_id=?').all(row.id)
+    .forEach(r=>{ if(r.coll_c > 0) shortCollC[r.symbol]=r.coll_c; });
   return {
     id:row.id, name:row.name,
     password_hash:row.password_hash, password_salt:row.password_salt,
@@ -445,7 +470,7 @@ function hydratePlayer(row) {
     patreon_expires_at: row.patreon_expires_at||null,
     faction: row.faction||null,
     portrait: row.portrait||null,
-    holdings, basisC,
+    holdings, basisC, shortCollC,
     tutorial_seen: row.tutorial_seen || 0,
     shipClass: row.ship_class || '',
     createdAt:row.created_at, updatedAt:row.updated_at, lastSeen:row.last_seen,
@@ -567,10 +592,17 @@ export function getFundNAVHistory(fundId, limit=300) {
 export function getLeaderboard(companies, limit=20) {
   try { db.exec('ALTER TABLE players ADD COLUMN faction TEXT'); } catch(_){}
   const players = stmt(`SELECT id,name,cash,xp,level,title,patreon_tier,is_dev,is_admin,is_prime,faction FROM players WHERE is_dev=0 AND is_admin=0 AND is_prime=0`).all();
+  const priceMap = {}; for (const c of companies) priceMap[c.symbol] = c.price;
   return players.map(p=>{
     const holdRows = stmt('SELECT symbol,qty FROM holdings WHERE player_id=?').all(p.id);
+    // signed: longs add, shorts subtract their cover cost
     const equity   = holdRows.reduce((acc,h)=>{ const c=companies.find(x=>x.symbol===h.symbol); return acc+(c?c.price*h.qty:0); },0);
-    return { id:p.id, name:p.name, net:p.cash+equity, xp:p.xp, level:p.level, title:p.title, patreon_tier:p.patreon_tier||0, is_dev:!!(p.is_dev||p.is_admin), is_prime:!!(p.is_prime), faction:p.faction||null };
+    // locked short collateral (proceeds withheld from cash on new shorts) adds back
+    let collateral = 0;
+    try { for (const r of stmt('SELECT coll_c FROM short_coll WHERE player_id=?').all(p.id)) collateral += (r.coll_c||0)/100; } catch(_){}
+    // money tied up in Capital Houses (the player's share of each fund's NAV)
+    const fundStake = getPlayerFundStake(p.id, priceMap);
+    return { id:p.id, name:p.name, net:p.cash+equity+collateral+fundStake, xp:p.xp, level:p.level, title:p.title, patreon_tier:p.patreon_tier||0, is_dev:!!(p.is_dev||p.is_admin), is_prime:!!(p.is_prime), faction:p.faction||null };
   }).sort((a,b)=>b.net-a.net).slice(0,limit);
 }
 
@@ -1235,6 +1267,41 @@ export function getFundNAVById(fundId, priceMap) {
   return cash + equity;
 }
 
+// All multi-house memberships for one player (reverse of getFundMemberships).
+export function getPlayerFundMemberships(playerId) {
+  try { return stmt('SELECT fund_id, shares FROM fund_memberships WHERE player_id=? AND shares>0').all(playerId); }
+  catch(_) { return []; }
+}
+
+// A player's total stake value across BOTH fund systems: their share of each fund's NAV.
+// Legacy single fund (fund_members/fund_holdings) + every multi-house they belong to.
+// priceMap is symbol->price. Returns Ƒ. Never throws.
+export function getPlayerFundStake(playerId, priceMap) {
+  let stake = 0;
+  // Legacy single fund
+  try {
+    const m = getFundMember(playerId);
+    if (m && m.shares > 0) {
+      const total = getTotalFundShares();
+      if (total > 0) {
+        let nav = getFundCash();
+        for (const h of getFundHoldings()) { const px = priceMap ? priceMap[h.symbol] : 0; if (px) nav += px * h.qty; }
+        if (nav > 0) stake += (m.shares / total) * nav;
+      }
+    }
+  } catch(_) {}
+  // Multi-houses
+  try {
+    for (const row of getPlayerFundMemberships(playerId)) {
+      const total = getTotalFundSharesById(row.fund_id);
+      if (total <= 0) continue;
+      const nav = getFundNAVById(row.fund_id, priceMap);
+      if (nav > 0) stake += (row.shares / total) * nav;
+    }
+  } catch(_) {}
+  return stake;
+}
+
 // ── Activity log ──────────────────────────────────────────────────────────────
 
 export function getFundActivity(fundId, limit=30) {
@@ -1594,6 +1661,25 @@ export function setDunce(targetId, duncedBy, reason) {
 
 export function clearDunce(targetId) {
   stmt(`UPDATE moderation SET is_dunced=0 WHERE player_id=?`).run(targetId);
+}
+
+// ── Margin calls ────────────────────────────────────────────────────────────
+export function setMarginCall(playerId, symbol, calledAt, deadline) {
+  stmt(`INSERT INTO margin_calls(player_id,symbol,called_at,deadline) VALUES(?,?,?,?)
+        ON CONFLICT(player_id) DO UPDATE SET symbol=excluded.symbol,
+          called_at=excluded.called_at, deadline=excluded.deadline`)
+    .run(playerId, symbol, calledAt, deadline);
+}
+export function getMarginCall(playerId) {
+  try { return stmt('SELECT player_id,symbol,called_at,deadline FROM margin_calls WHERE player_id=?').get(playerId) || null; }
+  catch(_) { return null; }
+}
+export function clearMarginCall(playerId) {
+  try { stmt('DELETE FROM margin_calls WHERE player_id=?').run(playerId); } catch(_) {}
+}
+export function getActiveMarginCalls() {
+  try { return stmt('SELECT player_id,symbol,called_at,deadline FROM margin_calls').all(); }
+  catch(_) { return []; }
 }
 
 // ── Limit Order DB helpers ──────────────────────────────────────────────────

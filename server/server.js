@@ -50,6 +50,7 @@ import {
   getFundCashById, setFundCashById, addFundCash,
   getFundPortfolio, setFundPortfolioQty, getTotalFundSharesById,
   getFundNAVById, applyFundSavingsInterest,
+  getPlayerFundStake, getPlayerFundMemberships,
   fundDepositFn, fundWithdrawFn,
   getFundActivity, logFundActivity,
   setFundGovernance, createHouseProposal, getHouseProposal, getOpenHouseProposals,
@@ -69,6 +70,7 @@ import {
   setMute, clearMute, isMuted, getMuteExpiry,
   setBan, isBanned, getModerationRecord,
   setDunce, clearDunce, isDunced, getDunceRecord,
+  setMarginCall, getMarginCall, clearMarginCall, getActiveMarginCalls,
   FUND_CREATE_COST, FUND_SLOT_COST, FUND_BASE_SLOTS, FLSH_TRADE_PCT,
   // Galaxy
   seedColoniesIfEmpty, getAllColonyStates, getColonyState, updateColonyState,
@@ -304,8 +306,17 @@ const EARNINGS_INTERVAL_MS  = 8  * 60 * 1000;  // 8 minutes
 const DIVIDEND_INTERVAL_MS  = 2  * 60 * 60 * 1000; // 2 hours
 const BORROW_INTERVAL_MS    = 30 * 60 * 1000;   // 30 minutes
 const BORROW_RATE           = 0.001;  // 0.1% of position value per 30min
-const SHORT_MARGIN_RATE     = 0.50;   // 50% of short value required as cash collateral
-const MAX_SHORT_PER_SYM     = 500;    // hard cap: max shares short per symbol per player
+// Collateral model: shorting no longer requires upfront cash margin or a share cap.
+// Proceeds are LOCKED as collateral (shortCollC) instead of credited to spendable cash,
+// so the only way to realize cash from a short is to cover at a profit. These two are
+// retained for reference but no longer enforced.
+const SHORT_MARGIN_RATE     = 0.50;   // (unused) was: 50% cash collateral required
+const MAX_SHORT_PER_SYM     = 500;    // (unused) was: hard share cap per symbol
+const MARGIN_CALL_RATIO     = 1.65;   // issue a margin call when cover cost >= 1.65x avg entry (65% underwater)
+const MARGIN_CALL_CLEAR     = 1.60;   // clear the call once back under 1.60x (hysteresis, stops flapping at the line)
+const MARGIN_CALL_GRACE_MS  = 3 * 60 * 60 * 1000; // 3h to cover (or recover) before liquidation
+const MARGIN_DUNCE_FINE     = 25000;  // flat fine to clear a margin-call dunce
+const DEBTOR_TITLE          = 'Debtor';
 const DIVIDEND_RATE         = 0.006;  // 0.6% of position value per 2h
 const DIVIDEND_SECTORS      = new Set([0, 2, 4, 6]); // Finance, Insurance, Energy, Tech
 const SECTOR_NAMES          = ['Finance','Biotech','Insurance','Manufacturing','Energy','Logistics','Tech','Misc'];
@@ -2199,6 +2210,157 @@ function runBorrowFees() {
   }
 }
 
+// ─── Margin calls ─────────────────────────────────────────────────────────────
+// Gated, not instant. When a short's cover cost crosses MARGIN_CALL_RATIO (1.65x avg
+// entry = 65% underwater) the player gets a margin call with a 3h deadline. They survive
+// it by covering the position OR by the price recovering below MARGIN_CALL_CLEAR before
+// the deadline. Only if a short is STILL >= 1.65x at the deadline do they get liquidated.
+// Solvency is irrelevant to nothing here on purpose: a player who can cover simply covers;
+// a player who can't (or won't) and doesn't recover is the one who gets wiped.
+
+// Worst short ratio (live cover cost / avg entry) across a player's shorts. 0 if none.
+function worstShortRatio(actor, priceMap) {
+  let worst = 0, sym = null;
+  for (const [s, qty] of Object.entries(actor.holdings || {})) {
+    if (!qty || qty >= 0) continue;
+    const px = priceMap[s]; if (px == null) continue;
+    const shortQty = Math.abs(qty);
+    const avgEntry = (Math.abs((actor.basisC || {})[s] || 0) / shortQty) / 100;
+    if (avgEntry <= 0) continue;
+    const r = px / avgEntry;
+    if (r > worst) { worst = r; sym = s; }
+  }
+  return { worst, sym };
+}
+
+// Issue or clear a connected player's margin call based on their live positions.
+function evaluateMarginState(actor, priceMap, now) {
+  if (isOwnerAccount(actor.id) || isDevAccount(actor.id) || isAdminAccount(actor.id)) return;
+  if (isDunced(actor.id)) return;
+  const { worst, sym } = worstShortRatio(actor, priceMap);
+  const existing = getMarginCall(actor.id);
+  if (worst >= MARGIN_CALL_RATIO) {
+    if (!existing) {
+      const deadline = now + MARGIN_CALL_GRACE_MS;
+      setMarginCall(actor.id, sym, now, deadline);
+      const hrs = (MARGIN_CALL_GRACE_MS / 3600000);
+      const when = new Date(deadline).toUTCString().replace('GMT','UTC');
+      broadcastToPlayer(actor.id, { type:'margin_call', data:{ symbol: sym, deadline,
+        msg:`⚠ MARGIN CALL on ${sym} — it ran 65% past your entry. Cover it (or it recovers) within ${hrs}h or all positions close, balance wiped, and you're dunced. Deadline: ${when}.` } });
+      try { broadcastToPlayer(actor.id, { type:'chat_system', data:{ text:`⚠ MARGIN CALL on ${sym}: cover within ${hrs}h or face liquidation. Deadline ${when}.` } }); } catch(_) {}
+      broadcastToAdmins({ type:'admin_log', data:{ action:'margin_call_issued', player: actor.name, symbol: sym, deadline } });
+      try { broadcastToPlayer(actor.id, { type:'portfolio', data: snapshotPortfolio(actor) }); } catch(_) {}
+    }
+  } else if (existing && worst < MARGIN_CALL_CLEAR) {
+    clearMarginCall(actor.id);
+    broadcastToPlayer(actor.id, { type:'margin_call_cleared', data:{ symbol: existing.symbol } });
+    try { broadcastToPlayer(actor.id, { type:'chat_system', data:{ text:`✅ Margin call on ${existing.symbol} cleared — position is back within limits.` } }); } catch(_) {}
+    try { broadcastToPlayer(actor.id, { type:'portfolio', data: snapshotPortfolio(actor) }); } catch(_) {}
+  }
+}
+
+function runMarginCalls() {
+  const priceMap = buildPriceMap();
+  const now = Date.now();
+  // 1) Issue/clear calls for connected players from their live positions.
+  for (const [playerId, sockets] of playerSockets) {
+    if (!sockets.size) continue;
+    const actor = getPlayer(playerId); if (!actor) continue;
+    try { evaluateMarginState(actor, priceMap, now); } catch(e) { console.error('[MarginCall] eval', e); }
+  }
+  // 2) Enforce deadlines for ALL active calls (online or not), re-checking live state so a
+  //    player who covered or whose price recovered is never wiped even at the deadline.
+  for (const call of getActiveMarginCalls()) {
+    if (now < call.deadline) continue;
+    const actor = getPlayer(call.player_id);
+    if (!actor) { clearMarginCall(call.player_id); continue; }
+    if (isOwnerAccount(actor.id) || isDevAccount(actor.id) || isAdminAccount(actor.id) || isDunced(actor.id)) { clearMarginCall(actor.id); continue; }
+    const { worst, sym } = worstShortRatio(actor, priceMap);
+    if (worst >= MARGIN_CALL_RATIO) settleMarginCall(actor, priceMap);
+    else clearMarginCall(actor.id); // covered or recovered in time
+  }
+}
+
+// Settle a failed margin call. NOT a total wipe. Force-close the underwater short(s),
+// realize the loss, and collect that debt: cash first, then liquidate long holdings
+// (largest first, only as much as the debt needs). A player who can pay keeps everything
+// else and is NOT dunced. Only a player whose loss exceeds their entire account gets
+// zeroed and dunced - the natural bankruptcy case. Fund stake is never touched.
+function settleMarginCall(actor, priceMap) {
+  try {
+    priceMap = priceMap || buildPriceMap();
+    // 1. Force-close every short at/over the call threshold; sum the realized loss.
+    let debtC = 0; const closed = [];
+    for (const [sym, qty] of Object.entries({ ...(actor.holdings || {}) })) {
+      if (!qty || qty >= 0) continue;
+      const px = priceMap[sym]; if (px == null) continue;
+      const shortQty = Math.abs(qty);
+      const avgEntry = (Math.abs((actor.basisC || {})[sym] || 0) / shortQty) / 100;
+      if (avgEntry <= 0 || px < avgEntry * MARGIN_CALL_RATIO) continue; // only the underwater ones
+      const coverCostC = toCents(px) * shortQty;
+      const taxC = Math.floor(coverCostC * TRADE_TAX_BPS / 10000);
+      const collC = (actor.shortCollC || {})[sym] || 0;
+      debtC += Math.max(0, coverCostC + taxC - collC); // loss after the locked collateral is applied
+      FMI.treasury += (taxC / 100);
+      delete actor.holdings[sym]; if (actor.basisC) delete actor.basisC[sym]; if (actor.shortCollC) delete actor.shortCollC[sym];
+      closed.push(sym);
+    }
+    if (!closed.length) { clearMarginCall(actor.id); return false; } // nothing past threshold anymore
+
+    // 2. Collect the debt: cash first, then liquidate longs (largest first) only as needed.
+    let balanceC = toCents(actor.cash) - debtC;
+    actor.cash = 0;
+    if (balanceC < 0) {
+      const longs = Object.entries(actor.holdings || {})
+        .filter(([, q]) => q > 0)
+        .map(([s, q]) => ({ s, q, val: (priceMap[s] || 0) * q }))
+        .sort((a, b) => b.val - a.val);
+      for (const L of longs) {
+        if (balanceC >= 0) break;
+        const pxC = toCents(priceMap[L.s]); if (pxC <= 0) continue;
+        const grossC = pxC * L.q, taxC = Math.floor(grossC * TRADE_TAX_BPS / 10000);
+        FMI.treasury += (taxC / 100);
+        delete actor.holdings[L.s]; if (actor.basisC) delete actor.basisC[L.s];
+        balanceC += (grossC - taxC);
+      }
+    }
+
+    // 3. Outcome.
+    let dunced = false;
+    if (balanceC >= 0) {
+      actor.cash = fromCents(balanceC); // solvent: paid the loss, keeps the remainder + any unsold holdings
+    } else {
+      actor.holdings = {}; actor.basisC = {}; actor.shortCollC = {}; actor.cash = 0; // bankruptcy: natural zero
+      actor.ownedTitles = actor.ownedTitles || [];
+      if (!actor.ownedTitles.includes(DEBTOR_TITLE)) actor.ownedTitles.push(DEBTOR_TITLE);
+      dunced = true;
+    }
+    savePlayer(actor);
+    clearMarginCall(actor.id);
+    if (dunced) setDunce(actor.id, 'MARGIN CALL', 'margin_call');
+    try { recordNetWorth(actor.id, playerNetWorth(actor), actor.cash, 0); } catch(_) {}
+
+    const symList = closed.join(', ');
+    if (dunced) {
+      broadcastToPlayer(actor.id, { type:'margin_called', data:{ symbol: symList,
+        msg:`📉 MARGIN CALL FAILED on ${symList}. Your loss exceeded everything you owned — account zeroed and you're dunced. Pay Ƒ${MARGIN_DUNCE_FINE.toLocaleString()} to clear the Debtor brand.` } });
+      broadcastToPlayer(actor.id, { type:'dunced', data:{ by:'MARGIN CALL', reason:'margin_call' } });
+      broadcastToPlayer(actor.id, { type:'title_updated', data:{ title: actor.title, owned: actor.ownedTitles } });
+      broadcast({ type:'chat', data:{ id:Math.random().toString(36).slice(2), t:Date.now(), user:'SYSTEM',
+        text:`📉 ${actor.name} blew a margin call on ${symList} and was dunced. The house collects.`, badge:'📉', color:'#6b4423', channel:'global' } });
+      broadcastToAdmins({ type:'admin_log', data:{ action:'margin_call_bankrupt', player: actor.name, symbol: symList } });
+    } else {
+      broadcastToPlayer(actor.id, { type:'margin_settled', data:{ symbol: symList,
+        msg:`⚠ Margin call on ${symList} expired — the position was auto-liquidated to cover the loss. You kept the rest, no dunce.` } });
+      try { broadcastToPlayer(actor.id, { type:'chat_system', data:{ text:`⚠ Margin call on ${symList} settled by liquidation — loss covered from your balance, you kept the rest.` } }); } catch(_) {}
+      broadcastToAdmins({ type:'admin_log', data:{ action:'margin_call_settled', player: actor.name, symbol: symList } });
+    }
+    broadcastToPlayer(actor.id, { type:'portfolio', data: snapshotPortfolio(actor) });
+    broadcastLeaderboard();
+    return dunced;
+  } catch(e) { console.error('[MarginCall] settle error:', e); return false; }
+}
+
 // ─── v5.0: Trade Feed ─────────────────────────────────────────────────────────
 function broadcastTradeFeed({ side, symbol, qty, price, isLimit = false }) {
   broadcast({
@@ -2617,6 +2779,31 @@ function buildPriceMap() {
   const m = {};
   for (const c of companies) m[c.symbol] = c.price;
   return m;
+}
+
+// A player's stake value across all Capital Houses (their share of each fund's NAV).
+function playerFundStake(playerId, priceMap) {
+  try { return getPlayerFundStake(playerId, priceMap || buildPriceMap()) || 0; }
+  catch(_) { return 0; }
+}
+
+// Single source of truth for net worth:
+//   cash + long equity - short cover-liability + locked short collateral + fund stake
+// Signed qty makes longs add and shorts subtract their cover cost; shortCollC adds back
+// the proceeds withheld from cash on collateral-model shorts (0 for legacy shorts whose
+// proceeds are already in cash, so both models net to the same true figure).
+function playerNetWorth(player, priceMap) {
+  if (!player) return 0;
+  priceMap = priceMap || buildPriceMap();
+  let v = Number(player.cash || 0);
+  for (const [sym, qty] of Object.entries(player.holdings || {})) {
+    if (!qty) continue;
+    const px = priceMap[sym]; if (px == null) continue;
+    v += px * qty;
+  }
+  for (const cc of Object.values(player.shortCollC || {})) v += (Number(cc) || 0) / 100;
+  v += playerFundStake(player.id, priceMap);
+  return v;
 }
 
 function fundDetailSnapshot(fundId, playerId) {
@@ -4235,7 +4422,8 @@ app.post('/api/galaxy/fund', (req, res) => {
   }
 });
 
-// ─── Dunce: self-redeem (player pays 45% of net worth to escape) ──────────────
+// ─── Dunce: self-redeem ───────────────────────────────────────────────────────
+// Margin-call dunce → flat MARGIN_DUNCE_FINE. Mod (dev /dunce) dunce → 45% of net worth.
 app.post('/api/dunce/redeem', (req, res) => {
   try {
     const { token } = req.body || {};
@@ -4243,29 +4431,36 @@ app.post('/api/dunce/redeem', (req, res) => {
     if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
     if (!isDunced(p.id)) return res.status(400).json({ ok: false, error: 'not_dunced' });
 
-    const equity = Object.entries(p.holdings||{}).reduce((acc,[sym,qty])=>{
-      const co = companies.find(x=>x.symbol===sym); return acc+(co?co.price*Math.abs(qty):0);
-    },0);
-    const netWorth = p.cash + equity;
-    const fine = Math.round(netWorth * 0.45 * 100) / 100;
+    const rec = (() => { try { return getDunceRecord(p.id); } catch(_) { return null; } })();
+    const isMarginDunce = !!(rec && rec.dunce_reason === 'margin_call');
+    const netWorth = playerNetWorth(p);
 
-    if (p.cash < fine) {
-      return res.status(400).json({ ok: false, error: 'insufficient_cash', fine, cash: p.cash,
-        msg: `You need Ƒ${fine.toLocaleString(undefined,{maximumFractionDigits:2})} cash on hand (45% of net worth Ƒ${netWorth.toLocaleString(undefined,{maximumFractionDigits:2})}).` });
+    let fine;
+    if (isMarginDunce) {
+      fine = MARGIN_DUNCE_FINE;
+      if (p.cash < fine) {
+        return res.status(400).json({ ok: false, error: 'insufficient_cash', fine, cash: p.cash,
+          msg: `You need Ƒ${fine.toLocaleString()} cash to clear the Debtor brand. Trade your way back up — dunced players can still trade.` });
+      }
+    } else {
+      fine = Math.round(netWorth * 0.45 * 100) / 100;
+      if (p.cash < fine) {
+        return res.status(400).json({ ok: false, error: 'insufficient_cash', fine, cash: p.cash,
+          msg: `You need Ƒ${fine.toLocaleString(undefined,{maximumFractionDigits:2})} cash on hand (45% of net worth Ƒ${netWorth.toLocaleString(undefined,{maximumFractionDigits:2})}).` });
+      }
     }
 
     p.cash = Math.round((p.cash - fine) * 100) / 100;
     savePlayer(p);
     clearDunce(p.id);
 
-    // Record net worth after fine
     try {
-      recordNetWorth(p.id, p.cash + equity, p.cash, equity);
+      recordNetWorth(p.id, playerNetWorth(p), p.cash, playerNetWorth(p) - p.cash);
       broadcastToPlayer(p.id, { type: 'portfolio', data: snapshotPortfolio(p) });
     } catch(_) {}
 
     broadcastToPlayer(p.id, { type: 'undunced', data: { msg: `You paid Ƒ${fine.toLocaleString(undefined,{maximumFractionDigits:2})} and escaped the dunce corner.` } });
-    broadcastToAdmins({ type: 'admin_log', data: { action: 'dunce_redeemed', player: p.name, fine } });
+    broadcastToAdmins({ type: 'admin_log', data: { action: 'dunce_redeemed', player: p.name, fine, reason: isMarginDunce ? 'margin_call' : 'mod' } });
     broadcast({ type: 'chat', data: { id: Math.random().toString(36).slice(2), t: Date.now(), user: 'SYSTEM',
       text: `🎓 ${p.name} paid Ƒ${fine.toLocaleString(undefined,{maximumFractionDigits:2})} to escape the dunce corner.`, badge: '🎓', color: '#888', channel: 'global' } });
 
@@ -5418,9 +5613,11 @@ function snapshotPortfolio(player){
   else if (_snapEscaped) { _snapColor = playerFaction === 'syndicate' ? '#e74c3c' : null; }
   else if (_snapCyborg) _snapColor = player.patreon_tier === 2 ? '#2ecc71' : '#9b59b6';
   else _snapColor = tier?.chatColor || null;
+  const _snapMarginCall = (() => { try { return getMarginCall(player.id) || null; } catch(_) { return null; } })();
   return {
-    cash: player.cash, positions, equity, net: player.cash + equity,
+    cash: player.cash, positions, equity, net: playerNetWorth(player),
     shortExposure, sectorBreakdown: sectorMap,
+    marginCall: _snapMarginCall ? { symbol: _snapMarginCall.symbol, deadline: _snapMarginCall.deadline } : null,
     xp: player.xp, level: player.level, title: player.title,
     patreon_tier: player.patreon_tier || 0,
     tierName: tier?.name || 'Free', badge: _snapCyborg ? (player.patreon_tier === 3 ? '♛' : '🤖') : (tier?.badge || null),
@@ -5553,23 +5750,35 @@ wss.on('connection',(ws,req)=>{
           const coverCostC = toCents(c.price) * coverQty;
           const taxC = Math.floor(coverCostC * TRADE_TAX_BPS / 10000);
           const totalC = coverCostC + taxC;
-          const total = fromCents(totalC);
-          if (actor.cash < total) {
-            ws.send(JSON.stringify({type:'error',data:{msg:`Insufficient funds to cover. Need Ƒ${total.toFixed(2)}`}}));
+          // Release the locked collateral attributable to the covered shares.
+          // Legacy shorts have no entry here (collC=0): their proceeds were credited to
+          // cash at open, so cover is funded purely from cash exactly as before.
+          actor.shortCollC = actor.shortCollC || {};
+          const collC = actor.shortCollC[s] || 0;
+          const releasedC = Math.floor(collC * (coverQty / shortQty));
+          // Cash is only needed for cover cost beyond the released collateral.
+          const cashNeededC = Math.max(0, totalC - releasedC);
+          if (toCents(actor.cash) < cashNeededC) {
+            ws.send(JSON.stringify({type:'error',data:{msg:`Insufficient funds to cover. Need Ƒ${fromCents(cashNeededC).toFixed(2)} on top of released collateral.`}}));
             return;
           }
-          // Calculate realized P&L from the short
-          const avgEntryC = Math.abs(actor.basisC[s] || 0) / shortQty; // per-share entry in cents
-          const pnlC = (avgEntryC - toCents(c.price)) * coverQty; // positive = profit (price dropped)
+          // Calculate realized P&L from the short (entry vs exit)
+          const avgEntryC = Math.abs(actor.basisC[s] || 0) / shortQty;
+          const pnlC = (avgEntryC - toCents(c.price)) * coverQty;
           const pnl = fromCents(pnlC);
 
-          safeAddCash(actor, -total);
+          // Settle: release collateral to cash, then pay cover cost + tax from cash.
+          if (releasedC > 0) safeAddCash(actor, fromCents(releasedC));
+          safeAddCash(actor, -fromCents(totalC));
           FMI.treasury += (taxC / 100);
           FMI.hourlyTaxAccrual += (taxC / 100);
 
+          // Reduce locked collateral by the released portion.
+          if (collC > 0) { actor.shortCollC[s] = collC - releasedC; if (actor.shortCollC[s] <= 0) delete actor.shortCollC[s]; }
+
           // Close the short (move toward 0)
           actor.holdings[s] = have + coverQty; // e.g. -100 + 100 = 0
-          if (actor.holdings[s] === 0) { delete actor.holdings[s]; delete actor.basisC[s]; }
+          if (actor.holdings[s] === 0) { delete actor.holdings[s]; delete actor.basisC[s]; delete actor.shortCollC[s]; }
           else {
             // Partial cover — adjust basis proportionally
             const remainingRatio = Math.abs(actor.holdings[s]) / shortQty;
@@ -5637,23 +5846,13 @@ wss.on('connection',(ws,req)=>{
           if(isScalp){ try{ ws.send(JSON.stringify({type:'error',data:{msg:'⚠ Scalping penalty: 2× trade tax on same-cycle round trip'}})); }catch(_){} }
           broadcastTradeFeed({side:'sell',symbol:s,qty,price:c.price});
             } else if(qty>0) {
-          // SHORT SELL — sell more than owned
+          // SHORT SELL — sell more than owned. Collateral model: no share cap and no
+          // upfront cash margin. Proceeds (minus trade tax) are LOCKED as collateral in
+          // shortCollC rather than credited to spendable cash, so the only way to realize
+          // cash from a short is to cover it at a profit. This removes the limits while
+          // making the short-and-extract-then-get-wiped exploit impossible.
           const shortQty = qty - Math.max(0, have);
-          const curShort = Math.abs(Math.min(0, have)); // existing short shares
-          const newTotalShort = curShort + shortQty;
 
-          // Guard: max short per symbol
-          if (newTotalShort > MAX_SHORT_PER_SYM) {
-            ws.send(JSON.stringify({type:'error',data:{msg:`Short cap exceeded. Max ${MAX_SHORT_PER_SYM} shares short per symbol.`}}));
-            return;
-          }
-          // Guard: margin requirement — need 50% of short value in cash
-          const shortValue = c.price * shortQty;
-          const marginNeeded = shortValue * SHORT_MARGIN_RATE;
-          if (actor.cash < marginNeeded) {
-            ws.send(JSON.stringify({type:'error',data:{msg:`Insufficient margin. Need Ƒ${marginNeeded.toFixed(2)} collateral for this short.`}}));
-            return;
-          }
           // Clear long position first
           if(have>0){
             const grossC=toCents(c.price)*have,taxC=Math.floor(grossC*TRADE_TAX_BPS/10000);
@@ -5661,23 +5860,26 @@ wss.on('connection',(ws,req)=>{
             actor.basisC=actor.basisC||{};delete actor.basisC[s];
             // CRITICAL: zero the long holdings before applying short delta
             // Without this, holdings[s] still contains the long qty, and the
-            // subsequent `- shortQty` leaves a net of 0 instead of -shortQty,
-            // causing the short proceeds to be credited without any position recorded.
+            // subsequent `- shortQty` leaves a net of 0 instead of -shortQty.
             actor.holdings=actor.holdings||{};
             actor.holdings[s]=0;
           }
           // Enter short position
           actor.holdings=actor.holdings||{};
           actor.holdings[s]=(actor.holdings[s]||0) - shortQty;
-          // Credit proceeds for shorted shares
+          // Lock proceeds (minus tax) as collateral — NOT spendable cash.
           const shortGrossC=toCents(c.price)*shortQty,shortTaxC=Math.floor(shortGrossC*TRADE_TAX_BPS/10000);
-          safeAddCash(actor,fromCents(shortGrossC-shortTaxC));FMI.treasury+=(shortTaxC/100);
+          const lockedC = shortGrossC - shortTaxC;
+          actor.shortCollC = actor.shortCollC || {};
+          actor.shortCollC[s] = (actor.shortCollC[s]||0) + lockedC;
+          FMI.treasury+=(shortTaxC/100);
           // Track avg short entry price in basisC (stored as negative to flag short)
           actor.basisC=actor.basisC||{};
           actor.basisC[s]=(actor.basisC[s]||0) - toCents(c.price)*shortQty;
           actor.xp+=3;
           // Day-trade: opening short issues a short ticket
           { const dt=_dtGet(actor.id); dt.shortTickets[s]=(dt.shortTickets[s]||0)+1; }
+          try { ws.send(JSON.stringify({type:'chat_system',data:{text:`📉 Shorted ${shortQty}× ${s} @ Ƒ${c.price.toFixed(2)}. Ƒ${fromCents(lockedC).toFixed(2)} locked as collateral, released when you cover. Liquidated if it runs 65% against you.`}})); } catch(_) {}
           broadcastTradeFeed({side:'sell',symbol:s,qty,price:c.price});
                 }
       }
@@ -5687,7 +5889,7 @@ wss.on('connection',(ws,req)=>{
       // Send day-trade remaining after every trade
       ws.send(JSON.stringify({type:'dt_update',data:{dayTradesRemaining:_dtRemaining(actor.id)}}));
       try{
-        const equity=Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{const co=companies.find(x=>x.symbol===sym);return acc+(co?co.price*Math.abs(qty):0);},0);
+        const equity=Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{const co=companies.find(x=>x.symbol===sym);return acc+(co?co.price*qty:0);},0);
         recordNetWorth(actor.id,actor.cash+equity,actor.cash,equity);
       }catch(e){}
 
@@ -6882,6 +7084,7 @@ wss.on('connection',(ws,req)=>{
       if (_isPresident) chatColor = '#00bfff';
       else if (_isOwner) chatColor = '#ff6a00';
       else if (_isDev) chatColor = null;
+      else if (actor.title === DEBTOR_TITLE) chatColor = '#6b4423'; // poop brown when the Debtor brand is worn
       else if (_isEscaped) {
         const pFaction = getPlayerFaction(actor.id);
         chatColor = pFaction === 'syndicate' ? '#e74c3c' : null;
@@ -7338,6 +7541,9 @@ setInterval(() => {
 setInterval(() => { try { runEarningsEvent(); } catch(e) { console.error('[Earnings]', e); } }, EARNINGS_INTERVAL_MS);
 setInterval(() => { try { runDividends(); } catch(e) { console.error('[Dividends]', e); } }, DIVIDEND_INTERVAL_MS);
 setInterval(() => { try { runBorrowFees(); } catch(e) { console.error('[Borrow]', e); } }, BORROW_INTERVAL_MS);
+// Margin-call sweep: cheap scan of connected players' shorts; 5s keeps a squeeze from
+// blowing well past the 65% trigger between checks without scanning every tick.
+setInterval(() => { try { runMarginCalls(); } catch(e) { console.error('[MarginCall]', e); } }, 5000);
 
 // Reset prevClose at midnight
 setInterval(() => {

@@ -1,8 +1,10 @@
 
 (function(){
   const BORROW_RATE = 0.001; // mirror server: 0.1% per 30min
-  const MARGIN_RATE = 0.50;  // 50% of position value required as collateral
-  const MAX_SHORT   = 500;   // max shares shorted per symbol
+  // Collateral model (server v1.1.5.7+): no upfront cash margin, no share cap. Proceeds
+  // lock as collateral; a margin call fires at 1.65x entry. These two are no longer used.
+  const MARGIN_RATE = 0.50;  // (unused)
+  const MAX_SHORT   = 500;   // (unused)
 
   function upper(x){ return String(x||'').toUpperCase().trim(); }
   function price(sym){ return (typeof getLastPrice==='function') ? (getLastPrice(sym)||0) : 0; }
@@ -98,8 +100,10 @@
       const confirmBtn = document.getElementById('sho-confirm-btn');
 
       priceEl.textContent  = px ? fmt(px) : '-';
+      // Proceeds are LOCKED as collateral (minus 0.3% tax), not credited to cash.
       procEl.textContent = px ? fmt(px * qty * 0.997) : '-';
-      margEl.textContent = px ? fmt(px * qty * MARGIN_RATE) : '-';
+      // Liquidation price: a margin call fires if price runs to 1.65x your entry.
+      margEl.textContent = px ? fmt(px * 1.65) : '-';
       feeEl.textContent  = px ? fmt(px * qty * BORROW_RATE) : '-';
 
       warnEl.style.display='none'; okEl.style.display='none';
@@ -112,25 +116,13 @@
         okEl.style.display='block'; return;
       }
 
-      const proceeds  = px * qty * 0.997;
-      const margin    = px * qty * MARGIN_RATE;
-      const fee       = px * qty * BORROW_RATE;
-      const myCash    = cash();
-      const curShort  = Math.abs(Math.min(0, owned(sym)));
-      const newShort  = curShort + qty;
-
-      if(newShort > MAX_SHORT){
-        warnEl.textContent = `⚠ Max short per symbol is ${MAX_SHORT} shares. You already have ${curShort} shorted.`;
-        warnEl.style.display='block'; return;
-      }
-      if(myCash > 0 && myCash < margin){
-        warnEl.textContent = `⚠ Insufficient margin. Need ${fmt(margin)} cash collateral, have ${fmt(myCash)}.`;
-        warnEl.style.display='block';
-        // still allow click — server will reject with proper message
-      } else {
-        okEl.textContent = `✓ Sell short ${qty}× ${sym} @ ~${fmt(px)} · receive ${fmt(proceeds)} · ${fmt(fee)}/30m fee`;
-        okEl.style.display='block';
-      }
+      const collateral = px * qty * 0.997;
+      const fee        = px * qty * BORROW_RATE;
+      // No share cap and no upfront cash margin: proceeds self-collateralize. The only
+      // cost to open is the locked collateral. A margin call fires at 1.65x entry; you
+      // then have 3h to cover or it's auto-liquidated to cover the loss.
+      okEl.textContent = `✓ Short ${qty}× ${sym} @ ~${fmt(px)} · ${fmt(collateral)} locked as collateral · liquidation ~${fmt(px*1.65)} · ${fmt(fee)}/30m fee`;
+      okEl.style.display='block';
     },
 
     updateCover(){

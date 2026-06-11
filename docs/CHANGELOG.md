@@ -4,6 +4,44 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.5.7 (2026-06-11) - short-selling rework: collateral, gated margin calls, debt settlement, Debtor brand, net-worth fixes + countdown UI (SERVER + DB + CLIENT)
+
+Everything below ships as one patch. The short mechanic was rebuilt end to end; the pieces are coupled (a margin trigger without locked proceeds just re-opens the money printer), so they land together.
+
+**Net-worth correctness (`server/server.js`, `server/db.js`)**
+- Two sites computed equity with `price * Math.abs(qty)`, counting a short as a positive asset - net worth rose as a short went underwater. Now signed `price * qty` everywhere: a short subtracts its cover cost. This fixed a live overcharge on the 45% dunce-escape fine for short-holders.
+- One net-worth helper (`playerNetWorth`) is now the single source of truth for the portfolio snapshot, the dunce-escape fine, and the leaderboard: cash + signed equity + locked short collateral + Capital House stake.
+
+**Collateral-locked shorts (new `short_coll` table)**
+- Shorting no longer credits proceeds to spendable cash. Proceeds (minus tax) lock as per-symbol collateral (`shortCollC`); the only way to realize cash from a short is to cover at a profit. This kills the short-extract-then-get-wiped exploit at the source.
+- No share cap, no upfront cash margin (the old 500-share cap and 50% margin gate are gone). Cover releases the proportional collateral and pays the cover cost from it; cash is only needed for a loss beyond collateral.
+- Migration-free: collateral is 0 for shorts opened before this deploy (their proceeds are already in cash), so legacy positions are auto-grandfathered with no double-count - unit-proven that legacy and new shorts net to the identical figure.
+
+**Gated margin calls (new `margin_calls` table)**
+- A short crossing 1.65x its average entry (65% underwater) issues a margin call with a 3-hour deadline, persisted so the clock survives restart and logoff. Covering the position or the price recovering below 1.60x clears it (hysteresis stops flapping). A 5s sweep issues/clears for connected players and enforces deadlines for all active calls, re-checking live state so a player who covered or recovered is never settled.
+
+**Debt settlement at the deadline - NOT a total wipe**
+- If a short is still >= 1.65x at the deadline, it's force-closed and the realized loss becomes a debt, collected from cash first, then by liquidating long holdings (largest first) only as much as the debt needs. A player who can pay keeps the rest and is NOT dunced. Only a player whose loss exceeds their entire account is zeroed - the natural bankruptcy case - and that player gets the Debtor brand + dunce. Wealth (including stock) is on the hook, so you can't shield it in holdings and walk away. Fund stake is never touched.
+- Dunce keeps trade access (gates chat only); escape is reason-gated - margin-call dunce = flat Ƒ25,000, mod (`/dunce`) dunce = 45% of net worth.
+
+**Debtor brand**
+- Bankruptcy grants the `Debtor` title (auto-owned, equippable). Worn, name + chat go poop-brown (`#6b4423`), below structural roles but overriding tier/cyborg colour.
+
+**Net worth counts tied-up money**
+- Leaderboard and net worth now include locked short collateral and each player's Capital House stake (their share of every fund's NAV, across the legacy fund and multi-house funds - pro-rata by shares, not credited to the owner).
+
+**Client (`client/index.html`, `client/assets/core.js`, `client/assets/shorts.js`)**
+- Margin-call banner: shows the called symbol, a live countdown (HH:MM:SS, red in the final 15m, "SETTLING…" at zero), and a COVER NOW button. Driven by the `marginCall` field in the portfolio snapshot, so it survives reconnect and clears on resolve; the server pushes a portfolio refresh on issue/clear so it appears/clears instantly.
+- Short modal fixed for the collateral model: removed the stale 500 cap and 50% margin gate (which were blocking the now-allowed shorts), relabeled "proceeds received" to "collateral locked (held, not cash)" and added the liquidation price (entry x1.65).
+
+Unit-tested: net-worth signed/invariance, collateral lock (zero spendable cash from shorting), cover P&L, 1.65x trigger, gating state machine (issue/clear/recover/hysteresis), debt settlement (solvent-from-cash, solvent-via-liquidation, bankruptcy, healthy-assets-preserved), and the countdown banner. Limit orders confirmed unable to open shorts (no bypass).
+
+Untested live (no DB/WS in the build sandbox): schema auto-create on first boot, WS broadcasts on settlement, and the per-call fund-stake DB reads in `snapshotPortfolio` (fine at current concurrency, cacheable later).
+
+SERVER + DB (two new tables, `short_coll` and `margin_calls`, both `CREATE TABLE IF NOT EXISTS` on boot; no manual migration) + CLIENT. Back up `server/fleshmarket.db`, `pm2 restart fleshmarket`, then hard-refresh (client assets aren't cache-busted).
+
+---
+
 ## v1.1.5.6 (2026-06-11) - Mr. Flesh branching codec dialogue (CLIENT)
 
 **Codec engine (`client/assets/codec.js`)**

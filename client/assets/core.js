@@ -1660,8 +1660,43 @@ el('#xfer').onclick = ()=>{
 
 el('#search').addEventListener('input', renderTickers);
 
-// ─── Dunce System (client) — defined early so WS handlers can call it ────────
-window.__IS_DUNCED = false;
+// ─── Margin Call banner + live countdown (client) ───────────────────────────
+var __mcInterval = null;
+var __mcDeadline = 0;
+function _mcFmt(ms){
+  if (ms <= 0) return '00:00:00';
+  var s = Math.floor(ms/1000);
+  var h = Math.floor(s/3600), m = Math.floor((s%3600)/60), ss = s%60;
+  var p = function(n){ return (n<10?'0':'')+n; };
+  return p(h)+':'+p(m)+':'+p(ss);
+}
+function _mcTick(){
+  var el = document.getElementById('mc-countdown'); if (!el) return;
+  var rem = __mcDeadline - Date.now();
+  if (rem <= 0){ el.textContent = 'SETTLING…'; el.style.color = '#ff6666'; return; }
+  el.textContent = _mcFmt(rem);
+  // turn red in the final 15 minutes
+  el.style.color = rem < 15*60*1000 ? '#ff8a5c' : '#ffd27d';
+}
+function updateMarginCallBanner(mc){
+  var banner = document.getElementById('margin-call-banner'); if (!banner) return;
+  if (!mc || !mc.deadline){
+    banner.style.display = 'none';
+    if (__mcInterval){ clearInterval(__mcInterval); __mcInterval = null; }
+    return;
+  }
+  var symEl = document.getElementById('mc-symbol');
+  if (symEl) symEl.textContent = mc.symbol || '—';
+  var btn = document.getElementById('mc-cover-btn');
+  if (btn) btn.onclick = function(){ try { window.__ShortModal && window.__ShortModal.open(mc.symbol); } catch(e){} };
+  __mcDeadline = Number(mc.deadline) || 0;
+  banner.style.display = 'block';
+  _mcTick();
+  if (!__mcInterval) __mcInterval = setInterval(_mcTick, 1000);
+}
+window.updateMarginCallBanner = updateMarginCallBanner;
+
+
 
 function applyDunceState(reason) {
   var dunceTab = document.getElementById('dunce-chat-tab');
@@ -1879,6 +1914,7 @@ ws.addEventListener('message', (ev)=>{
       const cashEl = document.getElementById('cash');
       if (cashEl && msg.data.cash != null) cashEl.textContent = 'Ƒ' + Math.round(msg.data.cash).toLocaleString();
     } catch(e) {}
+    try { updateMarginCallBanner(msg.data.marginCall || null); } catch(e) {}
   }
   if (msg.type === 'chart') {
     if (msg.data && msg.data.ohlc) {

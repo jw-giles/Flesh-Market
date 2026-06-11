@@ -1150,6 +1150,14 @@ window.storeSubTab=storeSubTab;
     </div>
   </div>
 </div>
+<!-- Margin Call Banner (hidden unless player has an active margin call) -->
+<div id="margin-call-banner" style="display:none;background:linear-gradient(135deg,#2a1800,#1a1000);border:2px solid #f0b454;border-radius:8px;padding:12px 14px;margin-bottom:10px;text-align:center">
+  <div style="font-size:1.4rem;margin-bottom:4px">⚠</div>
+  <div style="color:#f0b454;font-weight:700;letter-spacing:.1em;font-size:.85rem;text-transform:uppercase;margin-bottom:4px">Margin Call — <span id="mc-symbol">—</span></div>
+  <div style="color:#c89a4a;font-size:.73rem;margin-bottom:8px">This short ran 65% past your entry. Cover it (or the price recovers) before the timer ends, or it's auto-liquidated to cover the loss — and if the loss exceeds everything you own, you're zeroed and dunced.</div>
+  <div style="font-size:1.6rem;font-weight:700;letter-spacing:.08em;color:#ffd27d;margin-bottom:8px;font-variant-numeric:tabular-nums" id="mc-countdown">--:--:--</div>
+  <button id="mc-cover-btn" style="background:#1a1000;border:1px solid #f0b454;color:#ffd27d;font-family:inherit;font-size:.78rem;padding:6px 18px;border-radius:5px;cursor:pointer;letter-spacing:.06em">↩ COVER NOW</button>
+</div>
 <!-- Dunce Banner (hidden unless player is dunced) -->
 <div id="dunce-banner" style="display:none;background:linear-gradient(135deg,#2a0000,#1a0000);border:2px solid #ff2222;border-radius:8px;padding:12px 14px;margin-bottom:10px;text-align:center">
   <div style="font-size:1.5rem;margin-bottom:4px">🎓</div>
@@ -1321,10 +1329,10 @@ function __updateEffectivePositions(){
   <div id="short-open-body">
     <div class="srow"><div class="slab">Symbol</div><input id="sho-sym" placeholder="e.g. ORGX" maxlength="5" style="width:100px;text-transform:uppercase"/></div>
     <div class="srow"><div class="slab">Current Price</div><div class="sval" id="sho-price">-</div></div>
-    <div class="srow"><div class="slab">Qty to Short</div><input id="sho-qty" type="number" min="1" max="500" step="1" value="1" style="width:100px"/></div>
+    <div class="srow"><div class="slab">Qty to Short</div><input id="sho-qty" type="number" min="1" step="1" value="1" style="width:100px"/></div>
     <hr class="divider"/>
-    <div class="srow"><div class="slab">Proceeds</div><div class="sval" id="sho-proceeds">-</div></div>
-    <div class="srow"><div class="slab">Margin Req.</div><div class="sval" id="sho-margin">-</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px">(50% collateral)</span></div>
+    <div class="srow"><div class="slab">Collateral Locked</div><div class="sval" id="sho-proceeds">-</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px">(held, not cash)</span></div>
+    <div class="srow"><div class="slab">Liquidation @</div><div class="sval" id="sho-margin">-</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px">(entry ×1.65)</span></div>
     <div class="srow"><div class="slab">Borrow Fee</div><div class="sval" id="sho-fee">-</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px">/30 min</span></div>
     <div id="sho-warn" class="warn-box" style="display:none"></div>
     <div id="sho-ok" class="ok-box" style="display:none"></div>
