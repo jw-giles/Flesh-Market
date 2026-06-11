@@ -4,6 +4,19 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.5.6 (2026-06-11) - Mr. Flesh branching codec dialogue (CLIENT)
+
+**Codec engine (`client/assets/codec.js`)**
+- Added a branching dialogue mode alongside the linear quest scripts. A rep may carry `tree:{ start, nodes }`; each node is one NPC line plus player response options rendered as left-aligned amber buttons (number keys 1-9 also select). Picking an option plays your line in the YOU frame (amber nameplate), then click/space advances to the next node, loops back to the root question list, or hangs up (`end:true` -> CHANNEL CLOSED, farewell line kept on screen). Trees play only in the idle/all-done slot, so a future Mr. Flesh quest pitch or active-quest line still takes priority over the lore tree.
+- `typeLine` gained a completion callback and the skip-typing path was unified into `finishLine` (full text from `st.fullText` instead of re-reading `st.cur.lines[idx]`, which would have thrown in tree mode). `buttons()` now clears the `opts` column layout on every repaint so quest/close buttons render normally after a tree. Verified by jsdom smoke test: full tree traversal, root loop, hangup, plus a linear quest regression (Rahtan script plays, offer renders, decline closes).
+
+**Mr. Flesh lore conversation (`client/assets/codec-data.js`)**
+- Replaced the idle "Get back to work..." brush-off with the GM-authored four-thread lore tree (14 nodes): Coalition (fifteenth corporate war, Limbosis), Void (transhumanist cult, brain-in-a-jar admission), Merchants Guild (hidden sponsorship, premium recruitment hook), Syndicate (Sol, the implanted informant). Threads chain per the script and loop back to the starter questions; "No" style answers hang up. `idleLine` kept as a fallback if the tree is ever removed. Rep `ver` bumped v0.11 -> v0.12. Graph validated: no dangling node refs, all nodes reachable, every node has a path to hangup, no em dashes in player-visible text.
+
+CLIENT-ONLY: hard-refresh, no server restart needed.
+
+---
+
 ## v1.1.5.5 (2026-06-10) - cancel auto-accumulate (SERVER + CLIENT)
 
 **Auto-Accumulate cancel (`server/server.js`, `server/db.js`, `client/assets/market-upgrades.js`)**

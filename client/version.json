@@ -1,7 +1,7 @@
 {
-  "version": "1.1.5.5",
-  "built": "2026-06-10T00:55:00Z",
+  "version": "1.1.5.6",
+  "built": "2026-06-11T17:34:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.5.5",
-  "notes": "Auto-Accumulate now has a Cancel action: removes the config and returns the full segregated reserve to your main balance. SERVER change (new auto_accum_cancel handler + deleteAutoAccum); requires restart."
+  "patch": "1.1.5.6",
+  "notes": "Calling Mr. Flesh now opens a branching lore conversation (Coalition, Void, Guild, Syndicate threads with player response choices) instead of the idle brush-off line. New tree mode in the codec engine; linear quest scripts unchanged. CLIENT-only; hard refresh."
 }

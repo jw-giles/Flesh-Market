@@ -88,13 +88,75 @@ window.FM_CODEC = {
     {
       // Employer / story frame. Portrait reuses the Preserved Brain item art via
       // the client item catalog (item:<id> -> ITEM_CATALOG_CLIENT[id].img data URI).
-      // role/blurb are functional stand-ins - replace with Mr. Flesh's real voice.
       id:'mrflesh', name:'Mr. Flesh', faction:'flesh',
       portrait:'item:jarred_brain', role:'The Proprietor', enabled:true,
       blurb:"The proprietor of FLSH. He signs the checks. Mind the work and he will not mind you.",
-      idleLine:"Get back to work...",
-      ver:'v0.11',
-      quests:[]
+      idleLine:"Get back to work...", // fallback only; the tree below plays instead
+      ver:'v0.12',
+      quests:[],
+      // Branching lore dialogue (GM-authored). Node shape:
+      //   id:{ text:'Mr. Flesh line', options:[ { text:'player line', next:'nodeId' }
+      //        | { text:'player line', end:true } ] }
+      // Option order = on-screen order (keys 1-9). 'end:true' hangs up after the line.
+      tree:{
+        start:'root',
+        nodes:{
+          root:{ text:"Yeah?", options:[
+            { text:"What can you tell me about the coalition?", next:'co1' },
+            { text:"The Void Syndicate, who are they?", next:'vo1' },
+            { text:"You seem friendlier with the Merchants Guild than other groups, why is that?", next:'gu1' },
+            { text:"How come the Syndicate are so hostile?", next:'sy1' },
+          ]},
+          // ── Coalition ──
+          co1:{ text:"Coalition is a ruling council made up of the remaining corporations from the fifteenth corporate war. The war was so bloody it caused a pact between all known planets. Coalition was allowed by myself to take up the mantle as our front facing government sixty years ago. New Anchor is their main planet, but they operate on all planets officially.", options:[
+            { text:"Coalition is the ruling government? What deal did you make for that level of power?", next:'co2' },
+          ]},
+          co2:{ text:"Limbosis is a former weapons lab, they built a giant fucking laser to aim at Abaddon's binary black holes. I wanted this weapon installed on site. So now they rule, and I have my weapon. This was a long time ago so don't expect much detail from me. Anything else you need?", options:[
+            { text:"Yes", next:'root' },
+            { text:"No", end:true },
+          ]},
+          // ── Void ──
+          vo1:{ text:"Void Syndicate are a cult of transhumanists; they want to merge with machines. Well, I suppose they have merged with machines. It gets really fucking annoying though, they can hack shit with their minds. Imagine the technical infrastructure to defend against psychic-computation-cultists.", options:[
+            { text:"Well, not to be rude but aren't you the same? You are a brain in a jar.", next:'vo2' },
+          ]},
+          vo2:{ text:"Correct, but if I were to die the system would collapse, it insists upon my prolonged survival. My brain is connected to this entire system and network, I can remotely control any robot body within range of null relays.", options:[
+            { text:"So you keep the Void Priest here for what reason? To maintain more secret deals?", next:'vo3' },
+          ]},
+          vo3:{ text:"Bingo! And don't pretend you wouldn't do the same.", options:[
+            { text:"Right...guess you're right.", next:'vo4' },
+            { text:"Right...id guess again on that assumption.", next:'vo4' },
+          ]},
+          vo4:{ text:"Any more questions?", options:[
+            { text:"Yes", next:'root' },
+            { text:"No", end:true },
+          ]},
+          // ── Merchants Guild ──
+          gu1:{ text:"Its because I run that faction, its not well known but I'm their sponsor. How do you think they afford 100 billion credit sales, or maintain dominance in regards to trade policy? Id be more public about it but that would make the Coalitions council mad...very mad. Stability is my mandate, remember this.", options:[
+            { text:"You think you'd lose control if the other factions knew your dealings?", next:'gu2' },
+          ]},
+          gu2:{ text:"Unlikely, they are all bought in too deep now and this base is untouchable. Id get murdered the moment I left the station given I had a body. But everyone is in too deep now, they'd rather not flip the board over if they think checkmate is near.", options:[
+            { text:"You think they think you are beatable?", next:'gu3' },
+          ]},
+          gu3:{ text:"Yes, they think they stand a chance. I have backup plans to their backup plans. My eyes and ears may not exist here and now, but they extend to all aspects of all things. My goal is peace mind you; people never change unfortunately.", options:[
+            { text:"Why not recruit me into the Merchants Guild?", next:'gu4' },
+          ]},
+          gu4:{ text:"I would, the cost is listed. Only premium players in our game of musical chairs are worthy of my time in that regard. Join if you have the drive for such status.", options:[
+            { text:"Alright, well see you later then.", end:true },
+            { text:"Alright, few more questions if you don't mind?", next:'root' },
+          ]},
+          // ── Syndicate ──
+          sy1:{ text:"Syndicate are criminals in the truest sense, but I don't blame them. No matter how hard I try to order life in a meaningful way there's just too many people across too much space. Long ago Humans were confined to borders of a single astral body in the Sol system. We fought in the exact same ways, using the exact same weapons. Polluted our home then ran away as soon as the molestation was completed. Its a rotted corpse now, you cant even find Sol on a map.", options:[
+            { text:"Sol, that's a pretty name. Do you have any information on Sol?", next:'sy2' },
+          ]},
+          sy2:{ text:"Yeah, but its better left in the vault. Maybe one day ill show you the truth of our origin. Secrets cost social credits, even if you are a good employee.", options:[
+            { text:"So you keep the criminal here for fun or just to torture him?", next:'sy3' },
+          ]},
+          sy3:{ text:"Nothing I do is for fun, but yeah sort of. He is a bit slow in the head in a good way, we pay him more than his bosses for info and in exchange he gets to come and go as he pleases. Don't worry about him betraying us, I installed a recording device and tracker into his spine. If he talks about anything, tells anyone, writes anything down, thinks about betrayal. Ill trigger the tactical nuclear warhead sewn into the core of the implant. Trust that he enjoys the pay and his life. Anything else?", options:[
+            { text:"No, thats all for now", end:true },
+            { text:"Yes, have some more questions.", next:'root' },
+          ]},
+        }
+      }
     },
   ],
 };

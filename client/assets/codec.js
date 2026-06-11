@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // FMCodec — codec-call ENGINE (layer 1) + contacts list. Plays a conversation from
-// FM_CODEC.reps; emits onQuestAccepted at the end. Knows nothing about quest tracking.
+// FM_CODEC.reps: linear quest scripts (lines[]) or branching dialogue trees (rep.tree);
+// emits onQuestAccepted at the end. Knows nothing about quest tracking.
 //   window.FMContacts.open()      -> contacts list of faction reps
 //   window.FMCodec.call(repId)    -> place a codec call to that rep
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -65,6 +66,10 @@
     .fmc-cblurb{color:#9fc7b5;font-size:.74rem;line-height:1.55}
     .fmc-callbtn{flex:0 0 auto;align-self:center;border:1px solid var(--fac);color:var(--fac);background:transparent;border-radius:4px;padding:7px 12px;font:inherit;font-size:.62rem;letter-spacing:.08em;cursor:pointer;text-transform:uppercase}
     .fmc-callbtn.off{border-color:#7a3030;color:#ff6a6a;cursor:not-allowed;opacity:.85}
+    /* branching dialogue options (player lines) */
+    .fmc-ctl.opts{flex-direction:column;align-items:stretch;gap:7px}
+    .fmc-ctl button.fmc-opt{border:1px solid #f0b45455;color:#f0b454;text-align:left;text-transform:none;letter-spacing:.02em;font-size:.8rem;line-height:1.45;padding:9px 14px}
+    .fmc-ctl button.fmc-opt:hover{background:#f0b45418;border-color:#f0b454}
     `;
     document.head.appendChild(s);
   }
@@ -228,6 +233,16 @@
     const ov = $('fmcodecOverlay'); if (!ov) return;
     if (e.code === 'Escape') { closeAll(); return; }
     if (e.code === 'Backspace') { e.preventDefault(); backToContacts(); return; }
+    // 1-9 select a dialogue option when the option list is on screen.
+    var dg = /^Digit([1-9])$/.exec(e.code);
+    if (dg) {
+      const c = $('fmcCtl');
+      if (c && c.classList.contains('opts')) {
+        const b = c.children[+dg[1] - 1];
+        if (b) { e.preventDefault(); b.click(); }
+        return;
+      }
+    }
     if ((e.code === 'Space' || e.code === 'Enter') && ov.classList.contains('fmc-connected') && $('fmcCtl').children.length === 0) {
       e.preventDefault(); advance();
     }
@@ -238,8 +253,8 @@
     $('fmcLive').classList.add('on'); $('fmcState').textContent = 'CHANNEL OPEN';
     if (st.locked) { presidentBlock(); return; }
     var sel = selectCurrentQuest(st.qlist);
-    if (sel.empty)   { statusBlock(st.rep.idleLine || 'Channel open. Nothing for you right now.'); return; }
-    if (sel.allDone) { statusBlock(st.rep.allDoneLine || st.rep.questDoneLine || 'Nothing new from me right now. Stay close.'); return; }
+    if (sel.empty)   { if (st.rep.tree) return startTree(st.rep.tree); statusBlock(st.rep.idleLine || 'Channel open. Nothing for you right now.'); return; }
+    if (sel.allDone) { if (st.rep.tree) return startTree(st.rep.tree); statusBlock(st.rep.allDoneLine || st.rep.questDoneLine || 'Nothing new from me right now. Stay close.'); return; }
     if (sel.status === 'active') { statusBlock(sel.def.activeLine || st.rep.questActiveLine || 'You are still on that. Finish it, then we talk.'); return; }
     st.cur = sel.def; st.idx = 0; play();
   }
@@ -277,18 +292,72 @@
     typeLine(resolveTokens(l.text));
     buttons([]);
   }
-  function typeLine(text){
-    st.typing = true; let i = 0; const el = $('fmcLine'); $('fmcHint').textContent = '';
+  function typeLine(text, onDone){
+    st.typing = true; st.fullText = text; st.onTyped = onDone || null;
+    let i = 0; const el = $('fmcLine'); $('fmcHint').textContent = '';
     clearInterval(st.typer);
     st.typer = setInterval(function () {
       el.innerHTML = esc(text.slice(0, i)) + '<span class="cur">\u258c</span>';
       i++;
-      if (i > text.length) { clearInterval(st.typer); st.typing = false; el.textContent = text; $('fmcHint').textContent = '\u25b8 click / space'; }
+      if (i > text.length) finishLine();
     }, 18);
   }
+  // Finish the current line (natural end or skip): show full text, then either run
+  // the node's completion (tree mode shows options) or show the advance hint.
+  function finishLine(){
+    clearInterval(st.typer); st.typing = false;
+    $('fmcLine').textContent = st.fullText || '';
+    if (st.onTyped) { var f = st.onTyped; st.onTyped = null; f(); }
+    else $('fmcHint').textContent = '\u25b8 click / space';
+  }
   function advance(){
-    if (st.typing) { clearInterval(st.typer); st.typing = false; $('fmcLine').textContent = resolveTokens(st.cur.lines[st.idx].text); $('fmcHint').textContent = '\u25b8 click / space'; return; }
+    if (st.typing) { finishLine(); return; }
+    if (st.tree) { treeAdvance(); return; }
     st.idx++; play();
+  }
+  // ── Branching dialogue trees ────────────────────────────────────────────────
+  // rep.tree = { start:'nodeId', nodes:{ id:{ text:'npc line', options:[
+  //   { text:'player line', next:'nodeId' } | { text:'player line', end:true } ] } } }
+  // Plays in the idle/all-done slot only; quest pitches and active-quest lines win.
+  function startTree(tree){
+    st.tree = { nodes: tree.nodes || {}, mode:'npc', nextId:null };
+    showTreeNode(tree.start || 'root');
+  }
+  function showTreeNode(id){
+    var n = st.tree.nodes[id];
+    if (!n) { endCall('hangup'); return; }
+    st.tree.mode = 'npc';
+    $('fmcName').textContent = st.rep.name;
+    $('fmcName').style.background = 'var(--fac)';
+    buttons([]);
+    if (n.text != null) typeLine(resolveTokens(n.text), function(){ showOptions(n); });
+    else showOptions(n);
+  }
+  function showOptions(n){
+    $('fmcHint').textContent = '';
+    var opts = n.options || [];
+    if (!opts.length) { buttons([['CLOSE', 'fmc-accept', closeAll]]); return; }
+    const c = $('fmcCtl'); c.innerHTML = ''; c.classList.add('opts');
+    opts.forEach(function (o, i) {
+      const b = document.createElement('button');
+      b.className = 'fmc-opt';
+      b.textContent = (i + 1) + '. ' + resolveTokens(o.text);
+      b.onclick = function(){ pickOption(o); };
+      c.appendChild(b);
+    });
+  }
+  function pickOption(o){
+    st.tree.mode = 'you';
+    st.tree.nextId = o.end ? '__end' : (o.next || '__end');
+    buttons([]);
+    $('fmcName').textContent = 'YOU';
+    $('fmcName').style.background = '#f0b454';
+    typeLine(resolveTokens(o.text));
+  }
+  function treeAdvance(){
+    if (st.tree.mode !== 'you') return; // npc mode: the option buttons do the advancing
+    if (st.tree.nextId === '__end') { endCall('hangup'); return; }
+    showTreeNode(st.tree.nextId);
   }
   function offerQuest(){
     const q = st.cur.quest; $('fmcHint').textContent = ''; $('fmcName').textContent = st.rep.name;
@@ -320,7 +389,7 @@
     buttons([['CLOSE', 'fmc-accept', closeAll]]);
   }
   function buttons(list){
-    const c = $('fmcCtl'); if (!c) return; c.innerHTML = '';
+    const c = $('fmcCtl'); if (!c) return; c.classList.remove('opts'); c.innerHTML = '';
     list.forEach(function (x) { const b = document.createElement('button'); b.className = x[1]; b.textContent = x[0]; b.onclick = x[2]; c.appendChild(b); });
   }
   function esc(s){ return String(s).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
