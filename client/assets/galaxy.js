@@ -115,7 +115,7 @@ var COLONY_META = {
   },
   null_point: {
     name:'Null Point', x:480, y:560, pop:'420M',
-    lore:'Debris field with no Coalition sensor coverage. NullSyndicate operates a data relay network from inside the wreckage. UnderNet and SmugglerNetworks both route traffic through here. No logs are kept. Requests for operational records are not acknowledged.',
+    lore:'The relay heart of the Void Collective. Every null relay in the outer dark threads back to this point, and through it the augmented commune as a single signal where outsiders read only wreckage and noise. NullSyndicate and its sister houses keep the traffic moving and the logs empty, not to bury crime but because to the augmented a record of the self is one more thing worth releasing. The Collective came to the edge of the map to be left alone, and built peace out of the quiet. Requests for operational records are not acknowledged. The silence is the point.',
     companies:['NullSyndicate','UnderNet','CipherHoldings','ShadowDynamics','GhostFoundry'],
     planets:[
       { name:'The Null',       sector:1, sectorName:'Biotech',    icon:'◉',
@@ -252,7 +252,7 @@ var COLONY_META = {
   },
   the_escrow: {
     name:'The Escrow', x:430, y:870, pop:'90M',
-    lore:'Deep-ocean data vault colony. Every financial contract in the outer systems has a mirror record stored here; the ocean is three kilometers deep, the servers are deeper. Formally neutral. Has been occupied by four factions; all four declared it neutral when they left. Audits have been requested nine times and denied each time on procedural grounds.',
+    lore:'A drowned vault three kilometers down, and the servers run deeper still. The Void Collective keeps it formally neutral so all four factions will trust it with their mirror records, then files those records in the same black water where the augmented sink the selves they have shed. To the Collective the deep is not storage but doctrine: everything beyond the present moment is nothingness, so let it fall into the dark and rest. Audits have been requested nine times. The Escrow answers that there is nothing down there to find, and means it more honestly than the petitioners know.',
     companies:['Silver Holdings','SpecterIndustries','OccultMaterials','ApexContraband'],
     planets:[
       { name:'Vault Deep One',    sector:0, sectorName:'Finance',  icon:'◉',

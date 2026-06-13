@@ -22,6 +22,9 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 - `core.js`: portfolio sync now sets both whenever the snapshot carries a faction (removed the dead guard). The portfolio refresh the join already requests reinforces it.
 - Effect: joining Void routes Father Xen to the recognition line live; every other consumer of `window.gPlayerFaction` is fixed too.
 
+**Void Collective colony lore (`client/assets/galaxy.js`)**
+- Rewrote the planet-detail lore for the two Void-home colonies, Null Point and The Escrow, which read as generic relay/vault placeholder. Null Point is now the relay heart of the Collective (null relays, the augmented communing as one signal, logs kept empty as release rather than concealment); The Escrow is now the drowned vault where the deep itself is doctrine (everything beyond the present moment is nothingness). Mechanics, companies, and planet bonuses unchanged; lore text only. No em dashes in the player-visible strings.
+
 CLIENT-only: hard-refresh, no server restart needed. Sits on top of 1.1.5.7.
 
 ---
