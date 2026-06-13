@@ -270,6 +270,23 @@ const START_CASH    = 1000;
 const TAX_RATE      = 0.02;
 const MAX_SHARES    = 1_000_000;
 const TRADE_TAX_BPS = parseInt(process.env.TRADE_TAX_BPS || '25', 10);
+
+// ── Large-order market impact (anti-farm: caps "massive" extraction) ──────────
+// Only orders whose NOTIONAL (price x qty) crosses the threshold move the tape and
+// pay slippage; normal trades fill at quote with zero impact. The trader eats their
+// OWN impact (fill priced off the move they cause), so a big correct bet partly
+// closes its edge instead of printing free size. Computed per executed leg, not per
+// order qty, so a tiny short-cover with a huge order can't move the tape.
+const IMPACT_THRESHOLD_C = parseInt(process.env.IMPACT_THRESHOLD_C || '100000000', 10); // F1,000,000 notional, in cents
+const IMPACT_K           = parseFloat(process.env.IMPACT_K || '0.04'); // slip per 1x-threshold over the line
+const IMPACT_MAX_FRAC    = parseFloat(process.env.IMPACT_MAX_FRAC || '0.12'); // hard cap: 12% per order
+const IMPACT_SELL_SIDE   = (process.env.IMPACT_SELL_SIDE || '1') !== '0'; // symmetric by default; '0' = buys-only
+
+// ── News-as-driver: a headline move splits into an instant gap + decaying drift ──
+// The gap lands the moment the headline prints, so reading the public feed gives no
+// tradeable lead; the thin residual drift gives the chart its story over a window.
+const NEWS_GAP_FRAC    = parseFloat(process.env.NEWS_GAP_FRAC || '0.7'); // 70% instant, 30% drift
+const NEWS_DRIFT_TICKS = parseInt(process.env.NEWS_DRIFT_TICKS || '240', 10); // residual window (~2 min @500ms)
 const PATREON_WEBHOOK_SECRET = process.env.PATREON_WEBHOOK_SECRET || '';
 const INCOME_INTERVAL_MS = 30 * 60 * 1000;
 
@@ -289,17 +306,11 @@ const PRESIDENT_PASSIVE = 15_000;
 const PRESIDENT_COST    = 1_000_000_000;
 // Roll the gravity spawn reference every 6 hours so it tracks recent prices, not server-start prices
 const GRAVITY_REFERENCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
-setInterval(() => {
-  for (const c of companies) {
-    if (c._special) continue;
-    // Shift the spawn reference to current price — gravity now measures from the last 6h open
-    c._spawnLnP = c.lnP;
-    c._trendCheckLnP = c.lnP;
-    // Sync beta target so it doesn't fight the new reference
-    c.ownTargetLnP = c.lnP;
-  }
-  console.log('[Gravity] Spawn references rolled to current prices.');
-}, GRAVITY_REFERENCE_INTERVAL_MS);
+// 6-hour spawn re-home DISABLED (v1.1.6). Re-anchoring the gravity reference to the
+// current price every 6h produced the predictable "always returns to recent center"
+// oscillation traders farmed. _spawnLnP is now a fixed origin (set at spawn, persisted
+// across restarts), so the only structural pull left is the far lifetime-gain backstop.
+// GRAVITY_REFERENCE_INTERVAL_MS retained for reference; interval intentionally unregistered.
 
 // v5.0 config
 const EARNINGS_INTERVAL_MS  = 8  * 60 * 1000;  // 8 minutes
@@ -392,7 +403,7 @@ function resetDailyPrevClose() {
 const COMPANY_NAMES=["Anchor Biotech","Anchor International","Anchor Realty","Anchor Retail","ApexContraband","AshenTextiles","Aspen Automation","Aspen Energy","Aspen Financial","Atlas Consulting","Atlas Dynamics","Atlas Energy","Atlas Realty","Atlas Supplies","Atlas Textiles","Aurora Electric","Aurora Enterprises","Aurora Metals","Aurora Robotics","Beacon Consulting","Beacon Technologies","BlackCapital","BloodWorks","Blue Media","Blue Packaging","Blue Shipping","BoneMarkets","BoneYards","CarrionFarms","Cascade Minerals","Cascade Pharma","Catalyst Insurance","Catalyst Packaging","Catalyst Pharma","Cedar Dynamics","Cedar Insurance","Cedar Networks","CipherHoldings","CoalitionMetals","Comet Foods","Comet Packaging","Copper Dynamics","Copper Industries","Copper Insurance","Copper Marine","CorpseSystems","Crescent Robotics","Crescent Ventures","CrimsonChains","DarkRobotics","East Consulting","East Foods","East Retail","East Ventures","Evergreen Financial","First Minerals","First Networks","First Works","Frontier Supplies","GhostFoundry","Global Enterprises","Global Supplies","Golden Aerospace","Golden Insurance","Golden Packaging","GraftBiotech","Granite Aerospace","Granite Realty","GraveWorks","Green Shipping","GreyMining","GreywaterLabs","Grove Enterprises","Harbor Enterprises","Harbor Financial","Harbor Media","HollowLogistics","Horizon Automation","Horizon Retail","Liberty Packaging","Liberty Ventures","Lighthouse Logistics","Lumen Shipping","Maple Industries","MireInsurance","Momentum Logistics","National Foods","National Media","National Packaging","National Retail","Neon Retail","Neon Technologies","Nexus Aerospace","Nexus Financial","Nexus Supplies","NightFinance","Nimbus Biotech","Nimbus Realty","NoirTransport","North Biotech","North Consulting","North Industries","North Motors","Nova Biotech","NullSyndicate","Oak Capital","Oak Marine","Oak Ventures","ObsidianShipping","OccultMaterials","OrganCorp","Orion Foods","Orion Logistics","Orion Supplies","PhantomCourier","Pioneer Aerospace","Pioneer Realty","Pioneer Supplies","Pixel Biotech","Pixel Dynamics","Pixel Software","Prairie Financial","Prime Automation","Redwood Materials","Redwood Retail","River Aerospace","River Materials","RogueMinerals","SableSecurity","SeverShipping","ShadePharma","ShadowDynamics","Sierra Aerospace","Sierra Apparel","Sierra Consulting","Sierra Hospitality","Silver Holdings","Silver Motors","Silver Shipping","Silver Works","SinisterFoods","Skyline Packaging","SmugglerIndustries","SmugglerMedia","SmugglerNetworks","South Consulting","South Hardware","South Industries","South Minerals","SpecterIndustries","Summit Automation","Summit Logistics","Summit Retail","Sycamore Partners","Sycamore Software","TempestArms","ToxicChains","UnderNet","United Hospitality","United Insurance","United Technologies","Valley Realty","VeinConsortium","Vertex Aerospace","Vertex Dynamics","Vertex Foods","Vertex Logistics","Vertex Robotics","Vertex Shipping","Vertex Systems","Vertex Ventures","West Hospitality","West Works","Willow Aerospace","Willow Hardware","Willow Labs","WraithEnergy","Zenith Automation","Zenith Health","Zenith Insurance","Zenith Media"];
 const NAMES=Array.from(new Set(COMPANY_NAMES.map(n=>n.replace(/\d+$/,'').trim())));
 function symbolize(name){const words=String(name||'').replace(/[^A-Za-z ]/g,' ').trim().split(/\s+/).filter(Boolean);let t=words.map(w=>w[0]).join('').toUpperCase();if(t.length<3){const letters=words.join('').toUpperCase();for(let i=1;i<letters.length&&t.length<3;i++)t+=letters[i];}if(t.length<3)t=(t+'FMK').slice(0,3);if(t.length>4)t=t.slice(0,4);return t;}
-const companies=NAMES.map((n,i)=>({id:i,name:n,symbol:symbolize(n),price:rng(8,60),ohlc:[],lnP:0,sigma:0.00018+seededRand()*0.00012,mu:-0.000005+seededRand()*0.00001,kappa:0.0008+seededRand()*0.0012,sector:(i%8),offset:-0.3+seededRand()*0.6}));
+const companies=NAMES.map((n,i)=>({id:i,name:n,symbol:symbolize(n),price:8+rngSeeded(n,'initprice')*52,ohlc:[],lnP:0,sigma:0.00018+seededRand()*0.00012,mu:-0.000005+seededRand()*0.00001,kappa:0.0008+seededRand()*0.0012,sector:(i%8),offset:-0.3+seededRand()*0.6}));
 (()=>{const used=new Set(),letters='ABCDEFGHIJKLMNOPQRSTUVWXYZ';for(const c of companies){let sym=c.symbol.replace(/[^A-Z]/g,'').slice(0,4);if(sym.length<3)sym=(sym+'FMKT').slice(0,3);let k=0;while(used.has(sym)){sym=k<26?sym.slice(0,3)+letters[k]:sym.slice(0,2)+letters[Math.floor((k-26)/26)%26]+letters[(k-26)%26];sym=sym.slice(0,4);k++;}c.symbol=sym;used.add(sym);}})();
 const SECTOR_TARGETS = [15, 25, 35, 45, 20, 55, 30, 70]; // varied anchors per sector
 const SECTORS=new Array(8).fill(0).map((_,i)=>{const ln=Math.log(SECTOR_TARGETS[i]*(0.8+0.4*seededRand()));return{lnIndex:ln,prevLnIndex:ln,sigma:0.00010+seededRand()*0.00008,mu:-0.000002+seededRand()*0.000004,kappa:0.0003+seededRand()*0.0004,target:SECTOR_TARGETS[i]};});
@@ -1735,6 +1746,8 @@ function restoreMarketState(){
       if(typeof s.sigma==='number') c.sigma=s.sigma;
       if(typeof s.ownTargetLnP==='number') c.ownTargetLnP=s.ownTargetLnP;
       if(typeof s.beta==='number') c.beta=s.beta;
+      if(typeof s._spawnLnP==='number') c._spawnLnP=s._spawnLnP;
+      else if(typeof s.lnP==='number') c._spawnLnP=s.lnP; // anchor lifetime-gain backstop to restored price if no persisted origin
       if(Array.isArray(s.ohlc))    c.ohlc =s.ohlc;
     }
   }
@@ -5328,9 +5341,20 @@ function genHeadline(){
   const linePool = (sn[bucket] || []).concat(COMPANY_GENERIC[bucket] || []);
   const line = pick(linePool.length ? linePool : sn.weird);
 
-  // Minimal price impact (flavor, not driver; 0.02-0.08% move)
-  if (bucket === 'good') { c.lnP += 0.0002 + Math.random() * 0.0006; c.price = Math.max(0.5, Math.exp(c.lnP)); }
-  else if (bucket === 'bad') { c.lnP -= 0.0002 + Math.random() * 0.0006; c.price = Math.max(0.5, Math.exp(c.lnP)); }
+  // News now DRIVES price (v1.1.6). The move splits into an instant gap, applied here
+  // so reading the public headline gives no tradeable lead, plus a thin decaying drift
+  // delivered over NEWS_DRIFT_TICKS that gives the chart its story.
+  {
+    const sign  = bucket === 'good' ? 1 : (bucket === 'bad' ? -1 : (Math.random() < 0.5 ? 1 : -1));
+    const total = (bucket === 'weird' ? 0.004 : 0.012) * (0.7 + Math.random() * 1.0); // ~0.4% weird, ~0.8-2% real
+    const gap   = NEWS_GAP_FRAC * total;
+    const drift = (1 - NEWS_GAP_FRAC) * total;
+    c.lnP += sign * gap;
+    c.lnP  = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.lnP));
+    c.price = Math.max(0.5, Math.exp(c.lnP));
+    c.newsBias      = (c.newsBias || 0) + (sign * drift) / NEWS_DRIFT_TICKS;
+    c.newsBiasTicks = NEWS_DRIFT_TICKS;
+  }
 
   pushHeadline(`${c.name} (${c.symbol}): ${line}`, tone, c.symbol, 'company');
 }
@@ -5403,7 +5427,7 @@ function stepMarket(){
 
     // 3. Idiosyncratic noise (boosted, fatter tails)
     const u    = Math.random();
-    const tail = u < 0.02 ? 2.2 : (u < 0.08 ? 1.4 : 1.0);
+    const tail = u < 0.02 ? 1.7 : (u < 0.08 ? 1.25 : 1.0);
     const eps  = randn() * (c.sigma||0.0004) * tail * hotSigma;
 
     // 4. Stock's own target drifts (random walk + weak sector gravity)
@@ -5423,9 +5447,14 @@ function stepMarket(){
     const revertTarget = c._adminBias ? c._adminTargetLnP : c.ownTargetLnP;
     const revertKappa  = c._adminBias ? 0.0005 : (c.ownKappa||0.0000075);
 
+    // News drift: a decaying per-tick addend set by genHeadline (the chart's story).
+    let newsDrift = 0;
+    if (c.newsBiasTicks > 0) { newsDrift = c.newsBias || 0; c.newsBiasTicks--; if (c.newsBiasTicks <= 0) c.newsBias = 0; }
+
     let delta = mu
               + (c.beta||1.0) * sectorDelta        // sector influence via beta
               + revertKappa * (revertTarget - c.lnP) // own mean-reversion
+              + newsDrift                            // decaying news lean
               + eps;                                  // individual noise
 
     // ── ANTI-RUNAWAY GRAVITY (skipped for anchored stocks like SWT/BRNC) ─────
@@ -5466,34 +5495,21 @@ function stepMarket(){
 
     // Vol clustering (wider range for beta model)
     const absEps = Math.abs(eps);
-    c.sigma = Math.max(0.00015, Math.min(0.0015,
+    c.sigma = Math.max(0.00015, Math.min(0.0009,
       0.90*(c.sigma||0.0004) + 0.07*absEps + 0.03*0.0004
     ));
 
-    // Rare idiosyncratic event (0.05%/tick — slightly more frequent)
-    if(Math.random()<0.0005){
-      const eventMag = 0.003 + Math.random()*0.006;
-      c.lnP += (Math.random()<0.5?1:-1) * eventMag;
-      c.lnP = Math.max(Math.log(0.50), Math.min(Math.log(5000), c.lnP));
-      c.sigma = Math.min(0.0015, c.sigma * 1.6);
-    }
+    // Rare invisible in-tick event REMOVED (v1.1.6). Uncaused spikes read as rigged and
+    // are un-tradeable noise. All discrete moves now carry a headline (news gap + earnings),
+    // so price action is attributable.
 
     const prev=c.price;
     c.price=Math.max(0.50, Math.exp(c.lnP));
 
-    // ── Graduated reversal pressure every +50% above spawn ───────────────
-    if (!c._trendCheckLnP) c._trendCheckLnP = c._spawnLnP || c.lnP;
-    if (c.lnP >= c._trendCheckLnP + 0.405) {
-      c._trendCheckLnP = c.lnP;
-      if (Math.random() < 0.40) {
-        const pullback = 0.008 + Math.random() * 0.012;
-        c.lnP -= pullback;
-        c.sigma = Math.min(0.0015, (c.sigma || 0.0004) * 1.5);
-        c.price = Math.max(0.50, Math.exp(c.lnP));
-        console.log(`[GRAVITY] ${c.symbol} @ Ƒ${c.price.toFixed(0)}, +${((Math.exp(c.lnP - (c._spawnLnP||0))-1)*100).toFixed(0)}% pullback triggered`);
-      }
-    }
-    if (c.lnP < c._trendCheckLnP - 0.3) c._trendCheckLnP = c.lnP;
+    // +50% graduated pullback REMOVED (v1.1.6). This was the core "fade the extremes
+    // always pays" mechanic and the most farmable predictable pattern in the engine.
+    // Runaway is now bounded only by the far lifetime-gain backstop above and the
+    // F5000 split. Trends are allowed to run; direction is no longer auto-reverted.
 
     // ── Stock Split at Ƒ5000 ─────────────────────────────────────────────
     if (c.price >= 4999 && !c._splitting) {
@@ -5731,6 +5747,17 @@ wss.on('connection',(ws,req)=>{
       const s=String(symbol||'').toUpperCase(),qty=Math.max(1,Math.min(Number(shares)||0,MAX_SHARES));
       const c=companies.find(x=>x.symbol===s); if(!c||!qty)return;
 
+      // ── Large-order market impact (only fires above IMPACT_THRESHOLD_C notional) ──
+      // _impactSlipFor returns the slip fraction for an executed leg's notional; each
+      // branch prices its fill off that slip (trader eats it) and adds the directional
+      // push to _tapeMove, which is applied to c.lnP ONCE after all money math.
+      const _impactSlipFor = (notionalC, sideSign) => {
+        if (notionalC < IMPACT_THRESHOLD_C) return 0;
+        if (sideSign < 0 && !IMPACT_SELL_SIDE) return 0;
+        return Math.min(IMPACT_MAX_FRAC, IMPACT_K * (notionalC - IMPACT_THRESHOLD_C) / IMPACT_THRESHOLD_C);
+      };
+      let _tapeMove = 0;
+
       // Day-trade gate — server-authoritative
       if(_dtRemaining(actor.id) <= 0){
         ws.send(JSON.stringify({type:'error',data:{msg:'❌ Day-trade limit reached (3 per cycle). Resets at next EOD.'}}));
@@ -5747,7 +5774,9 @@ wss.on('connection',(ws,req)=>{
         if (have < 0) {
           const shortQty = Math.abs(have);
           const coverQty = Math.min(qty, shortQty);  // can't cover more than you're short
-          const coverCostC = toCents(c.price) * coverQty;
+          const _slip = _impactSlipFor(toCents(c.price) * coverQty, 1);
+          const execPrice = _slip > 0 ? c.price * (1 + _slip/2) : c.price;
+          const coverCostC = toCents(execPrice) * coverQty;
           const taxC = Math.floor(coverCostC * TRADE_TAX_BPS / 10000);
           const totalC = coverCostC + taxC;
           // Release the locked collateral attributable to the covered shares.
@@ -5764,7 +5793,7 @@ wss.on('connection',(ws,req)=>{
           }
           // Calculate realized P&L from the short (entry vs exit)
           const avgEntryC = Math.abs(actor.basisC[s] || 0) / shortQty;
-          const pnlC = (avgEntryC - toCents(c.price)) * coverQty;
+          const pnlC = (avgEntryC - toCents(execPrice)) * coverQty;
           const pnl = fromCents(pnlC);
 
           // Settle: release collateral to cash, then pay cover cost + tax from cash.
@@ -5789,7 +5818,8 @@ wss.on('connection',(ws,req)=>{
           try { addFundCash('FLSH', fromCents(coverCostC) * FLSH_TRADE_PCT); } catch(_) {}
           // Day-trade: covering a short = round trip
           { const dt=_dtGet(actor.id); if(dt.shortTickets[s]>0){dt.shortTickets[s]--;dt.roundTrips=Math.min(DAY_TRADE_CAP,dt.roundTrips+1);} }
-          broadcastTradeFeed({side:'buy',symbol:s,qty:coverQty,price:c.price});
+          _tapeMove += _slip; // covering a large short is buying pressure
+          broadcastTradeFeed({side:'buy',symbol:s,qty:coverQty,price:execPrice});
 
           // Notify player of cover result
           const pnlSign = pnl >= 0 ? '+' : '';
@@ -5802,7 +5832,9 @@ wss.on('connection',(ws,req)=>{
 
         // ── NORMAL LONG BUY ──────────────────────────────────────────────────
         } else {
-          const costC=toCents(c.price)*qty,taxC=Math.floor(costC*TRADE_TAX_BPS/10000),totalC=costC+taxC,total=fromCents(totalC);
+          const _slip=_impactSlipFor(toCents(c.price)*qty, 1);
+          const execPrice=_slip>0?c.price*(1+_slip/2):c.price;
+          const costC=toCents(execPrice)*qty,taxC=Math.floor(costC*TRADE_TAX_BPS/10000),totalC=costC+taxC,total=fromCents(totalC);
           if(actor.cash>=total){
             safeAddCash(actor,-total);FMI.treasury+=(taxC/100);FMI.hourlyTaxAccrual+=(taxC/100);
             actor.holdings[s]=(actor.holdings[s]||0)+qty;
@@ -5811,8 +5843,9 @@ wss.on('connection',(ws,req)=>{
             try{addFundCash('FLSH', fromCents(costC)*FLSH_TRADE_PCT);}catch(_){}
             // Day-trade: issue buy ticket
             { const dt=_dtGet(actor.id); dt.tickets[s]=(dt.tickets[s]||0)+1; }
-            broadcastTradeFeed({side:'buy',symbol:s,qty,price:c.price});
-          }
+            _tapeMove += _slip;
+            broadcastTradeFeed({side:'buy',symbol:s,qty,price:execPrice});
+          } else { try{ ws.send(JSON.stringify({type:'error',data:{msg:'Insufficient funds.'}})); }catch(_){} }
         }
       } else if(side==='sell'){
         const have=actor.holdings?.[s]||0;
@@ -5823,9 +5856,12 @@ wss.on('connection',(ws,req)=>{
           const dt=_dtGet(actor.id);
           const isScalp = dt.tickets[s] > 0;
           const taxMult = isScalp ? 2 : 1;
-          const grossC=toCents(c.price)*qty,taxC=Math.floor(grossC*TRADE_TAX_BPS*taxMult/10000);
+          const _slip=_impactSlipFor(toCents(c.price)*qty, -1);
+          const execPrice=_slip>0?c.price*(1-_slip/2):c.price;
+          const grossC=toCents(execPrice)*qty,taxC=Math.floor(grossC*TRADE_TAX_BPS*taxMult/10000);
           safeAddCash(actor,fromCents(grossC-taxC));FMI.treasury+=(taxC/100);FMI.hourlyTaxAccrual+=(taxC/100);
           try{addFundCash('FLSH', fromCents(grossC)*FLSH_TRADE_PCT);}catch(_){}
+          _tapeMove += -_slip;
           actor.basisC=actor.basisC||{};
           const bB=Math.max(0,Number(actor.basisC[s]||0)),avgC=have>0?Math.floor(bB/have):0;
           actor.basisC[s]=Math.max(0,bB-Math.min(bB,avgC*qty));
@@ -5852,10 +5888,13 @@ wss.on('connection',(ws,req)=>{
           // cash from a short is to cover it at a profit. This removes the limits while
           // making the short-and-extract-then-get-wiped exploit impossible.
           const shortQty = qty - Math.max(0, have);
+          // Large-order impact for the whole downward order (long-clear + short open).
+          const _slip = _impactSlipFor(toCents(c.price)*qty, -1);
+          const execPrice = _slip>0 ? c.price*(1-_slip/2) : c.price;
 
           // Clear long position first
           if(have>0){
-            const grossC=toCents(c.price)*have,taxC=Math.floor(grossC*TRADE_TAX_BPS/10000);
+            const grossC=toCents(execPrice)*have,taxC=Math.floor(grossC*TRADE_TAX_BPS/10000);
             safeAddCash(actor,fromCents(grossC-taxC));FMI.treasury+=(taxC/100);
             actor.basisC=actor.basisC||{};delete actor.basisC[s];
             // CRITICAL: zero the long holdings before applying short delta
@@ -5868,14 +5907,15 @@ wss.on('connection',(ws,req)=>{
           actor.holdings=actor.holdings||{};
           actor.holdings[s]=(actor.holdings[s]||0) - shortQty;
           // Lock proceeds (minus tax) as collateral — NOT spendable cash.
-          const shortGrossC=toCents(c.price)*shortQty,shortTaxC=Math.floor(shortGrossC*TRADE_TAX_BPS/10000);
+          const shortGrossC=toCents(execPrice)*shortQty,shortTaxC=Math.floor(shortGrossC*TRADE_TAX_BPS/10000);
           const lockedC = shortGrossC - shortTaxC;
           actor.shortCollC = actor.shortCollC || {};
           actor.shortCollC[s] = (actor.shortCollC[s]||0) + lockedC;
           FMI.treasury+=(shortTaxC/100);
+          _tapeMove += -_slip;
           // Track avg short entry price in basisC (stored as negative to flag short)
           actor.basisC=actor.basisC||{};
-          actor.basisC[s]=(actor.basisC[s]||0) - toCents(c.price)*shortQty;
+          actor.basisC[s]=(actor.basisC[s]||0) - toCents(execPrice)*shortQty;
           actor.xp+=3;
           // Day-trade: opening short issues a short ticket
           { const dt=_dtGet(actor.id); dt.shortTickets[s]=(dt.shortTickets[s]||0)+1; }
@@ -5884,6 +5924,13 @@ wss.on('connection',(ws,req)=>{
                 }
       }
 
+      // Apply accumulated large-order impact to the tape ONCE (trader already paid
+      // execPrice). Big buys/covers push the quote up; big sells/shorts push it down.
+      if (_tapeMove !== 0) {
+        const _ceil = c._isAnchored ? Math.log(10000) : Math.log(5000);
+        c.lnP = Math.max(Math.log(0.50), Math.min(_ceil, c.lnP + _tapeMove));
+        c.price = Math.max(0.50, Math.exp(c.lnP));
+      }
       actor.level=calcLevel(actor.xp);
       savePlayer(actor);
       // Send day-trade remaining after every trade

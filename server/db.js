@@ -610,7 +610,7 @@ export function getLeaderboard(companies, limit=20) {
 
 export function saveMarketState(companies, headlines) {
   const state = {
-    companies: companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,lnP:c.lnP,sigma:c.sigma,ohlc:c.ohlc,ownTargetLnP:c.ownTargetLnP,beta:c.beta})),
+    companies: companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,lnP:c.lnP,sigma:c.sigma,ohlc:c.ohlc,ownTargetLnP:c.ownTargetLnP,beta:c.beta,_spawnLnP:c._spawnLnP})),
     headlines: headlines.slice(-200),
     savedAt: Date.now()
   };

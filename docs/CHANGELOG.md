@@ -4,6 +4,40 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.6.0 (2026-06-13) - market dynamics rework + large-order impact (SERVER + DB)
+
+Ships as one patch. The pieces are coupled: making news a real driver creates a front-running vector, so the gap mechanic lands with it; removing the gravity that auto-reverts price requires persisting the spawn origin or the runaway backstop fires off a stale value. SERVER + DB only, no client change. Deploy is `pm2 restart fleshmarket`, no hard-refresh.
+
+**Predictability cut (`server/server.js`, `stepMarket`)**
+- Removed the 6-hour spawn re-home. Re-anchoring the gravity reference to the current price every 6h produced the predictable "always returns to recent center" oscillation traders farmed. `_spawnLnP` is now a fixed origin.
+- Removed the +50% graduated pullback (40% trigger, 0.8-2% yank). This was the core "fade the extremes always pays" mechanic and the single most farmable pattern in the engine. Trends are now allowed to run; direction is no longer auto-reverted. The far lifetime-gain backstop (+394%, +1500%) and the F5000 split are the only remaining ceilings.
+
+**Wildness cut (`server/server.js`, `stepMarket`)**
+- Per-stock sigma ceiling lowered 0.0015 -> 0.0009 in the vol-clustering clamp.
+- Fat-tail multipliers softened 2.2/1.4 -> 1.7/1.25.
+- Removed the invisible rare in-tick event (0.05%/tick, 0.3-0.9% uncaused jump). Uncaused spikes read as rigged and are un-tradeable noise. All discrete moves now carry a headline.
+
+**News is now a real driver (`server/server.js`, `genHeadline`)**
+- A company headline previously moved price ~0.02-0.08% (flavor). It now moves ~0.8-2% on a real headline, ~0.4% on weird. The move splits into an instant gap (70%, applied the moment the headline prints so reading the public feed gives no tradeable lead) plus a thin decaying drift delivered over ~2 minutes (`c.newsBias` / `c.newsBiasTicks`, summed into the per-tick delta). Earnings remain an instant gap and are unchanged.
+
+**Large-order market impact (`server/server.js`, `order` handler)**
+- Orders above F1,000,000 notional now pay slippage and move the tape; sub-threshold orders are unchanged (fill at quote, zero impact). Computed per executed leg, not per order qty, so a tiny short-cover attached to a huge order cannot move the tape.
+- The trader eats their own impact: the fill is priced off the move they cause (buy avg ~ +slip/2, sell avg ~ -slip/2), then the tape (`c.lnP`) is pushed once after all money math. A big correct bet partly closes its own edge instead of printing free size.
+- Symmetric by default: big buys and covers push up, big sells and short-opens push down. Curve: F1.5M -> 2%, F2M -> 4%, F3M -> 8%, F4M+ -> 12% cap (stock at F20). `IMPACT_SELL_SIDE=0` makes it buys-only.
+- Threaded through all four legs (short cover, long buy, normal sell, short open incl. long-clear). Long-buy now sends an explicit "Insufficient funds." error instead of failing silently.
+
+**Required companion fix (`server/server.js` restore, `server/db.js` save)**
+- `_spawnLnP` (the origin the lifetime-gain backstop measures from) was set at module-load to `log(random 8-60)` and never persisted or restored. The 6h re-home masked it. With the re-home gone it would fire the backstop off a stale value after every restart. `_spawnLnP` is now saved in market state and restored, falling back to the restored price if no persisted origin exists.
+- Init price is now seeded deterministically by company name (`rngSeeded(name,'initprice')`) instead of `Math.random()`. Masked by restore on the live DB; only affects fresh boots and newly added companies.
+
+**Tunables (env)**
+- `IMPACT_THRESHOLD_C` (default 100000000 = F1,000,000 notional in cents), `IMPACT_K` (0.04), `IMPACT_MAX_FRAC` (0.12), `IMPACT_SELL_SIDE` (1 = symmetric, 0 = buys-only), `NEWS_GAP_FRAC` (0.7), `NEWS_DRIFT_TICKS` (240).
+
+**Known limitation**
+- Notional gating is per-order. A determined whale can split a large buy into multiple sub-F1,000,000 orders to dodge entry impact (accumulation costs no day-trades; only paired sells consume the 3-per-cycle cap). Closing this needs rolling cumulative-notional tracking per player and symbol, deferred. The symbol-reshuffle reroll vector (restore keyed by symbol, symbols assigned by an order-dependent dedup loop) is also still open; seeded init only makes fresh boots deterministic.
+
+---
+
 ## v1.1.5.8 (2026-06-11) - Father Xen branching codec dialogue + faction-sync fix (CLIENT)
 
 **Codec engine (`client/assets/codec.js`)**
