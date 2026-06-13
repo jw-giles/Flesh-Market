@@ -41,7 +41,7 @@ var FACTIONS = {
 var COLONY_META = {
   new_anchor: {
     name:'New Anchor', x:470, y:154, pop:'12.4B',
-    lore:'Coalition administrative capital. Faction representatives maintain offices here; treaties are signed here and enforced elsewhere. Revenue comes from licensing, arbitration fees, and the percentage taken on every regulated transaction in the inner systems.',
+    lore:'Coalition administrative capital. Seat of inner-system licensing, arbitration, and regulated-transaction fees. Finance and insurance dominate the local market.',
     companies:['Anchor Biotech','Anchor International','Nexus Financial','Catalyst Insurance'],
     planets:[
       { name:'Anchor Prime',   sector:0, sectorName:'Finance',   icon:'◉',
@@ -54,7 +54,7 @@ var COLONY_META = {
   },
   cascade_station: {
     name:'Cascade Station', x:780, y:126, pop:'3.1B',
-    lore:'Three tidally-locked moons in permanent tidal rotation. No atmosphere worth filtering. Cascade Minerals extracts ore; Vertex Aerospace moves it. Everyone else pays the orbital elevator toll.',
+    lore:'Three tidally-locked moons, no breathable atmosphere. Ore extraction is the primary export; all surface freight pays the orbital elevator toll. Cascade Minerals extracts, Vertex Aerospace hauls.',
     companies:['Cascade Minerals','Cascade Pharma','Vertex Aerospace','CoalitionMetals'],
     planets:[
       { name:'Cascade Alpha',  sector:3, sectorName:'Manufacturing', icon:'◉',
@@ -65,7 +65,7 @@ var COLONY_META = {
   },
   frontier_outpost: {
     name:'Frontier Outpost', x:220, y:266, pop:'890M',
-    lore:'Last Coalition-regulated waypoint before open space. All three factions run supply operations through here. None will allow a rival to hold it; the result is a permanent low-level standoff managed through licensed contractors.',
+    lore:'Last Coalition-regulated waypoint before open space. All three factions run supply operations through the docks under licensed contractors. Control is contested and held at a standoff.',
     companies:['Frontier Supplies','HollowLogistics','Lighthouse Logistics','Momentum Logistics'],
     planets:[
       { name:'Waypoint I',     sector:5, sectorName:'Logistics',  icon:'◉',
@@ -76,7 +76,7 @@ var COLONY_META = {
   },
   the_hollow: {
     name:'The Hollow', x:300, y:476, pop:'1.6B',
-    lore:'Dead rock hollowed out by an operation that stopped filing paperwork in year three. HollowLogistics runs the docks and sets the rates. Pirate contractors handle enforcement. Coalition jurisdiction has been attempted twice; both attempts are listed under unsolved incidents.',
+    lore:'Hollowed-out mining body, off the regulatory record since year three of operation. HollowLogistics controls the docks and sets rates; enforcement is contracted to pirate crews. No effective Coalition jurisdiction.',
     companies:['SmugglerIndustries','SmugglerNetworks','PhantomCourier','NoirTransport','ApexContraband'],
     planets:[
       { name:'Hollow Core',    sector:7, sectorName:'Gray Bazaar', icon:'◉',
@@ -87,7 +87,7 @@ var COLONY_META = {
   },
   vein_cluster: {
     name:'Vein Cluster', x:650, y:490, pop:'4.8B',
-    lore:'Tidally locked. The main moon faces permanent darkness on the inhabited side. VeinConsortium owns the orbital processing ring; what gets refined there does not appear on standard manifests. BloodWorks and OrganCorp both distribute downstream.',
+    lore:'Tidally locked; the inhabited side faces permanent darkness. VeinConsortium owns the orbital processing ring, and refined output is not listed on standard manifests. Biotech and organ supply move downstream.',
     companies:['VeinConsortium','BloodWorks','GraftBiotech','OrganCorp','BoneMarkets','CarrionFarms'],
     planets:[
       { name:'BloodWorks Stn', sector:1, sectorName:'Biotech',    icon:'◉',
@@ -100,7 +100,7 @@ var COLONY_META = {
   },
   aurora_prime: {
     name:'Aurora Prime', x:820, y:364, pop:'18.3B',
-    lore:'Inner-system relay hub. Aurora Electric holds the power grid; Neon Technologies controls the data infrastructure. WraithEnergy operates the fusion plants under a supply agreement Aurora Electric has disputed for eleven years. The Coalition administers the licensing and takes the fees.',
+    lore:'Inner-system relay hub. Aurora Electric holds the power grid, Neon Technologies the data infrastructure, and WraithEnergy the fusion plants under a contested supply agreement. The Coalition administers licensing and collects the fees.',
     companies:['Aurora Electric','Neon Technologies','WraithEnergy','Zenith Automation'],
     planets:[
       { name:'Aurora Relay',   sector:6, sectorName:'Tech',       icon:'◉',
@@ -115,7 +115,7 @@ var COLONY_META = {
   },
   null_point: {
     name:'Null Point', x:480, y:560, pop:'420M',
-    lore:'The relay heart of the Void Collective. Every null relay in the outer dark threads back here, and through them the augmented speak as a single signal. Outsiders who listen in hear only wreckage and static. NullSyndicate and its sister houses keep the traffic moving and the logs empty. This is not concealment. To the augmented, a record of the self is one more thing to release. The Collective came to the edge of the map to be left alone, and made peace out of the quiet. The silence here is not an absence. It is the point.',
+    lore:'Relay nexus for the outer cluster, routing most of the null-relay signal traffic in the southern reach. Void Collective jurisdiction. No operational logs, no published manifests, and no response to records requests. No Coalition sensor coverage.',
     companies:['NullSyndicate','UnderNet','CipherHoldings','ShadowDynamics','GhostFoundry'],
     planets:[
       { name:'The Null',       sector:1, sectorName:'Biotech',    icon:'◉',
@@ -182,7 +182,7 @@ var COLONY_META = {
   },
   dust_basin: {
     name:'Dust Basin', x:80, y:590, pop:'610M',
-    lore:'Extraction territory at the outer edge of settled space. Three mining consortiums share one orbital elevator and compete for the same ore contracts. Infrastructure maintenance is disputed. Output is not.',
+    lore:'Outer-edge extraction territory. Three mining consortiums share a single orbital elevator and compete for the same ore contracts. Elevator maintenance is unresolved.',
     companies:['Aurora Metals','GreyMining','First Minerals','South Minerals','RogueMinerals'],
     planets:[
       { name:'Crater Base Alpha', sector:3, sectorName:'Iron Foundries', icon:'◉',
@@ -193,7 +193,7 @@ var COLONY_META = {
   },
   nova_reach: {
     name:'Nova Reach', x:960, y:460, pop:'310M',
-    lore:'Outer-rim research installation. Coalition licensing jurisdiction has not been formally established here; three biotech firms treat this as a feature. Compounds produced here do not appear in licensed pharmaceutical registries.',
+    lore:'Outer-rim research installation. No established Coalition licensing jurisdiction. Compounds produced here do not appear in licensed pharmaceutical registries.',
     companies:['Nimbus Biotech','North Biotech','Nova Biotech','GreywaterLabs','Willow Labs'],
     planets:[
       { name:'Cryo Station One', sector:1, sectorName:'Flesh & Gene', icon:'◉',
@@ -204,7 +204,7 @@ var COLONY_META = {
   },
   iron_shelf: {
     name:'Iron Shelf', x:920, y:600, pop:'1.2B',
-    lore:'Manufacturing corridor across three barren moons. Primary output: ship components, aerospace parts, weapons systems. Buyers across all three factions; none of them discuss it publicly. North Industries runs the largest facility. Output does not stop during faction conflicts.',
+    lore:'Manufacturing corridor across three barren moons. Output is ship components, aerospace parts, and weapons systems, with buyers across all three factions. Production continues through faction conflicts.',
     companies:['Nexus Aerospace','Pioneer Aerospace','River Aerospace','Golden Aerospace','Granite Aerospace','Willow Aerospace'],
     planets:[
       { name:'Forge Station',  sector:3, sectorName:'Iron Foundries', icon:'◉',
@@ -215,7 +215,7 @@ var COLONY_META = {
   },
   the_ledger: {
     name:'The Ledger', x:350, y:650, pop:'6.7B',
-    lore:'Financial administration center for the outer systems. Insurance underwriters, venture funds, and realty developers control the local colonial government. Elections are held on schedule. Candidates are approved in advance.',
+    lore:'Financial administration center for the outer systems. Insurance underwriters, venture funds, and realty developers control the colonial government, and candidates are approved in advance.',
     companies:['United Insurance','Zenith Insurance','Cedar Insurance','Copper Insurance','Oak Capital','Prairie Financial','Harbor Financial'],
     planets:[
       { name:'Exchange Tier',  sector:0, sectorName:'Capital Syndicate', icon:'◉',
@@ -228,7 +228,7 @@ var COLONY_META = {
   },
   signal_run: {
     name:'Signal Run', x:720, y:640, pop:'2.8B',
-    lore:'Gas giant relay hub on the primary freight corridor between inner and outer systems. Controls the fastest transit lanes in settled space. Holding Signal Run sets the cargo schedule for the outer rim; every faction has tried, none have held it past two elections.',
+    lore:'Gas giant relay hub on the primary freight corridor between the inner and outer systems. Holds the fastest transit lanes in settled space and sets the outer-rim cargo schedule. Control is contested and has never held past two elections.',
     companies:['Blue Shipping','Copper Marine','Oak Marine','Vertex Logistics','Vertex Shipping','Summit Logistics','Orion Logistics'],
     planets:[
       { name:'Relay Alpha',   sector:5, sectorName:'Transit Guild',    icon:'◉',
@@ -241,7 +241,7 @@ var COLONY_META = {
   },
   scrub_yard: {
     name:'Scrub Yard', x:200, y:790, pop:'180M',
-    lore:'Administrative registry for shell companies and holding structures. Seventeen thousand registered entities; combined verified employment is under four hundred. Atmospheric processors have run on expired Coalition permits since the 11th Corporate War. Revenue is financial transit fees. The Coalition has not sent an inspector in six years.',
+    lore:'Administrative registry for shell companies and holding structures. Seventeen thousand registered entities against verified employment under four hundred. Atmospheric processors run on Coalition permits expired since the 11th Corporate War. Revenue is financial transit fees.',
     companies:['BlackCapital','NightFinance','MireInsurance','SableSecurity','SmugglerMedia'],
     planets:[
       { name:'Shell Block Nine',  sector:0, sectorName:'Finance',  icon:'◉',
@@ -252,7 +252,7 @@ var COLONY_META = {
   },
   the_escrow: {
     name:'The Escrow', x:430, y:870, pop:'90M',
-    lore:'A drowned vault three kilometers down, with the servers running deeper still. The Void Collective keeps it formally neutral, so all four factions trust it to hold their mirror records. Those records sink into the same black water where the augmented let their old selves fall away. To the Collective, the deep is not storage. It is doctrine. Everything past the present moment is nothingness, so they give it to the dark and call that peace. Audits have been requested nine times. The Escrow answers that there is nothing down there to find, and it means that more honestly than the petitioners know.',
+    lore:'Deep-water data vault with servers submerged three kilometers. Holds mirror records of outer-system financial contracts under declared neutrality. Void Collective jurisdiction. Audit requests: 9. Audits granted: 0.',
     companies:['Silver Holdings','SpecterIndustries','OccultMaterials','ApexContraband'],
     planets:[
       { name:'Vault Deep One',    sector:0, sectorName:'Finance',  icon:'◉',
@@ -263,7 +263,7 @@ var COLONY_META = {
   },
   margin_call: {
     name:'Margin Call', x:600, y:800, pop:'240M',
-    lore:'Industrial lava world operating as a debt collection and asset liquidation center. When The Ledger calls a debt, physical collateral transfer orders process here. The Syndicate runs enforcement operations on the collection floor. The smelters run continuously. Profitable at all points in the economic cycle.',
+    lore:'Industrial lava world running as a debt collection and asset liquidation center. Physical collateral transfer orders from The Ledger process here. The Syndicate runs enforcement on the collection floor and the smelters run continuously.',
     companies:['BoneYards','CrimsonChains','GraveWorks','ObsidianShipping','ToxicChains'],
     planets:[
       { name:'Furnace Deck Alpha', sector:3, sectorName:'Manufacturing', icon:'◉',

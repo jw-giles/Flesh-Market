@@ -22,8 +22,8 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 - `core.js`: portfolio sync now sets both whenever the snapshot carries a faction (removed the dead guard). The portfolio refresh the join already requests reinforces it.
 - Effect: joining Void routes Father Xen to the recognition line live; every other consumer of `window.gPlayerFaction` is fixed too.
 
-**Void Collective colony lore (`client/assets/galaxy.js`)**
-- Rewrote the planet-detail lore for the two Void-home colonies, Null Point and The Escrow, which read as generic relay/vault placeholder. Null Point is now the relay heart of the Collective (null relays, the augmented communing as one signal, logs kept empty as release rather than concealment); The Escrow is now the drowned vault where the deep itself is doctrine (everything beyond the present moment is nothingness). Mechanics, companies, and planet bonuses unchanged; lore text only. No em dashes in the player-visible strings.
+**Planet-detail lore: cold-terminal rewrite (`client/assets/galaxy.js`)**
+- The detail page is a trader's data feed, not a lore page. Stripped the AI prose cadence (antithesis "it is not X, it is Y", editorializing, faction personhood) from every planet detail that was not hand-authored. Rewrote 15 colonies as cold descriptions of what the place is plus its economic and control facts: the 13 outer/financial/industrial colonies (New Anchor, Cascade Station, Frontier Outpost, The Hollow, Vein Cluster, Aurora Prime, Dust Basin, Nova Reach, Iron Shelf, The Ledger, Signal Run, Scrub Yard, Margin Call) and the two Void-home colonies (Null Point, The Escrow), the latter pulled back from their lore-flavored draft to the same cold register. Population and the corporation list are dropped from the lore text since the panel already renders them separately. The six authored colonies (Limbosis, Lustandia, Gluttonis, Abaddon, Eyejog, Flesh Station) are left untouched. Lore text only; no mechanics, companies, or bonuses changed. No em dashes in any player-visible string.
 
 CLIENT-only: hard-refresh, no server restart needed. Sits on top of 1.1.5.7.
 
