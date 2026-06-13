@@ -127,7 +127,7 @@ var COLONY_META = {
   // ── Abaddon Cluster ──────────────────────────────────────────────────────────
   limbosis: {
     name:'Limbosis', x:295, y:38, pop:'Unknown',
-    lore:'The fog never lifts and nobody who understood why ever came back. Limbosis was abandoned after the last Corporate War and the colonists did not leave quietly. What they left behind was a planetary defense grid rated equivalent to Flesh Station. It still runs. Nobody is maintaining it. Any faction that holds Limbosis controls the only weapons platform in the cluster capable of making Abaddon indefensible for everyone else. The relics are not ruins. They are the wreckage of the last four attempts to take this place by force.',
+    lore:"Former weapons lab, abandoned since the last Corporate War. Built the orbital laser grid aimed at Abaddon's binary black holes; the same design was later installed at Flesh Station. The grid still runs unmaintained on automated targeting, rated equivalent to Flesh Station's. Whoever holds Limbosis holds the only platform in the cluster that can leave Abaddon undefendable. Four attempts to take it by force; the wreckage from each still sits in the approach lanes.",
     companies:[],
     planets:[
       { name:'Fog Bastion',    sector:7, sectorName:'Gray Bazaar', icon:'◎',
