@@ -318,9 +318,14 @@
   // ── Branching dialogue trees ────────────────────────────────────────────────
   // rep.tree = { start:'nodeId', nodes:{ id:{ text:'npc line', options:[
   //   { text:'option label', next:'nodeId' } | { text:'option label', end:true } ] } } }
+  // A node may instead be a faction router (no text/options):
+  //   id:{ branch:{ faction:'void', match:'nodeIfMember', other:'nodeOtherwise' } }
   // Plays in the idle/all-done slot only; quest pitches and active-quest lines win.
   // Selecting an option jumps straight to the next NPC line - the option label is NOT
   // re-spoken as a player line (the player already read it on the button).
+  function playerFaction(){
+    try { return window.gPlayerFaction || (window.ME && window.ME.faction) || null; } catch(_) { return null; }
+  }
   function startTree(tree){
     st.tree = { nodes: tree.nodes || {} };
     showTreeNode(tree.start || 'root');
@@ -328,6 +333,13 @@
   function showTreeNode(id){
     var n = st.tree.nodes[id];
     if (!n) { endCall('hangup'); return; }
+    // Faction router: silently redirect based on the caller's faction.
+    if (n.branch) {
+      var pf = playerFaction();
+      var dest = (pf === n.branch.faction) ? n.branch.match : n.branch.other;
+      showTreeNode(dest);
+      return;
+    }
     $('fmcName').textContent = st.rep.name;
     $('fmcName').style.background = 'var(--fac)';
     buttons([]);

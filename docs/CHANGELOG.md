@@ -4,6 +4,28 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.5.8 (2026-06-11) - Father Xen branching codec dialogue + faction-sync fix (CLIENT)
+
+**Codec engine (`client/assets/codec.js`)**
+- New faction-router tree node: `id:{ branch:{ faction, match, other } }`. When the engine reaches it, it silently redirects to `match` if the caller's faction equals `faction`, else to `other` - no text, no button, the player never sees the branch. Reads `window.gPlayerFaction` (falls back to `window.ME.faction`). Linear quests and the Mr. Flesh tree are untouched.
+
+**Father Xen lore conversation (`client/assets/codec-data.js`)**
+- Father Xen (Void Collective tech-priest) gets a GM-authored branching tree (14 nodes) and is now `enabled`. Opens on a greeting with two paths: the question menu and a work stub ("Not yet. Return to me later.").
+- Question menu: the Collective's goal (deflects into a "have you been talking about me" Yes/No that converges, then the mission monologue, then a follow-up on why others dislike them), why they hack other factions (surveillance / outer-planet isolation), their beliefs (unity, then an Abraxas explainer), and his read on Mr. Flesh's mandate.
+- Faction-aware augment beat: after the augment line, the priest "scans" the caller. Void Collective members get the recognition line ("two scholars of Abraxas..."); everyone else gets the rejection ("you lack the augment..."). Implemented with the router node.
+- The placeholder COMMUNION quest is parked (kept as dormant data, `quests:[]` set) so the lore tree plays in the idle slot, mirroring Mr. Flesh. Restore the quest by removing that empty array once the Void questline ships. Rep `ver` v0.13 -> v0.14.
+- Graph-validated (no dangling refs, all 14 nodes reachable, every node can reach a hangup, faction-branch targets resolve, no em dashes in player-visible text) and flow-smoke-tested including the void/non-void routing.
+
+**Faction-sync fix (`client/assets/galaxy.js`, `client/assets/core.js`)**
+- Found while testing the augment branch: it routed everyone to the rejection line even after joining Void. Root cause was not the dialogue. `galaxy.js` is an IIFE, so its `gPlayerFaction` is a module-local variable; the `welcome` and `faction_joined` handlers updated only that local, never `window.gPlayerFaction` - the global the codec (and the header badge, and any cross-module reader) actually uses. `ME.faction` is set only at login, so it was stale after a mid-session join, and `core.js` gated its `window.gPlayerFaction` write behind a `typeof ... !== 'undefined'` check that never passed.
+- `galaxy.js`: `welcome` and `faction_joined` now mirror the faction to `window.gPlayerFaction` and `window.ME.faction`, so a mid-session join is reflected immediately without a reload.
+- `core.js`: portfolio sync now sets both whenever the snapshot carries a faction (removed the dead guard). The portfolio refresh the join already requests reinforces it.
+- Effect: joining Void routes Father Xen to the recognition line live; every other consumer of `window.gPlayerFaction` is fixed too.
+
+CLIENT-only: hard-refresh, no server restart needed. Sits on top of 1.1.5.7.
+
+---
+
 ## v1.1.5.7 (2026-06-11) - short-selling rework: collateral, gated margin calls, debt settlement, Debtor brand, net-worth fixes + countdown UI (SERVER + DB + CLIENT)
 
 Everything below ships as one patch. The short mechanic was rebuilt end to end; the pieces are coupled (a margin trigger without locked proceeds just re-opens the money printer), so they land together.
@@ -39,6 +61,7 @@ Unit-tested: net-worth signed/invariance, collateral lock (zero spendable cash f
 Untested live (no DB/WS in the build sandbox): schema auto-create on first boot, WS broadcasts on settlement, and the per-call fund-stake DB reads in `snapshotPortfolio` (fine at current concurrency, cacheable later).
 
 SERVER + DB (two new tables, `short_coll` and `margin_calls`, both `CREATE TABLE IF NOT EXISTS` on boot; no manual migration) + CLIENT. Back up `server/fleshmarket.db`, `pm2 restart fleshmarket`, then hard-refresh (client assets aren't cache-busted).
+
 
 ---
 

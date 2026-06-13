@@ -3177,9 +3177,13 @@ document.addEventListener('fm_ws_msg',function(e){
   }
   if(msg.type==='welcome'&&msg.data&&msg.data.faction){
     gPlayerFaction=msg.data.faction;
+    // Mirror to the globals other modules (codec, header) read.
+    window.gPlayerFaction=msg.data.faction; if(window.ME) window.ME.faction=msg.data.faction;
   }
   if(msg.type==='faction_joined'&&msg.data&&msg.data.faction){
     gPlayerFaction=msg.data.faction;
+    // Mirror to the globals immediately so a mid-session join is reflected without a reload.
+    window.gPlayerFaction=msg.data.faction; if(window.ME) window.ME.faction=msg.data.faction;
     // Refresh passive income — faction changed affects Syndicate bonus etc.
     setTimeout(function(){ _sendWSGalaxy({type:'portfolio_request'}); }, 500);
   }

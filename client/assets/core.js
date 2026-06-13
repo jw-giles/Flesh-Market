@@ -1883,9 +1883,10 @@ ws.addEventListener('message', (ev)=>{
           __MY_POSITIONS[po.sym] = { qty: Number(po.qty)||0, avg: Number(po.avg)||0 };
         }
       }
-      // Sync faction to galaxy module
-      if (msg.data.faction && typeof window.gPlayerFaction !== 'undefined') {
+      // Sync faction to the globals other modules (galaxy, codec, header) read.
+      if (msg.data.faction) {
         window.gPlayerFaction = msg.data.faction;
+        if (window.ME) window.ME.faction = msg.data.faction;
       }
     } catch(e) {}
     renderPositions(msg.data);

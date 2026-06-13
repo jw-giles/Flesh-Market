@@ -72,9 +72,14 @@ window.FM_CODEC = {
     },
     {
       id:'xen', name:'Father Xen', faction:'void',
-      portrait:'cyborg11', role:'Void Collective Tech Priest',
+      portrait:'cyborg11', role:'Void Collective Tech Priest', enabled:true,
       blurb:"Another religious representative. I would call him a man, but he is closer to a machine now. The Void Collective locks away tech we need and likes to pick at our OPSEC. Since he arrived, the hacks have stopped, and he has been useful enough to justify the trade secrets we lost for the quiet. Try not to let him preach too long.",
-      ver:'v0.13',
+      idleLine:"The Collective is listening. Speak.", // fallback only; the tree below plays instead
+      ver:'v0.14',
+      // quests:[] makes the branching lore tree play in the idle slot. The COMMUNION quest
+      // below is parked (dormant data) until the Void questline ships; restore it by
+      // removing this empty array.
+      quests:[],
       lines:[
         {from:'them', text:"The Collective felt your pulse on the network. Steady. Wasteful. Human."},
         {from:'you',  text:"What do you want, priest?"},
@@ -83,7 +88,73 @@ window.FM_CODEC = {
       ],
       quest:{ id:'void_communion', title:'COMMUNION',
         desc:'Travel to a colony in the Abaddon cluster and dock.',
-        reward:'Void standing +1, opens a hidden contact (placeholder).' }
+        reward:'Void standing +1, opens a hidden contact (placeholder).' },
+      // Branching lore dialogue (GM-authored). Node shape mirrors Mr. Flesh's tree.
+      // A faction-router node carries { branch:{ faction, match, other } } and silently
+      // redirects on the caller's faction (used for the Void augment recognition).
+      tree:{
+        start:'open',
+        nodes:{
+          open:{ text:"Peace finds you on the network, traveler. The Collective is listening.", options:[
+            { text:"I have some questions for you.", next:'root' },
+            { text:"Any work for me?", next:'work' },
+          ]},
+          work:{ text:"Not yet. Return to me later.", options:[
+            { text:"A few more questions, then.", next:'root' },
+            { text:"Understood.", end:true },
+          ]},
+          root:{ text:"Not many do. What do you care to know?", options:[
+            { text:"What is your organization's goal?", next:'goal1' },
+            { text:"Why do you hack other factions?", next:'hack1' },
+            { text:"What are your beliefs?", next:'belief1' },
+            { text:"Do you like Mr. Flesh's mandate, or peace and stable pricing?", next:'flesh1' },
+            { text:"Any work for me?", next:'work' },
+            { text:"That is all.", end:true },
+          ]},
+          // ── A2: organization's goal ──
+          goal1:{ text:"Have you been talking to the others about me?", options:[
+            { text:"Yes.", next:'goal2' },
+            { text:"No.", next:'goal2' },
+          ]},
+          goal2:{ text:"Well, regardless, they don't understand our mission. As soon as Man merged his divine intellect with the computation drives, all was seen. The code of reality became apparent to the everyman. We don't fight. We don't cause war. Our isolation has bred peace; the outsiders bring their conflict to us.", options:[
+            { text:"So why do the others dislike you?", next:'goal3' },
+          ]},
+          goal3:{ text:"They don't have a choice but to hate what they can't control. Once a member joins our cause and receives the augment, their allegiance to peace is merged with another form of divine intellect. The augmentation is peace and love. It is God.", options:[
+            { text:"The augment?", next:'goal_faction' },
+          ]},
+          // Faction router: the priest reads the caller and answers differently.
+          goal_faction:{ branch:{ faction:'void', match:'goal_void', other:'goal_nonvoid' } },
+          goal_void:{ text:"Ah, my apologies. I did not see the augment at first. Rejoice with me. Two scholars of Abraxas have made it into the company of Mr. Flesh.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"Peace to you, priest.", end:true },
+          ]},
+          goal_nonvoid:{ text:"You lack the augment. You will never truly understand peace, or love. No matter. Do you have any more questions?", options:[
+            { text:"Yes, a few more.", next:'root' },
+            { text:"No, that is all.", end:true },
+          ]},
+          // ── A3: hacking other factions ──
+          hack1:{ text:"Security. Notice how they avoid our hacks, yet never state what those hacks are doing. We need surveillance.", options:[
+            { text:"You can't really believe the other factions would have no issue with being spied on?", next:'hack2' },
+          ]},
+          hack2:{ text:"I understand. But do you understand? The others would devour us like rabid dogs the moment we operate under their concepts. Imagine it. We are on the outer planets. They could never jump to us again, and every one of our operations would remain a mystery to them. But they will not allow it. They force us to partake in the collective rule of corporations and their ill councils.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // ── A4: beliefs ──
+          belief1:{ text:"We believe in unity. Human history is drenched in the blood of conflict. Endless fighting, endless atrocity. If only we all saw the universe for what it is. A wealth of resources, of consciousness, of beauty, and of love.", options:[
+            { text:"You worship Abraxas. What is that?", next:'belief2' },
+          ]},
+          belief2:{ text:"Abraxas is an old idea, from the age of occultist trifling. Yet within all that esoteric rambling sat an empty truth. A reality. Abraxas is the idea that everything beyond what we hold now is nothingness. To love a thing, you must first embrace the lack of it. To worship the void is to understand the value of the here and now. The augment teaches this. You should consider it.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // ── A5: Mr. Flesh's mandate ──
+          flesh1:{ text:"He knows, and he agrees with us, even if he will not say so openly. His acts of peace are far too hands off, far too moderate for our liking. But what do we know. We are not Mr. Flesh.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+        }
+      }
     },
     {
       // Employer / story frame. Portrait reuses the Preserved Brain item art via

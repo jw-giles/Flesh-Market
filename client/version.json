@@ -1,7 +1,7 @@
 {
-  "version": "1.1.5.7",
-  "built": "2026-06-11T21:40:00Z",
+  "version": "1.1.5.8",
+  "built": "2026-06-13T01:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.5.7",
-  "notes": "Short-selling rework (single consolidated patch): proceeds lock as collateral (no spendable cash from shorting, no share cap, no upfront margin); gated margin calls at 65% underwater with a 3h deadline; deadline SETTLES THE DEBT (cash then liquidate holdings as needed) instead of wiping the account - only true insolvency zeroes + dunces (Debtor brand, brown chat, flat 25k escape); net worth + leaderboard count locked collateral + Capital House stake; net-worth Math.abs liability bug fixed; margin-call countdown banner + COVER NOW; short modal aligned to the collateral model. SERVER + DB (new short_coll + margin_calls tables) + CLIENT. Back up DB, pm2 restart, hard-refresh."
+  "patch": "1.1.5.8",
+  "notes": "Father Xen branching codec dialogue (Void Collective tech-priest): org goal, hacking, beliefs/Abraxas, opinion of Mr. Flesh, work stub, with a faction-aware augment branch (Void members get recognition, others get rejection) via a new faction-router tree node. Includes the faction-sync fix: mid-session faction joins now update window.gPlayerFaction + ME.faction (galaxy.js was only updating a module-local var), so the augment branch and any other faction-dependent UI react without a reload. CLIENT-only; hard-refresh. Sits on top of 1.1.5.7."
 }
