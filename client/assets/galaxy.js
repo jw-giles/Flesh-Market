@@ -115,7 +115,7 @@ var COLONY_META = {
   },
   null_point: {
     name:'Null Point', x:480, y:560, pop:'420M',
-    lore:'The relay heart of the Void Collective. Every null relay in the outer dark threads back to this point, and through it the augmented commune as a single signal where outsiders read only wreckage and noise. NullSyndicate and its sister houses keep the traffic moving and the logs empty, not to bury crime but because to the augmented a record of the self is one more thing worth releasing. The Collective came to the edge of the map to be left alone, and built peace out of the quiet. Requests for operational records are not acknowledged. The silence is the point.',
+    lore:'The relay heart of the Void Collective. Every null relay in the outer dark threads back here, and through them the augmented speak as a single signal. Outsiders who listen in hear only wreckage and static. NullSyndicate and its sister houses keep the traffic moving and the logs empty. This is not concealment. To the augmented, a record of the self is one more thing to release. The Collective came to the edge of the map to be left alone, and made peace out of the quiet. The silence here is not an absence. It is the point.',
     companies:['NullSyndicate','UnderNet','CipherHoldings','ShadowDynamics','GhostFoundry'],
     planets:[
       { name:'The Null',       sector:1, sectorName:'Biotech',    icon:'◉',
@@ -252,7 +252,7 @@ var COLONY_META = {
   },
   the_escrow: {
     name:'The Escrow', x:430, y:870, pop:'90M',
-    lore:'A drowned vault three kilometers down, and the servers run deeper still. The Void Collective keeps it formally neutral so all four factions will trust it with their mirror records, then files those records in the same black water where the augmented sink the selves they have shed. To the Collective the deep is not storage but doctrine: everything beyond the present moment is nothingness, so let it fall into the dark and rest. Audits have been requested nine times. The Escrow answers that there is nothing down there to find, and means it more honestly than the petitioners know.',
+    lore:'A drowned vault three kilometers down, with the servers running deeper still. The Void Collective keeps it formally neutral, so all four factions trust it to hold their mirror records. Those records sink into the same black water where the augmented let their old selves fall away. To the Collective, the deep is not storage. It is doctrine. Everything past the present moment is nothingness, so they give it to the dark and call that peace. Audits have been requested nine times. The Escrow answers that there is nothing down there to find, and it means that more honestly than the petitioners know.',
     companies:['Silver Holdings','SpecterIndustries','OccultMaterials','ApexContraband'],
     planets:[
       { name:'Vault Deep One',    sector:0, sectorName:'Finance',  icon:'◉',
