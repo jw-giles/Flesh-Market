@@ -31,6 +31,9 @@
   .cc-ttl{color:#5cf08a;letter-spacing:.12em;font-weight:700;text-transform:uppercase;text-shadow:0 0 10px rgba(92,240,138,.3)}
   .cc-ttl small{display:block;color:#5d6f6a;font-size:10px;letter-spacing:.18em;margin-top:2px}
   .cc-cash{font-weight:700;color:#ffd23f;font-size:.95rem}
+  .cc-credit{display:inline-block;margin-top:3px;color:#6dffa0;font-size:.7rem;letter-spacing:.08em;text-transform:none;text-decoration:none;font-weight:600;animation:ccCreditGlow 2.2s ease-in-out infinite}
+  .cc-credit:hover{color:#bfffd6}
+  @keyframes ccCreditGlow{0%,100%{text-shadow:0 0 5px #42ff7e,0 0 10px #42ff7e66}50%{text-shadow:0 0 10px #6dffa0,0 0 20px #42ff7eaa}}
   .cc-nav{display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid #13202a;flex-wrap:wrap}
   .cc-nav button{background:none;border:none;border-bottom:2px solid transparent;color:#5d8f6f;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;padding:7px 14px;cursor:pointer;font-family:inherit}
   .cc-nav button.on{color:#7df0a6;border-bottom-color:#2f7d4f}
@@ -392,7 +395,7 @@
     inMatch = false;
     r.innerHTML = '';
     var wrap = el('div', 'cc-root'); wrap.style.cssText = 'padding:10px;max-width:1040px;margin:0 auto';
-    wrap.appendChild(el('div', 'cc-top', '<div class="cc-ttl">Corpo-Cards<small>The Arena</small></div><div class="cc-cash">' + fmtF(state.cash) + '</div>'));
+    wrap.appendChild(el('div', 'cc-top', '<div class="cc-ttl">Corpo-Cards<small>The Arena</small><a class="cc-credit" href="https://subotai-khudozhnik.itch.io/" target="_blank" rel="noopener noreferrer">Art by subotai \u2197</a></div><div class="cc-cash">' + fmtF(state.cash) + '</div>'));
     var nav = el('div', 'cc-nav');
     [['play', 'Play'], ['decks', 'Decks'], ['collection', 'Collection'], ['rules', 'Rules'], ['packs', 'Card Packs'], ['fbay', 'Ƒbay']].forEach(function (v) {
       var b = el('button', arenaView === v[0] ? 'on' : null, v[1]); b.onclick = function () { arenaView = v[0]; builder.open = false; if (v[0] === 'fbay') send({ type: 'tcg_card_listings' }); renderArena(); }; nav.appendChild(b);

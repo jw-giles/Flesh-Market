@@ -37,6 +37,7 @@ The in-game trading card game, **Corpo-Cards**, plus a player card market, deck-
 - Art: 50 vintage archival portraits added at `client/assets/tcg/art/dwarves/` (grayscale + alpha, ~44KB each, ~2.15 MB total), resolved via a new `['dwarf', name]` branch in `card-art.js`.
 
 **UI fixes**
+- Artist credit: an "Art by subotai" link (to subotai-khudozhnik.itch.io, opens in a new tab) sits under the Corpo-Cards header title, matching the portrait-picker credit, added per the artist's request for use of the card and portrait art.
 - Tab strip is a single strand: `.tab` gets `white-space:nowrap` + `flex-shrink:0` (labels never wrap, tabs never squish) and `.tabs` gets `flex-wrap:nowrap` + `overflow-x:auto` (the row scrolls horizontally if it overflows instead of wrapping to a second line or growing taller). This fixes both the earlier thick-tab wrap and the Arena-on-a-second-row wrap.
 - Bug-report button moved from the tab strip into the header, right of Discord. The `#bugsTab` pane and `dev-comms.js` are unchanged; a hidden `data-tab="bugs"` element keeps the existing tab handler wiring, and the header button triggers it.
 
