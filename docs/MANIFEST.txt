@@ -1,4 +1,32 @@
-# FleshMarket v1.1.6.0 — MANIFEST
+# FleshMarket v1.1.7.0 - MANIFEST
+
+## v1.1.7.0 additions (Corpo-Cards: card game)
+
+```
+server/
+  tcg/
+    packs.js                pack economy: 5 packs (Starter/Standard/Premium, Dwarves-only Guild Crate, guaranteed-Legendary Vault); per-faction pool filter, shiny roll
+    tcg-db.js               collection + deck + card-market persistence (tcg_collection, tcg_decks, tcg_card_market)
+client/
+  assets/
+    casino-cards.js         shared pixel-art poker-deck renderer (FMPokerCard / FMPokerCardHTML) for blackjack + poker
+    cards/poker-deck.png    pixel-art playing-card sprite sheet (880x464) for the casino card games
+    tcg/
+      tcg-app.js            Corpo-Cards tab app: Card Packs store, pack opening, Collection, Decks, Rules, Ƒbay card market
+      engine.js             rules engine (server-authoritative design, runs client-side for PvE)
+      cards.js              card pool: 106 deck-legal (+50 Dwarves faction; Abaddon is now its own faction) + tokens
+      deck.js               deck model + validation (7 factions; legendary = 1 copy; + Dwarves/Abaddon starters)
+      ai.js                 PvE AI (one-ply greedy + lethal)
+      card-art.js           card -> art mapping
+      art/portraits/*.png   25 cyberpunk character sprites
+      art/elements/*.png    10 element faces
+      art/masters/*.png     10 Abaddon "Masters" (legendary art)
+      art/dwarves/*.png     50 vintage archival portraits (Dwarves faction)
+```
+Edited: server/db.js (initTcg call), server/server.js (tcg_* WS handlers incl. the Ƒbay card market),
+client/index.html (Bugs tab removed; Corpo-Cards tab, formerly Arena, + #arenaTab pane; Store card subtab removed),
+client/assets/core.js (Corpo-Cards tab handler + lazy-load), client/style.css (single-strand horizontal-scroll tab strip),
+client/assets/casino-blackjack.js + casino-poker.js (pixel-art card rendering via casino-cards.js, text-glyph fallback).
 
 ## Structure
 
@@ -121,7 +149,8 @@ See `CHANGELOG.md` for full details.
 
 | Version | Key Change |
 |---|---|
-| v1.1.5.6 | Branching codec dialogue engine (no player-line echo); Mr. Flesh idle line replaced with a nine-question lore conversation + work stub; war timeline folded into the Coalition thread |
+| v1.1.7.0 | Corpo-Cards in-game card game (packs, collection, deck-builder, PvE matches, 7 factions, shiny variants, server-authoritative pack economy); Ƒbay player card market (list/buy/cancel, atomic card+cash transfer, listed cards gate deck play); all card UI folded into one Corpo-Cards tab (formerly Arena); casino blackjack/poker pixel-art cards; single-strand tab strip |
+| v1.1.6.0 | Market dynamics rework + large-order slippage/impact; news drives instant price gaps; predictability and wildness cut |
 | v1.1.3.5 | Commodity round-trip exploit fix: fills price off post-impact price (buy/sell eat their own slippage) |
 | v1.0.2.4 | Capital Houses guild redesign: rename, passive faucets removed, per-share performance P&L, four-pane house view, and governance/voting (Executive/Vote/Council, share-weighted, owner-set voting window) |
 | v1.0.2.3 | Fund disband pays NAV share value (not deposit), drone enemies spawn outside aggro range, SWT hard-locked flat at Ƒ4500, Patreon webhook email matching hardened |

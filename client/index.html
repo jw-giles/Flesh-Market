@@ -43,6 +43,7 @@
   <span id="invNavBtn" style="display:none"></span><span id="slotNavBtn" style="display:none"><span id="slotNavSpinCount"></span></span>
   <a href="https://www.patreon.com/FLSH" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#7a5e1e;color:#ffce4d;text-decoration:none;animation:patreonPulse 2.5s ease-in-out infinite;font-weight:500">☆ Patreon</a>
   <a href="https://discord.gg/H47DnbY33t" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#3a3a6a;color:#8a8ae0;text-decoration:none;animation:discordPulse 2.5s ease-in-out infinite;font-weight:500">◈ Discord</a>
+  <button class="btn" onclick="var b=document.getElementById('bugsTabBtnHidden');b&&b.click();" style="padding:4px 14px;font-size:.82rem;border-color:#1a4a47;color:#4ecdc4;font-weight:500" title="Report a bug">🐛 Bugs</button>
   <style>@keyframes patreonPulse{0%,100%{box-shadow:0 0 4px #ffce4d22;border-color:#7a5e1e}50%{box-shadow:0 0 8px #ffce4d44,0 0 12px #ffce4d22;border-color:#a07e2e}}@keyframes discordPulse{0%,100%{box-shadow:0 0 4px #5865f222;border-color:#3a3a6a}50%{box-shadow:0 0 8px #5865f244,0 0 12px #5865f222;border-color:#5a5a9a}}</style>
   <button class="btn" onclick="window.showTutorial&&window.showTutorial()" style="padding:3px 10px;font-size:.78rem;border-color:#1a3a1a;color:#4a8a4a" title="Replay Tutorial">? Tutorial</button>
   <button class="btn" onclick="window.FM_Auth&&window.FM_Auth.logout()" style="padding:3px 10px;font-size:.78rem;border-color:#1f4515;color:#888">Logout</button>
@@ -69,7 +70,7 @@
 <div class="tab active" data-tab="market">Market</div>
 <div class="tab" data-tab="heat">🔥 Heat</div>
 <div class="tab" data-tab="pnl">P&amp;L</div>
-<div class="tab" data-tab="casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none">⚖ Capital Houses</div><div class="tab" data-tab="store">Store</div><div class="tab" data-tab="galactic">⬡ Galaxy</div><div class="tab" data-tab="mining">⛏ Mining</div><div class="tab" data-tab="bugs">🐛 Bugs</div><div class="tab" data-tab="fleshbook">📣 Fleshbook<span id="unread-fleshbook" style="display:none;background:#a78bfa;color:#000;border-radius:8px;font-size:.6rem;padding:0 5px;margin-left:4px;font-weight:bold">0</span></div>
+<div class="tab" data-tab="casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none">⚖ Capital Houses</div><div class="tab" data-tab="store">Store</div><div class="tab" data-tab="galactic">⬡ Galaxy</div><div class="tab" data-tab="mining">⛏ Mining</div><div class="tab" data-tab="fleshbook">📣 Fleshbook<span id="unread-fleshbook" style="display:none;background:#a78bfa;color:#000;border-radius:8px;font-size:.6rem;padding:0 5px;margin-left:4px;font-weight:bold">0</span></div><div class="tab" data-tab="arena">🃏 Corpo-Cards</div><div class="tab" data-tab="bugs" id="bugsTabBtnHidden" style="display:none">🐛 Bugs</div>
 </div>
 <div id="marketTab">
 <canvas id="chart"></canvas>
@@ -1041,6 +1042,7 @@ window.storeSubTab=storeSubTab;
 
 
 <div id="fleshbookTab" style="display:none;flex:1;min-height:0;flex-direction:column;overflow:hidden;background:#02060a;border-radius:6px"></div>
+<div id="arenaTab" style="display:none;flex:1;min-height:0;overflow:auto;background:#02060a;border-radius:6px"></div>
 </div>
 
 
@@ -1194,6 +1196,7 @@ window.storeSubTab=storeSubTab;
   </div>
 </div>
 <script src="assets/core.js"></script>
+<script src="assets/casino-cards.js"></script>
 <!-- ── Unmoderated Chat 18+ Warning Modal ──────────────────────────────────────────── -->
 <div id="unmod-warning-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);align-items:center;justify-content:center">
   <div style="background:#100a04;border:1px solid #8b0000;border-radius:10px;padding:28px 32px;max-width:480px;width:90%;box-shadow:0 0 40px rgba(180,0,0,.35)">
@@ -1746,7 +1749,7 @@ ws.addEventListener('message', function(ev){
     if(_lazyLoaded[src]){ if(cb) cb(); return; }
     _lazyLoaded[src] = true;
     var s = document.createElement('script');
-    s.src = src;
+    s.src = src + (src.indexOf('?')<0?'?':'&') + 'v=' + Date.now();
     s.onload = cb || null;
     document.head.appendChild(s);
   }

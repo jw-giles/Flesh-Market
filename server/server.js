@@ -113,6 +113,13 @@ import {
   buyMiningShip, equipMiningShip,
 } from './db.js';
 
+// FleshMarket TCG — collection/deck persistence + server-authoritative pack economy
+import {
+  tcgGetCollection, tcgGrantCards, tcgGetDecks, tcgSaveDeck, tcgDeleteDeck,
+  tcgListCard, tcgGetCardListings, tcgGetMyCardListings, tcgBuyCard, tcgCancelCardListing,
+} from './tcg/tcg-db.js';
+import { PACKS, rollPack, packPrice, packInfo } from './tcg/packs.js';
+
 initDB();
 setupTransactions();
 initHedgeFund();
@@ -2398,7 +2405,16 @@ const wss=new WebSocketServer({server});
 
 app.use('/api/patreon/webhook', express.raw({type:'application/json'}));
 app.use(express.json());
-app.use('/',express.static(path.join(__dirname,'..','client')));
+app.use('/',express.static(path.join(__dirname,'..','client'),{
+  etag:true,
+  setHeaders:function(res,filePath){
+    if(/\.(html|js)$/i.test(filePath)){
+      res.setHeader('Cache-Control','no-cache'); // must revalidate every load: 304 if unchanged, fresh on deploy
+    } else if(/\.(png|jpg|jpeg|gif|webp|svg|woff2?|ttf|mp3|ogg|wav)$/i.test(filePath)){
+      res.setHeader('Cache-Control','public, max-age=86400'); // static assets cache 1 day (paths are stable)
+    }
+  }
+}));
 
 // Selectable player portraits: allowlist built from the assets dir at boot so the
 // client can never set an arbitrary string into an <img src>. Filenames (sans .png).
@@ -5739,6 +5755,105 @@ wss.on('connection',(ws,req)=>{
     }
 
     const tier=TIERS[actor.patreon_tier||0];
+
+    // ── FleshMarket TCG (Arena) ──────────────────────────────────────────────
+    // Pack purchase is server-authoritative: the server owns the price, rolls the
+    // cards, debits cash, and writes the collection. The client never decides what
+    // it receives or what it costs.
+    if(msg.type==='tcg_collection'){
+      ws.send(JSON.stringify({type:'tcg_collection',data:{
+        collection: tcgGetCollection(actor.id),
+        decks: tcgGetDecks(actor.id),
+        packs: packInfo(),
+        cash: actor.cash,
+      }}));
+      return;
+    }
+    if(msg.type==='tcg_buy_pack'){
+      const packId=String(msg.pack||'');
+      const price=packPrice(packId);
+      if(price==null){ ws.send(JSON.stringify({type:'tcg_error',data:{msg:'Unknown pack.'}})); return; }
+      if(Number(actor.cash||0) < price){ ws.send(JSON.stringify({type:'tcg_error',data:{msg:'Insufficient funds.'}})); return; }
+      let cards; try{ cards=rollPack(packId); }catch(e){ ws.send(JSON.stringify({type:'tcg_error',data:{msg:'Pack error.'}})); return; }
+      try{ tcgGrantCards(actor.id, cards); }
+      catch(e){ console.error('tcg grant:', e); ws.send(JSON.stringify({type:'tcg_error',data:{msg:'Pack error.'}})); return; }
+      safeAddCash(actor, -price);   // charge only after the grant transaction commits
+      savePlayer(actor);
+      ws.send(JSON.stringify({type:'tcg_pack_opened',data:{pack:packId, cards, cash:actor.cash}}));
+      try{ broadcastToPlayer(actor.id, {type:'portfolio', data:snapshotPortfolio(actor)}); }catch(_){}
+      return;
+    }
+    if(msg.type==='tcg_save_deck'){
+      const slot=Number(msg.slot)||0; const deck=msg.deck||{};
+      if(slot<0||slot>8||!deck.faction){ ws.send(JSON.stringify({type:'tcg_error',data:{msg:'Bad deck.'}})); return; }
+      tcgSaveDeck(actor.id, slot, {name:String(deck.name||'Deck').slice(0,40), faction:String(deck.faction), cards:Array.isArray(deck.cards)?deck.cards.slice(0,40):[]});
+      ws.send(JSON.stringify({type:'tcg_decks',data:{decks: tcgGetDecks(actor.id)}}));
+      return;
+    }
+    if(msg.type==='tcg_delete_deck'){
+      tcgDeleteDeck(actor.id, Number(msg.slot)||0);
+      ws.send(JSON.stringify({type:'tcg_decks',data:{decks: tcgGetDecks(actor.id)}}));
+      return;
+    }
+
+    // ── Card Market (Ƒbay) ───────────────────────────────────────────────────
+    if(msg.type==='tcg_card_listings'){
+      ws.send(JSON.stringify({type:'tcg_card_listings',data:{
+        listings: tcgGetCardListings(200),
+        mine: tcgGetMyCardListings(actor.id),
+      }}));
+      return;
+    }
+    if(msg.type==='tcg_list_card'){
+      const cardId=String(msg.card||'');
+      const variant=(msg.variant==='shiny')?'shiny':'normal';
+      const price=Math.floor(Number(msg.price)||0);
+      if(!cardId){ ws.send(JSON.stringify({type:'tcg_error',data:{msg:'No card selected.'}})); return; }
+      if(!(price>0)){ ws.send(JSON.stringify({type:'tcg_error',data:{msg:'Set a price above 0.'}})); return; }
+      const r=tcgListCard(actor.id, cardId, variant, price);
+      if(!r.ok){
+        const m = r.error==='not_owned' ? 'You do not own a spare copy of that card.'
+          : r.error==='price_too_high' ? 'That price is too high.' : 'Could not list that card.';
+        ws.send(JSON.stringify({type:'tcg_error',data:{msg:m}})); return;
+      }
+      ws.send(JSON.stringify({type:'tcg_card_listings',data:{
+        listings: tcgGetCardListings(200), mine: tcgGetMyCardListings(actor.id), collection: tcgGetCollection(actor.id),
+      }}));
+      return;
+    }
+    if(msg.type==='tcg_cancel_card_listing'){
+      const listingId=String(msg.listing||'');
+      const ok=tcgCancelCardListing(actor.id, listingId);
+      if(!ok){ ws.send(JSON.stringify({type:'tcg_error',data:{msg:'Listing not found.'}})); return; }
+      ws.send(JSON.stringify({type:'tcg_card_listings',data:{
+        listings: tcgGetCardListings(200), mine: tcgGetMyCardListings(actor.id), collection: tcgGetCollection(actor.id),
+      }}));
+      return;
+    }
+    if(msg.type==='tcg_buy_card'){
+      const listingId=String(msg.listing||'');
+      const r=tcgBuyCard(actor.id, listingId);
+      if(!r.ok){
+        const m = r.error==='insufficient_funds' ? 'Insufficient funds.'
+          : r.error==='own_listing' ? 'That is your own listing.'
+          : r.error==='not_found' ? 'That listing is no longer available.' : 'Could not buy that card.';
+        ws.send(JSON.stringify({type:'tcg_error',data:{msg:m}})); return;
+      }
+      actor.cash = Number(actor.cash||0) - r.price;   // DB already debited in the txn; sync in-memory for response/snapshot only, never re-save
+      ws.send(JSON.stringify({type:'tcg_card_bought',data:{
+        card: r.cardId, variant: r.variant, price: r.price, cash: actor.cash,
+        collection: tcgGetCollection(actor.id), listings: tcgGetCardListings(200), mine: tcgGetMyCardListings(actor.id),
+      }}));
+      try{ broadcastToPlayer(actor.id, {type:'portfolio', data:snapshotPortfolio(actor)}); }catch(_){}
+      try{
+        if(playerSockets.get(r.sellerId)){
+          const seller=getPlayer(r.sellerId);
+          broadcastToPlayer(r.sellerId, {type:'tcg_card_sold', data:{ card:r.cardId, variant:r.variant, price:r.price, cash: seller?seller.cash:undefined }});
+          if(seller) broadcastToPlayer(r.sellerId, {type:'portfolio', data:snapshotPortfolio(seller)});
+        }
+      }catch(_){}
+      return;
+    }
 
     // ── Market Order ─────────────────────────────────────────────────────────
     if(msg.type==='order'){

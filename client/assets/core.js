@@ -1569,9 +1569,11 @@ $all('.tab').forEach(tab=>{
     const _fbTab = el('#fleshbookTab'); if(_fbTab) _fbTab.style.display = sel==='fleshbook'?'flex':'none';
     const _galTab = el('#galacticTab'); if(_galTab) _galTab.style.display = sel==='galactic'?'flex':'none';
     const _mineTab = el('#miningTab'); if(_mineTab) _mineTab.style.display = sel==='mining'?'flex':'none';
+    const _arenaTab = el('#arenaTab'); if(_arenaTab) _arenaTab.style.display = sel==='arena'?'block':'none';
     if (sel==='guild') { loadGuildDirectory(); }
     if (sel==='bugs') { if(window.bugsTabLoad) window.bugsTabLoad(); else lazyLoad('assets/dev-comms.js', ()=>window.bugsTabLoad&&window.bugsTabLoad()); }
     if (sel==='fleshbook') { if(window.fleshbookTabLoad) window.fleshbookTabLoad(); else lazyLoad('assets/fleshbook.js', ()=>window.fleshbookTabLoad&&window.fleshbookTabLoad()); }
+    if (sel==='arena') { if(window.tcgTabLoad) window.tcgTabLoad(); else lazyLoad('assets/tcg/tcg-app.js', ()=>window.tcgTabLoad&&window.tcgTabLoad()); }
     if (sel==='mining') {
       try { window.__miningBriefRefresh && window.__miningBriefRefresh(); } catch(_){}
       // Fetch fresh leaderboard whenever the tab is opened

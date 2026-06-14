@@ -159,6 +159,10 @@
 
   // ── Card rendering ───────────────────────────────────────────────
   function cardEl(c,faceDown=false){
+    // Pixel-art deck sprite when the shared renderer is loaded; text glyph fallback otherwise.
+    if(window.FMPokerCard){
+      return window.FMPokerCard(faceDown?'back':c.r, faceDown?null:c.s, {w:52, faceDown});
+    }
     const d=document.createElement('div');
     if(faceDown){ d.className='bj-card back'; d.innerHTML='\u{1F0A0}'; return d; }
     d.className=`bj-card ${SUIT_COLOR[c.s]}`;

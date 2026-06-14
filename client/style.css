@@ -88,10 +88,13 @@ hr{border:0;border-top:2px solid var(--hr);margin:10px 0;box-shadow:0 1px 4px #4
 .n-badge-system{background:#3aa0ff22;color:#7ec8ff}
 .n-badge-trade{background:#2dd4c422;color:#5fe6da}
 .n-ticker{color:var(--amber);font-weight:700;text-decoration:underline;text-decoration-color:#f0b45455;text-underline-offset:2px}
-.tabs{display:flex;gap:8px;margin-bottom:6px;flex-shrink:0}
+.tabs{display:flex;gap:8px;margin-bottom:6px;flex-shrink:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(240,180,84,.28) transparent}
+.tabs::-webkit-scrollbar{height:5px}
+.tabs::-webkit-scrollbar-thumb{background:rgba(240,180,84,.28);border-radius:3px}
+.tabs::-webkit-scrollbar-track{background:transparent}
 /* Center panel tab content: fill available space */
 #marketTab,#pnlTab,#heatTab,#casinoTab,#storeTab,#guildTab,#bugsTab{flex:1;min-height:0;overflow-y:auto}
-.tab{padding:4px 8px;border:1px dashed rgba(240,180,84,0.35);cursor:pointer;border-radius:8px;color:var(--amber)}
+.tab{padding:4px 8px;border:1px dashed rgba(240,180,84,0.35);cursor:pointer;border-radius:8px;color:var(--amber);white-space:nowrap;flex-shrink:0}
 .tab.active{border-color:var(--amber);box-shadow:var(--tab-glow)}
 
 /* Guild / Hedge Fund Tab */

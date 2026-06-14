@@ -75,6 +75,9 @@ function pkUpdateInfo(){
 }
 
 function cardEl(card,faceDown=false){
+  if(window.FMPokerCard){
+    return window.FMPokerCard(faceDown?'back':card.r, faceDown?null:card.s, {w:40, faceDown});
+  }
   const d=document.createElement('div');
   if(faceDown){d.className='pk-card back';d.innerHTML='🂠';return d;}
   d.className=`pk-card ${SUIT_COLOR[card.s]}`;
@@ -98,11 +101,14 @@ function renderSeats(){
     if(ai.hand.length===2){
       if(showCards&&!ai.folded){
         handHtml=ai.hand.map(c=>{
+          if(window.FMPokerCardHTML) return window.FMPokerCardHTML(c.r,c.s,{w:34});
           const col=SUIT_COLOR[c.s];
           return `<div class="pk-card ${col}"><span class="pk-rank">${c.r}</span><span class="pk-suit">${c.s}</span></div>`;
         }).join('');
       } else {
-        handHtml='<div class="pk-card back">🂠</div><div class="pk-card back">🂠</div>';
+        handHtml = window.FMPokerCardHTML
+          ? window.FMPokerCardHTML('back',null,{w:34})+window.FMPokerCardHTML('back',null,{w:34})
+          : '<div class="pk-card back">🂠</div><div class="pk-card back">🂠</div>';
       }
     }
 

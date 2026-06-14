@@ -13,6 +13,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { pbkdf2Sync, randomBytes } from 'crypto';
 import path from 'path';
 import url  from 'url';
+import { initTcg } from './tcg/tcg-db.js';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const DB_PATH   = process.env.DB_PATH || path.join(__dirname, 'fleshmarket.db');
@@ -371,6 +372,8 @@ export function initDB() {
     _renameOwned.run('"' + oldT + '"', '"' + newT + '"', '%' + oldT + '%');
   }
   console.log('[DB] Title rename migration applied');
+
+  initTcg(db); // FleshMarket TCG: collection + deck tables
 
   console.log(`[DB] SQLite ready: ${DB_PATH}`);
   return db;
