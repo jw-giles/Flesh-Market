@@ -1,3 +1,18 @@
+# FleshMarket v1.1.7.1 - MANIFEST
+
+## v1.1.7.1 changes (collapsible right-panel sections + flex chat, CLIENT-only)
+
+```
+client/
+  index.html              Wire Credits + Leaderboard wrapped as .collapsible sections (toggle <h2> + chevron + .collapse-body), default collapsed; + inline collapse toggle script (localStorage: fm_wire_collapsed, fm_lb_collapsed)
+  style.css               #chatBox 420px fixed -> flex:1 1 auto / min-height:240px; new .collapse-toggle / .collapse-chevron / .collapsible.collapsed rules
+  version.json            1.1.7.0 -> 1.1.7.1
+```
+
+No server, DB, or asset changes. Hard-refresh only.
+
+---
+
 # FleshMarket v1.1.7.0 - MANIFEST
 
 ## v1.1.7.0 additions (Corpo-Cards: card game)

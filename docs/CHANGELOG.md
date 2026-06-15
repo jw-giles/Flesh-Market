@@ -4,6 +4,20 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.7.1 (2026-06-15) - Collapsible right-panel sections + flex chat (CLIENT)
+
+Right panel: Wire Credits and Leaderboard collapse to reclaim vertical space for chat. CLIENT-only (`client/index.html` + `client/style.css`): hard-refresh, no `pm2 restart`.
+
+- Wire Credits (`#transferSection`) and Leaderboard (`#leaderboardCompact`) are now collapsible. Each header is a clickable toggle (`role=button`, keyboard Enter/Space) with a chevron that rotates to show open/closed state. Both default to collapsed.
+- The real mechanism: `#chatBox` was a fixed `height:420px`, so collapsing the sections below it would only have left dead space. It is now `flex:1 1 auto; min-height:240px`, so within the viewport-bounded `#rightPanel` flex column the chat box grows to fill whatever the collapsed sections free up. Side effect (intended): on tall desktop viewports the chat now grows past 420px even with both sections expanded, instead of capping at 420 with empty space below.
+- State persists per section in `localStorage` (`fm_wire_collapsed`, `fm_lb_collapsed`), matching the existing `fm_chat_font_pct` pattern. No saved value = collapsed (markup default); `0` = expanded, `1` = collapsed.
+- DOM-safe: `#board` (leaderboard render target) and all transfer input ids (`#toName`, `#amt`, `#xfer`) are unchanged; the leaderboard rows are now one level deeper but `#leaderboardCompact #board` is a descendant selector so styling and the renderer are unaffected.
+- No player-visible prose changed; no em dashes introduced.
+
+**Known tradeoff:** the Leaderboard (net-worth flex board) now starts hidden, so the social-proof/competition signal is off by default until a player expands it. If that costs more in engagement than it gains in chat space, flip the leaderboard's default by removing `collapsed` from its class in `index.html` (one token); Wire Credits defaulting collapsed is uncontroversial.
+
+---
+
 ## v1.1.7.0 (2026-06-14) - Corpo-Cards: the in-game card game (SERVER + DB + CLIENT)
 
 The in-game trading card game, **Corpo-Cards**, plus a player card market, deck-listing rules, and a casino card-art pass. SERVER + DB + CLIENT: `pm2 restart fleshmarket` AND hard-refresh.

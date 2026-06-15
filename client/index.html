@@ -1170,18 +1170,22 @@ window.storeSubTab=storeSubTab;
   <div id="dunce-redeem-hint" style="font-size:.7rem;color:#666;margin-top:6px"></div>
 </div>
 <!-- Transfer pinned at bottom -->
-<div id="transferSection">
-  <h2>Wire Credits</h2>
-  <div class="row">
-    <input class="input" id="toName" placeholder="Recipient name"/>
-    <input class="input" id="amt" min="1" style="max-width:110px" type="number" value="10"/>
-    <button class="btn" id="xfer">Wire</button>
+<div id="transferSection" class="collapsible collapsed" data-collapse-key="fm_wire_collapsed">
+  <h2 class="collapse-toggle" role="button" tabindex="0" aria-label="Toggle Wire Credits"><span class="collapse-chevron">▸</span>Wire Credits</h2>
+  <div class="collapse-body">
+    <div class="row">
+      <input class="input" id="toName" placeholder="Recipient name"/>
+      <input class="input" id="amt" min="1" style="max-width:110px" type="number" value="10"/>
+      <button class="btn" id="xfer">Wire</button>
+    </div>
+    <div style="font-size:.62rem;color:#3a5f3a;margin-top:4px;letter-spacing:.03em;line-height:1.3">* Standard 2% transfer tax applies. Transfers exceeding Ƒ10,000 are subject to 90% taxation by the Merchant Guild.</div>
   </div>
-  <div style="font-size:.62rem;color:#3a5f3a;margin-top:4px;letter-spacing:.03em;line-height:1.3">* Standard 2% transfer tax applies. Transfers exceeding Ƒ10,000 are subject to 90% taxation by the Merchant Guild.</div>
 </div>
-<div id="leaderboardCompact">
-  <h2 style="margin:4px 0 4px 0;font-size:11px">Leaderboard <span style="opacity:.4;font-weight:400;letter-spacing:.04em">NET WORTH</span></h2>
-  <div id="board"></div>
+<div id="leaderboardCompact" class="collapsible collapsed" data-collapse-key="fm_lb_collapsed">
+  <h2 class="collapse-toggle" role="button" tabindex="0" aria-label="Toggle Leaderboard" style="margin:4px 0 4px 0;font-size:11px"><span class="collapse-chevron">▸</span>Leaderboard <span style="opacity:.4;font-weight:400;letter-spacing:.04em">NET WORTH</span></h2>
+  <div class="collapse-body">
+    <div id="board"></div>
+  </div>
 </div>
 </div>
 </div>
@@ -1196,6 +1200,36 @@ window.storeSubTab=storeSubTab;
   </div>
 </div>
 <script src="assets/core.js"></script>
+<script>
+/* Collapsible right-panel sections (Wire Credits, Leaderboard). Default collapsed; state persists per section. */
+(function(){
+  'use strict';
+  function init(){
+    document.querySelectorAll('.collapsible').forEach(function(sec){
+      var key = sec.dataset.collapseKey;
+      if (key){
+        try {
+          var saved = localStorage.getItem(key);
+          if (saved === '0') sec.classList.remove('collapsed');
+          else if (saved === '1') sec.classList.add('collapsed');
+        } catch(_){}
+      }
+      var toggle = sec.querySelector('.collapse-toggle');
+      if (!toggle) return;
+      function flip(){
+        var collapsed = sec.classList.toggle('collapsed');
+        if (key){ try { localStorage.setItem(key, collapsed ? '1' : '0'); } catch(_){} }
+      }
+      toggle.addEventListener('click', flip);
+      toggle.addEventListener('keydown', function(e){
+        if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); flip(); }
+      });
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
 <script src="assets/casino-cards.js"></script>
 <!-- ── Unmoderated Chat 18+ Warning Modal ──────────────────────────────────────────── -->
 <div id="unmod-warning-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);align-items:center;justify-content:center">
