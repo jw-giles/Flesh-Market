@@ -1,3 +1,25 @@
+# FleshMarket v1.1.7.2 - MANIFEST
+
+## v1.1.7.2 changes (Capital House trade integrity: tape impact + buy rate limit, SERVER + DB)
+
+```
+server/
+  server.js               + module helpers impactSlip(notionalC, sideSign) and applyTapeMove(c, lnDelta) (single source of truth for large-order slip + tape push)
+                          + const HOUSE_BUY_COOLDOWN_MS (default 30 min, env-tunable)
+                          + import getLastFundTradeTs from db.js
+                          executeFundTrade(): buy gated by per-house 30-min cooldown (player funds only; flsh/patreon exempt; covers direct + all proposal paths; rate-limited proposal -> failed_exec)
+                                              buys fill at price·(1+slip/2) & push tape up; sells fill at price·(1−slip/2) & push tape down; logs/headlines use fill price
+                          processFundProposals() (legacy guild): same impact, special stocks held to slip=0 so FLSH pin is untouched
+                          personal order handler: inline slip formula + tape block replaced by calls to the shared helpers (behavior-identical)
+  db.js                   + getLastFundTradeTs(fundId, type='trade_buy'): MAX(ts) of a fund's activity rows of that type (restart-safe cooldown source, NO schema change)
+client/
+  version.json            1.1.7.1 -> 1.1.7.2
+```
+
+No DB schema migration (getLastFundTradeTs reads the existing fund_activity table) and no asset changes. `pm2 restart fleshmarket` required (server logic). No client cache concern.
+
+---
+
 # FleshMarket v1.1.7.1 - MANIFEST
 
 ## v1.1.7.1 changes (collapsible right-panel sections + flex chat, CLIENT-only)

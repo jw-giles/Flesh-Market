@@ -4,6 +4,33 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.7.2 (2026-06-15) — Capital House trade integrity: tape impact + buy rate limit (SERVER + DB)
+
+Closes a frictionless extraction path worth ~1B SC/day, plus a defense-in-depth buy cooldown. SERVER + DB-logic (`server/server.js`, `server/db.js` — additive helper, no schema change): `pm2 restart fleshmarket` required, no client cache concern.
+
+**The hole**
+- Personal market orders move the ticker: orders above `IMPACT_THRESHOLD_C` (Ƒ1,000,000) notional pay slippage and push the tape, and the trader eats their own impact (fills off the post-impact price). Capital House trades (`executeFundTrade`) and the legacy guild fund (`processFundProposals`) did neither — they filled flat at the live quote and never touched `c.lnP`.
+- That asymmetry is the exploit: a house buys a block flat (no impact), the price gets pumped (by personal orders or a second account), and the house dumps the block flat at the top — no slippage on the cheap entry, none on the expensive exit, and the dump doesn't drag the realized price down. Round-trip is free money; the player's stake in the house's NAV balloons.
+
+**Fix 1 — impact symmetry**
+- Extracted the slip formula and tape-application into two shared module functions, `impactSlip(notionalC, sideSign)` and `applyTapeMove(c, lnDelta)`, so personal orders, Capital Houses, and the legacy guild fund all price impact through one code path (no drift between them). The personal hot path now calls these — verified byte-identical to the previous inline math (0 mismatches across a price×qty×side sweep).
+- `executeFundTrade` (Capital Houses) and `processFundProposals` (legacy guild): buys now fill at `price·(1 + slip/2)` and push the tape up; sells fill at `price·(1 − slip/2)` and push the tape down — exactly the personal model. Activity logs and headlines now show the actual fill price, not the pre-impact quote.
+- Under threshold, `slip = 0`: fund trades fill flat and move nothing, so ordinary house activity is unchanged. Only large (exploit-scale) orders bite, capped at `IMPACT_MAX_FRAC` (12%) per order. A simulated immediate pump-dump round-trip now posts a net loss instead of a profit. This makes fund round-trips negative-sum exactly like personal trades, so cross-account pump-dump (house A pumps, account B sells into it) is net-negative across the two accounts — the same invariant as two colluding personal accounts the game already tolerates.
+- Special/pinned stocks (e.g. FLSH) are held to `slip = 0` in the guild path so the pin can't be disturbed; `executeFundTrade` already excludes `_special` symbols.
+
+**Fix 2 — Capital House buy rate limit**
+- A player house may execute at most one buy per `HOUSE_BUY_COOLDOWN_MS` (default 30 min, env-tunable). Enforced inside `executeFundTrade`, so it covers EVERY buy path: direct executive/Trader trades, vote-passed proposals (timer auto-resolve and `maybeResolveEarly`), and owner-executed proposals. A rate-limited proposal buy resolves as `failed_exec` — the same graceful outcome as an insufficient-cash buy; the direct-trade and owner-execute routes return `400 { error:'buy_rate_limited', retryInMs, msg }`.
+- **Sells are uncapped.** The cooldown only gates accumulation.
+- Restart-safe with no new schema: the window is derived from the fund activity log via a new `getLastFundTradeTs(fundId, type)` (`MAX(ts) WHERE type='trade_buy'`). A rejected buy writes no activity row, so only a *successful* buy advances the window. Tested against the real SQLite engine (window boundary, sells-don't-block, latest-buy-wins, per-house isolation, exemptions).
+- Per-house, not per-actor: a 5-member house still gets one buy / 30 min, not five. Dev (`flsh`) and guild (`patreon`) funds are exempt.
+
+**Out of scope, flagged**
+- The rate limit closes the *direct executive trade* fast path and the *self-passed proposal* fast path (a solo house in vote mode passing its own proposals). It does not touch sells or sub-threshold grinding; with Fix 1 those are no longer free-money anyway.
+- Price impact removes the *free* extraction (the asymmetry), not all coordinated wash-trading. The residual cost to a patient cross-account pumper is set by the `IMPACT_K` / `IMPACT_MAX_FRAC` constants and applies equally to personal-account collusion; that's a tuning question, not a structural hole.
+- The 30-min cooldown also applies to legitimate vote-passed buys: if a house buys twice within the window (e.g. an owner direct-buy then a vote passes 10 min later), the second resolves `failed_exec`. Acceptable for an anti-grind cap; raise `HOUSE_BUY_COOLDOWN_MS` or scope it to direct trades only if it bites real governance.
+
+---
+
 ## v1.1.7.1 (2026-06-15) - Collapsible right-panel sections + flex chat (CLIENT)
 
 Right panel: Wire Credits and Leaderboard collapse to reclaim vertical space for chat. CLIENT-only (`client/index.html` + `client/style.css`): hard-refresh, no `pm2 restart`.

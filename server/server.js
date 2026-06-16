@@ -52,7 +52,7 @@ import {
   getFundNAVById, applyFundSavingsInterest,
   getPlayerFundStake, getPlayerFundMemberships,
   fundDepositFn, fundWithdrawFn,
-  getFundActivity, logFundActivity,
+  getFundActivity, logFundActivity, getLastFundTradeTs,
   setFundGovernance, createHouseProposal, getHouseProposal, getOpenHouseProposals,
   getGoldenHolder, setGoldenHolder,
   setFundOfficer, removeFundOfficer, getFundOfficerRole, getFundOfficers,
@@ -158,27 +158,50 @@ function executeFundTrade(fundId, side, sym, qty, actorId) {
   const q = Math.max(1, Math.floor(Number(qty)||0));
   const fundCash = fund.cash;
   const haveQty  = getFundPortfolio(fundId).find(h=>h.symbol===sym)?.qty || 0;
+  let fillPrice = c.price;
   if (side === 'buy') {
-    const cost = c.price * q;
+    // House buy rate limit (player funds only). Derived from the activity log, so it
+    // survives restarts and only the LAST SUCCESSFUL buy advances the window. Applies
+    // to every buy path through this function; a vote-passed buy that is rate-limited
+    // resolves as failed_exec, the same outcome as an insufficient-cash buy.
+    if (fund.type === 'player' && HOUSE_BUY_COOLDOWN_MS > 0) {
+      const lastBuyTs = getLastFundTradeTs(fundId, 'trade_buy') || 0;
+      const elapsed = Date.now() - lastBuyTs;
+      if (elapsed < HOUSE_BUY_COOLDOWN_MS) {
+        const retryInMs = HOUSE_BUY_COOLDOWN_MS - elapsed;
+        return { ok:false, error:'buy_rate_limited', retryInMs,
+                 msg:`This house can buy once every ${Math.round(HOUSE_BUY_COOLDOWN_MS/60000)} min. Try again in ${Math.ceil(retryInMs/60000)} min.` };
+      }
+    }
+    // Large-order impact: the house eats its own slippage (fills off the post-impact
+    // price) and the buy pushes the tape up, exactly like a personal order. Under
+    // IMPACT_THRESHOLD_C notional slip is 0, so ordinary house trades fill flat as before.
+    const slip = impactSlip(toCents(c.price) * q, 1);
+    fillPrice = slip > 0 ? c.price * (1 + slip/2) : c.price;
+    const cost = fillPrice * q;
     if (fundCash < cost) return { ok:false, error:'insufficient_fund_cash', have:fundCash, need:cost };
     setFundCashById(fundId, fundCash - cost);
     setFundPortfolioQty(fundId, sym, haveQty + q);
-    logFundActivity(fundId,'trade_buy',actorId,sym,q,c.price,cost,`Buy ${q}× ${sym} @ Ƒ${c.price.toFixed(2)}`);
-    pushHeadline(`${fund.name}: bought ${q}× ${sym} @ Ƒ${c.price.toFixed(2)}`, 'good', sym);
+    applyTapeMove(c, slip);
+    logFundActivity(fundId,'trade_buy',actorId,sym,q,fillPrice,cost,`Buy ${q}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`);
+    pushHeadline(`${fund.name}: bought ${q}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`, 'good', sym);
   } else if (side === 'sell') {
     const sellQty = Math.min(q, haveQty);
     if (sellQty <= 0) return { ok:false, error:'no_holdings' };
-    const proceeds = c.price * sellQty;
+    const slip = impactSlip(toCents(c.price) * sellQty, -1);
+    fillPrice = slip > 0 ? c.price * (1 - slip/2) : c.price;
+    const proceeds = fillPrice * sellQty;
     setFundCashById(fundId, fundCash + proceeds);
     setFundPortfolioQty(fundId, sym, haveQty - sellQty);
-    logFundActivity(fundId,'trade_sell',actorId,sym,sellQty,c.price,proceeds,`Sell ${sellQty}× ${sym} @ Ƒ${c.price.toFixed(2)}`);
-    pushHeadline(`${fund.name}: sold ${sellQty}× ${sym} @ Ƒ${c.price.toFixed(2)}`, 'neutral', sym);
+    applyTapeMove(c, -slip);
+    logFundActivity(fundId,'trade_sell',actorId,sym,sellQty,fillPrice,proceeds,`Sell ${sellQty}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`);
+    pushHeadline(`${fund.name}: sold ${sellQty}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`, 'neutral', sym);
   } else {
     return { ok:false, error:'invalid_side' };
   }
   if (fund.type==='flsh') updateFLSHPrice();
   snapshotFund(fundId);
-  return { ok:true, price:c.price };
+  return { ok:true, price:fillPrice };
 }
 
 // Can this actor participate in a house's governance (propose/vote)?
@@ -288,6 +311,31 @@ const IMPACT_THRESHOLD_C = parseInt(process.env.IMPACT_THRESHOLD_C || '100000000
 const IMPACT_K           = parseFloat(process.env.IMPACT_K || '0.04'); // slip per 1x-threshold over the line
 const IMPACT_MAX_FRAC    = parseFloat(process.env.IMPACT_MAX_FRAC || '0.12'); // hard cap: 12% per order
 const IMPACT_SELL_SIDE   = (process.env.IMPACT_SELL_SIDE || '1') !== '0'; // symmetric by default; '0' = buys-only
+
+// Slip fraction for an executed leg's notional (cents) and side (+1 buy / -1 sell).
+// Single source of truth: personal orders, Capital Houses, and the legacy guild
+// fund all price impact through this, so no trade path can move the tape for free.
+function impactSlip(notionalC, sideSign) {
+  if (notionalC < IMPACT_THRESHOLD_C) return 0;
+  if (sideSign < 0 && !IMPACT_SELL_SIDE) return 0;
+  return Math.min(IMPACT_MAX_FRAC, IMPACT_K * (notionalC - IMPACT_THRESHOLD_C) / IMPACT_THRESHOLD_C);
+}
+// Push a log-price delta onto a company's tape, bounded to its ceiling/floor, and
+// resync c.price. No-op for zero delta (sub-threshold fills stay flat).
+function applyTapeMove(c, lnDelta) {
+  if (!c || !lnDelta) return;
+  const ceil = c._isAnchored ? Math.log(10000) : Math.log(5000);
+  c.lnP = Math.max(Math.log(0.50), Math.min(ceil, c.lnP + lnDelta));
+  c.price = Math.max(0.50, Math.exp(c.lnP));
+}
+
+// Capital House buy rate limit: a house ('player' fund) may execute at most one buy
+// per this window, across every buy path (direct executive/trader trade AND a
+// vote-passed proposal). Sells are uncapped. 0 disables. Defense-in-depth on top of
+// the v1.1.7.2 impact fix: even with slippage now applied, this stops a house from
+// machine-gunning buys to grind the tape. Dev (flsh) and the guild (patreon) funds
+// are exempt — see executeFundTrade.
+const HOUSE_BUY_COOLDOWN_MS = parseInt(process.env.HOUSE_BUY_COOLDOWN_MS || '1800000', 10); // 30 min
 
 // ── News-as-driver: a headline move splits into an instant gap + decaying drift ──
 // The gap lands the moment the headline prints, so reading the public feed gives no
@@ -2693,21 +2741,29 @@ function processFundProposals() {
           const current  = holdings.find(h => h.symbol === prop.symbol);
           const haveQty  = current?.qty || 0;
           if (prop.side === 'buy') {
-            const cost = c.price * prop.qty;
+            // Same large-order impact as personal orders / Capital Houses. Special
+            // stocks (e.g. pinned FLSH) keep slip 0 so their price isn't disturbed.
+            const slip = c._special ? 0 : impactSlip(toCents(c.price) * prop.qty, 1);
+            const fillPrice = slip > 0 ? c.price * (1 + slip/2) : c.price;
+            const cost = fillPrice * prop.qty;
             if (cash >= cost) {
               setFundCash(cash - cost);
               setFundHolding(prop.symbol, haveQty + prop.qty);
-              logFundTrade(prop.symbol, 'buy', prop.qty, c.price, `Vote passed ${prop.votes_yes}-${prop.votes_no}`);
-              pushHeadline(`GUILD: Acquired ${prop.qty}x ${prop.symbol} @ Ƒ${c.price.toFixed(2)}`,'good', prop.symbol);
+              applyTapeMove(c, slip);
+              logFundTrade(prop.symbol, 'buy', prop.qty, fillPrice, `Vote passed ${prop.votes_yes}-${prop.votes_no}`);
+              pushHeadline(`GUILD: Acquired ${prop.qty}x ${prop.symbol} @ Ƒ${fillPrice.toFixed(2)}`,'good', prop.symbol);
             }
           } else if (prop.side === 'sell') {
             const qty = Math.min(prop.qty, haveQty);
             if (qty > 0) {
-              const proceeds = c.price * qty;
+              const slip = c._special ? 0 : impactSlip(toCents(c.price) * qty, -1);
+              const fillPrice = slip > 0 ? c.price * (1 - slip/2) : c.price;
+              const proceeds = fillPrice * qty;
               setFundCash(cash + proceeds);
               setFundHolding(prop.symbol, haveQty - qty);
-              logFundTrade(prop.symbol, 'sell', qty, c.price, `Vote passed ${prop.votes_yes}-${prop.votes_no}`);
-              pushHeadline(`GUILD: Sold ${qty}x ${prop.symbol} @ Ƒ${c.price.toFixed(2)}`,'neutral', prop.symbol);
+              applyTapeMove(c, -slip);
+              logFundTrade(prop.symbol, 'sell', qty, fillPrice, `Vote passed ${prop.votes_yes}-${prop.votes_no}`);
+              pushHeadline(`GUILD: Sold ${qty}x ${prop.symbol} @ Ƒ${fillPrice.toFixed(2)}`,'neutral', prop.symbol);
             }
           }
         }
@@ -5866,11 +5922,7 @@ wss.on('connection',(ws,req)=>{
       // _impactSlipFor returns the slip fraction for an executed leg's notional; each
       // branch prices its fill off that slip (trader eats it) and adds the directional
       // push to _tapeMove, which is applied to c.lnP ONCE after all money math.
-      const _impactSlipFor = (notionalC, sideSign) => {
-        if (notionalC < IMPACT_THRESHOLD_C) return 0;
-        if (sideSign < 0 && !IMPACT_SELL_SIDE) return 0;
-        return Math.min(IMPACT_MAX_FRAC, IMPACT_K * (notionalC - IMPACT_THRESHOLD_C) / IMPACT_THRESHOLD_C);
-      };
+      const _impactSlipFor = (notionalC, sideSign) => impactSlip(notionalC, sideSign);
       let _tapeMove = 0;
 
       // Day-trade gate — server-authoritative
@@ -6041,11 +6093,7 @@ wss.on('connection',(ws,req)=>{
 
       // Apply accumulated large-order impact to the tape ONCE (trader already paid
       // execPrice). Big buys/covers push the quote up; big sells/shorts push it down.
-      if (_tapeMove !== 0) {
-        const _ceil = c._isAnchored ? Math.log(10000) : Math.log(5000);
-        c.lnP = Math.max(Math.log(0.50), Math.min(_ceil, c.lnP + _tapeMove));
-        c.price = Math.max(0.50, Math.exp(c.lnP));
-      }
+      applyTapeMove(c, _tapeMove);
       actor.level=calcLevel(actor.xp);
       savePlayer(actor);
       // Send day-trade remaining after every trade

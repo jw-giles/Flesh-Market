@@ -1316,6 +1316,16 @@ export function logFundActivity(fundId, type, playerId, symbol, qty, price, amou
   stmt('INSERT INTO fund_activity(fund_id,ts,type,player_id,symbol,qty,price,amount,note) VALUES(?,?,?,?,?,?,?,?,?)')
     .run(fundId, Date.now(), type, playerId||null, symbol||null, qty||null, price||null, amount||null, note||null);
 }
+// Timestamp (ms) of this fund's most recent activity row of a given type, or 0 if
+// none. Used to rate-limit house buys without a dedicated cooldown column: the
+// activity log already records every successful trade with a ts, and a rejected
+// trade writes no row, so MAX(ts) of 'trade_buy' is exactly the last *successful* buy.
+export function getLastFundTradeTs(fundId, type='trade_buy') {
+  try {
+    const row = stmt('SELECT MAX(ts) AS ts FROM fund_activity WHERE fund_id=? AND type=?').get(fundId, type);
+    return row && row.ts ? Number(row.ts) : 0;
+  } catch(_) { return 0; }
+}
 
 // ── House governance + binding trade proposals ────────────────────────────────
 // governance: 'executive' (owner trades) | 'vote' (members decide) | 'council'
