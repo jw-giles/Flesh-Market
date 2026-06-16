@@ -48,7 +48,7 @@ import {
   getAllFunds, getFund, getFundByName, createFund, addFundSlots,
   getFundMemberships, getFundMembership, isInFund, getFundMemberCount, joinFund,
   getFundCashById, setFundCashById, addFundCash,
-  getFundPortfolio, setFundPortfolioQty, getTotalFundSharesById,
+  getFundPortfolio, setFundPortfolioQty, setFundPortfolioBuy, getTotalFundSharesById,
   getFundNAVById, applyFundSavingsInterest,
   getPlayerFundStake, getPlayerFundMemberships,
   fundDepositFn, fundWithdrawFn,
@@ -181,7 +181,7 @@ function executeFundTrade(fundId, side, sym, qty, actorId) {
     const cost = fillPrice * q;
     if (fundCash < cost) return { ok:false, error:'insufficient_fund_cash', have:fundCash, need:cost };
     setFundCashById(fundId, fundCash - cost);
-    setFundPortfolioQty(fundId, sym, haveQty + q);
+    setFundPortfolioBuy(fundId, sym, q, fillPrice);
     applyTapeMove(c, slip);
     logFundActivity(fundId,'trade_buy',actorId,sym,q,fillPrice,cost,`Buy ${q}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`);
     pushHeadline(`${fund.name}: bought ${q}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`, 'good', sym);
@@ -240,10 +240,7 @@ function houseVoteWeight(fund, playerId) {
   return 1;
 }
 function broadcastHouseUpdate(fundId) {
-  try {
-    const snap = fundDetailSnapshot(fundId, null);
-    broadcastToFundMembers(fundId, { type:'fund_update', data:{ fundId, ...snap }});
-  } catch(_) {}
+  broadcastFundDetail(fundId);
 }
 
 // Members eligible to vote: everyone in equal mode, shareholders only in share mode
@@ -2430,10 +2427,10 @@ function settleMarginCall(actor, priceMap) {
 }
 
 // ─── v5.0: Trade Feed ─────────────────────────────────────────────────────────
-function broadcastTradeFeed({ side, symbol, qty, price, isLimit = false }) {
+function broadcastTradeFeed({ side, symbol, qty, price, isLimit = false, auto = false, src = null }) {
   broadcast({
     type: 'trade_feed',
-    data: { side, symbol, qty, price: Math.round(price * 100) / 100, isLimit, ts: Date.now() }
+    data: { side, symbol, qty, price: Math.round(price * 100) / 100, isLimit, auto: auto || isLimit, src: src || (isLimit ? 'limit' : null), ts: Date.now() }
   });
 }
 
@@ -2923,7 +2920,7 @@ function fundDetailSnapshot(fundId, playerId) {
     })),
     holdings: portfolio.map(h=>{
       const c=companies.find(x=>x.symbol===h.symbol);
-      return {symbol:h.symbol,qty:h.qty,price:c?.price||0,value:(c?.price||0)*h.qty};
+      return {symbol:h.symbol,qty:h.qty,price:c?.price||0,value:(c?.price||0)*h.qty,avgCost:h.avg_cost||0};
     }),
     activity: getFundActivity(fundId, 20),
     polls: getFundPolls(fundId),
@@ -3105,7 +3102,7 @@ app.post('/api/funds/:id/deposit', (req, res) => {
     const shares = fundDepositFn(fund.id, actor.id, amount);
     snapshotFund(fund.id);
     const snap   = fundDetailSnapshot(fund.id, actor.id);
-    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+    broadcastFundDetail(fund.id);
     // Refresh depositor's portfolio (cash decreased)
     try {
       const fresh = getPlayer(actor.id);
@@ -3132,7 +3129,7 @@ app.post('/api/funds/:id/withdraw', (req, res) => {
     const cashOut = fundWithdrawFn(fund.id, actor.id, amount, nav);
     snapshotFund(fund.id);
     const snap    = fundDetailSnapshot(fund.id, actor.id);
-    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+    broadcastFundDetail(fund.id);
     try {
       const fresh = getPlayer(actor.id);
       if (fresh) broadcastToPlayer(actor.id, { type:'portfolio', data: snapshotPortfolio(fresh) });
@@ -3261,7 +3258,7 @@ app.post('/api/funds/:id/kick', (req, res) => {
     logFundActivity(fund.id, 'kick', actor.id, null, null, null, null, `${target.name} kicked by owner`);
     broadcastToPlayer(target.id, { type:'system_message', data:{ text:`You were removed from the fund "${fund.name}".`, color:'#ff6b6b' }});
     const snap = fundDetailSnapshot(fund.id, actor.id);
-    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+    broadcastFundDetail(fund.id);
     res.json({ ok:true });
   } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
 });
@@ -3283,7 +3280,7 @@ app.post('/api/funds/:id/invite', (req, res) => {
     logFundActivity(fund.id, 'invite', actor.id, null, null, null, null, `${actor.name} invited ${target.name}`);
     broadcastToPlayer(target.id, { type:'system_message', data:{ text:`You were invited to the fund "${fund.name}".`, color:'#4ecdc4' }});
     const snap = fundDetailSnapshot(fund.id, actor.id);
-    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+    broadcastFundDetail(fund.id);
     res.json({ ok:true });
   } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
 });
@@ -3313,7 +3310,7 @@ app.post('/api/funds/:id/assign', (req, res) => {
     broadcastToPlayer(target.id, { type:'system_message', data:{ text:`Fund owner assigned you Ƒ${amount.toLocaleString()} from "${fund.name}".`, color:'#86ff6a' }});
     if (fresh) broadcastToPlayer(target.id, { type:'portfolio', data: snapshotPortfolio(fresh) });
     const snap = fundDetailSnapshot(fund.id, actor.id);
-    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+    broadcastFundDetail(fund.id);
     res.json({ ok:true, amount });
   } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
 });
@@ -3335,7 +3332,7 @@ app.post('/api/funds/:id/poll/create', (req, res) => {
     const id = createFundPoll(fund.id, actor.id, question, options);
     logFundActivity(fund.id, 'poll_created', actor.id, null, null, null, null, `Poll: "${question.slice(0,60)}"`);
     const snap = fundDetailSnapshot(fund.id, actor.id);
-    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+    broadcastFundDetail(fund.id);
     res.json({ ok:true, pollId: id });
   } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
 });
@@ -3351,7 +3348,7 @@ app.post('/api/funds/:id/poll/vote', (req, res) => {
     const { pollId, optionIndex } = req.body || {};
     const votes = voteFundPoll(Number(pollId), actor.id, Number(optionIndex));
     const snap  = fundDetailSnapshot(fund.id, actor.id);
-    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+    broadcastFundDetail(fund.id);
     res.json({ ok:true, votes });
   } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
 });
@@ -3365,7 +3362,7 @@ app.post('/api/funds/:id/poll/close', (req, res) => {
     if (!fund || fund.owner_id !== actor.id) return res.status(403).json({ ok:false, error:'owner_only' });
     closeFundPoll(Number(req.body?.pollId));
     const snap = fundDetailSnapshot(fund.id, actor.id);
-    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+    broadcastFundDetail(fund.id);
     res.json({ ok:true });
   } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
 });
@@ -3397,7 +3394,7 @@ app.post('/api/funds/:id/trade', (req, res) => {
     const r = executeFundTrade(fund.id, side, sym, q, actor.id);
     if (!r.ok) return res.status(400).json(r);
     const snap = fundDetailSnapshot(fund.id, actor.id);
-    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId:fund.id, ...snap }});
+    broadcastFundDetail(fund.id);
     res.json({ ok:true, fund: snap });
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
@@ -3592,7 +3589,7 @@ app.post('/api/funds/:id/edit', (req, res) => {
     savePlayerFn(p);
 
     updateFundInfo(fund.id, newName, newDesc);
-    broadcastToFundMembers(fund.id, { type:'fund_update', data:{ fundId: fund.id, name: newName, description: newDesc }});
+    broadcastFundDetail(fund.id);
     res.json({ ok:true, name: newName, description: newDesc });
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
@@ -5174,7 +5171,7 @@ setInterval(() => {
         FMI.treasury += taxC / 100; FMI.hourlyTaxAccrual += taxC / 100;
         try { addFundCash('FLSH', fromCents(costC) * FLSH_TRADE_PCT); } catch(_) {}
         savePlayer(actor);
-        broadcastTradeFeed({ side:'buy', symbol:cfg.symbol, qty:buyQty, price:c.price });
+        broadcastTradeFeed({ side:'buy', symbol:cfg.symbol, qty:buyQty, price:c.price, auto:true, src:'accum' });
         const socks = playerSockets.get(cfg.player_id);
         if (socks) { const m = JSON.stringify({ type:'chat_system', data:{ text:`🤖 Auto-Accumulate: bought ${buyQty}x ${cfg.symbol} @ Ƒ${c.price.toFixed(2)} from reserve` } }); for (const w of socks) { try { if (w.readyState === 1) w.send(m); } catch(_) {} } }
       } catch (_) {}
@@ -5208,6 +5205,24 @@ function broadcastToFundMembers(fundId, msg) {
       for (const ws of sockets) { try { if(ws.readyState===1) ws.send(data); } catch(e){} }
     }
   } catch(e) {}
+}
+
+// Per-recipient fund detail push. isOwner / isMember / myRole / my* are viewer-specific,
+// so broadcasting one shared snapshot renders the ACTOR's perspective for every other
+// member (root cause of the "kicked to Overview / owner panels vanish" bug when a member
+// joins, and of members briefly seeing each other's personal stake). Send each member
+// their OWN snapshot so every client renders its own correct view.
+function broadcastFundDetail(fundId) {
+  try {
+    const members = getFundMemberships(fundId);
+    for (const m of members) {
+      const sockets = playerSockets.get(m.player_id);
+      if (!sockets) continue;
+      const snap = fundDetailSnapshot(fundId, m.player_id);
+      const data = JSON.stringify({ type:'fund_update', data:{ fundId, ...snap }});
+      for (const ws of sockets) { try { if (ws.readyState===1) ws.send(data); } catch(_){} }
+    }
+  } catch(_) {}
 }
 
 function pushHeadline(text,tone,symbol,category){
@@ -6061,6 +6076,17 @@ wss.on('connection',(ws,req)=>{
           // cash from a short is to cover it at a profit. This removes the limits while
           // making the short-and-extract-then-get-wiped exploit impossible.
           const shortQty = qty - Math.max(0, have);
+          // Liquidity gate: opening a short requires liquid cash >= 3x the notional shorted
+          // (price x shortQty). Balance check only, cash is NOT consumed (the short's own
+          // proceeds are locked as collateral below); this blocks unbacked shorting. A mixed
+          // long-clear + short order is rejected as a whole if the short portion fails.
+          {
+            const _reqLiquid = 3 * c.price * shortQty;
+            if (actor.cash < _reqLiquid) {
+              try { ws.send(JSON.stringify({ type:'error', data:{ msg:`Short needs \u0192${Math.ceil(_reqLiquid).toLocaleString()} liquid (3x \u0192${Math.ceil(c.price*shortQty).toLocaleString()} notional). You have \u0192${Math.floor(actor.cash).toLocaleString()}.` }})); } catch(_) {}
+              return;
+            }
+          }
           // Large-order impact for the whole downward order (long-clear + short open).
           const _slip = _impactSlipFor(toCents(c.price)*qty, -1);
           const execPrice = _slip>0 ? c.price*(1-_slip/2) : c.price;

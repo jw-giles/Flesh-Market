@@ -1,7 +1,7 @@
 {
-  "version": "1.1.7.3",
-  "built": "2026-06-15T00:00:00Z",
+  "version": "1.1.7.5",
+  "built": "2026-06-16T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.7.3",
-  "notes": "Capital House buy-cooldown UI. After a house buy, the Execute button reds out and shows a live mm:ss countdown to the next allowed buy (mirrors the day-trade lock) instead of only surfacing a raw 'buy_rate_limited' string on a blocked click. Server-authoritative: the fund snapshot now carries buyCooldownMs (remaining) and buyCooldownWindowMs (full window), so the countdown is correct on first render, after a buy, on reload, and on any fund broadcast. SELL stays enabled during the cooldown (sells are uncapped); flipping the side toggle relocks/unlocks accordingly. The trade hint now shows the friendly server message (with the wait time) rather than the error code. SERVER + CLIENT (server/server.js snapshot field, client/assets/funds.js): pm2 restart fleshmarket required; funds.js is served no-cache so it revalidates on next load (hard-refresh if in doubt)."
+  "patch": "1.1.7.5",
+  "notes": "Capital House cost basis plus short liquidity gate. (1) House Portfolio holdings now show gain vs the house's weighted-average entry price (matches personal P&L) instead of the ticker's daily move. fund_portfolios gains an avg_cost column (additive, idempotent migration), maintained on every buy/sell; existing holdings are backfilled by replaying logged trade history, with a placeholder shown for any position that cannot be reconciled. (2) Opening a short now requires liquid cash of at least 3x the shorted notional (price times shortQty), checked at order time. Cash is not consumed; the existing proceeds-as-collateral lock and the 1.65x margin call are unchanged. A mixed long-clear plus short order is rejected as a whole if the short portion fails the check. SERVER plus DB plus CLIENT (server/db.js: avg_cost column, backfill, weighted-avg buy helper; server/server.js: fund buys use the helper, snapshot returns avgCost, short-open liquidity gate; client/assets/funds.js: holdings show gain-vs-entry). pm2 restart fleshmarket required; client assets served no-cache (hard-refresh if in doubt). DB migration is additive and idempotent. Carries 1.1.7.4."
 }

@@ -102,9 +102,11 @@ window.renderTradeFeed = function(d) {
   const row = document.createElement('div');
   const side = d.side === 'buy' ? 'BUY' : 'SELL';
   const cls = d.side === 'buy' ? 'tf-buy' : 'tf-sell';
-  const tag = d.isLimit ? '[L]' : '';
+  // Automated fills (limit orders, auto-accumulate) get a marker so they read apart from
+  // manual clicks: '*' = automated; the trailing letter names the engine (L=limit, A=accumulate).
+  const srcTag = d.src === 'limit' ? '*L' : (d.src === 'accum' ? '*A' : ((d.auto || d.isLimit) ? '*' : ''));
   row.className = 'tf-row ' + cls;
-  row.textContent = `${side} ${d.qty}× ${d.symbol} @ Ƒ${d.price.toFixed(2)} ${tag}`;
+  row.textContent = (`${side} ${d.qty}× ${d.symbol} @ Ƒ${d.price.toFixed(2)} ${srcTag}`).trim();
   panel.insertBefore(row, panel.firstChild);
   // Trim
   while (panel.children.length > TRADE_FEED_MAX) panel.removeChild(panel.lastChild);

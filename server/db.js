@@ -1025,6 +1025,30 @@ export function initFundsSystem() {
   // Patreon Merchants Guild defaults to majority vote (its historical behavior).
   try { stmt(`UPDATE funds SET governance='vote' WHERE id='MERCHANTS_GUILD' AND governance='executive'`).run(); } catch(_) {}
 
+  // Cost basis on fund holdings: weighted-average entry price per position, so the house
+  // Portfolio shows gain-vs-entry (matching personal P&L) instead of the ticker's daily
+  // move. Additive + idempotent. Then backfill existing holdings by replaying the logged
+  // buy/sell history (fund_activity records price); only applied when the replay reconciles
+  // with the current qty, otherwise basis stays 0 and the client shows a placeholder.
+  try { db.exec(`ALTER TABLE fund_portfolios ADD COLUMN avg_cost REAL NOT NULL DEFAULT 0`); } catch(_) {}
+  try {
+    const _need = db.prepare(`SELECT fund_id, symbol, qty FROM fund_portfolios WHERE qty>0 AND (avg_cost IS NULL OR avg_cost<=0)`).all();
+    const _hist = db.prepare(`SELECT type, qty, price FROM fund_activity WHERE fund_id=? AND symbol=? AND type IN ('trade_buy','trade_sell') AND qty IS NOT NULL AND price IS NOT NULL ORDER BY ts ASC`);
+    const _upd  = db.prepare(`UPDATE fund_portfolios SET avg_cost=? WHERE fund_id=? AND symbol=?`);
+    let _fixed = 0;
+    for (const r of _need) {
+      let q = 0, avg = 0;
+      for (const h of _hist.all(r.fund_id, r.symbol)) {
+        const hq = Number(h.qty)||0, hp = Number(h.price)||0;
+        if (hq <= 0) continue;
+        if (h.type === 'trade_buy') { const nq = q + hq; avg = nq>0 ? (q*avg + hq*hp)/nq : 0; q = nq; }
+        else { q -= hq; if (q <= 0) { q = 0; avg = 0; } }
+      }
+      if (q === r.qty && avg > 0) { _upd.run(Math.round(avg*100)/100, r.fund_id, r.symbol); _fixed++; }
+    }
+    if (_fixed) console.log(`[DB] Backfilled cost basis for ${_fixed} fund holding(s)`);
+  } catch (e) { console.error('[DB] fund cost-basis backfill error', e); }
+
   // Seed special funds if not present
   const now = Date.now();
   const existing = stmt('SELECT id FROM funds').all().map(r => r.id);
@@ -1181,11 +1205,32 @@ export function addFundCash(fundId, delta) {
   stmt('UPDATE funds SET cash=cash+? WHERE id=?').run(delta, fundId);
 }
 export function getFundPortfolio(fundId) {
-  return stmt('SELECT symbol,qty FROM fund_portfolios WHERE fund_id=? AND qty>0').all(fundId);
+  return stmt('SELECT symbol,qty,avg_cost FROM fund_portfolios WHERE fund_id=? AND qty>0').all(fundId);
 }
 export function setFundPortfolioQty(fundId, symbol, qty) {
-  if (qty <= 0) stmt('DELETE FROM fund_portfolios WHERE fund_id=? AND symbol=?').run(fundId, symbol);
-  else stmt('INSERT OR REPLACE INTO fund_portfolios VALUES(?,?,?)').run(fundId, symbol, qty);
+  // Set absolute qty while PRESERVING avg_cost (used by sells; basis is unchanged when a
+  // position is only reduced). INSERT OR REPLACE would wipe avg_cost, so update in place.
+  if (qty <= 0) { stmt('DELETE FROM fund_portfolios WHERE fund_id=? AND symbol=?').run(fundId, symbol); return; }
+  const cur = stmt('SELECT 1 AS x FROM fund_portfolios WHERE fund_id=? AND symbol=?').get(fundId, symbol);
+  if (cur) stmt('UPDATE fund_portfolios SET qty=? WHERE fund_id=? AND symbol=?').run(qty, fundId, symbol);
+  else stmt('INSERT INTO fund_portfolios(fund_id,symbol,qty,avg_cost) VALUES(?,?,?,0)').run(fundId, symbol, qty);
+}
+// Add shares to a fund holding at a unit cost, updating the weighted-average basis
+// (mirrors player_cargo addCargo). Used by fund buys so house P&L has a real entry.
+export function setFundPortfolioBuy(fundId, symbol, addQty, unitCost) {
+  const add = Math.max(0, Math.floor(Number(addQty)||0));
+  if (add <= 0) return;
+  const cur = stmt('SELECT qty, avg_cost FROM fund_portfolios WHERE fund_id=? AND symbol=?').get(fundId, symbol);
+  if (cur && cur.qty > 0) {
+    const nq  = cur.qty + add;
+    const avg = (cur.qty * (cur.avg_cost||0) + add * unitCost) / nq;
+    stmt('UPDATE fund_portfolios SET qty=?, avg_cost=? WHERE fund_id=? AND symbol=?')
+      .run(nq, Math.round(avg*100)/100, fundId, symbol);
+  } else {
+    stmt(`INSERT INTO fund_portfolios(fund_id,symbol,qty,avg_cost) VALUES(?,?,?,?)
+          ON CONFLICT(fund_id,symbol) DO UPDATE SET qty=excluded.qty, avg_cost=excluded.avg_cost`)
+      .run(fundId, symbol, add, Math.round(unitCost*100)/100);
+  }
 }
 export function getTotalFundSharesById(fundId) {
   return (stmt('SELECT SUM(shares) as s FROM fund_memberships WHERE fund_id=?').get(fundId)||{s:0}).s || 0;

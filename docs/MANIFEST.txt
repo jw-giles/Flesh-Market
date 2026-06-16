@@ -1,4 +1,45 @@
-# FleshMarket v1.1.7.3 - MANIFEST
+# FleshMarket v1.1.7.5 - MANIFEST
+
+## v1.1.7.5 changes (Capital House cost basis + short liquidity gate, SERVER + DB + CLIENT)
+
+```
+server/
+  db.js                   fund_portfolios: + avg_cost column (ALTER ADD COLUMN, idempotent) + startup backfill from fund_activity (qty-validated)
+                          getFundPortfolio(): + avg_cost; setFundPortfolioQty(): preserve avg_cost on sells (was INSERT OR REPLACE)
+                          + setFundPortfolioBuy(fundId,symbol,addQty,unitCost): weighted-avg basis on buys (mirrors player_cargo addCargo)
+  server.js               executeFundTrade buy -> setFundPortfolioBuy(); fundDetailSnapshot holdings -> + avgCost
+                          'order' short-open: liquidity gate -- require actor.cash >= 3 * c.price * shortQty, else reject (return)
+client/
+  assets/funds.js         _gBuildHoldings(): pct = (price/avgCost-1)*100 (gain vs entry; null when no basis)
+                          _renderGuildHoldings(): '·' placeholder when basis unknown; _drawGuildBars(): coalesce null pct to 0
+  version.json            1.1.7.4 -> 1.1.7.5
+```
+
+DB migration additive + idempotent (avg_cost defaults 0, backfilled). `pm2 restart fleshmarket` required; client assets served `no-cache`, hard-refresh if in doubt.
+
+---
+
+## v1.1.7.4 changes (Capital House pane retention + per-recipient broadcast, sector allocation, automated-trade markers, SERVER + CLIENT)
+
+```
+server/
+  server.js               + broadcastFundDetail(fundId): per-recipient fund_update fan-out (each member gets fundDetailSnapshot(fundId, member))
+                          broadcastHouseUpdate() -> broadcastFundDetail(); 9 live route broadcasts + edit-name/desc broadcast -> broadcastFundDetail()
+                          broadcastTradeFeed(): + auto/src params; data carries auto (|| isLimit) + src ('limit'|'accum'|null)
+                          auto-accumulate fill: broadcastTradeFeed(..., auto:true, src:'accum')
+client/
+  assets/funds.js         openFund(): isRefresh = (fundId===__currentFundId); setHousePane(isRefresh ? __housePane : 'overview') -- in-place refresh keeps active pane
+                          onFundUpdate(): sets __currentFundData = data on current-fund push
+                          + _renderFundSectors(f): sector-allocation bars (sb-* styles) into #g-sector-bars; called from renderFundDetail after donut
+  assets/sound.js         renderTradeFeed(): srcTag '*L'/'*A'/'*'/'' from d.src/d.auto/d.isLimit (was '[L]' on isLimit only)
+  index.html              + #g-sector-breakdown / #g-sector-bars panel in g-pane-overview (after Performance block)
+  version.json            1.1.7.3 -> 1.1.7.4
+```
+
+No DB schema change. `pm2 restart fleshmarket` required (server fan-out + feed flags); client assets served `no-cache`, hard-refresh if in doubt.
+NOTE: holdings %-column still shows ticker daily move (no fund cost basis) -- true house P&L is a separate staged change.
+
+---
 
 ## v1.1.7.3 changes (Capital House buy-cooldown UI: red-out + live countdown, SERVER + CLIENT)
 

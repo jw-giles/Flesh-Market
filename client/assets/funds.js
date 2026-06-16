@@ -77,6 +77,10 @@ function renderGuildDirectory(funds) {
 
 // ── Fund detail ──────────────────────────────────────────────
 async function openFund(fundId) {
+  // Opening a DIFFERENT house lands on Overview; re-opening the house already in view is
+  // an in-place refresh (after a trade, invite, deposit, etc.) and must keep the active
+  // pane so the user isn't bounced to Overview mid-task.
+  const isRefresh = (fundId === __currentFundId);
   __currentFundId = fundId;
   try {
     const tok = window.FM_TOKEN; if (!tok) return;
@@ -85,7 +89,7 @@ async function openFund(fundId) {
     if (!d.ok) { alert(d.error); return; }
     __currentFundData = d.fund;
     renderFundDetail(d.fund);
-    setHousePane('overview');
+    setHousePane(isRefresh ? __housePane : 'overview');
     renderFundPerformance(fundId);
   } catch(e) { console.warn('openFund error', e); }
 }
@@ -256,17 +260,19 @@ function _gLive(sym){
   return null;
 }
 
-// Build live-priced holding rows. Funds store only (symbol, qty) — no cost
-// basis — so the metric is today's % move, not gain-vs-entry. Value is
-// re-marked at the live price; fund NAV/cash stay server-authoritative.
+// Build live-priced holding rows. Funds now track weighted-average cost per position, so
+// the metric is gain-vs-entry (matches personal P&L), not the ticker's daily move. pct is
+// null when the house has no recorded basis (legacy position) and renders as a placeholder.
+// Value is re-marked at the live price; fund NAV/cash stay server-authoritative.
 function _gBuildHoldings(f){
   const all = (f && f.holdings) ? f.holdings : [];
   return all.map(h => {
-    const live  = _gLive(h.symbol);
-    const price = (live && live.price) ? live.price : (Number(h.price)||0);
-    const pct   = live ? live.pct : 0;
-    const qty   = Number(h.qty)||0;
-    return { symbol:h.symbol, qty, price, pct, value: price*qty };
+    const live    = _gLive(h.symbol);
+    const price   = (live && live.price) ? live.price : (Number(h.price)||0);
+    const qty     = Number(h.qty)||0;
+    const avgCost = Number(h.avgCost)||0;
+    const pct     = avgCost > 0 ? ((price/avgCost)-1)*100 : null;
+    return { symbol:h.symbol, qty, price, pct, avgCost, value: price*qty };
   });
 }
 
@@ -286,13 +292,15 @@ function _renderGuildHoldings(f){
         : 'No holdings match filter';
       hBox.innerHTML = rows.length
         ? rows.map(h => {
-            const sign = h.pct >= 0 ? '+' : '';
-            const col  = h.pct >= 0 ? '#86ff6a' : '#ff6b6b';
+            const hasG = (h.pct != null);
+            const sign = hasG && h.pct >= 0 ? '+' : '';
+            const col  = !hasG ? '#7a6a4a' : (h.pct >= 0 ? '#86ff6a' : '#ff6b6b');
+            const pctStr = hasG ? (sign + h.pct.toFixed(2) + '%') : '\u00B7';
             const secTag = bySector ? ` <span style="font-size:.6rem;color:#7a6a4a;letter-spacing:.04em">${_gSectorName(_gSectorOf(h.symbol))}</span>` : '';
             return `<div class="ticker" style="cursor:pointer" title="Open ${h.symbol} in Market" onclick="window.FMGotoSymbol('${h.symbol}')"><span class="sym">${h.symbol}${secTag}</span>`
               + `<span style="display:flex;gap:12px;align-items:baseline;justify-content:flex-end">`
               + `<span style="color:#b6ffcf">Ƒ${h.price.toFixed(2)}</span>`
-              + `<span style="color:${col};min-width:64px;text-align:right">${sign}${h.pct.toFixed(2)}%</span>`
+              + `<span style="color:${col};min-width:64px;text-align:right">${pctStr}</span>`
               + `<span style="min-width:120px;text-align:right">${h.qty}× <b>${_mfmt(h.value)}</b></span>`
               + `</span></div>`;
           }).join('')
@@ -349,7 +357,7 @@ function _drawGuildBarsAxis(W, maxAbs){
   ctx.textAlign = 'right'; ctx.fillText('-'+maxAbs.toFixed(0)+'%', PAD_L-4,    H/2);
 }
 
-// ── Bars: today's % move per holding (mirrors personal P&L bars) ────────────
+// ── Bars: gain vs entry per holding (mirrors personal P&L bars) ──────────────
 function _drawGuildBars(rowsIn){
   const canvas = document.getElementById('g-pnl-bars');
   if (!canvas) return;
@@ -382,7 +390,7 @@ function _drawGuildBars(rowsIn){
 
   const plotW = W - PAD_L - PAD_R;
   let maxAbs = 0.001;
-  for (const h of rows){ if (Math.abs(h.pct) > maxAbs) maxAbs = Math.abs(h.pct); }
+  for (const h of rows){ const v=(h.pct==null?0:h.pct); if (Math.abs(v) > maxAbs) maxAbs = Math.abs(v); }
   maxAbs = Math.max(maxAbs, 5);
 
   const zeroX = PAD_L + plotW/2;
@@ -395,7 +403,7 @@ function _drawGuildBars(rowsIn){
 
   rows.forEach((h, i) => {
     const y = PAD_T + i*ROW_H + (ROW_H - BAR_H)/2;
-    const pct = Math.max(-maxAbs, Math.min(maxAbs, h.pct));
+    const pct = Math.max(-maxAbs, Math.min(maxAbs, (h.pct==null?0:h.pct)));
     const barPx = (Math.abs(pct)/maxAbs) * (plotW/2);
     const isPos = pct >= 0;
     const color = isPos ? PNL_COLORS[i % PNL_COLORS.length] : '#e06b5a';
@@ -434,6 +442,29 @@ function _drawGuildBars(rowsIn){
         if (idx >= 0 && idx < rr.length && rr[idx] && rr[idx].symbol) window.FMGotoSymbol(rr[idx].symbol);
       } catch(_){}
     });
+  }
+}
+
+// Sector allocation breakdown for the house — mirrors the personal P&L sector bars and
+// reuses the global sb-* styles. Groups live-valued holdings by sector and shows each
+// sector's share of position equity. Allocation only; this is not gain/loss.
+function _renderFundSectors(f){
+  const bars = document.getElementById('g-sector-bars'); if (!bars) return;
+  const rows = _gBuildHoldings(f);
+  const byS = {}; let equity = 0;
+  for (const h of rows){
+    const v = Math.max(0, h.value||0); if (v <= 0) continue;
+    const name = _gSectorName(_gSectorOf(h.symbol));
+    byS[name] = (byS[name]||0) + v; equity += v;
+  }
+  if (equity <= 0){ bars.innerHTML = '<span style="opacity:.3;font-size:.75rem">No positions</span>'; return; }
+  bars.innerHTML = '';
+  for (const [name,val] of Object.entries(byS).sort((a,b)=>b[1]-a[1])){
+    const pct = Math.min(100, (val/equity)*100);
+    const row = document.createElement('div');
+    row.className = 'sb-row';
+    row.innerHTML = '<div class="sb-name">'+name+'</div><div class="sb-bg"><div class="sb-fill" style="width:'+pct.toFixed(1)+'%"></div></div><div class="sb-val">\u0191'+Math.round(val).toLocaleString()+'</div>';
+    bars.appendChild(row);
   }
 }
 
@@ -600,6 +631,8 @@ function renderFundDetail(f) {
   renderFundPolls(f.polls || [], f.isOwner);
   // Allocation donut (current NAV composition)
   try { renderFundDonut(f); } catch(_){}
+  // Sector allocation bars (Overview), mirrors personal P&L
+  try { _renderFundSectors(f); } catch(_){}
 
   const slotsInfo = document.getElementById('g-slots-info');
   if (slotsInfo) slotsInfo.textContent = `${f.memberCount}/${f.maxMembers} slots used`;
@@ -675,7 +708,10 @@ window.closePoll = async function(pollId) {
 // ── Refresh detail (on fund_update WS push) ──────────────────
 function onFundUpdate(data) {
   if (!data.fundId) return;
-  if (data.fundId === __currentFundId) renderFundDetail(data);
+  if (data.fundId === __currentFundId) {
+    __currentFundData = data;          // keep live re-marks + pane refresh in sync with the push
+    renderFundDetail(data);
+  }
   // Also refresh directory card if visible
   if (document.getElementById('guild-dir').style.display !== 'none') loadGuildDirectory();
 }

@@ -4,6 +4,44 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.7.5 (2026-06-16) — Capital House cost basis + short liquidity gate (SERVER + DB + CLIENT)
+
+Two changes: give house holdings a real cost basis (so the Portfolio %-column is gain-vs-entry like personal P&L, not the ticker's daily move), and require liquid cash backing to open a short. SERVER + DB + CLIENT (`server/db.js`, `server/server.js`, `client/assets/funds.js`): `pm2 restart fleshmarket` required; client assets are served `no-cache` and revalidate on next load (hard-refresh if in doubt). **DB migration is additive + idempotent.**
+
+**Capital House — real cost basis on holdings**
+- `fund_portfolios` previously stored `(symbol, qty)` only, so the Portfolio %-column showed the *ticker's daily market move*, not the house's gain — buying a stock up 4% on the day read as `+4%` even at your entry. Houses now carry a weighted-average entry price.
+- DB (`server/db.js`): additive `avg_cost` column on `fund_portfolios` (`ALTER … ADD COLUMN`, idempotent). `setFundPortfolioBuy` maintains the weighted average on buys (mirrors `player_cargo.addCargo`); `setFundPortfolioQty` now **preserves** `avg_cost` on sells (the old `INSERT OR REPLACE` would have wiped it). `getFundPortfolio` returns `avg_cost`.
+- Backfill: on startup, existing holdings with no basis are reconstructed by replaying the logged `fund_activity` buy/sell history (price is recorded per trade). The replay is **validated against the current qty** — if it reconciles, the basis is set; if not (incomplete history), basis stays 0 and the client shows a `·` placeholder rather than a wrong number. `fund_activity` is never trimmed, so normally-traded houses reconcile fully.
+- Server snapshot returns `avgCost` per holding; client `_gBuildHoldings` computes `((price/avgCost)-1)*100` (gain vs entry, `null` → `·` when unknown). The holdings list and the bars both switch to gain-vs-entry, matching personal P&L. Funds can't short (sells cap at holdings), so no negative-basis edge.
+
+**Market — short liquidity gate**
+- Opening a short now requires **liquid cash ≥ 3× the shorted notional** (`price × shortQty`), checked server-side at order time in the `order` handler before any state changes. It's a **balance check, not a lock** — cash isn't consumed; the short's proceeds are still locked as collateral and the 1.65× margin call is unchanged. This re-adds an entry barrier on top of the collateral model (which had removed upfront margin).
+- A mixed order that both clears a long and opens a short is **rejected as a whole** if the short portion fails the check (the long isn't partially sold). Limit orders can't open shorts (sell fills cap at holdings), so the gate sits only on the market-order naked-short path the short modal uses.
+
+---
+
+## v1.1.7.4 (2026-06-16) — Capital House pane retention + per-recipient broadcast, sector allocation, automated-trade markers (SERVER + CLIENT)
+
+Four fixes: stop in-house actions bouncing to Overview, stop `fund_update` leaking the actor's perspective to every member, add a Sector Allocation panel to the house Overview, and mark automated trades in the live feed. SERVER + CLIENT (`server/server.js`, `client/assets/funds.js`, `client/assets/sound.js`, `client/index.html`): `pm2 restart fleshmarket` required; client assets are served `no-cache` and revalidate on next load (hard-refresh if in doubt). **No DB schema change.**
+
+**Capital House — Portfolio/Manage stop bouncing to Overview**
+- Buying/selling, inviting, depositing, and every other in-house action used to call `openFund()`, which force-reset the sub-pane to **Overview**. `openFund` now detects an *in-place refresh* (re-opening the house already in view) and re-asserts the **current** pane instead, so a trade from **Portfolio** stays on Portfolio and the holdings list re-renders with the new position. The trade hint still prints `✓ BUY n× SYM executed`.
+
+**Capital House — `fund_update` is now per-recipient (Manage invite/join bug)**
+- Every `fund_update` broadcast computed **one** `fundDetailSnapshot(fund, ACTOR)` and sent that identical payload to all members. `isOwner` / `isMember` / `myRole` / `my*` are viewer-specific, so a non-actor viewer rendered the *actor's* perspective: the owner sitting on **Manage** when a member was invited/joined got `isOwner:false`, which hid the owner panels and bounced them to **Overview** ("elements missing"). Members also briefly saw each other's personal stake.
+- New `broadcastFundDetail(fundId)` loops the membership and sends **each member their own** `fundDetailSnapshot(fundId, member)`. All nine live route broadcasts, `broadcastHouseUpdate`, and the edit-name/description broadcast now route through it. Client `onFundUpdate` keeps `__currentFundData` in sync with the push. The legacy single-guild path and the commented-out savings-interest block are untouched.
+
+**Capital House — Sector Allocation (Overview)**
+- New **Sector Allocation** bars under the Performance block on the house **Overview**, mirroring the personal P&L sector breakdown (reuses the global `sb-*` styles). `_renderFundSectors` groups the house's live-valued holdings by sector and shows each sector's share of position equity. Allocation only — not gain/loss.
+
+**Market — automated-trade markers in the live feed**
+- `broadcastTradeFeed` carries `auto` + `src`; the feed renders `*L` for limit-order fills, `*A` for auto-accumulate fills (`*` generic automated), and leaves **manual** clicks unmarked. NPC market-sim trades are intentionally left unmarked (they would swamp the feed). Auto-accumulate fills now pass the flag; limit fills already carried `isLimit`.
+
+**Known gap (separate change)**
+- The Portfolio holdings **%-column** under the breakdown graph still shows the **ticker's daily market move**, not gain-vs-entry, because `fund_portfolios` stores no cost basis. A true house cost-basis P&L (to match personal P&L) is staged but not in this patch — it needs an additive `avg_cost` schema change + backfill from `fund_activity`.
+
+---
+
 ## v1.1.7.3 (2026-06-15) — Capital House buy-cooldown UI: red-out + live countdown (SERVER + CLIENT)
 
 Makes the 30-min house buy cooldown obvious instead of dumping a raw `buy_rate_limited` string on a blocked click. SERVER + CLIENT (`server/server.js` snapshot field, `client/assets/funds.js`): `pm2 restart fleshmarket` required; `funds.js` is served `no-cache` so it revalidates on next load.
