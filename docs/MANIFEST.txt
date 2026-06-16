@@ -1,3 +1,24 @@
+# FleshMarket v1.1.7.3 - MANIFEST
+
+## v1.1.7.3 changes (Capital House buy-cooldown UI: red-out + live countdown, SERVER + CLIENT)
+
+```
+server/
+  server.js               fundDetailSnapshot(): + buyCooldownMs (remaining, via getLastFundTradeTs; 0 for non-player funds) + buyCooldownWindowMs (full window)
+client/
+  assets/funds.js         + buy-cooldown UI: _fmtCooldown / _ensureBuyCdEl / _renderBuyCooldown / applyBuyCooldown; reds out #g-t-exec-btn + injects #g-buy-cd countdown; 500ms ticker
+                          renderFundDetail(): applyBuyCooldown(f.buyCooldownMs) on every render
+                          g-t-exec-btn handler: rate-limited fallback syncs lock to d.retryInMs
+                          g-t-side 'change': re-evaluates lock (SELL stays enabled, BUY relocks)
+                          guildPost(): error hint prefers d.msg over d.error (no more raw 'buy_rate_limited')
+                          + injected CSS (.g-buy-locked, #g-buy-cd)
+  version.json            1.1.7.2 -> 1.1.7.3
+```
+
+No DB schema change. `pm2 restart fleshmarket` required (snapshot field); `funds.js` is served `no-cache` and revalidates on next load (hard-refresh if in doubt).
+
+---
+
 # FleshMarket v1.1.7.2 - MANIFEST
 
 ## v1.1.7.2 changes (Capital House trade integrity: tape impact + buy rate limit, SERVER + DB)

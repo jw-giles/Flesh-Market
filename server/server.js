@@ -2938,6 +2938,12 @@ function fundDetailSnapshot(fundId, playerId) {
     officers: (()=>{ try { return getFundOfficers(fundId).map(o=>({name:o.name,role:o.role})); } catch(_) { return []; } })(),
     myRole: (()=>{ try { return playerId ? getFundOfficerRole(fundId, playerId) : null; } catch(_) { return null; } })(),
     isOwner:   fund.owner_id === playerId,
+    // Remaining buy cooldown for the panel countdown (player funds only; 0 = ready).
+    // buyCooldownWindowMs is the full window so the client never hardcodes the value.
+    buyCooldownMs: (fund.type==='player' && HOUSE_BUY_COOLDOWN_MS>0)
+      ? Math.max(0, HOUSE_BUY_COOLDOWN_MS - (Date.now() - (getLastFundTradeTs(fundId,'trade_buy')||0)))
+      : 0,
+    buyCooldownWindowMs: (fund.type==='player') ? HOUSE_BUY_COOLDOWN_MS : 0,
   };
 }
 

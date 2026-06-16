@@ -581,6 +581,8 @@ function renderFundDetail(f) {
   show('g-trade-panel', canDirectTrade);
   const tradePanelTitle = document.querySelector('#g-trade-panel div[style*="opacity:.5"]');
   if (tradePanelTitle) tradePanelTitle.textContent = gov === 'council' ? 'Fund Trade (Owner Override)' : 'Fund Trade';
+  // Buy cooldown lock + countdown (server-authoritative; 0 for non-player funds).
+  try { applyBuyCooldown(f.buyCooldownMs || 0); } catch(_){}
 
   // Manage tab is owner-only
   const stabManage = document.getElementById('g-stab-manage');
@@ -678,6 +680,52 @@ function onFundUpdate(data) {
   if (document.getElementById('guild-dir').style.display !== 'none') loadGuildDirectory();
 }
 
+// ── House buy cooldown (button red-out + live countdown) ──────
+let __buyCooldownUntil = 0;   // epoch ms when the next house buy is allowed
+let __buyCooldownTimer = null;
+function _fmtCooldown(ms){
+  const s = Math.max(0, Math.ceil(ms/1000)), m = Math.floor(s/60), ss = s%60;
+  return (m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+// Lazily create the countdown line under the trade row.
+function _ensureBuyCdEl(){
+  let el = document.getElementById('g-buy-cd');
+  if (el) return el;
+  const panel = document.getElementById('g-trade-panel');
+  if (!panel) return null;
+  el = document.createElement('div'); el.id = 'g-buy-cd';
+  const hint = document.getElementById('g-trade-hint');
+  if (hint && hint.parentElement === panel) panel.insertBefore(el, hint); else panel.appendChild(el);
+  return el;
+}
+// Paint current lock state from __buyCooldownUntil. Only locks when side === 'buy'.
+function _renderBuyCooldown(){
+  const btn  = document.getElementById('g-t-exec-btn');
+  const side = document.getElementById('g-t-side');
+  const cd   = _ensureBuyCdEl();
+  if (!btn) return;
+  const remaining = __buyCooldownUntil - Date.now();
+  const onBuy = !side || side.value === 'buy';
+  if (remaining > 0 && onBuy){
+    btn.classList.add('g-buy-locked'); btn.disabled = true;
+    if (cd){ cd.classList.add('show'); cd.innerHTML = '\u23F3 NEXT BUY <span class="g-buy-cd-clock">'+_fmtCooldown(remaining)+'</span>'; }
+  } else {
+    btn.classList.remove('g-buy-locked'); btn.disabled = false;
+    if (cd) cd.classList.remove('show');
+  }
+}
+// Set the remaining window (ms) from the server and start/refresh the ticker.
+function applyBuyCooldown(ms){
+  __buyCooldownUntil = Date.now() + Math.max(0, Number(ms)||0);
+  _renderBuyCooldown();
+  if (!__buyCooldownTimer){
+    __buyCooldownTimer = setInterval(function(){
+      _renderBuyCooldown();
+      if (__buyCooldownUntil - Date.now() <= 0){ clearInterval(__buyCooldownTimer); __buyCooldownTimer = null; }
+    }, 500);
+  }
+}
+
 // ── Actions ──────────────────────────────────────────────────
 async function guildPost(path, body, hintId, successMsg) {
   const tok = window.FM_TOKEN; if (!tok) return null;
@@ -690,7 +738,7 @@ async function guildPost(path, body, hintId, successMsg) {
     });
     const d = await r.json();
     if (hint) {
-      hint.textContent = d.ok ? (successMsg||'✓ Done') : ('✗ ' + (d.error||'Error'));
+      hint.textContent = d.ok ? (successMsg||'✓ Done') : ('✗ ' + (d.msg || d.error || 'Error'));
       hint.style.color = d.ok ? '#86ff6a' : '#ff6b6b';
     }
     return d;
@@ -952,6 +1000,22 @@ function initGuildUI() {
     if (d?.ok) { document.getElementById('g-poll-form').style.display='none'; document.getElementById('g-poll-question').value=''; openFund(__currentFundId); }
   });
 
+  // ── House buy cooldown UI ────────────────────────────────────
+  // Mirrors the day-trade lock: after a house buy, the Execute button reds out and
+  // shows a live mm:ss countdown to the next allowed buy. Server-authoritative — the
+  // remaining window arrives in the fund snapshot (f.buyCooldownMs) and, as a
+  // fallback, in a rate-limited trade's retryInMs. SELL is never locked (uncapped).
+  if (!document.getElementById('gBuyCdCSS')) {
+    const st = document.createElement('style'); st.id = 'gBuyCdCSS';
+    st.textContent = [
+      '#g-t-exec-btn.g-buy-locked{background:#2a0a0a!important;border-color:#ff6b6b!important;color:#ff6b6b!important;cursor:not-allowed!important;font-family:monospace;letter-spacing:.04em;min-width:96px}',
+      '#g-buy-cd{display:none;margin-top:6px;font-family:monospace;font-size:.78rem;letter-spacing:.06em;color:#ff6b6b}',
+      '#g-buy-cd.show{display:block}',
+      '#g-buy-cd .g-buy-cd-clock{color:#72e09c;font-weight:bold}'
+    ].join('\n');
+    document.head.appendChild(st);
+  }
+
   // Execute trade
   document.getElementById('g-t-exec-btn')?.addEventListener('click', async () => {
     if (!__currentFundId) return;
@@ -962,7 +1026,15 @@ function initGuildUI() {
     const d = await guildPost(`/api/funds/${__currentFundId}/trade`, {side,symbol,qty}, 'g-trade-hint',
       `✓ ${side.toUpperCase()} ${qty}× ${symbol} executed`);
     if (d?.ok) openFund(__currentFundId);
+    // Fallback sync: if a buy slipped through and got rate-limited, lock to the
+    // server's remaining window (normally the button is already locked, so this
+    // only fires on clock skew / stale state / a direct API hit).
+    else if (d && d.error === 'buy_rate_limited' && typeof d.retryInMs === 'number') applyBuyCooldown(d.retryInMs);
   });
+
+  // Re-evaluate the lock when the side flips: the cooldown gates BUYS only, so SELL
+  // must stay clickable even mid-cooldown.
+  document.getElementById('g-t-side')?.addEventListener('change', () => { try { _renderBuyCooldown(); } catch(_){} });
 
   // Sub-tab navigation
   document.querySelectorAll('#g-subtabs .g-stab').forEach(tab => {

@@ -4,6 +4,26 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.7.3 (2026-06-15) — Capital House buy-cooldown UI: red-out + live countdown (SERVER + CLIENT)
+
+Makes the 30-min house buy cooldown obvious instead of dumping a raw `buy_rate_limited` string on a blocked click. SERVER + CLIENT (`server/server.js` snapshot field, `client/assets/funds.js`): `pm2 restart fleshmarket` required; `funds.js` is served `no-cache` so it revalidates on next load.
+
+**What players see**
+- After a house buy, the **Execute** button reds out (disabled, red/monospace) and a `⏳ NEXT BUY mm:ss` line ticks down below the trade row — the same lock-and-clock idiom as the day-trade limit.
+- **SELL stays enabled** during the cooldown (sells are uncapped). Flipping the side toggle to SELL unlocks the button; flipping back to BUY relocks it while time remains.
+- The trade hint now shows the friendly server message (with the wait time) instead of the error code — `guildPost` prefers `d.msg` over `d.error`.
+
+**How it stays correct (server-authoritative, mirrors day trades)**
+- `fundDetailSnapshot` now returns `buyCooldownMs` (remaining, derived from `getLastFundTradeTs` — 0 for non-player funds) and `buyCooldownWindowMs` (the full window, so the client never hardcodes 30 min). `renderFundDetail` calls `applyBuyCooldown(f.buyCooldownMs)`, so the countdown is right on first open, immediately after a buy (via `openFund`'s re-fetch), on reload, and on every `fund_update` broadcast.
+- The button click handler keeps a fallback: a buy that still returns `buy_rate_limited` (clock skew, stale panel, direct API) syncs the lock to the response's `retryInMs`.
+- The countdown element is injected once and reused; a 500ms ticker re-paints and self-clears when the window elapses.
+- Dev (`flsh`) and guild (`patreon`) funds report `buyCooldownMs: 0`, so the lock never shows there — matching the server-side exemption.
+
+**Tested**
+- UI functions exercised against a DOM mock (the real functions, eval'd from source): lock on buy+cooldown, counter shown with time, unlock on SELL, relock on flip back, unlock at 0, single element creation, `mm:ss` formatting.
+
+---
+
 ## v1.1.7.2 (2026-06-15) — Capital House trade integrity: tape impact + buy rate limit (SERVER + DB)
 
 Closes a frictionless extraction path worth ~1B SC/day, plus a defense-in-depth buy cooldown. SERVER + DB-logic (`server/server.js`, `server/db.js` — additive helper, no schema change): `pm2 restart fleshmarket` required, no client cache concern.
