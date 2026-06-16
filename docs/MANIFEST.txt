@@ -1,4 +1,61 @@
-# FleshMarket v1.1.7.5 - MANIFEST
+# FleshMarket v1.1.7.9 - MANIFEST
+
+## v1.1.7.9 changes (Batch B continued, CLIENT)
+
+```
+client/
+  assets/core.js              renderNews stamps .news-line with data-sym
+  assets/market-tools.js      news filter: + watchlist-only star toggle
+  assets/tcg/tcg-app.js       renderCollection: + Sort by selector (cost/attack/health/rarity/name)
+  version.json                1.1.7.8 -> 1.1.7.9
+```
+
+CLIENT only. Hard-refresh after deploy; no server/DB change.
+
+---
+
+## v1.1.7.8 changes (Batch B part 1, CLIENT)
+
+```
+client/
+  assets/core.js   _waveTimes parallel timestamp buffer (declare/reset/seed-from-ohlc/push); time-axis labels from real timestamps;
+                   FMDoubleDown(sym,qty) one-click buy-to-double; 2x button on long P&L rows
+  version.json     1.1.7.7 -> 1.1.7.8
+```
+
+CLIENT only. Hard-refresh after deploy; no server/DB change.
+
+---
+
+## v1.1.7.7 changes (Batch A UI, CLIENT)
+
+```
+client/
+  assets/core.js          + _DIV_SECTORS; #pnlBox rows: onclick FMGotoSymbol + 💰 dividend badge; earnings toast passes symbol
+  assets/sound.js         showToast(text,color,duration,symbol): honors duration, optional tap-to-navigate symbol
+  assets/market-orders.js sell modal: + TRADE_TAX_RATE; preview shows fee + net proceeds
+  assets/market-upgrades.js auto-accumulate description + cancel prompt reworded (reserve = set-aside cash)
+  index.html              sell modal: + Fee + Net proceeds rows
+  version.json            1.1.7.6 -> 1.1.7.7
+```
+
+CLIENT only. Hard-refresh after deploy; no server/DB change.
+
+---
+
+## v1.1.7.6 changes (Trade integrity: market-impact fill exploit + auto-accumulate day-trade dodge, SERVER)
+
+```
+server/
+  server.js   8 fill sites: c.price*(1 ± slip/2) -> c.price*Math.exp(±slip) (fill == post-impact price; kills short-big/cover-small + buy-big/sell-small arb)
+              (personal buy/sell/short/cover, executeFundTrade buy/sell, processFundProposals buy/sell)
+              auto-accumulate fill: + day-trade buy ticket (selling auto-accumulated shares now counts as a round trip)
+  version.json  1.1.7.5 -> 1.1.7.6
+```
+
+SERVER only. `pm2 restart fleshmarket` required; no client/DB change in this patch.
+
+---
 
 ## v1.1.7.5 changes (Capital House cost basis + short liquidity gate, SERVER + DB + CLIENT)
 

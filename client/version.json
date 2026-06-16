@@ -1,7 +1,7 @@
 {
-  "version": "1.1.7.5",
+  "version": "1.1.7.9",
   "built": "2026-06-16T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.7.5",
-  "notes": "Capital House cost basis plus short liquidity gate. (1) House Portfolio holdings now show gain vs the house's weighted-average entry price (matches personal P&L) instead of the ticker's daily move. fund_portfolios gains an avg_cost column (additive, idempotent migration), maintained on every buy/sell; existing holdings are backfilled by replaying logged trade history, with a placeholder shown for any position that cannot be reconciled. (2) Opening a short now requires liquid cash of at least 3x the shorted notional (price times shortQty), checked at order time. Cash is not consumed; the existing proceeds-as-collateral lock and the 1.65x margin call are unchanged. A mixed long-clear plus short order is rejected as a whole if the short portion fails the check. SERVER plus DB plus CLIENT (server/db.js: avg_cost column, backfill, weighted-avg buy helper; server/server.js: fund buys use the helper, snapshot returns avgCost, short-open liquidity gate; client/assets/funds.js: holdings show gain-vs-entry). pm2 restart fleshmarket required; client assets served no-cache (hard-refresh if in doubt). DB migration is additive and idempotent. Carries 1.1.7.4."
+  "patch": "1.1.7.9",
+  "notes": "Client only. Two more Batch B items. (1) News watchlist filter: the news panel filter now has a star button that shows only news about tickers on your watchlist; text search and good/bad/neutral tone filters already existed. News lines are tagged with their ticker so the filter can match. (2) Corpo-Cards collection sort: the collection now has a Sort by selector (Cost, Attack, Health, Rarity, Name); it previously always sorted by cost. Carries 1.1.7.8 and earlier."
 }

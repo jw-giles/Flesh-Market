@@ -523,20 +523,31 @@
     var fsel = el('select'); fsel.innerHTML = '<option value="">All factions</option>' + ['coalition', 'syndicate', 'void', 'guild', 'flesh', 'dwarves', 'abaddon', 'neutral'].map(function (f) { return '<option value="' + f + '">' + f.charAt(0).toUpperCase() + f.slice(1) + '</option>'; }).join('');
     var lab = el('label'); lab.style.cssText = 'color:#9cf;font-size:.74rem;display:flex;gap:4px;align-items:center;cursor:pointer'; lab.innerHTML = '<input type="checkbox"> Shiny only'; var shIn = lab.querySelector('input');
     var stat = el('div', 'cc-stat');
-    tools.appendChild(fsel); tools.appendChild(lab); tools.appendChild(stat); body.appendChild(tools);
+    var ssel = el('select'); ssel.title = 'Sort by'; ssel.innerHTML = ['cost','attack','health','rarity','name'].map(function(k){ return '<option value="'+k+'">'+({cost:'Cost',attack:'Attack',health:'Health',rarity:'Rarity',name:'Name'})[k]+'</option>'; }).join('');
+    tools.appendChild(fsel); tools.appendChild(lab); tools.appendChild(ssel); tools.appendChild(stat); body.appendChild(tools);
     var hint = el('div'); hint.style.cssText = 'color:#5d6f6a;font-size:.72rem;margin:0 2px 8px'; hint.textContent = 'Click a card to list it on Ƒbay.'; body.appendChild(hint);
     var grid = el('div', 'cc-grid'); body.appendChild(grid);
     function draw() {
       grid.innerHTML = '';
       var fac = fsel.value, shinyOnly = shIn.checked;
       var rows = owned.filter(function (r) { var def = CARDS[r.card_id]; if (!def) return false; if (fac && def.faction !== fac) return false; if (shinyOnly && r.variant !== 'shiny') return false; return true; });
-      rows.sort(function (a, b) { var da = CARDS[a.card_id], db = CARDS[b.card_id]; return (da.cost - db.cost) || da.name.localeCompare(db.name) || (a.variant === 'shiny' ? 1 : -1); });
+      var sortKey = ssel.value || 'cost';
+      var RR = { common: 0, rare: 1, epic: 2, legendary: 3 };
+      rows.sort(function (a, b) {
+        var da = CARDS[a.card_id], db = CARDS[b.card_id], r;
+        if (sortKey === 'attack') r = (db.attack || 0) - (da.attack || 0);
+        else if (sortKey === 'health') r = (db.health || 0) - (da.health || 0);
+        else if (sortKey === 'rarity') r = (RR[db.rarity] || 0) - (RR[da.rarity] || 0);
+        else if (sortKey === 'name') r = 0;
+        else r = (da.cost - db.cost);
+        return r || da.name.localeCompare(db.name) || (a.variant === 'shiny' ? 1 : -1);
+      });
       var distinct = 0, total = 0, shiny = 0;
       if (!rows.length) grid.innerHTML = '<div class="cc-empty">No cards yet. Open a pack in the Store → Corpo-Cards.</div>';
       rows.forEach(function (r) { distinct++; total += r.qty; if (r.variant === 'shiny') shiny += r.qty; var c = cardEl(r.card_id, { shiny: r.variant === 'shiny', qty: r.qty }); c.classList.add('cc-click'); c.title = 'List on Ƒbay'; c.onclick = function () { openListDialog(r.card_id, r.variant); }; grid.appendChild(c); });
       stat.textContent = distinct + ' shown · ' + total + ' cards · ' + shiny + ' shiny';
     }
-    fsel.onchange = draw; shIn.onchange = draw; draw();
+    fsel.onchange = draw; shIn.onchange = draw; ssel.onchange = draw; draw();
   }
 
   // ---- decks: saved list ----

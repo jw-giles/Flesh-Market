@@ -112,6 +112,7 @@ var TICKERS = [];   // var so window.TICKERS works across script blocks
 var CURRENT = null;
 let OHLC = [];
 let _waveBuffer = []; // rolling buffer of raw close prices (one per tick)
+let _waveTimes = [];  // parallel real timestamps (ms) per point, so the chart time axis reflects true elapsed time (5s OHLC seed bars + 500ms live ticks) and widens with the extended-history upgrade
 let _waveOpenPrice = 0; // session open for %change
 
 function fmt(n){ return 'Ƒ' + (Math.round(n*100)/100).toLocaleString(); }
@@ -343,7 +344,7 @@ function renderTickers() {
         const prev = CURRENT;
         el('#sym').value = t.symbol;
         CURRENT = t.symbol;
-        _waveBuffer = []; _waveOpenPrice = 0; // reset buffer for new symbol
+        _waveBuffer = []; _waveTimes = []; _waveOpenPrice = 0; // reset buffer for new symbol
         sendWS({type:'chart', symbol:t.symbol});
         // Re-render to update active highlight and price badge
         renderTickers();
@@ -405,6 +406,7 @@ function renderNews(item) {
   const toneRow  = item.tone === 'good' ? ' up' : (item.tone === 'bad' ? ' dn' : ' nu');
   const headTone = item.tone === 'good' ? ' n-up' : (item.tone === 'bad' ? ' n-dn' : '');
   div.className = 'news-line' + toneRow;
+  if (item.symbol) div.dataset.sym = String(item.symbol).toUpperCase();
   div.innerHTML = `<div class="n-meta"><span class="n-time">${time}</span>${badgeHtml}</div><div class="n-head${headTone}">${text}</div>`;
 
   // Click handler: click anywhere on the line to navigate to ticker (if available)
@@ -873,6 +875,21 @@ window.FMGotoSymbol = function (sym) {
   } catch (_) {}
 };
 
+// Double Down: buy `qty` more of `sym` (doubling an existing long) at market in one click.
+// Server enforces cash, the day-trade cap, and the buy cooldown, and rejects with a toast if needed.
+window.FMDoubleDown = function (sym, qty) {
+  try {
+    sym = String(sym || '').toUpperCase();
+    qty = Math.max(1, Math.floor(Number(qty) || 0));
+    if (!sym || qty < 1) return;
+    const px = (window.getLastPrice ? Number(window.getLastPrice(sym)) || 0 : 0);
+    const cost = px > 0 ? ('~Ƒ' + Math.round(px * qty).toLocaleString() + ' before fee and slippage') : 'at market';
+    const ok = window.confirm('Double down on ' + sym + ': buy ' + qty + ' more @ Ƒ' + px.toFixed(2) + ' (' + cost + '). This doubles your position.');
+    if (!ok) return;
+    if (window.marketAPI && typeof window.marketAPI.buy === 'function') window.marketAPI.buy(sym, qty);
+  } catch (_) {}
+};
+
 function renderPnLDetail(p) {
   // Called on portfolio msg — seeds __MY_POSITIONS then delegates to live renderer
   try { liveUpdatePnL(null, p); } catch(e) {}
@@ -927,6 +944,9 @@ function _pnlMatch(sym){
   return !q || String(sym||'').toLowerCase().includes(q);
 }
 // Sector index + readable name for a symbol, pulled from the live market snapshot.
+// Dividend-paying sectors, mirrors server DIVIDEND_SECTORS (Finance/Insurance/Energy/Tech).
+// Used to badge positions in the P&L list so you can see at a glance which pay a dividend.
+const _DIV_SECTORS = new Set([0, 2, 4, 6]);
 function _sectorOf(sym){
   try {
     const t = (window.TICKERS||[]).find(x => x && String(x.symbol) === String(sym));
@@ -1017,13 +1037,14 @@ function liveUpdatePnL(tickData, portfolioSnap) {
     const uplSign2 = p.upl >= 0 ? '+' : '';
     const pctSign  = p.gainPct >= 0 ? '+' : '';
     const secTag = bySector ? `<span style="font-size:.6rem;color:#7a6a4a;letter-spacing:.04em">${_sectorName(_sectorOf(p.sym))}</span>` : '';
-    return `<div class="pnl-pos-row" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #06160a">
-      <span style="font-weight:700;color:#46ff7d;min-width:52px">${p.sym}${secTag?' '+secTag:''}</span>
+    return `<div class="pnl-pos-row" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #06160a;cursor:pointer" title="Open ${p.sym} in Market" onclick="window.FMGotoSymbol('${p.sym}')">
+      <span style="font-weight:700;color:#46ff7d;min-width:52px">${p.sym}${_DIV_SECTORS.has(_sectorOf(p.sym)) ? ' <span title="Pays a dividend" style="font-size:.62rem">💰</span>' : ''}${secTag?' '+secTag:''}</span>
       <span class="muted" style="min-width:60px;font-size:.8rem">${p.qty} @ Ƒ${p.avg.toFixed(2)}</span>
       <span style="min-width:72px;color:#d4b87a">Ƒ${p.last.toFixed(2)}</span>
       <span style="min-width:80px;color:#d4b87a">${fmt(p.value)}</span>
       <span style="min-width:80px;color:${p.upl>=0?'#86ff6a':'#ff6b6b'}">${uplSign2}${fmt(p.upl)}</span>
       <span style="min-width:60px;font-size:.78rem;color:${p.gainPct>=0?'#86ff6a':'#ff6b6b'}">${pctSign}${p.gainPct.toFixed(2)}%</span>
+      ${p.qty > 0 ? `<button title="Double down on ${p.sym}: buy ${p.qty} more" onclick="event.stopPropagation();window.FMDoubleDown('${p.sym}',${p.qty})" style="flex:0 0 auto;margin-left:4px;font-size:.64rem;padding:1px 6px;background:#0a2a14;border:1px solid #1f6b3a;color:#86ff6a;border-radius:4px;cursor:pointer">2×</button>` : ''}
     </div>`;
   });
 
@@ -1269,12 +1290,17 @@ function drawChart() {
   ctx.font = '12px monospace';
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(114,224,156,0.55)';
-  const secTotal = n * 0.5; // each point is 500ms
+  // Per-point real timestamps when available, so the axis shows true elapsed time and
+  // widens with the extended-history upgrade. Falls back to the old 500ms/point estimate.
+  const useTimes = (_waveTimes.length >= buf.length) && n > 0;
+  const nowT = useTimes ? _waveTimes[_waveTimes.length - 1] : 0;
   const labels = 6;
   for (let i = 0; i <= labels; i++) {
     const frac = i / labels;
-    const secAgo = Math.round(secTotal * (1 - frac));
     const x = frac * CW;
+    const secAgo = useTimes
+      ? Math.round((nowT - (_waveTimes[offset + Math.round(frac * (n - 1))] || nowT)) / 1000)
+      : Math.round((n * 0.5) * (1 - frac));
     if (secAgo > 0) {
       const lbl = secAgo >= 60 ? Math.floor(secAgo/60) + 'm' + (secAgo%60?String(secAgo%60).padStart(2,'0')+'s':'') : secAgo + 's';
       ctx.fillText('-' + lbl, x, H - 3);
@@ -1313,7 +1339,9 @@ let _waveAnimFrame = null;
 function _wavePush(price) {
   const maxBuf = 800; // enough for widest monitors
   _waveBuffer.push(price);
+  _waveTimes.push(Date.now());
   if (_waveBuffer.length > maxBuf) _waveBuffer.shift();
+  if (_waveTimes.length > maxBuf) _waveTimes.shift();
   if (!_waveOpenPrice) _waveOpenPrice = price;
   // Throttle redraws to ~20fps (every 50ms) to save CPU
   if (!_waveAnimFrame) {
@@ -1924,6 +1952,7 @@ ws.addEventListener('message', (ev)=>{
       OHLC = msg.data.ohlc;
       // Seed wave buffer from OHLC close prices
       _waveBuffer = msg.data.ohlc.map(d => d.c);
+      _waveTimes  = msg.data.ohlc.map(d => Number(d.t) || Date.now());
       _waveOpenPrice = msg.data.ohlc.length ? msg.data.ohlc[0].o : 0;
       drawChart();
     }
@@ -2015,7 +2044,7 @@ ws.addEventListener('message', (ev)=>{
     playSound(d.beat ? 'buy' : 'sell');
     const dir = d.beat ? '▲' : '▼';
     const color = d.beat ? '#86ff6a' : '#ff6a6a';
-    showToast(`${dir} EARNINGS: ${d.symbol} ${d.beat?'BEAT':'MISS'} ${dir}${d.magnitude}% → Ƒ${d.newPrice.toFixed(2)}`, color);
+    showToast(`${dir} EARNINGS: ${d.symbol} ${d.beat?'BEAT':'MISS'} ${dir}${d.magnitude}% → Ƒ${d.newPrice.toFixed(2)}`, color, 3500, d.symbol);
   }
   if (msg.type === 'dividend') {
     playSound('buy');

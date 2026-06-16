@@ -177,7 +177,7 @@ function executeFundTrade(fundId, side, sym, qty, actorId) {
     // price) and the buy pushes the tape up, exactly like a personal order. Under
     // IMPACT_THRESHOLD_C notional slip is 0, so ordinary house trades fill flat as before.
     const slip = impactSlip(toCents(c.price) * q, 1);
-    fillPrice = slip > 0 ? c.price * (1 + slip/2) : c.price;
+    fillPrice = slip > 0 ? c.price * Math.exp(slip) : c.price;
     const cost = fillPrice * q;
     if (fundCash < cost) return { ok:false, error:'insufficient_fund_cash', have:fundCash, need:cost };
     setFundCashById(fundId, fundCash - cost);
@@ -189,7 +189,7 @@ function executeFundTrade(fundId, side, sym, qty, actorId) {
     const sellQty = Math.min(q, haveQty);
     if (sellQty <= 0) return { ok:false, error:'no_holdings' };
     const slip = impactSlip(toCents(c.price) * sellQty, -1);
-    fillPrice = slip > 0 ? c.price * (1 - slip/2) : c.price;
+    fillPrice = slip > 0 ? c.price * Math.exp(-slip) : c.price;
     const proceeds = fillPrice * sellQty;
     setFundCashById(fundId, fundCash + proceeds);
     setFundPortfolioQty(fundId, sym, haveQty - sellQty);
@@ -2741,7 +2741,7 @@ function processFundProposals() {
             // Same large-order impact as personal orders / Capital Houses. Special
             // stocks (e.g. pinned FLSH) keep slip 0 so their price isn't disturbed.
             const slip = c._special ? 0 : impactSlip(toCents(c.price) * prop.qty, 1);
-            const fillPrice = slip > 0 ? c.price * (1 + slip/2) : c.price;
+            const fillPrice = slip > 0 ? c.price * Math.exp(slip) : c.price;
             const cost = fillPrice * prop.qty;
             if (cash >= cost) {
               setFundCash(cash - cost);
@@ -2754,7 +2754,7 @@ function processFundProposals() {
             const qty = Math.min(prop.qty, haveQty);
             if (qty > 0) {
               const slip = c._special ? 0 : impactSlip(toCents(c.price) * qty, -1);
-              const fillPrice = slip > 0 ? c.price * (1 - slip/2) : c.price;
+              const fillPrice = slip > 0 ? c.price * Math.exp(-slip) : c.price;
               const proceeds = fillPrice * qty;
               setFundCash(cash + proceeds);
               setFundHolding(prop.symbol, haveQty - qty);
@@ -5168,6 +5168,9 @@ setInterval(() => {
         actor.holdings = actor.holdings || {}; actor.basisC = actor.basisC || {};
         actor.holdings[cfg.symbol] = (actor.holdings[cfg.symbol] || 0) + buyQty;
         actor.basisC[cfg.symbol] = (actor.basisC[cfg.symbol] || 0) + costC;
+        // Day-trade: issue a buy ticket like a manual buy, so selling auto-accumulated
+        // shares counts as a round trip and can't be used to dodge the day-trade cap.
+        { const _dt=_dtGet(cfg.player_id); _dt.tickets[cfg.symbol]=(_dt.tickets[cfg.symbol]||0)+1; }
         FMI.treasury += taxC / 100; FMI.hourlyTaxAccrual += taxC / 100;
         try { addFundCash('FLSH', fromCents(costC) * FLSH_TRADE_PCT); } catch(_) {}
         savePlayer(actor);
@@ -5963,7 +5966,7 @@ wss.on('connection',(ws,req)=>{
           const shortQty = Math.abs(have);
           const coverQty = Math.min(qty, shortQty);  // can't cover more than you're short
           const _slip = _impactSlipFor(toCents(c.price) * coverQty, 1);
-          const execPrice = _slip > 0 ? c.price * (1 + _slip/2) : c.price;
+          const execPrice = _slip > 0 ? c.price * Math.exp(_slip) : c.price;
           const coverCostC = toCents(execPrice) * coverQty;
           const taxC = Math.floor(coverCostC * TRADE_TAX_BPS / 10000);
           const totalC = coverCostC + taxC;
@@ -6021,7 +6024,7 @@ wss.on('connection',(ws,req)=>{
         // ── NORMAL LONG BUY ──────────────────────────────────────────────────
         } else {
           const _slip=_impactSlipFor(toCents(c.price)*qty, 1);
-          const execPrice=_slip>0?c.price*(1+_slip/2):c.price;
+          const execPrice=_slip>0?c.price*Math.exp(_slip):c.price;
           const costC=toCents(execPrice)*qty,taxC=Math.floor(costC*TRADE_TAX_BPS/10000),totalC=costC+taxC,total=fromCents(totalC);
           if(actor.cash>=total){
             safeAddCash(actor,-total);FMI.treasury+=(taxC/100);FMI.hourlyTaxAccrual+=(taxC/100);
@@ -6045,7 +6048,7 @@ wss.on('connection',(ws,req)=>{
           const isScalp = dt.tickets[s] > 0;
           const taxMult = isScalp ? 2 : 1;
           const _slip=_impactSlipFor(toCents(c.price)*qty, -1);
-          const execPrice=_slip>0?c.price*(1-_slip/2):c.price;
+          const execPrice=_slip>0?c.price*Math.exp(-_slip):c.price;
           const grossC=toCents(execPrice)*qty,taxC=Math.floor(grossC*TRADE_TAX_BPS*taxMult/10000);
           safeAddCash(actor,fromCents(grossC-taxC));FMI.treasury+=(taxC/100);FMI.hourlyTaxAccrual+=(taxC/100);
           try{addFundCash('FLSH', fromCents(grossC)*FLSH_TRADE_PCT);}catch(_){}
@@ -6089,7 +6092,7 @@ wss.on('connection',(ws,req)=>{
           }
           // Large-order impact for the whole downward order (long-clear + short open).
           const _slip = _impactSlipFor(toCents(c.price)*qty, -1);
-          const execPrice = _slip>0 ? c.price*(1-_slip/2) : c.price;
+          const execPrice = _slip>0 ? c.price*Math.exp(-_slip) : c.price;
 
           // Clear long position first
           if(have>0){

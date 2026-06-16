@@ -1,5 +1,7 @@
 
 (function(){
+  // Mirror server TRADE_TAX_BPS=25 (0.25%) so the sell dialog can preview the fee.
+  const TRADE_TAX_RATE = 0.0025;
   function upper(x){ return String(x||'').toUpperCase(); }
 
   // Helpers (prefer store, then portfolio, then ME)
@@ -81,6 +83,11 @@
       const pnl = avg > 0 ? (last - avg) * qty : 0;
       const valueEl = document.getElementById('sm-value');
       if (valueEl) valueEl.textContent = 'Ƒ' + saleValue.toFixed(2);
+      const fee = saleValue * TRADE_TAX_RATE;
+      const feeEl = document.getElementById('sm-fee');
+      if (feeEl) feeEl.textContent = 'Ƒ' + fee.toFixed(2);
+      const netEl = document.getElementById('sm-net');
+      if (netEl) netEl.textContent = 'Ƒ' + Math.max(0, saleValue - fee).toFixed(2);
       const pnlEl = document.getElementById('sm-pnl');
       if (pnlEl) {
         const sign = pnl >= 0 ? '+' : '';

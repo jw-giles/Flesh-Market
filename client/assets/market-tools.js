@@ -491,6 +491,7 @@ function initNewsFilter() {
       <option value="bad">Bad</option>
       <option value="neutral">Neutral</option>
     </select>
+    <button id="newsWatchOnly" title="Show only news for your watchlisted tickers" style="background:none;border:1px solid rgba(240,180,84,0.3);border-radius:3px;color:#b8893a;font-size:.68rem;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap">★</button>
     <button id="newsClearFilter" style="background:none;border:1px solid #2a1010;border-radius:3px;
       color:#553333;font-size:.68rem;padding:2px 6px;cursor:pointer;font-family:inherit">✕</button>`;
   newsH2.after(filterWrap);
@@ -498,16 +499,24 @@ function initNewsFilter() {
   const filterInput = $('#newsFilter');
   const toneFilter = $('#newsToneFilter');
   const clearBtn = $('#newsClearFilter');
+  const watchBtn = $('#newsWatchOnly');
+  let _newsWatchOnly = false;
 
   function applyNewsFilter() {
     const q = (filterInput.value || '').toLowerCase().trim();
     const tone = toneFilter.value;
     const newsBox = $('#news');
     if (!newsBox) return;
+    const wl = _newsWatchOnly ? getWatchlist().map(s => String(s).toUpperCase()) : null;
     const items = newsBox.querySelectorAll('.news-line');
     items.forEach(item => {
       const text = (item.textContent || '').toLowerCase();
       const matchText = !q || text.includes(q);
+      let matchWatch = true;
+      if (wl) {
+        const sym = (item.dataset && item.dataset.sym) ? item.dataset.sym.toUpperCase() : '';
+        matchWatch = !!sym && wl.includes(sym);
+      }
       // Tone matching via CSS classes
       let matchTone = true;
       if (tone) {
@@ -518,17 +527,27 @@ function initNewsFilter() {
         else if (tone === 'bad') matchTone = !!hasBad;
         else if (tone === 'neutral') matchTone = !!hasNeutral;
       }
-      item.style.opacity = (matchText && matchTone) ? '1' : '.15';
-      item.style.maxHeight = (matchText && matchTone) ? '' : '18px';
+      const _show = matchText && matchTone && matchWatch;
+      item.style.opacity = _show ? '1' : '.15';
+      item.style.maxHeight = _show ? '' : '18px';
       item.style.overflow = 'hidden';
     });
   }
 
   filterInput.addEventListener('input', applyNewsFilter);
   toneFilter.addEventListener('change', applyNewsFilter);
+  if (watchBtn) watchBtn.addEventListener('click', () => {
+    _newsWatchOnly = !_newsWatchOnly;
+    watchBtn.style.borderColor = _newsWatchOnly ? '#f0b454' : 'rgba(240,180,84,0.3)';
+    watchBtn.style.color = _newsWatchOnly ? '#f0b454' : '#b8893a';
+    watchBtn.style.background = _newsWatchOnly ? 'rgba(240,180,84,.10)' : 'none';
+    applyNewsFilter();
+  });
   clearBtn.addEventListener('click', () => {
     filterInput.value = '';
     toneFilter.value = '';
+    _newsWatchOnly = false;
+    if (watchBtn) { watchBtn.style.borderColor = 'rgba(240,180,84,0.3)'; watchBtn.style.color = '#b8893a'; watchBtn.style.background = 'none'; }
     applyNewsFilter();
   });
 }

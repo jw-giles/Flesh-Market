@@ -4,6 +4,49 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.7.9 (2026-06-16) - News watchlist filter; Corpo-Cards collection sort (CLIENT)
+
+Client-only. Hard-refresh after deploy. **No server/DB change.** Batch B continued.
+
+- **News watchlist filter** (`market-tools.js`, `core.js`) - the existing news filter (text search + good/bad/neutral tone) gains a `★` toggle that shows only news whose ticker is on your watchlist (`fm:watchlist`). `renderNews` now stamps each `.news-line` with `data-sym`; the filter reads it and dims/collapses non-watchlisted lines. Clearing the filter resets the toggle.
+- **Corpo-Cards collection sort** (`tcg/tcg-app.js`) - `renderCollection` previously hardcoded a cost sort. Added a Sort by selector: Cost (asc, default - unchanged behavior), Attack (desc), Health (desc), Rarity (desc by rank common<rare<epic<legendary), Name. Non-unit cards (no attack/health) fall back to 0 and sort last on those keys. Faction/shiny filters and the click-to-list behavior are untouched.
+
+---
+
+## v1.1.7.8 (2026-06-16) - Chart time axis fixed to real elapsed time; DOUBLE DOWN button (CLIENT)
+
+Client-only, `client/assets/core.js`. Hard-refresh after deploy. **No server/DB change.** First two of Batch B.
+
+- **Chart time axis** - OHLC bars are 5s each (`BAR_MS_F=5000`), but the bottom time axis assumed 500ms/point (`secTotal = n * 0.5`), so it understated the real span by ~10x and never widened when you owned the extended-history (`price_history`) upgrade. Now a parallel `_waveTimes` buffer keeps a real timestamp per point (OHLC `t` was being discarded on seed); the axis labels are computed from actual timestamps and fall back to the old estimate only if timestamps are missing. The visible window now grows with the upgrade.
+- **DOUBLE DOWN** - each long position row in `#pnlBox` now has a `2×` button that buys an equal number of additional shares at market via `marketAPI.buy`, doubling the position, behind a single confirm showing approx cost. `event.stopPropagation()` so it doesn't trigger the row's navigate. Cash, day-trade cap, and buy cooldown stay enforced server-side. Longs only (`p.qty > 0`).
+
+---
+
+## v1.1.7.7 (2026-06-16) — Batch A UI: clickable P&L tickers, sell fee, dividend badge, tappable stock toasts, auto-accum wording (CLIENT)
+
+Client-only UI batch. CLIENT (`client/assets/core.js`, `sound.js`, `market-orders.js`, `market-upgrades.js`, `client/index.html`): hard-refresh after deploy (assets are served `no-cache`). **No server or DB change.**
+
+- **P&L tickers clickable** — `#pnlBox` position rows now navigate to the stock's Market page on click (`FMGotoSymbol`), matching the house holdings and bar-chart behavior.
+- **Sell dialog shows the fee** — the sell modal now displays the trade fee (0.25%, mirrors server `TRADE_TAX_BPS=25`) and net proceeds, alongside sale value.
+- **Dividend badge** — positions in dividend-paying sectors (Finance/Insurance/Energy/Tech, mirrors server `DIVIDEND_SECTORS`) show a 💰 badge in the P&L list.
+- **Tappable stock toasts** — `showToast` gained an optional `symbol` (and now honors the `duration` arg callers were already passing, which was previously ignored). Earnings toasts are wired to open the stock on tap; other stock toasts can opt in by passing the symbol.
+- **Auto-Accumulate wording** — clarified the reserve as cash you set aside per symbol that auto-buys spend (not your spendable cash), funded/withdrawn any time. Removed the contradictory "never touches your main balance" line and reworded the cancel prompt away from "returns to your balance."
+
+---
+
+## v1.1.7.6 (2026-06-16) — Trade integrity: market-impact fill exploit + auto-accumulate day-trade dodge (SERVER)
+
+Server-only. Closes a money exploit in the large-order impact model and a day-trade-cap bypass. SERVER (`server/server.js`): `pm2 restart fleshmarket` required; **no client or DB change** in this patch (it carries the earlier 1.1.7.4/1.1.7.5 client + DB changes if not yet deployed).
+
+**Market — fills now execute at the price they create (the short "always profits" exploit)**
+- Large orders (> impact threshold) filled at `c.price * (1 ± slip/2)` but moved the tape the full `slip` (`lnP ± slip`). So the order filled at *half* the impact while the market settled at the *full* impact — a permanent gap between the trader's fill and the resulting price. That gap was harvestable: short big (fill above the depressed market) then cover in sub-threshold chunks at the depressed price, or symmetrically buy big then sell small. Most visible as "short while holding nets more than just selling," and as the short's locked collateral (set from the fill) exceeding its cover liability (marked at the moved price), so net worth jumped the instant a short opened.
+- Fix: all eight fill sites (personal buy/sell/short/cover, Capital House trades, legacy guild vote-passed trades) now fill at `c.price * Math.exp(±slip)` — exactly the post-tape price. Fill == resulting market price on both sides, so the round trip nets ≈ −tax and the gap is gone. Sub-threshold fills (`slip == 0`) are unchanged. **Trade-off:** orders above the threshold now pay the *full* slippage they cause (was half) — this is the cost of keeping the price impact intact while killing the arb.
+
+**Market — auto-accumulate no longer dodges the day-trade cap**
+- The day-trade cap counts round trips; a manual buy issues a ticket and the closing sell consumes it. Auto-Accumulate buys issued **no** ticket, so selling auto-accumulated shares never counted as a round trip — an end-run around the cap. Auto-Accumulate buys now issue a buy ticket like a manual buy. (Side effect: selling auto-accumulated shares in the same cycle now correctly counts as a round trip, including the 2× scalping tax.)
+
+---
+
 ## v1.1.7.5 (2026-06-16) — Capital House cost basis + short liquidity gate (SERVER + DB + CLIENT)
 
 Two changes: give house holdings a real cost basis (so the Portfolio %-column is gain-vs-entry like personal P&L, not the ticker's daily move), and require liquid cash backing to open a short. SERVER + DB + CLIENT (`server/db.js`, `server/server.js`, `client/assets/funds.js`): `pm2 restart fleshmarket` required; client assets are served `no-cache` and revalidate on next load (hard-refresh if in doubt). **DB migration is additive + idempotent.**

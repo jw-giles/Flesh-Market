@@ -80,19 +80,26 @@ window.playSound = function(type) {
 };
 
 // ── Toast System ─────────────────────────────────────────────────────────────
-window.showToast = function(text, color) {
+window.showToast = function(text, color, duration, symbol) {
   const area = document.getElementById('toastArea'); if (!area) return;
   const div = document.createElement('div');
   div.className = 'v5toast';
   div.textContent = text;
   div.style.borderColor = color || '#46ff7d';
   div.style.color = color || '#46ff7d';
+  // Stock toasts are tappable: jump to that symbol's Market page.
+  if (symbol && window.FMGotoSymbol) {
+    div.style.cursor = 'pointer';
+    div.title = 'Open ' + symbol + ' in Market';
+    div.addEventListener('click', () => { try { window.FMGotoSymbol(symbol); } catch(_){} });
+  }
   area.appendChild(div);
   requestAnimationFrame(() => { div.classList.add('show'); });
+  const ms = (typeof duration === 'number' && duration > 0) ? duration : 3500;
   setTimeout(() => {
     div.classList.remove('show');
     setTimeout(() => div.remove(), 300);
-  }, 3500);
+  }, ms);
 };
 
 // ── Trade Feed ─────────────────────────────────────────────────────────────

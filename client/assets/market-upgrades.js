@@ -59,7 +59,7 @@
       html +=
         '<div style="margin-top:10px;border-top:1px solid #0a2510;padding-top:8px">' +
           '<div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px">Auto-Accumulate</div>' +
-          '<div class="muted" style="font-size:.72rem;opacity:.6;margin-bottom:6px">Buys from a funded reserve when a held position drops below your average cost. Reserve only; never touches your main balance. Runs while you are connected.</div>' +
+          '<div class="muted" style="font-size:.72rem;opacity:.6;margin-bottom:6px">Set aside cash as a per-symbol reserve. When a held position drops below your average cost, auto-buys spend from that reserve, not your spendable cash. Fund or withdraw the reserve any time. Runs while you are connected.</div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">' +
             '<input id="muSym" class="input" placeholder="Symbol" maxlength="5" style="max-width:80px"/>' +
             '<input id="muDrop" class="input" type="number" min="0.1" step="0.1" value="5" title="% below your average cost" style="max-width:96px"/>' +
@@ -135,7 +135,7 @@
         var s = b.getAttribute('data-sym');
         var res = (parseInt(b.getAttribute('data-res'), 10) || 0) / 100;
         var prompt = res > 0
-          ? 'Cancel auto-accumulate on ' + s + '? Reserve ' + fmtF(res) + ' returns to your balance.'
+          ? 'Cancel auto-accumulate on ' + s + '? Its reserve of ' + fmtF(res) + ' is released back to your spendable cash.'
           : 'Cancel auto-accumulate on ' + s + '?';
         if (window.confirm(prompt)) send({ type: 'auto_accum_cancel', symbol: s });
       });
