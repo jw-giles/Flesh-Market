@@ -713,6 +713,7 @@ const RARITY_ORDER = {common:0,uncommon:1,rare:2,epic:3,legendary:4};
 
 window.loadMarket = async function(){
   const el = document.getElementById('marketListings'); if(!el) return;
+  if(window.TitleMarket && window.TitleMarket.isMode()){ window.TitleMarket.requestData(); window.TitleMarket.render('marketListings'); return; }
   el.innerHTML = '<div style="color:#443333;font-size:.73rem;padding:8px">Loading…</div>';
   try{
     const r = await fetch('/api/items/market');
@@ -725,6 +726,7 @@ window.loadMarket = async function(){
 
 window.applyMarketFilters = function(){
   const el = document.getElementById('marketListings'); if(!el) return;
+  if(window.TitleMarket && window.TitleMarket.isMode()){ window.TitleMarket.requestData(); window.TitleMarket.render('marketListings'); return; }
   const slotF   = document.getElementById('mktFilterSlot')?.value   || '';
   const rarityF = document.getElementById('mktFilterRarity')?.value || '';
   const sortBy  = document.getElementById('mktSortBy')?.value       || 'newest';
@@ -792,7 +794,8 @@ window.cancelListing = async function(listingId){
 window.showListForm = function(){
   const form = document.getElementById('listForm');
   if(form){ form.style.display = form.style.display==='none'?'block':'none'; }
-  updateListSelect();
+  if(window.TitleMarket && window.TitleMarket.isMode()){ window.TitleMarket.populateListSelect('listInvSelect'); }
+  else { updateListSelect(); }
 };
 
 function updateListSelect(){
@@ -807,6 +810,7 @@ function updateListSelect(){
 }
 
 window.submitListing = async function(){
+  if(window.TitleMarket && window.TitleMarket.isMode()){ window.TitleMarket.submitListing(); return; }
   const token = getToken(); if(!token) return;
   const invId = document.getElementById('listInvSelect')?.value;
   const price = parseFloat(document.getElementById('listPrice')?.value);

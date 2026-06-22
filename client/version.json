@@ -1,7 +1,7 @@
 {
-  "version": "1.1.8.2",
+  "version": "1.1.8.4",
   "built": "2026-06-22T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.8.2",
-  "notes": "SERVER + CLIENT. Gifted Titles are now real selectable titles instead of an invisible auto-overlay. Granting one adds it to the player's owned titles and auto-equips it, so it appears in the title inventory picker (in its custom color, with its badge) and recolors the chat name immediately. The custom color and badge apply in chat, whispers, and portfolio only while the gifted title is the equipped title, consistent with every other title; the player can switch titles freely and switch back. Removing a gifted title pulls it from owned titles and unequips it. No DB change (the gifted_titles table and ownedTitles field already existed). Carries 1.1.8.1 and earlier."
+  "patch": "1.1.8.4",
+  "notes": "SERVER + DB + CLIENT. Ƒbay title trading: collectible custom titles can now be listed, bought, and sold between players, inside the existing Ƒbay inventory marketplace. Pick the 👑 Titles category in the Ƒbay slot filter to browse titles For Sale (shown in their color with rarity) and your own listings; the + List form then lists one of your held titles at a price. Listing escrows the title out of your holdings until it sells or you delist; buying transfers cash and the title atomically with the full price going to the seller; rarity (common/rare/epic/legendary/custom) is shown for collector value. Adds a title_market table and a boot-safe schema step. Carries 1.1.8.3 and earlier."
 }

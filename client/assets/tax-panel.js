@@ -96,11 +96,15 @@
       </div>` : ''}
 
       <div style="margin-bottom:6px;color:#8a857b;font-size:.74rem;letter-spacing:.05em">PAY AHEAD</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:9px 12px;margin-bottom:8px;border-radius:6px;border:1px solid #3a8a3a44;background:#06120a">
+        <span style="color:#7fc090;font-size:.74rem;letter-spacing:.03em">FRS prepaid balance</span>
+        <span style="color:#86ff6a;font-size:1.05rem;font-weight:700;font-family:ui-monospace,monospace">${fmtF(prepaid)}</span>
+      </div>
       <div style="display:flex;gap:6px;margin-bottom:8px">
         <input id="fm-tax-prepay-amt" type="number" min="1" placeholder="Prepay amount" style="flex:1;padding:6px 8px;background:#0a0700;border:1px solid #3a3320;border-radius:4px;color:#fff;font-size:.82rem">
         <button onclick="window.taxPrepay&&window.taxPrepay()" style="padding:6px 14px;border:1px solid #7a5e1e;border-radius:4px;background:#140d00;color:#ffce4d;cursor:pointer;font-size:.82rem">Prepay</button>
       </div>
-      <div style="color:#6f6a60;font-size:.72rem">Prepaid credit is applied to future weekly assessments before any cash is taken. Money held inside a capital house is taxed only when you withdraw it.</div>
+      <div style="color:#6f6a60;font-size:.72rem">This balance sits with the FRS like a deposit account and is drawn down by future weekly assessments before any of your cash is taken. Money held inside a capital house is taxed only when you withdraw it.</div>
     `;
   }
 

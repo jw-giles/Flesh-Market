@@ -669,7 +669,10 @@ function escapeHtml(s) {
   };
   window.godUngift = function() {
     const t = _frsTarget(); if (!t) return godFeedback('✗ Enter a player name', '#ff6b6b');
-    godSend({ cmd: 'ungift_title', targetName: t });
+    // Optional: type an exact label in the custom-label field to remove that specific title;
+    // leave it blank to remove the player's currently-equipped gifted title.
+    const lbl = (document.getElementById('god-frs-customlabel')?.value || '').trim();
+    godSend({ cmd: 'ungift_title', targetName: t, label: lbl || undefined });
   };
 
   window.godSetFRS = function(patch) { godSend({ cmd: 'set_frs', ...patch }); };
@@ -717,10 +720,14 @@ function escapeHtml(s) {
       const hist = (t.tax || []).map(h =>
         `${new Date(h.ts).toLocaleDateString()}  gain ${_frsFmt(h.period_gain)}  tax ${_frsFmt(h.tax_assessed)}  owed ${_frsFmt(h.new_owed)}`
       ).join('\n') || '  (none)';
+      const gifts = (d.gifted || []).map(g =>
+        `${g.label === d.equipped ? '● ' : '  '}${(g.badge||'')} ${g.label}  [${g.rarity||'custom'}] ${g.color||''}`
+      ).join('\n') || '  (none)';
       _frsOut(
         `<b style="color:#ffce4d">DOSSIER: ${escapeHtml(d.name)}</b>\n`
         + `Playtime: ${_frsTime(t.play_seconds)}\n`
         + `Tax basis ${tax.tax_basis==null?'(unassessed)':_frsFmt(tax.tax_basis)}  owed ${_frsFmt(tax.tax_owed)}  prepaid ${_frsFmt(tax.tax_prepaid)}  loss credit ${_frsFmt(tax.tax_loss_credit)}\n`
+        + `\n<b>Gifted titles</b> (● = equipped; type a label in the custom field and Remove to delete one)\n${escapeHtml(gifts)}\n`
         + `\n<b>Recent trades</b>\n${escapeHtml(purch)}\n`
         + `\n<b>Tax history</b>\n${escapeHtml(hist)}`
       );

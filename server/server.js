@@ -113,7 +113,8 @@ import {
   buyMiningShip, equipMiningShip,
   // FRS (Flesh Revenue Service) + Gifted Titles — 1.1.8.0
   initFRSTables,
-  setGiftedTitle, clearGiftedTitle, getGiftedTitle,
+  addGiftedTitle, removeGiftedTitle, getGiftedTitles, getGiftedTitleByLabel, transferGiftedTitle,
+  listTitleForSale, buyTitle, cancelTitleListing, getTitleListings, getMyTitleListings,
   addPlaySecondsBulk, getPlaySeconds,
   recordFRSPositionSnapshot, logFRSPurchase, getFRSPlayerTelemetry, getFRSRecentPurchases,
   getFRSSettings, setFRSSetting,
@@ -150,13 +151,18 @@ function recordNetWorth(id, net, cash, equity) { try { recordNetWorthFn(id, net,
 // distinct from the structural chat colors (president #00bfff, owner #ff6a00,
 // debtor #6b4423, cyborg #9b59b6 / guild-cyborg #2ecc71).
 const GIFTED_TITLE_PRESETS = {
-  sweet_trader:   { label: "S'weet Trader",  color: '#b83265', badge: '🍇' }, // purplish red
-  angel_investor: { label: 'Angel Investor', color: '#8ab8ff', badge: '😇' }, // light blue
-  loan_shark:     { label: 'Loan Shark',     color: '#7a3fb0', badge: '💰' }, // dark purple
+  sweet_trader:   { label: "S'weet Trader",  color: '#b83265', badge: '🍇', rarity: 'rare' }, // purplish red
+  angel_investor: { label: 'Angel Investor', color: '#8ab8ff', badge: '😇', rarity: 'rare' }, // light blue
+  loan_shark:     { label: 'Loan Shark',     color: '#7a3fb0', badge: '💰', rarity: 'rare' }, // dark purple
 };
 // Cached lookup of the bearer's gifted title (or null). Read straight from db each
 // call; gifting is rare and chat already does per-message db reads, so this is cheap.
-function giftedTitleOf(playerId) { try { return getGiftedTitle(playerId); } catch(_) { return null; } }
+// Resolve a player's gifted-title look ONLY when the named title is one they hold.
+// Returns {label,color,badge,rarity} or null. Used to color the equipped title.
+function equippedGiftOf(playerId, equippedTitle) {
+  if (!equippedTitle) return null;
+  try { return getGiftedTitleByLabel(playerId, equippedTitle); } catch(_) { return null; }
+}
 
 function recordFundNAV(fundId, nav, spp, shares) { try { recordFundNAVFn(fundId, nav, spp, shares); } catch(e) {} }
 // Snapshot a single fund's NAV/share now — called on trades/deposits/withdrawals
@@ -5766,13 +5772,13 @@ function snapshotPortfolio(player){
   const _snapCyborg = isVoidLocked(player.id);
   const _snapEscaped = _snapCyborg && isVoidPresidentEscaped(player.id);
   const _snapIsPresident = !!(president && president.id === player.id);
-  const _snapGifted = giftedTitleOf(player.id);
-  const _snapGiftActive = !!(_snapGifted && player.title === _snapGifted.label);
+  const _snapGiftEquipped = equippedGiftOf(player.id, player.title);
+  const _snapGiftActive = !!_snapGiftEquipped;
   let _snapColor;
   if (_snapIsPresident) _snapColor = '#00bfff';
   else if (_snapEscaped) { _snapColor = playerFaction === 'syndicate' ? '#e74c3c' : null; }
   else if (_snapCyborg) _snapColor = player.patreon_tier === 2 ? '#2ecc71' : '#9b59b6';
-  else if (_snapGiftActive) _snapColor = _snapGifted.color;
+  else if (_snapGiftActive) _snapColor = _snapGiftEquipped.color;
   else _snapColor = tier?.chatColor || null;
   const _snapMarginCall = (() => { try { return getMarginCall(player.id) || null; } catch(_) { return null; } })();
   return {
@@ -5780,9 +5786,9 @@ function snapshotPortfolio(player){
     shortExposure, sectorBreakdown: sectorMap,
     marginCall: _snapMarginCall ? { symbol: _snapMarginCall.symbol, deadline: _snapMarginCall.deadline } : null,
     xp: player.xp, level: player.level, title: player.title,
-    giftTitle: (_snapGifted && _snapGifted.label) || null,
+    giftTitle: (_snapGiftActive && _snapGiftEquipped.label) || null,
     patreon_tier: player.patreon_tier || 0,
-    tierName: tier?.name || 'Free', badge: _snapCyborg ? (player.patreon_tier === 3 ? '♛' : '🤖') : ((_snapGiftActive && _snapGifted.badge) || tier?.badge || null),
+    tierName: tier?.name || 'Free', badge: _snapCyborg ? (player.patreon_tier === 3 ? '♛' : '🤖') : ((_snapGiftActive && _snapGiftEquipped.badge) || tier?.badge || null),
     chatColor: _snapColor, transferFree: !tier?.transferFee,
     faction: playerFaction, passiveIncome,
     dayTradesRemaining: _dtRemaining(player.id),
@@ -6254,6 +6260,9 @@ wss.on('connection',(ws,req)=>{
     // Helper: build full list of equippable titles for a player
     function buildAvailableTitles(player) {
       const titles = [...(player.ownedTitles || [])];
+      // Gifted (collectible) titles are owned via the gifted_titles table; include them
+      // so ownership there alone surfaces them in the picker (survives ownedTitles drift).
+      try { for (const g of getGiftedTitles(player.id)) if (!titles.includes(g.label)) titles.push(g.label); } catch(_) {}
       // President title if currently in office
       if (president && president.id === player.id && !titles.includes('President of The Coalition')) {
         titles.push('President of The Coalition');
@@ -6275,7 +6284,7 @@ wss.on('connection',(ws,req)=>{
 
     function sendTitleState(player, wsTarget) {
       const avail = buildAvailableTitles(player);
-      let gifted = null; try { gifted = getGiftedTitle(player.id); } catch(_) {}
+      let gifted = []; try { gifted = getGiftedTitles(player.id); } catch(_) {}
       wsTarget.send(JSON.stringify({ type: 'title_state', data: { title: player.title || '', owned: player.ownedTitles || [], available: avail, gifted } }));
     }
 
@@ -6325,6 +6334,73 @@ wss.on('connection',(ws,req)=>{
 
     if (msg.type === 'get_titles') {
       sendTitleState(actor, ws);
+    }
+
+    // ── Ƒbay title exchange ────────────────────────────────────────────────────
+    if (msg.type === 'title_listings') {
+      ws.send(JSON.stringify({ type: 'title_listings', data: { listings: getTitleListings(200), mine: getMyTitleListings(actor.id) } }));
+    }
+
+    if (msg.type === 'list_title') {
+      const label = String(msg.label || '').trim();
+      const price = Math.floor(Number(msg.price) || 0);
+      if (!label) return ws.send(JSON.stringify({ type:'error', data:{ msg:'No title selected.' } }));
+      if (!(price > 0)) return ws.send(JSON.stringify({ type:'error', data:{ msg:'Set a price above 0.' } }));
+      const r = listTitleForSale(actor.id, label, price);
+      if (!r.ok) {
+        const m = r.error==='not_owned' ? 'You do not hold that title.'
+          : r.error==='bad_price' ? 'Set a valid price.'
+          : r.error==='price_too_high' ? 'That price is too high.' : 'Could not list that title.';
+        return ws.send(JSON.stringify({ type:'error', data:{ msg:m } }));
+      }
+      // Title is now escrowed: drop it from owned + unequip if worn. No cash changed, safe to save.
+      actor.ownedTitles = (actor.ownedTitles || []).filter(t => t !== label);
+      if (actor.title === label) actor.title = '';
+      savePlayer(actor);
+      sendTitleState(actor, ws);
+      ws.send(JSON.stringify({ type:'title_listings', data:{ listings: getTitleListings(200), mine: getMyTitleListings(actor.id) } }));
+      ws.send(JSON.stringify({ type:'portfolio', data: snapshotPortfolio(actor) }));
+      ws.send(JSON.stringify({ type:'chat_system', data:{ text:`Listed "${label}" on the Ƒbay title exchange for Ƒ${price.toLocaleString()}.` } }));
+    }
+
+    if (msg.type === 'cancel_title_listing') {
+      const listingId = String(msg.listing || '');
+      const r = cancelTitleListing(actor.id, listingId);
+      if (!r.ok) return ws.send(JSON.stringify({ type:'error', data:{ msg:'Listing not found.' } }));
+      // Title returned to the seller via gifted_titles; the picker shows it through the gifted union.
+      sendTitleState(actor, ws);
+      ws.send(JSON.stringify({ type:'title_listings', data:{ listings: getTitleListings(200), mine: getMyTitleListings(actor.id) } }));
+      ws.send(JSON.stringify({ type:'chat_system', data:{ text:`Delisted "${r.label}" from the Ƒbay title exchange.` } }));
+    }
+
+    if (msg.type === 'buy_title_listing') {
+      const listingId = String(msg.listing || '');
+      const r = buyTitle(actor.id, listingId);
+      if (!r.ok) {
+        const m = r.error==='insufficient_funds' ? 'Insufficient funds.'
+          : r.error==='own_listing' ? 'That is your own listing.'
+          : r.error==='already_owned' ? 'You already hold that title.'
+          : r.error==='not_found' ? 'That listing is no longer available.' : 'Could not buy that title.';
+        return ws.send(JSON.stringify({ type:'error', data:{ msg:m } }));
+      }
+      // Cash + title moved atomically in the DB txn. Sync cash in-memory for the snapshot only;
+      // do NOT re-save actor (its cash is pre-debit). The picker shows the title via the gifted union.
+      actor.cash = Number(actor.cash || 0) - r.price;
+      sendTitleState(actor, ws);
+      ws.send(JSON.stringify({ type:'title_listings', data:{ listings: getTitleListings(200), mine: getMyTitleListings(actor.id) } }));
+      ws.send(JSON.stringify({ type:'portfolio', data: snapshotPortfolio(actor) }));
+      ws.send(JSON.stringify({ type:'chat_system', data:{ text:`Purchased the title "${r.label}" for Ƒ${r.price.toLocaleString()}. Equip it from your titles.` } }));
+      // Notify the seller (fresh read reflects the credited cash; their holdings were cleared on listing).
+      try {
+        if (playerSockets.get(r.sellerId)) {
+          const seller = getPlayer(r.sellerId);
+          if (seller) {
+            broadcastToPlayer(r.sellerId, { type:'chat_system', data:{ text:`Your title "${r.label}" sold on the Ƒbay exchange for Ƒ${r.price.toLocaleString()}.` } });
+            broadcastToPlayer(r.sellerId, { type:'title_state', data:{ title: seller.title || '', owned: seller.ownedTitles || [], available: buildAvailableTitles(seller), gifted: getGiftedTitles(seller.id) } });
+            broadcastToPlayer(r.sellerId, { type:'portfolio', data: snapshotPortfolio(seller) });
+          }
+        }
+      } catch(_) {}
     }
 
     if (msg.type === 'get_president_state') {
@@ -7065,7 +7141,7 @@ wss.on('connection',(ws,req)=>{
             equity, online,
             play_seconds: (()=>{ try { return getPlaySeconds(target.id); } catch(_) { return 0; } })(),
             tax: (()=>{ try { return getPlayerTaxState(target.id); } catch(_) { return null; } })(),
-            gift_title: (()=>{ try { return getGiftedTitle(target.id); } catch(_) { return null; } })(),
+            gift_titles: (()=>{ try { return getGiftedTitles(target.id); } catch(_) { return []; } })(),
           }
         }));
       }
@@ -7378,56 +7454,57 @@ wss.on('connection',(ws,req)=>{
         } catch(e) { err('Clear rename failed: ' + e.message); }
       }
 
-      // ── gift_title: grant a name-recoloring display title ─────────────────
+      // ── gift_title: grant a collectible name-recoloring title (accumulates) ─
       else if (cmd === 'gift_title') {
         const target = getPlayerByName(String(msg.targetName || '').trim());
         if (!target) return err('Player not found.');
-        let label, color, badge;
+        let label, color, badge, rarity = 'custom';
         if (msg.preset && GIFTED_TITLE_PRESETS[msg.preset]) {
           ({ label, color, badge } = GIFTED_TITLE_PRESETS[msg.preset]);
+          rarity = GIFTED_TITLE_PRESETS[msg.preset].rarity || 'rare';
         } else {
           label = String(msg.label || '').trim().slice(0, 48);
           color = String(msg.color || '').trim();
           badge = msg.badge ? String(msg.badge).trim().slice(0, 8) : null;
+          if (msg.rarity) rarity = String(msg.rarity);
           if (!label) return err('label or a valid preset required.');
           if (!/^#[0-9a-fA-F]{6}$/.test(color)) return err('color must be a #RRGGBB hex value.');
         }
         try {
-          // Capture the previous gifted label so we can drop it from owned titles on re-gift.
-          const _prevGift = getGiftedTitle(target.id);
-          setGiftedTitle(target.id, label, color, badge, actor.name);
-          // Make it a real, selectable title: add to owned, drop any stale gifted label,
-          // and auto-equip so the recolor shows immediately. Player can change it anytime.
+          // Collectible: add it without disturbing any titles the player already holds.
+          // Re-granting the same label just refreshes its look. Auto-equip the new one.
+          addGiftedTitle(target.id, label, color, badge, rarity, actor.name);
           target.ownedTitles = target.ownedTitles || [];
-          if (_prevGift && _prevGift.label && _prevGift.label !== label)
-            target.ownedTitles = target.ownedTitles.filter(t => t !== _prevGift.label);
           if (!target.ownedTitles.includes(label)) target.ownedTitles.push(label);
           target.title = label;
           savePlayer(target);
-          broadcastToPlayer(target.id, { type: 'gift_title', data: { label, color, badge } });
-          broadcastToPlayer(target.id, { type: 'title_state', data: { title: target.title, owned: target.ownedTitles, available: buildAvailableTitles(target), gifted: { label, color, badge } } });
+          broadcastToPlayer(target.id, { type: 'gift_title', data: { label, color, badge, rarity } });
+          broadcastToPlayer(target.id, { type: 'title_state', data: { title: target.title, owned: target.ownedTitles, available: buildAvailableTitles(target), gifted: getGiftedTitles(target.id) } });
           broadcastToPlayer(target.id, { type: 'system_message', data: { text: `You have been granted the title ${badge ? badge + ' ' : ''}${label}. It is now equipped; change it anytime from your titles.`, color } });
           const fresh = getPlayer(target.id); if (fresh) broadcastToPlayer(target.id, { type: 'portfolio', data: snapshotPortfolio(fresh) });
           broadcastToAdmins({ type: 'admin_log', data: { action: 'gift_title', by: actor.name, target: target.name, title: label } });
-          ack(`✓ Gifted "${label}" to ${target.name} (equipped)`);
+          ack(`✓ Gifted "${label}" to ${target.name} (equipped). They now hold ${getGiftedTitles(target.id).length} custom title(s).`);
         } catch(e) { err('Gift failed: ' + e.message); }
       }
 
-      // ── ungift_title: remove a gifted title ───────────────────────────────
+      // ── ungift_title: remove one collectible title (by label) ─────────────
       else if (cmd === 'ungift_title') {
         const target = getPlayerByName(String(msg.targetName || '').trim());
         if (!target) return err('Player not found.');
         try {
-          const _g = getGiftedTitle(target.id);
-          clearGiftedTitle(target.id);
-          // Remove it from owned titles and unequip if it was the active one.
-          if (_g && _g.label) {
-            target.ownedTitles = (target.ownedTitles || []).filter(t => t !== _g.label);
-            if (target.title === _g.label) target.title = '';
-            savePlayer(target);
+          // Which one to remove: an explicit label, else the currently-equipped gifted title.
+          let rmLabel = msg.label ? String(msg.label).trim() : '';
+          if (!rmLabel) {
+            const eq = getGiftedTitleByLabel(target.id, target.title);
+            if (eq) rmLabel = eq.label;
           }
-          broadcastToPlayer(target.id, { type: 'gift_title', data: null });
-          broadcastToPlayer(target.id, { type: 'title_state', data: { title: target.title || '', owned: target.ownedTitles || [], available: buildAvailableTitles(target), gifted: null } });
+          if (!rmLabel) return err('Specify which gifted title to remove (label), or have one equipped.');
+          if (!getGiftedTitleByLabel(target.id, rmLabel)) return err(`${target.name} does not hold a gifted title "${rmLabel}".`);
+          removeGiftedTitle(target.id, rmLabel);
+          target.ownedTitles = (target.ownedTitles || []).filter(t => t !== rmLabel);
+          if (target.title === rmLabel) target.title = '';
+          savePlayer(target);
+          broadcastToPlayer(target.id, { type: 'title_state', data: { title: target.title || '', owned: target.ownedTitles || [], available: buildAvailableTitles(target), gifted: getGiftedTitles(target.id) } });
           const fresh = getPlayer(target.id); if (fresh) broadcastToPlayer(target.id, { type: 'portfolio', data: snapshotPortfolio(fresh) });
           broadcastToAdmins({ type: 'admin_log', data: { action: 'ungift_title', by: actor.name, target: target.name } });
           ack(`✓ Removed gifted title from ${target.name}`);
@@ -7487,7 +7564,8 @@ wss.on('connection',(ws,req)=>{
         try {
           const tele = getFRSPlayerTelemetry(target.id);
           const tax  = getPlayerTaxState(target.id);
-          ws.send(JSON.stringify({ type: 'god_frs_player', data: { name: target.name, id: target.id, tax, telemetry: tele } }));
+          const gifted = getGiftedTitles(target.id);
+          ws.send(JSON.stringify({ type: 'god_frs_player', data: { name: target.name, id: target.id, tax, telemetry: tele, gifted, equipped: target.title || null } }));
         } catch(e) { err('Telemetry failed: ' + e.message); }
       }
 
@@ -7561,11 +7639,12 @@ wss.on('connection',(ws,req)=>{
       const _isPresident = !!(president && president.id === actor.id);
       const _isCyborg = isVoidLocked(actor.id);
       const _isEscaped = _isCyborg && isVoidPresidentEscaped(actor.id);
-      const _giftedChat = giftedTitleOf(actor.id);
-      // Gifted title is a selectable role: its color/badge apply only while it is the equipped title.
-      const _giftActive = !!(_giftedChat && actor.title === _giftedChat.label);
+      // Gifted titles are collectible selectable roles: the color/badge apply only when
+      // the equipped title is one the player holds. Equipped label resolves it directly.
+      const _giftEquipped = equippedGiftOf(actor.id, actor.title);
+      const _giftActive = !!_giftEquipped;
       // Badge: Owner→★, Dev→null, Cyborg+CEO→♛, Cyborg→🤖, gifted(equipped)→gift badge, else→tier badge
-      const chatBadge = _isOwner ? '★' : (_isDev ? null : (_isCyborg ? (actor.patreon_tier === 3 ? '♛' : '🤖') : ((_giftActive && _giftedChat.badge) || tier?.badge || null)));
+      const chatBadge = _isOwner ? '★' : (_isDev ? null : (_isCyborg ? (actor.patreon_tier === 3 ? '♛' : '🤖') : ((_giftActive && _giftEquipped.badge) || tier?.badge || null)));
       // Color: President→blue, Owner→orange, Dev→null,
       //   Escaped+Syndicate→red, Escaped+other→null (purple gone),
       //   Cyborg+Guild→green, Cyborg(normal)→purple, gifted title (equipped)→gift color, else→tier color
@@ -7579,12 +7658,12 @@ wss.on('connection',(ws,req)=>{
         chatColor = pFaction === 'syndicate' ? '#e74c3c' : null;
       }
       else if (_isCyborg) chatColor = actor.patreon_tier === 2 ? '#2ecc71' : '#9b59b6';
-      else if (_giftActive) chatColor = _giftedChat.color;
+      else if (_giftActive) chatColor = _giftEquipped.color;
       else chatColor = tier?.chatColor || null;
       const chatText = channel==='unmod' ? rawText : text;
       // For all channels (except dunce), include room number (1-15) for multi-room support
       const chatRoom = channel !== 'dunce' ? Math.min(5, Math.max(1, parseInt(msg.room) || 1)) : undefined;
-      const payload={type:'chat',data:{id:uuidv4(),t:Date.now(),user:actor.name,text:chatText,badge:chatBadge,color:chatColor,channel,title:actor.title||null,giftTitle:(_giftedChat&&_giftedChat.label)||null,is_dev:_isDev,is_prime:_isOwner,faction:actor.faction||null,portrait:actor.portrait||null,...(chatRoom !== undefined && {room:chatRoom})}};
+      const payload={type:'chat',data:{id:uuidv4(),t:Date.now(),user:actor.name,text:chatText,badge:chatBadge,color:chatColor,channel,title:actor.title||null,giftTitle:(_giftActive&&_giftEquipped.label)||null,is_dev:_isDev,is_prime:_isOwner,faction:actor.faction||null,portrait:actor.portrait||null,...(chatRoom !== undefined && {room:chatRoom})}};
       if(channel==='global'){
         broadcast(payload);
       } else {
@@ -7619,16 +7698,16 @@ wss.on('connection',(ws,req)=>{
       const _isPres=!!(president&&president.id===actor.id);
       const _wCyborg=isVoidLocked(actor.id);
       const _wEscaped=_wCyborg&&isVoidPresidentEscaped(actor.id);
-      const _wGifted=giftedTitleOf(actor.id);
-      const _wGiftActive=!!(_wGifted&&actor.title===_wGifted.label);
-      const wBadge=_isOwner?'★':(_isDev?null:(_wCyborg?(actor.patreon_tier===3?'♛':'🤖'):((_wGiftActive&&_wGifted.badge)||TIERS[actor.patreon_tier||0]?.badge||null)));
+      const _wGiftEquipped=equippedGiftOf(actor.id, actor.title);
+      const _wGiftActive=!!_wGiftEquipped;
+      const wBadge=_isOwner?'★':(_isDev?null:(_wCyborg?(actor.patreon_tier===3?'♛':'🤖'):((_wGiftActive&&_wGiftEquipped.badge)||TIERS[actor.patreon_tier||0]?.badge||null)));
       let wColor;
       if(_isPres) wColor='#00bfff';
       else if(_isOwner) wColor='#ff6a00';
       else if(_isDev) wColor=null;
       else if(_wEscaped){ const wf=getPlayerFaction(actor.id); wColor=wf==='syndicate'?'#e74c3c':null; }
       else if(_wCyborg) wColor=actor.patreon_tier===2?'#2ecc71':'#9b59b6';
-      else if(_wGiftActive) wColor=_wGifted.color;
+      else if(_wGiftActive) wColor=_wGiftEquipped.color;
       else wColor=TIERS[actor.patreon_tier||0]?.chatColor||null;
       const base={id:uuidv4(),t:Date.now(),from:actor.name,to:target.name,text:wText,badge:wBadge,color:wColor,is_prime:_isOwner,is_dev:_isDev};
       broadcastToPlayer(target.id,{type:'whisper',data:{...base,sent:false}});

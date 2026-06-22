@@ -3504,16 +3504,32 @@ export function initFRSTables() {
   // Lazy-add withdraw_tax_bps in case frs_settings predates 1.1.8.0 final.
   try { db.exec('ALTER TABLE frs_settings ADD COLUMN withdraw_tax_bps INTEGER NOT NULL DEFAULT 1500'); } catch(_) {}
 
+  // Migrate legacy single-row gifted_titles (player_id PK, no `id` column) to the new
+  // many-per-player schema: rename it aside so the CREATE below builds the new table;
+  // rows are copied back and the legacy table dropped after creation.
+  try {
+    let legacy = false;
+    try { db.prepare('SELECT id FROM gifted_titles LIMIT 1').get(); }
+    catch(_) { try { db.prepare('SELECT label FROM gifted_titles LIMIT 1').get(); legacy = true; } catch(_) {} }
+    if (legacy) db.exec('ALTER TABLE gifted_titles RENAME TO gifted_titles_legacy');
+  } catch(_) {}
+
   db.exec(`
-    -- Gifted Titles: a god-granted display title that recolors the player's chat name.
+    -- Gifted Titles: god-granted collectible display titles. A player can hold MANY
+    -- (one row per title); (player_id,label) is unique. rarity is reserved for future
+    -- marketplace value. New-schema table; legacy single-row table is migrated below.
     CREATE TABLE IF NOT EXISTS gifted_titles (
-      player_id  TEXT PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id  TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
       label      TEXT NOT NULL,
       color      TEXT NOT NULL,
       badge      TEXT,
+      rarity     TEXT NOT NULL DEFAULT 'custom',
       granted_by TEXT,
-      granted_at INTEGER NOT NULL
+      granted_at INTEGER NOT NULL,
+      UNIQUE(player_id, label)
     );
+    CREATE INDEX IF NOT EXISTS idx_gifted_player ON gifted_titles(player_id);
 
     -- Single-row settings for the tax engine. id is always 1.
     CREATE TABLE IF NOT EXISTS frs_settings (
@@ -3567,23 +3583,123 @@ export function initFRSTables() {
     );
     CREATE INDEX IF NOT EXISTS idx_frs_purch_player ON frs_purchase_log(player_id, ts);
     CREATE INDEX IF NOT EXISTS idx_frs_purch_ts ON frs_purchase_log(ts);
+
+    -- Ƒbay title exchange: a gifted title escrowed for sale. The display snapshot
+    -- (label/color/badge/rarity) is stored so the listing renders after the seller's
+    -- gifted_titles row is removed on listing. sold: 0 active, 1 sold, 2 cancelled.
+    CREATE TABLE IF NOT EXISTS title_market (
+      id         TEXT PRIMARY KEY,
+      seller_id  TEXT NOT NULL,
+      label      TEXT NOT NULL,
+      color      TEXT NOT NULL,
+      badge      TEXT,
+      rarity     TEXT NOT NULL DEFAULT 'custom',
+      price      INTEGER NOT NULL,
+      listed_at  INTEGER NOT NULL,
+      sold       INTEGER NOT NULL DEFAULT 0,
+      buyer_id   TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_title_market_active ON title_market(sold, listed_at);
+    CREATE INDEX IF NOT EXISTS idx_title_market_seller ON title_market(seller_id, sold);
   `);
+
+  // Copy any migrated legacy gifted titles into the new table, then drop the legacy one.
+  try {
+    db.prepare('SELECT 1 FROM gifted_titles_legacy LIMIT 1').get(); // throws if it does not exist
+    db.exec(`INSERT OR IGNORE INTO gifted_titles(player_id,label,color,badge,granted_by,granted_at)
+             SELECT player_id,label,color,badge,granted_by,granted_at FROM gifted_titles_legacy`);
+    db.exec('DROP TABLE gifted_titles_legacy');
+  } catch(_) {}
 }
 
-// ── Gifted Titles ─────────────────────────────────────────────────────────────
-export function setGiftedTitle(playerId, label, color, badge, grantedBy) {
-  stmt(`INSERT INTO gifted_titles(player_id,label,color,badge,granted_by,granted_at)
-        VALUES(?,?,?,?,?,?)
-        ON CONFLICT(player_id) DO UPDATE SET label=excluded.label, color=excluded.color,
-          badge=excluded.badge, granted_by=excluded.granted_by, granted_at=excluded.granted_at`)
-    .run(playerId, String(label).slice(0,48), String(color), badge ? String(badge).slice(0,8) : null, grantedBy || null, Date.now());
+// ── Gifted Titles (collectible, many-per-player) ──────────────────────────────
+const _GIFT_RARITIES = new Set(['common','rare','epic','legendary','custom']);
+// Add (or refresh) a gifted title. Re-granting the same label updates its look/rarity;
+// different labels accumulate. Returns nothing.
+export function addGiftedTitle(playerId, label, color, badge, rarity, grantedBy) {
+  const rar = _GIFT_RARITIES.has(String(rarity)) ? String(rarity) : 'custom';
+  stmt(`INSERT INTO gifted_titles(player_id,label,color,badge,rarity,granted_by,granted_at)
+        VALUES(?,?,?,?,?,?,?)
+        ON CONFLICT(player_id,label) DO UPDATE SET color=excluded.color,
+          badge=excluded.badge, rarity=excluded.rarity, granted_by=excluded.granted_by`)
+    .run(playerId, String(label).slice(0,48), String(color), badge ? String(badge).slice(0,8) : null, rar, grantedBy || null, Date.now());
 }
-export function clearGiftedTitle(playerId) {
-  stmt('DELETE FROM gifted_titles WHERE player_id=?').run(playerId);
+// Remove one gifted title (by exact label) from a player.
+export function removeGiftedTitle(playerId, label) {
+  stmt('DELETE FROM gifted_titles WHERE player_id=? AND label=?').run(playerId, String(label));
 }
-export function getGiftedTitle(playerId) {
-  try { return stmt('SELECT label,color,badge FROM gifted_titles WHERE player_id=?').get(playerId) || null; }
+// All gifted titles a player holds (for the picker + transfer).
+export function getGiftedTitles(playerId) {
+  try { return stmt('SELECT label,color,badge,rarity FROM gifted_titles WHERE player_id=? ORDER BY granted_at ASC').all(playerId) || []; }
+  catch(_) { return []; }
+}
+// Look up one gifted title a player holds by its label (for equipped-color resolution).
+export function getGiftedTitleByLabel(playerId, label) {
+  try { return stmt('SELECT label,color,badge,rarity FROM gifted_titles WHERE player_id=? AND label=?').get(playerId, String(label)) || null; }
   catch(_) { return null; }
+}
+// Move a gifted title from one player to another (for future Ƒbay trades). Preserves
+// color/badge/rarity. Caller is responsible for ownedTitles bookkeeping on both sides.
+export function transferGiftedTitle(fromId, toId, label) {
+  const row = getGiftedTitleByLabel(fromId, label);
+  if (!row) return null;
+  removeGiftedTitle(fromId, label);
+  addGiftedTitle(toId, row.label, row.color, row.badge, row.rarity, fromId);
+  return row;
+}
+
+// ── Ƒbay title exchange ───────────────────────────────────────────────────────
+// Escrow model mirrors the card market: listing a title removes it from the seller's
+// holdings; buying it moves cash and grants it atomically; cancelling returns it.
+export const listTitleForSale = transaction((sellerId, label, price) => {
+  price = Math.floor(Number(price) || 0);
+  if (!(price > 0)) return { ok: false, error: 'bad_price' };
+  if (price > 1e15) return { ok: false, error: 'price_too_high' };
+  const g = getGiftedTitleByLabel(sellerId, label);
+  if (!g) return { ok: false, error: 'not_owned' };
+  removeGiftedTitle(sellerId, label); // escrow out
+  const listId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  stmt(`INSERT INTO title_market(id,seller_id,label,color,badge,rarity,price,listed_at,sold)
+        VALUES(?,?,?,?,?,?,?,?,0)`)
+    .run(listId, sellerId, g.label, g.color, g.badge || null, g.rarity || 'custom', price, Date.now());
+  return { ok: true, listId, label: g.label, color: g.color, badge: g.badge, rarity: g.rarity };
+});
+
+export const buyTitle = transaction((buyerId, listingId) => {
+  const L = stmt('SELECT * FROM title_market WHERE id=? AND sold=0').get(listingId);
+  if (!L) return { ok: false, error: 'not_found' };
+  if (L.seller_id === buyerId) return { ok: false, error: 'own_listing' };
+  if (getGiftedTitleByLabel(buyerId, L.label)) return { ok: false, error: 'already_owned' };
+  const buyer = stmt('SELECT cash FROM players WHERE id=?').get(buyerId);
+  if (!buyer) return { ok: false, error: 'no_buyer' };
+  if (Number(buyer.cash) < L.price) return { ok: false, error: 'insufficient_funds' };
+  stmt('UPDATE players SET cash=cash-? WHERE id=?').run(L.price, buyerId);
+  stmt('UPDATE players SET cash=cash+? WHERE id=?').run(L.price, L.seller_id);
+  addGiftedTitle(buyerId, L.label, L.color, L.badge, L.rarity, L.seller_id);
+  stmt('UPDATE title_market SET sold=1, buyer_id=? WHERE id=?').run(buyerId, listingId);
+  return { ok: true, price: L.price, label: L.label, color: L.color, badge: L.badge, rarity: L.rarity, sellerId: L.seller_id };
+});
+
+export const cancelTitleListing = transaction((sellerId, listingId) => {
+  const L = stmt('SELECT * FROM title_market WHERE id=? AND seller_id=? AND sold=0').get(listingId, sellerId);
+  if (!L) return { ok: false, error: 'not_found' };
+  addGiftedTitle(sellerId, L.label, L.color, L.badge, L.rarity, L.seller_id); // return escrow
+  stmt('UPDATE title_market SET sold=2 WHERE id=?').run(listingId);
+  return { ok: true, label: L.label, color: L.color, badge: L.badge, rarity: L.rarity };
+});
+
+export function getTitleListings(limit = 200) {
+  try {
+    return stmt(`SELECT m.id,m.label,m.color,m.badge,m.rarity,m.price,m.listed_at,m.seller_id,p.name AS seller
+                 FROM title_market m LEFT JOIN players p ON p.id=m.seller_id
+                 WHERE m.sold=0 ORDER BY m.listed_at DESC LIMIT ?`).all(limit) || [];
+  } catch(_) { return []; }
+}
+export function getMyTitleListings(sellerId) {
+  try {
+    return stmt(`SELECT id,label,color,badge,rarity,price,listed_at FROM title_market
+                 WHERE seller_id=? AND sold=0 ORDER BY listed_at DESC`).all(sellerId) || [];
+  } catch(_) { return []; }
 }
 
 // ── Telemetry: playtime ───────────────────────────────────────────────────────

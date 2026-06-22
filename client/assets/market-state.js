@@ -43,7 +43,8 @@
 
   // Server title state response
   let available = []; // all titles player can equip (owned + special + patreon)
-  let giftedTitle = null; // { label, color, badge } for a God-granted custom role, if any
+  let giftedTitles = []; // [{label,color,badge,rarity}] God-granted custom roles the player holds
+  function giftedByLabel(name) { for (var i=0;i<giftedTitles.length;i++){ if (giftedTitles[i] && giftedTitles[i].label === name) return giftedTitles[i]; } return null; }
   document.addEventListener('fm_ws_msg', ev => {
     const msg = ev.detail;
     if (!msg) return;
@@ -53,7 +54,7 @@
       if (Array.isArray(d.available)) available = d.available;
       else available = [...owned]; // fallback
       if (typeof d.title === 'string') active = d.title;
-      if ('gifted' in d) giftedTitle = d.gifted || null; // null clears it on ungift
+      if (Array.isArray(d.gifted)) giftedTitles = d.gifted; else if (d.gifted == null && 'gifted' in d) giftedTitles = [];
       saveState();
       refreshAllButtons();
       reflectActiveTitle();
@@ -496,7 +497,8 @@
   };
 
   function getTitleColor(name) {
-    if (giftedTitle && giftedTitle.label === name && giftedTitle.color) return giftedTitle.color;
+    var g = giftedByLabel(name);
+    if (g && g.color) return g.color;
     if (SPECIAL_TITLE_COLORS[name]) return SPECIAL_TITLE_COLORS[name];
     const item = TITLES.find(t => t.name === name);
     if (item && TIER_COLORS[item.tier]) return TIER_COLORS[item.tier];
@@ -528,7 +530,8 @@
       row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 10px;margin-bottom:4px;border-radius:4px;border:1px solid '+(isActive?tc+'44':'#1a1a2e')+';border-left:3px solid '+tc+';background:'+(isActive?'#0f0f0f':'#0a0a0e');
 
       const nameEl = document.createElement('span');
-      nameEl.textContent = (giftedTitle && giftedTitle.label === titleName && giftedTitle.badge ? giftedTitle.badge + ' ' : '') + titleName;
+      var _g = giftedByLabel(titleName);
+      nameEl.textContent = (_g && _g.badge ? _g.badge + ' ' : '') + titleName;
       nameEl.style.cssText = 'flex:1;font-size:.80rem;font-weight:600;color:'+tc+';letter-spacing:.02em';
 
       const btnWrap = document.createElement('div');

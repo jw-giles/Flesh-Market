@@ -1,3 +1,56 @@
+# FleshMarket v1.1.8.4 - MANIFEST
+
+## v1.1.8.4 changes (Ƒbay Title Exchange; SERVER + DB + CLIENT)
+
+```
+server/
+  db.js       + title_market table (escrow listing w/ display snapshot, sold flag).
+              + listTitleForSale, buyTitle, cancelTitleListing, getTitleListings,
+                getMyTitleListings (txn-atomic, mirrors card market).
+  server.js   + WS handlers title_listings / list_title / cancel_title_listing /
+                buy_title_listing. buildAvailableTitles unions gifted_titles rows so
+                ownership is table-authoritative; trade paths never re-save stale players.
+                + marketplace imports.
+client/
+  assets/title-market.js  NEW: renders the title category INTO the Ƒbay marketplace
+                          (browse/buy/list/delist, rarity-colored). Not a standalone panel.
+  assets/inventory.js     Ƒbay market fns (loadMarket/applyMarketFilters/showListForm/
+                          submitListing) branch to title mode when the Titles filter is set.
+  index.html              + '👑 Titles' option in the Ƒbay slot filter; + title-market.js
+                          include. (No separate header button.)
+  version.json            1.1.8.3 -> 1.1.8.4
+```
+
+SERVER + DB + CLIENT. title_market created on boot (additive). Hard-refresh after deploy.
+
+---
+
+# FleshMarket v1.1.8.3 - MANIFEST
+
+## v1.1.8.3 changes (Collectible custom titles + FRS prepaid readout; SERVER + DB + CLIENT)
+
+```
+server/
+  db.js       gifted_titles -> many-per-player (id PK, UNIQUE(player_id,label), + rarity);
+              boot migration renames legacy single-row table, copies rows, drops it.
+              + addGiftedTitle, removeGiftedTitle, getGiftedTitles, getGiftedTitleByLabel,
+                transferGiftedTitle. Removed setGiftedTitle/clearGiftedTitle/getGiftedTitle.
+  server.js   equippedGiftOf(playerId, equippedTitle) replaces giftedTitleOf; chat/whisper/
+              portfolio color+badge resolve by equipped label. gift_title accumulates + rarity
+              + auto-equip; ungift_title removes one by label/equipped; title_state sends gifted
+              array; frs_player dossier + held titles; presets get rarity.
+client/
+  assets/market-state.js  giftedTitles array + giftedByLabel; getTitleColor and inventory row
+                          use per-title color/badge; all held titles equippable.
+  assets/tax-panel.js     Pay Ahead: prominent FRS prepaid balance readout.
+  assets/god-panel.js     ungift uses custom-label field; dossier lists held gifted titles.
+  version.json            1.1.8.2 -> 1.1.8.3
+```
+
+SERVER + DB + CLIENT. DB migration on boot (additive, preserves titles). Hard-refresh after deploy.
+
+---
+
 # FleshMarket v1.1.8.2 - MANIFEST
 
 ## v1.1.8.2 changes (Gifted Titles -> selectable equippable titles; SERVER + CLIENT)

@@ -4,6 +4,40 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.8.4 (2026-06-22) - Ƒbay Title Exchange: trade collectible custom titles (SERVER + DB + CLIENT)
+
+Server, DB, and client. Hard-refresh after deploy. **DB adds a `title_market` table on boot** (additive, `CREATE IF NOT EXISTS`).
+
+Builds on 1.1.8.3's collectible titles to let players trade them, modeled on the existing card market (escrow on list, atomic buy, full price to seller, no fee).
+
+- **Exchange UI lives inside the existing Ƒbay** (the inventory marketplace), not a separate panel or header button. A new `👑 Titles` option in the Ƒbay slot filter swaps the listings area to titles: For Sale (each title in its color with its rarity, by seller) and Your Listings (delist). The existing `+ List` form, in this mode, lists one of your held titles at a price; the rarity and sort controls apply. Buy/list/cancel go over WebSocket. (`title-market.js` renders into the Ƒbay `marketListings` area; `inventory.js` market functions `loadMarket`/`applyMarketFilters`/`showListForm`/`submitListing` branch to title mode when the Titles category is selected.)
+- **Server** (`server.js`): handlers `title_listings`, `list_title`, `cancel_title_listing`, `buy_title_listing`. Listing escrows the title (removed from the seller and from their `ownedTitles`, unequipped if worn) and creates a listing snapshot. Buying runs one DB transaction: validate listing is active and not your own and not already held, check funds, debit buyer, credit seller the full price, grant the title, mark sold. Cancel returns the escrowed title.
+- **Ownership is table-authoritative**: `buildAvailableTitles` now unions a player's `gifted_titles` rows, so a bought title surfaces in the picker from the table alone. Trade handlers therefore never re-save a stale player object (buyer cash is synced in-memory for the snapshot only; the seller is read fresh), avoiding any cash clobber. Concurrency is safe via the `sold=0` guard inside the transaction.
+- **DB** (`db.js`): `title_market` table (id, seller, label/color/badge/rarity snapshot, price, sold flag, buyer) and functions `listTitleForSale`, `buyTitle`, `cancelTitleListing`, `getTitleListings`, `getMyTitleListings`. Rarity drives display value (common, rare, epic, legendary, custom).
+
+---
+
+## v1.1.8.3 (2026-06-22) - Collectible custom titles (multi-hold); FRS prepaid balance readout (SERVER + DB + CLIENT)
+
+Server, DB, and client. Hard-refresh after deploy. **DB migration runs on boot** and preserves existing gifted titles.
+
+### Custom titles are now collectible (hold many)
+In 1.1.8.0 the `gifted_titles` table used `player_id` as the primary key, so a player could physically hold only one gifted title and granting a new one overwrote the old. Now a player can hold any number.
+
+- **Schema**: `gifted_titles` moves to one row per title with `id` PK and `UNIQUE(player_id,label)`, plus a `rarity` column (`db.js`). A boot migration detects the legacy single-row table (no `id` column), renames it aside, builds the new table, copies the rows over, and drops the legacy table. Idempotent and additive; no titles lost.
+- **Granting** (`gift_title`) now adds a title without disturbing any the player already holds (re-granting the same label refreshes its color/badge/rarity), adds it to `ownedTitles`, and auto-equips it. The dossier and ack report how many custom titles the player holds.
+- **Color resolution** is now by equipped label: a gifted title's color/badge apply in chat, whispers, and portfolio only while that specific title is the equipped one, so each held title shows its own color when worn (`server.js`).
+- **Removing** (`ungift_title`) removes one specific title by label, or the currently-equipped gifted title if no label is given (was: cleared the single title). The God Panel Remove button uses the custom-label field for this; the dossier lists held titles with the equipped one marked.
+- **Client** (`market-state.js`): `title_state` now carries a `gifted` array; the title picker renders every held custom title in its own color with its badge, all individually equippable.
+- New db helpers: `addGiftedTitle`, `removeGiftedTitle`, `getGiftedTitles`, `getGiftedTitleByLabel`, and `transferGiftedTitle` (groundwork for marketplace trading).
+
+### FRS prepaid balance
+- The tax panel's Pay Ahead section now shows the prepaid amount as a prominent deposit-account balance, so players can see their running FRS prepaid balance at the point of prepaying (`tax-panel.js`).
+
+Groundwork note: `rarity` and `transferGiftedTitle` exist so titles can later be listed and traded on Ƒbay as collectible, rarity-valued items. That marketplace integration is not in this patch.
+
+---
+
 ## v1.1.8.2 (2026-06-22) - Gifted Titles become selectable equippable titles (SERVER + CLIENT)
 
 Server and client. Hard-refresh after deploy. **No DB change** (`gifted_titles` table and the `ownedTitles` player field already existed in 1.1.8.0).
