@@ -1,3 +1,21 @@
+# FleshMarket v1.1.8.5 - MANIFEST
+
+## v1.1.8.5 changes (FRS defaults to ENABLED; DB)
+
+```
+server/
+  db.js          frs_settings.enabled default 0 -> 1 (new DBs seed enabled).
+                 + one-time guarded flip of an existing settings row to enabled=1
+                   via new column enabled_default_v2; a later God Panel disable
+                   persists across restarts (boot step never re-enables a flipped row).
+client/
+  version.json   1.1.8.4 -> 1.1.8.5
+```
+
+DB only. Existing live row is enabled on the next restart. Rates unchanged (income 15%, withdraw 15%).
+
+---
+
 # FleshMarket v1.1.8.4 - MANIFEST
 
 ## v1.1.8.4 changes (Ƒbay Title Exchange; SERVER + DB + CLIENT)

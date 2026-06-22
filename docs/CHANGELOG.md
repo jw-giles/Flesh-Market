@@ -4,6 +4,21 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.8.5 (2026-06-22) - FRS tax engine defaults to ENABLED (DB)
+
+DB only. No client or server-handler change; a restart applies it.
+
+The FRS weekly tax engine shipped DORMANT in 1.1.8.0 (`frs_settings.enabled` defaulted to 0), so every fresh setup started untaxed and the live settings row was seeded disabled and never persistently flipped. This makes ENABLED the default.
+
+- New databases seed `enabled=1`.
+- An existing `frs_settings` row is enabled exactly once, via a one-time guard column (`enabled_default_v2`). After that flip, disabling FRS from the God Panel FRS tab persists across restarts, because the boot step only ever enables a row that has never been flipped.
+- Rates are unchanged: income 15.00%, capital-house withdrawal 15.00%. Adjust from the God Panel FRS tab.
+- Once enabled, the engine assesses on the next Sunday noon America/Los_Angeles cycle.
+
+Note: this means players are taxed on schedule. That is the intended live behavior.
+
+---
+
 ## v1.1.8.4 (2026-06-22) - Ƒbay Title Exchange: trade collectible custom titles (SERVER + DB + CLIENT)
 
 Server, DB, and client. Hard-refresh after deploy. **DB adds a `title_market` table on boot** (additive, `CREATE IF NOT EXISTS`).

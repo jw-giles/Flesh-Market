@@ -1,7 +1,7 @@
 {
-  "version": "1.1.8.4",
+  "version": "1.1.8.5",
   "built": "2026-06-22T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.8.4",
-  "notes": "SERVER + DB + CLIENT. Ƒbay title trading: collectible custom titles can now be listed, bought, and sold between players, inside the existing Ƒbay inventory marketplace. Pick the 👑 Titles category in the Ƒbay slot filter to browse titles For Sale (shown in their color with rarity) and your own listings; the + List form then lists one of your held titles at a price. Listing escrows the title out of your holdings until it sells or you delist; buying transfers cash and the title atomically with the full price going to the seller; rarity (common/rare/epic/legendary/custom) is shown for collector value. Adds a title_market table and a boot-safe schema step. Carries 1.1.8.3 and earlier."
+  "patch": "1.1.8.5",
+  "notes": "DB. The FRS weekly tax engine now defaults to ENABLED. New databases seed it on; an existing settings row that was seeded disabled gets flipped on once, after which a manual disable from the God Panel FRS tab persists across restarts. Rates are unchanged (income 15.00%, capital-house withdrawal 15.00%); adjust from the God Panel FRS tab. Once enabled the engine assesses on the next Sunday noon America/Los_Angeles cycle. Carries 1.1.8.4 and earlier."
 }

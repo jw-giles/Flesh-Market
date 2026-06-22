@@ -3534,7 +3534,7 @@ export function initFRSTables() {
     -- Single-row settings for the tax engine. id is always 1.
     CREATE TABLE IF NOT EXISTS frs_settings (
       id                INTEGER PRIMARY KEY CHECK (id = 1),
-      enabled           INTEGER NOT NULL DEFAULT 0,
+      enabled           INTEGER NOT NULL DEFAULT 1,   -- FRS defaults to ENABLED (1.1.8.5); existing rows flipped once below
       rate_bps          INTEGER NOT NULL DEFAULT 1500,   -- 1500 = 15.00%
       loss_carryforward INTEGER NOT NULL DEFAULT 1,
       house_mode        TEXT    NOT NULL DEFAULT 'gains', -- vestigial; houses now taxed at withdrawal, not assessed weekly
@@ -3610,6 +3610,13 @@ export function initFRSTables() {
              SELECT player_id,label,color,badge,granted_by,granted_at FROM gifted_titles_legacy`);
     db.exec('DROP TABLE gifted_titles_legacy');
   } catch(_) {}
+
+  // FRS defaults to ENABLED (1.1.8.5). New DBs seed enabled=1; an existing settings row
+  // (seeded disabled under the old default) is flipped on exactly once via a guard column.
+  // A later manual disable from the God Panel still persists across restarts, because the
+  // guard is already set and this UPDATE only matches a row that has never been flipped.
+  try { db.exec('ALTER TABLE frs_settings ADD COLUMN enabled_default_v2 INTEGER NOT NULL DEFAULT 0'); } catch(_) {}
+  try { db.exec('UPDATE frs_settings SET enabled=1, enabled_default_v2=1 WHERE id=1 AND enabled_default_v2=0'); } catch(_) {}
 }
 
 // ── Gifted Titles (collectible, many-per-player) ──────────────────────────────
