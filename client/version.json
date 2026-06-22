@@ -1,7 +1,7 @@
 {
-  "version": "1.1.8.1",
+  "version": "1.1.8.2",
   "built": "2026-06-22T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.8.1",
-  "notes": "Client only. God Panel tab bar fix. The 9th tab (FRS) overflowed the fixed 400px panel and clipped off-screen, leaving the FRS tab unreachable. The tab row now wraps to two rows (flex-wrap), tabs gained a min-width so they wrap cleanly, the panel widened 400 to 460px, and the content max-height offset was adjusted for the taller two-row header. No server/DB change. Carries 1.1.8.0 and earlier."
+  "patch": "1.1.8.2",
+  "notes": "SERVER + CLIENT. Gifted Titles are now real selectable titles instead of an invisible auto-overlay. Granting one adds it to the player's owned titles and auto-equips it, so it appears in the title inventory picker (in its custom color, with its badge) and recolors the chat name immediately. The custom color and badge apply in chat, whispers, and portfolio only while the gifted title is the equipped title, consistent with every other title; the player can switch titles freely and switch back. Removing a gifted title pulls it from owned titles and unequips it. No DB change (the gifted_titles table and ownedTitles field already existed). Carries 1.1.8.1 and earlier."
 }

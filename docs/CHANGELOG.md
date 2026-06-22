@@ -4,6 +4,21 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.8.2 (2026-06-22) - Gifted Titles become selectable equippable titles (SERVER + CLIENT)
+
+Server and client. Hard-refresh after deploy. **No DB change** (`gifted_titles` table and the `ownedTitles` player field already existed in 1.1.8.0).
+
+In 1.1.8.0 a gifted title was an invisible auto-overlay stored in a side table, disconnected from the owned-titles system. It never appeared in the title picker (the picker renders owned/available titles, and the gifted label was in neither) and only recolored the chat name on the next message, never showing the label text. Now:
+
+- **Granting a title** (`gift_title`) adds the label to the player's `ownedTitles`, drops any previously gifted label, and auto-equips it. It appears in the title inventory picker as a selectable Equip/Unequip row, rendered in its custom color with its badge, and the chat-name recolor shows immediately (`server.js`).
+- **Color and badge are tied to equipping.** The gifted color/badge apply in chat, whispers, and the portfolio snapshot only while the gifted title is the equipped title (was: applied unconditionally whenever a gifted title existed). The player can equip a different title and switch back at will, like any other title.
+- **Removing a title** (`ungift_title`) pulls the label from `ownedTitles` and unequips it if it was active.
+- `title_state` now carries a `gifted: {label,color,badge}` field so the client picker can render the custom role in its real color (`market-state.js`: `getTitleColor` and the inventory row use it; gifted info is cleared on ungift). `sendTitleState` and the gift/ungift pushes include it.
+
+Design note: the gift now auto-equips and is opt-in to keep visible (the player can unequip or swap it). If a gifted title should be forced-always-on regardless of what the player equips, that is a different model and not what shipped here.
+
+---
+
 ## v1.1.8.1 (2026-06-22) - God Panel tab bar overflow fix (CLIENT)
 
 Client-only. Hard-refresh after deploy. **No server/DB change.**

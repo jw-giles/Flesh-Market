@@ -1,3 +1,25 @@
+# FleshMarket v1.1.8.2 - MANIFEST
+
+## v1.1.8.2 changes (Gifted Titles -> selectable equippable titles; SERVER + CLIENT)
+
+```
+server/
+  server.js   gift_title: + ownedTitles add/dedupe, drop stale gifted label, auto-equip,
+                          savePlayer, push title_state w/ gifted {label,color,badge}.
+              ungift_title: + remove from ownedTitles, unequip if active, push title_state.
+              sendTitleState: + gifted field.
+              chat/whisper/snapshotPortfolio: gifted color+badge gated on equipped
+                          (title === gifted.label) instead of mere existence.
+client/
+  assets/market-state.js  title_state handler: + capture d.gifted; getTitleColor returns
+                          gifted color for the custom role; inventory row shows gifted badge.
+  version.json            1.1.8.1 -> 1.1.8.2
+```
+
+SERVER + CLIENT. No DB change. Hard-refresh after deploy.
+
+---
+
 # FleshMarket v1.1.8.1 - MANIFEST
 
 ## v1.1.8.1 changes (God Panel tab overflow fix, CLIENT)

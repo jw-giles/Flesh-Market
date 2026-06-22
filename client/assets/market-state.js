@@ -43,6 +43,7 @@
 
   // Server title state response
   let available = []; // all titles player can equip (owned + special + patreon)
+  let giftedTitle = null; // { label, color, badge } for a God-granted custom role, if any
   document.addEventListener('fm_ws_msg', ev => {
     const msg = ev.detail;
     if (!msg) return;
@@ -52,6 +53,7 @@
       if (Array.isArray(d.available)) available = d.available;
       else available = [...owned]; // fallback
       if (typeof d.title === 'string') active = d.title;
+      if ('gifted' in d) giftedTitle = d.gifted || null; // null clears it on ungift
       saveState();
       refreshAllButtons();
       reflectActiveTitle();
@@ -494,6 +496,7 @@
   };
 
   function getTitleColor(name) {
+    if (giftedTitle && giftedTitle.label === name && giftedTitle.color) return giftedTitle.color;
     if (SPECIAL_TITLE_COLORS[name]) return SPECIAL_TITLE_COLORS[name];
     const item = TITLES.find(t => t.name === name);
     if (item && TIER_COLORS[item.tier]) return TIER_COLORS[item.tier];
@@ -525,7 +528,7 @@
       row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 10px;margin-bottom:4px;border-radius:4px;border:1px solid '+(isActive?tc+'44':'#1a1a2e')+';border-left:3px solid '+tc+';background:'+(isActive?'#0f0f0f':'#0a0a0e');
 
       const nameEl = document.createElement('span');
-      nameEl.textContent = titleName;
+      nameEl.textContent = (giftedTitle && giftedTitle.label === titleName && giftedTitle.badge ? giftedTitle.badge + ' ' : '') + titleName;
       nameEl.style.cssText = 'flex:1;font-size:.80rem;font-weight:600;color:'+tc+';letter-spacing:.02em';
 
       const btnWrap = document.createElement('div');

@@ -5767,11 +5767,12 @@ function snapshotPortfolio(player){
   const _snapEscaped = _snapCyborg && isVoidPresidentEscaped(player.id);
   const _snapIsPresident = !!(president && president.id === player.id);
   const _snapGifted = giftedTitleOf(player.id);
+  const _snapGiftActive = !!(_snapGifted && player.title === _snapGifted.label);
   let _snapColor;
   if (_snapIsPresident) _snapColor = '#00bfff';
   else if (_snapEscaped) { _snapColor = playerFaction === 'syndicate' ? '#e74c3c' : null; }
   else if (_snapCyborg) _snapColor = player.patreon_tier === 2 ? '#2ecc71' : '#9b59b6';
-  else if (_snapGifted) _snapColor = _snapGifted.color;
+  else if (_snapGiftActive) _snapColor = _snapGifted.color;
   else _snapColor = tier?.chatColor || null;
   const _snapMarginCall = (() => { try { return getMarginCall(player.id) || null; } catch(_) { return null; } })();
   return {
@@ -5781,7 +5782,7 @@ function snapshotPortfolio(player){
     xp: player.xp, level: player.level, title: player.title,
     giftTitle: (_snapGifted && _snapGifted.label) || null,
     patreon_tier: player.patreon_tier || 0,
-    tierName: tier?.name || 'Free', badge: _snapCyborg ? (player.patreon_tier === 3 ? '♛' : '🤖') : ((_snapGifted && _snapGifted.badge) || tier?.badge || null),
+    tierName: tier?.name || 'Free', badge: _snapCyborg ? (player.patreon_tier === 3 ? '♛' : '🤖') : ((_snapGiftActive && _snapGifted.badge) || tier?.badge || null),
     chatColor: _snapColor, transferFree: !tier?.transferFee,
     faction: playerFaction, passiveIncome,
     dayTradesRemaining: _dtRemaining(player.id),
@@ -6274,7 +6275,8 @@ wss.on('connection',(ws,req)=>{
 
     function sendTitleState(player, wsTarget) {
       const avail = buildAvailableTitles(player);
-      wsTarget.send(JSON.stringify({ type: 'title_state', data: { title: player.title || '', owned: player.ownedTitles || [], available: avail } }));
+      let gifted = null; try { gifted = getGiftedTitle(player.id); } catch(_) {}
+      wsTarget.send(JSON.stringify({ type: 'title_state', data: { title: player.title || '', owned: player.ownedTitles || [], available: avail, gifted } }));
     }
 
     if (msg.type === 'set_title') {
@@ -7391,12 +7393,23 @@ wss.on('connection',(ws,req)=>{
           if (!/^#[0-9a-fA-F]{6}$/.test(color)) return err('color must be a #RRGGBB hex value.');
         }
         try {
+          // Capture the previous gifted label so we can drop it from owned titles on re-gift.
+          const _prevGift = getGiftedTitle(target.id);
           setGiftedTitle(target.id, label, color, badge, actor.name);
+          // Make it a real, selectable title: add to owned, drop any stale gifted label,
+          // and auto-equip so the recolor shows immediately. Player can change it anytime.
+          target.ownedTitles = target.ownedTitles || [];
+          if (_prevGift && _prevGift.label && _prevGift.label !== label)
+            target.ownedTitles = target.ownedTitles.filter(t => t !== _prevGift.label);
+          if (!target.ownedTitles.includes(label)) target.ownedTitles.push(label);
+          target.title = label;
+          savePlayer(target);
           broadcastToPlayer(target.id, { type: 'gift_title', data: { label, color, badge } });
-          broadcastToPlayer(target.id, { type: 'system_message', data: { text: `You have been granted the title ${badge ? badge + ' ' : ''}${label}.`, color } });
+          broadcastToPlayer(target.id, { type: 'title_state', data: { title: target.title, owned: target.ownedTitles, available: buildAvailableTitles(target), gifted: { label, color, badge } } });
+          broadcastToPlayer(target.id, { type: 'system_message', data: { text: `You have been granted the title ${badge ? badge + ' ' : ''}${label}. It is now equipped; change it anytime from your titles.`, color } });
           const fresh = getPlayer(target.id); if (fresh) broadcastToPlayer(target.id, { type: 'portfolio', data: snapshotPortfolio(fresh) });
           broadcastToAdmins({ type: 'admin_log', data: { action: 'gift_title', by: actor.name, target: target.name, title: label } });
-          ack(`✓ Gifted "${label}" to ${target.name}`);
+          ack(`✓ Gifted "${label}" to ${target.name} (equipped)`);
         } catch(e) { err('Gift failed: ' + e.message); }
       }
 
@@ -7405,8 +7418,16 @@ wss.on('connection',(ws,req)=>{
         const target = getPlayerByName(String(msg.targetName || '').trim());
         if (!target) return err('Player not found.');
         try {
+          const _g = getGiftedTitle(target.id);
           clearGiftedTitle(target.id);
+          // Remove it from owned titles and unequip if it was the active one.
+          if (_g && _g.label) {
+            target.ownedTitles = (target.ownedTitles || []).filter(t => t !== _g.label);
+            if (target.title === _g.label) target.title = '';
+            savePlayer(target);
+          }
           broadcastToPlayer(target.id, { type: 'gift_title', data: null });
+          broadcastToPlayer(target.id, { type: 'title_state', data: { title: target.title || '', owned: target.ownedTitles || [], available: buildAvailableTitles(target), gifted: null } });
           const fresh = getPlayer(target.id); if (fresh) broadcastToPlayer(target.id, { type: 'portfolio', data: snapshotPortfolio(fresh) });
           broadcastToAdmins({ type: 'admin_log', data: { action: 'ungift_title', by: actor.name, target: target.name } });
           ack(`✓ Removed gifted title from ${target.name}`);
@@ -7541,11 +7562,13 @@ wss.on('connection',(ws,req)=>{
       const _isCyborg = isVoidLocked(actor.id);
       const _isEscaped = _isCyborg && isVoidPresidentEscaped(actor.id);
       const _giftedChat = giftedTitleOf(actor.id);
-      // Badge: Owner→★, Dev→null, Cyborg+CEO→♛, Cyborg→🤖, gifted→gift badge, else→tier badge
-      const chatBadge = _isOwner ? '★' : (_isDev ? null : (_isCyborg ? (actor.patreon_tier === 3 ? '♛' : '🤖') : ((_giftedChat && _giftedChat.badge) || tier?.badge || null)));
+      // Gifted title is a selectable role: its color/badge apply only while it is the equipped title.
+      const _giftActive = !!(_giftedChat && actor.title === _giftedChat.label);
+      // Badge: Owner→★, Dev→null, Cyborg+CEO→♛, Cyborg→🤖, gifted(equipped)→gift badge, else→tier badge
+      const chatBadge = _isOwner ? '★' : (_isDev ? null : (_isCyborg ? (actor.patreon_tier === 3 ? '♛' : '🤖') : ((_giftActive && _giftedChat.badge) || tier?.badge || null)));
       // Color: President→blue, Owner→orange, Dev→null,
       //   Escaped+Syndicate→red, Escaped+other→null (purple gone),
-      //   Cyborg+Guild→green, Cyborg(normal)→purple, gifted title→gift color, else→tier color
+      //   Cyborg+Guild→green, Cyborg(normal)→purple, gifted title (equipped)→gift color, else→tier color
       let chatColor;
       if (_isPresident) chatColor = '#00bfff';
       else if (_isOwner) chatColor = '#ff6a00';
@@ -7556,7 +7579,7 @@ wss.on('connection',(ws,req)=>{
         chatColor = pFaction === 'syndicate' ? '#e74c3c' : null;
       }
       else if (_isCyborg) chatColor = actor.patreon_tier === 2 ? '#2ecc71' : '#9b59b6';
-      else if (_giftedChat) chatColor = _giftedChat.color;
+      else if (_giftActive) chatColor = _giftedChat.color;
       else chatColor = tier?.chatColor || null;
       const chatText = channel==='unmod' ? rawText : text;
       // For all channels (except dunce), include room number (1-15) for multi-room support
@@ -7597,14 +7620,15 @@ wss.on('connection',(ws,req)=>{
       const _wCyborg=isVoidLocked(actor.id);
       const _wEscaped=_wCyborg&&isVoidPresidentEscaped(actor.id);
       const _wGifted=giftedTitleOf(actor.id);
-      const wBadge=_isOwner?'★':(_isDev?null:(_wCyborg?(actor.patreon_tier===3?'♛':'🤖'):((_wGifted&&_wGifted.badge)||TIERS[actor.patreon_tier||0]?.badge||null)));
+      const _wGiftActive=!!(_wGifted&&actor.title===_wGifted.label);
+      const wBadge=_isOwner?'★':(_isDev?null:(_wCyborg?(actor.patreon_tier===3?'♛':'🤖'):((_wGiftActive&&_wGifted.badge)||TIERS[actor.patreon_tier||0]?.badge||null)));
       let wColor;
       if(_isPres) wColor='#00bfff';
       else if(_isOwner) wColor='#ff6a00';
       else if(_isDev) wColor=null;
       else if(_wEscaped){ const wf=getPlayerFaction(actor.id); wColor=wf==='syndicate'?'#e74c3c':null; }
       else if(_wCyborg) wColor=actor.patreon_tier===2?'#2ecc71':'#9b59b6';
-      else if(_wGifted) wColor=_wGifted.color;
+      else if(_wGiftActive) wColor=_wGifted.color;
       else wColor=TIERS[actor.patreon_tier||0]?.chatColor||null;
       const base={id:uuidv4(),t:Date.now(),from:actor.name,to:target.name,text:wText,badge:wBadge,color:wColor,is_prime:_isOwner,is_dev:_isDev};
       broadcastToPlayer(target.id,{type:'whisper',data:{...base,sent:false}});
