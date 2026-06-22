@@ -111,6 +111,13 @@ import {
   // Mining: ship hulls
   MINING_SHIP_CATALOG, getMiningShips, hasMiningShip,
   buyMiningShip, equipMiningShip,
+  // FRS (Flesh Revenue Service) + Gifted Titles — 1.1.8.0
+  initFRSTables,
+  setGiftedTitle, clearGiftedTitle, getGiftedTitle,
+  addPlaySecondsBulk, getPlaySeconds,
+  recordFRSPositionSnapshot, logFRSPurchase, getFRSPlayerTelemetry, getFRSRecentPurchases,
+  getFRSSettings, setFRSSetting,
+  getPlayerTaxState, setPlayerTaxState, recordTaxHistory, getAllPlayerIdsForTax,
 } from './db.js';
 
 // FleshMarket TCG — collection/deck persistence + server-authoritative pack economy
@@ -132,9 +139,25 @@ seedColoniesIfEmpty();
 initItemTables();
 initQuestTables();
 initMarketUpgradeTables();
+initFRSTables();
 
 function savePlayer(p) { try { savePlayerFn(p); } catch(e) { console.error('savePlayer:', e); } }
 function recordNetWorth(id, net, cash, equity) { try { recordNetWorthFn(id, net, cash, equity); } catch(e) {} }
+
+// ── Gifted Titles (1.1.8.0) ───────────────────────────────────────────────────
+// God-granted display titles that recolor the bearer's chat name. Presets below;
+// custom label/color/badge also supported via the god_cmd. Colors are chosen to be
+// distinct from the structural chat colors (president #00bfff, owner #ff6a00,
+// debtor #6b4423, cyborg #9b59b6 / guild-cyborg #2ecc71).
+const GIFTED_TITLE_PRESETS = {
+  sweet_trader:   { label: "S'weet Trader",  color: '#b83265', badge: '🍇' }, // purplish red
+  angel_investor: { label: 'Angel Investor', color: '#8ab8ff', badge: '😇' }, // light blue
+  loan_shark:     { label: 'Loan Shark',     color: '#7a3fb0', badge: '💰' }, // dark purple
+};
+// Cached lookup of the bearer's gifted title (or null). Read straight from db each
+// call; gifting is rare and chat already does per-message db reads, so this is cheap.
+function giftedTitleOf(playerId) { try { return getGiftedTitle(playerId); } catch(_) { return null; } }
+
 function recordFundNAV(fundId, nav, spp, shares) { try { recordFundNAVFn(fundId, nav, spp, shares); } catch(e) {} }
 // Snapshot a single fund's NAV/share now — called on trades/deposits/withdrawals
 // so the performance chart builds with activity instead of only every 30 min.
@@ -2799,6 +2822,9 @@ app.post('/api/fund/deposit', (req, res) => {
     syncFundMembership();
     const { nav } = getFundNAV();
     const newShares = depositToFundFn(p.id, amount, nav);
+    // FRS: same treatment as capital houses. Depositing into the hedge fund is
+    // income-tax-neutral (fund stake is excluded from taxable net worth).
+    frsOnFundDeposit(p.id, amount);
     broadcastFundUpdate();
     try { const fresh=getPlayer(p.id); if(fresh) broadcastToPlayer(p.id,{type:'portfolio',data:snapshotPortfolio(fresh)}); } catch(_) {}
     res.json({ ok: true, newShares, nav });
@@ -2813,9 +2839,15 @@ app.post('/api/fund/withdraw', (req, res) => {
     const pct = Math.min(1, Math.max(0.01, Number(req.body?.pct) || 0));
     const { nav } = getFundNAV();
     const cashOut = withdrawFromFundFn(p.id, pct, nav);
+    // FRS withdrawal tax: hedge-fund money is taxed on the way out, same as capital
+    // houses, so it can't be used as an untaxed shelter. No-op when FRS is disabled.
+    const _frsW = frsOnFundWithdraw(p.id, cashOut);
+    if (_frsW.tax > 0) {
+      try { broadcastToPlayer(p.id, { type:'chat_system', data:{ text:`FRS withdrawal tax: Ƒ${Math.round(_frsW.tax).toLocaleString()} on Ƒ${Math.round(_frsW.gross).toLocaleString()} withdrawn. Net Ƒ${Math.round(_frsW.net).toLocaleString()}.` } }); } catch(_) {}
+    }
     broadcastFundUpdate();
     try { const fresh=getPlayer(p.id); if(fresh) broadcastToPlayer(p.id,{type:'portfolio',data:snapshotPortfolio(fresh)}); } catch(_) {}
-    res.json({ ok: true, cashOut });
+    res.json({ ok: true, cashOut: _frsW.gross, taxPaid: _frsW.tax, netCashOut: _frsW.net });
   } catch(e) { res.status(400).json({ ok: false, error: String(e) }); }
 });
 
@@ -3100,6 +3132,9 @@ app.post('/api/funds/:id/deposit', (req, res) => {
     if (fund.type==='flsh' && !isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
     const amount = Math.max(1, Math.floor(Number(req.body?.amount)||0));
     const shares = fundDepositFn(fund.id, actor.id, amount);
+    // FRS: depositing into a fund is income-tax-neutral (fund stake is excluded from
+    // taxable net worth). Lower the basis so the weekly engine doesn't read it as a loss.
+    frsOnFundDeposit(actor.id, amount);
     snapshotFund(fund.id);
     const snap   = fundDetailSnapshot(fund.id, actor.id);
     broadcastFundDetail(fund.id);
@@ -3127,6 +3162,17 @@ app.post('/api/funds/:id/withdraw', (req, res) => {
     const priceMap = buildPriceMap();
     const nav = getFundNAVById(fund.id, priceMap);
     const cashOut = fundWithdrawFn(fund.id, actor.id, amount, nav);
+    // FRS withdrawal tax: capital-house money is taxed on the way out, not weekly.
+    // Taxes the gross cash-out, routes it to the treasury, and bumps the income-tax
+    // basis by the net so the weekly engine doesn't re-tax the same money. No-op when
+    // FRS is disabled. Applies to player capital houses only.
+    let _frsW = { gross: cashOut, tax: 0, net: cashOut };
+    if (fund.type === 'player') {
+      _frsW = frsOnFundWithdraw(actor.id, cashOut);
+      if (_frsW.tax > 0) {
+        try { broadcastToPlayer(actor.id, { type:'chat_system', data:{ text:`FRS withdrawal tax: Ƒ${Math.round(_frsW.tax).toLocaleString()} on Ƒ${Math.round(_frsW.gross).toLocaleString()} withdrawn. Net Ƒ${Math.round(_frsW.net).toLocaleString()}.` } }); } catch(_) {}
+      }
+    }
     snapshotFund(fund.id);
     const snap    = fundDetailSnapshot(fund.id, actor.id);
     broadcastFundDetail(fund.id);
@@ -3134,7 +3180,7 @@ app.post('/api/funds/:id/withdraw', (req, res) => {
       const fresh = getPlayer(actor.id);
       if (fresh) broadcastToPlayer(actor.id, { type:'portfolio', data: snapshotPortfolio(fresh) });
     } catch(_) {}
-    res.json({ ok:true, cashOut });
+    res.json({ ok:true, cashOut: _frsW.gross, taxPaid: _frsW.tax, netCashOut: _frsW.net });
   } catch(e) { res.status(400).json({ ok:false, error:String(e) }); }
 });
 
@@ -5720,10 +5766,12 @@ function snapshotPortfolio(player){
   const _snapCyborg = isVoidLocked(player.id);
   const _snapEscaped = _snapCyborg && isVoidPresidentEscaped(player.id);
   const _snapIsPresident = !!(president && president.id === player.id);
+  const _snapGifted = giftedTitleOf(player.id);
   let _snapColor;
   if (_snapIsPresident) _snapColor = '#00bfff';
   else if (_snapEscaped) { _snapColor = playerFaction === 'syndicate' ? '#e74c3c' : null; }
   else if (_snapCyborg) _snapColor = player.patreon_tier === 2 ? '#2ecc71' : '#9b59b6';
+  else if (_snapGifted) _snapColor = _snapGifted.color;
   else _snapColor = tier?.chatColor || null;
   const _snapMarginCall = (() => { try { return getMarginCall(player.id) || null; } catch(_) { return null; } })();
   return {
@@ -5731,8 +5779,9 @@ function snapshotPortfolio(player){
     shortExposure, sectorBreakdown: sectorMap,
     marginCall: _snapMarginCall ? { symbol: _snapMarginCall.symbol, deadline: _snapMarginCall.deadline } : null,
     xp: player.xp, level: player.level, title: player.title,
+    giftTitle: (_snapGifted && _snapGifted.label) || null,
     patreon_tier: player.patreon_tier || 0,
-    tierName: tier?.name || 'Free', badge: _snapCyborg ? (player.patreon_tier === 3 ? '♛' : '🤖') : (tier?.badge || null),
+    tierName: tier?.name || 'Free', badge: _snapCyborg ? (player.patreon_tier === 3 ? '♛' : '🤖') : ((_snapGifted && _snapGifted.badge) || tier?.badge || null),
     chatColor: _snapColor, transferFree: !tier?.transferFee,
     faction: playerFaction, passiveIncome,
     dayTradesRemaining: _dtRemaining(player.id),
@@ -6137,6 +6186,8 @@ wss.on('connection',(ws,req)=>{
         const equity=Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{const co=companies.find(x=>x.symbol===sym);return acc+(co?co.price*qty:0);},0);
         recordNetWorth(actor.id,actor.cash+equity,actor.cash,equity);
       }catch(e){}
+      // FRS surveillance: log the executed leg (dev-facing exploit watch).
+      try { logFRSPurchase(actor.id, side==='buy'?'stock_buy':'stock_sell', s, qty, c.price); } catch(_) {}
 
 
       ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
@@ -6595,6 +6646,69 @@ wss.on('connection',(ws,req)=>{
     }
 
     // ── Chart ────────────────────────────────────────────────────────────────
+    // ── FRS: tax status / pay / prepay ─────────────────────────────────────────
+    if (msg.type === 'tax_status') {
+      try {
+        const s = getFRSSettings();
+        const ts = getPlayerTaxState(actor.id);
+        const priceMap = buildPriceMap();
+        const nowNet = taxableNetWorth(actor, priceMap);
+        const pendingGain = (ts.tax_basis == null) ? 0 : (nowNet - ts.tax_basis);
+        const estTax = (s.enabled && pendingGain > 0)
+          ? Math.max(0, pendingGain - (s.loss_carryforward ? (Number(ts.tax_owed)===0 ? Number(ts.tax_loss_credit||0) : 0) : 0)) * (s.rate_bps/10000)
+          : 0;
+        ws.send(JSON.stringify({ type: 'tax_status', data: {
+          enabled: !!s.enabled,
+          rateBps: s.rate_bps, withdrawTaxBps: s.withdraw_tax_bps,
+          owed: Number(ts.tax_owed) || 0,
+          prepaid: Number(ts.tax_prepaid) || 0,
+          lossCredit: Number(ts.tax_loss_credit) || 0,
+          taxableNetWorth: nowNet,
+          basis: ts.tax_basis,
+          pendingGain,
+          estTaxThisCycle: estTax,
+          nextDue: s.enabled ? _frsNextSundayNoonLA(Date.now()) : null,
+        }}));
+      } catch(e) { ws.send(JSON.stringify({ type:'error', data:{ msg:'Tax status unavailable.' } })); }
+    }
+
+    if (msg.type === 'pay_tax') {
+      try {
+        const amount = Math.max(0, Math.floor(Number(msg.amount) || 0));
+        if (amount <= 0) return ws.send(JSON.stringify({ type:'error', data:{ msg:'Enter an amount to pay.' } }));
+        const ts = getPlayerTaxState(actor.id);
+        const owed = Number(ts.tax_owed) || 0;
+        if (owed <= 0) return ws.send(JSON.stringify({ type:'chat_system', data:{ text:'You have no outstanding FRS balance.' } }));
+        const pay = Math.min(amount, owed, Math.floor(actor.cash || 0));
+        if (pay <= 0) return ws.send(JSON.stringify({ type:'error', data:{ msg:'Insufficient cash.' } }));
+        safeAddCash(actor, -pay);
+        FMI.treasury += pay; FMI.hourlyTaxAccrual += pay;
+        setPlayerTaxState(actor.id, { tax_owed: owed - pay });
+        savePlayer(actor);
+        ws.send(JSON.stringify({ type:'chat_system', data:{ text:`Paid Ƒ${pay.toLocaleString()} toward your FRS balance. Remaining owed: Ƒ${(owed-pay).toLocaleString()}.` } }));
+        ws.send(JSON.stringify({ type:'portfolio', data: snapshotPortfolio(actor) }));
+      } catch(e) { ws.send(JSON.stringify({ type:'error', data:{ msg:'Payment failed.' } })); }
+    }
+
+    if (msg.type === 'prepay_tax') {
+      try {
+        const amount = Math.max(0, Math.floor(Number(msg.amount) || 0));
+        if (amount <= 0) return ws.send(JSON.stringify({ type:'error', data:{ msg:'Enter an amount to prepay.' } }));
+        const pay = Math.min(amount, Math.floor(actor.cash || 0));
+        if (pay <= 0) return ws.send(JSON.stringify({ type:'error', data:{ msg:'Insufficient cash.' } }));
+        const ts = getPlayerTaxState(actor.id);
+        // Prepaid is credited to the treasury immediately and held as a credit that future
+        // assessments draw down before touching cash. Useful before going idle.
+        safeAddCash(actor, -pay);
+        FMI.treasury += pay; FMI.hourlyTaxAccrual += pay;
+        setPlayerTaxState(actor.id, { tax_prepaid: (Number(ts.tax_prepaid)||0) + pay });
+        savePlayer(actor);
+        ws.send(JSON.stringify({ type:'chat_system', data:{ text:`Prepaid Ƒ${pay.toLocaleString()} into your FRS account. This is applied to future weekly assessments before any cash is taken.` } }));
+        ws.send(JSON.stringify({ type:'portfolio', data: snapshotPortfolio(actor) }));
+      } catch(e) { ws.send(JSON.stringify({ type:'error', data:{ msg:'Prepayment failed.' } })); }
+    }
+
+
     if(msg.type==='chart'){const s=String(msg.symbol||'').toUpperCase(),c=companies.find(x=>x.symbol===s);if(c){const _hl=(actor&&hasMarketUpgrade(actor.id,'price_history'))?400:199;const bars=c.ohlc.slice(-_hl);if(c._bar)bars.push({t:c._bar.t,o:c._bar.o,h:c._bar.h,l:c._bar.l,c:c._bar.c,v:0});ws.send(JSON.stringify({type:'chart',data:{symbol:s,ohlc:bars}}));}}
 
     // ── Market upgrades: list / buy ────────────────────────────────────────────
@@ -6947,6 +7061,9 @@ wss.on('connection',(ws,req)=>{
             is_admin: !!(isAdminAccount(target.id)), is_prime: !!(isOwnerAccount(target.id)),
             net_worth: target.cash + equity,
             equity, online,
+            play_seconds: (()=>{ try { return getPlaySeconds(target.id); } catch(_) { return 0; } })(),
+            tax: (()=>{ try { return getPlayerTaxState(target.id); } catch(_) { return null; } })(),
+            gift_title: (()=>{ try { return getGiftedTitle(target.id); } catch(_) { return null; } })(),
           }
         }));
       }
@@ -7259,6 +7376,109 @@ wss.on('connection',(ws,req)=>{
         } catch(e) { err('Clear rename failed: ' + e.message); }
       }
 
+      // ── gift_title: grant a name-recoloring display title ─────────────────
+      else if (cmd === 'gift_title') {
+        const target = getPlayerByName(String(msg.targetName || '').trim());
+        if (!target) return err('Player not found.');
+        let label, color, badge;
+        if (msg.preset && GIFTED_TITLE_PRESETS[msg.preset]) {
+          ({ label, color, badge } = GIFTED_TITLE_PRESETS[msg.preset]);
+        } else {
+          label = String(msg.label || '').trim().slice(0, 48);
+          color = String(msg.color || '').trim();
+          badge = msg.badge ? String(msg.badge).trim().slice(0, 8) : null;
+          if (!label) return err('label or a valid preset required.');
+          if (!/^#[0-9a-fA-F]{6}$/.test(color)) return err('color must be a #RRGGBB hex value.');
+        }
+        try {
+          setGiftedTitle(target.id, label, color, badge, actor.name);
+          broadcastToPlayer(target.id, { type: 'gift_title', data: { label, color, badge } });
+          broadcastToPlayer(target.id, { type: 'system_message', data: { text: `You have been granted the title ${badge ? badge + ' ' : ''}${label}.`, color } });
+          const fresh = getPlayer(target.id); if (fresh) broadcastToPlayer(target.id, { type: 'portfolio', data: snapshotPortfolio(fresh) });
+          broadcastToAdmins({ type: 'admin_log', data: { action: 'gift_title', by: actor.name, target: target.name, title: label } });
+          ack(`✓ Gifted "${label}" to ${target.name}`);
+        } catch(e) { err('Gift failed: ' + e.message); }
+      }
+
+      // ── ungift_title: remove a gifted title ───────────────────────────────
+      else if (cmd === 'ungift_title') {
+        const target = getPlayerByName(String(msg.targetName || '').trim());
+        if (!target) return err('Player not found.');
+        try {
+          clearGiftedTitle(target.id);
+          broadcastToPlayer(target.id, { type: 'gift_title', data: null });
+          const fresh = getPlayer(target.id); if (fresh) broadcastToPlayer(target.id, { type: 'portfolio', data: snapshotPortfolio(fresh) });
+          broadcastToAdmins({ type: 'admin_log', data: { action: 'ungift_title', by: actor.name, target: target.name } });
+          ack(`✓ Removed gifted title from ${target.name}`);
+        } catch(e) { err('Failed: ' + e.message); }
+      }
+
+      // ── get_frs: read current tax settings (panel load, no side effects) ──
+      else if (cmd === 'get_frs') {
+        const s = getFRSSettings();
+        ws.send(JSON.stringify({ type: 'god_frs_settings', data: {
+          enabled: !!s.enabled, rateBps: s.rate_bps, withdrawTaxBps: s.withdraw_tax_bps,
+          lossCarryforward: !!s.loss_carryforward, lastRunTs: s.last_run_ts,
+        }}));
+      }
+
+      // ── set_frs: configure the tax engine (enable, rate, loss mode, withdraw rate) ─
+      else if (cmd === 'set_frs') {
+        const patch = {};
+        if (msg.enabled != null)           patch.enabled = !!msg.enabled;
+        if (msg.rateBps != null)           patch.rate_bps = Number(msg.rateBps);
+        if (msg.lossCarryforward != null)  patch.loss_carryforward = !!msg.lossCarryforward;
+        if (msg.withdrawTaxBps != null)    patch.withdraw_tax_bps = Number(msg.withdrawTaxBps);
+        const s = setFRSSetting(patch);
+        broadcast({ type: 'frs_settings', data: { enabled: !!s.enabled, rateBps: s.rate_bps, withdrawTaxBps: s.withdraw_tax_bps } });
+        broadcastToAdmins({ type: 'admin_log', data: { action: 'set_frs', by: actor.name, settings: s } });
+        ack(`✓ FRS ${s.enabled ? 'ENABLED' : 'disabled'} — income ${(s.rate_bps/100).toFixed(2)}%, withdraw ${(s.withdraw_tax_bps/100).toFixed(2)}%, loss carryforward ${s.loss_carryforward ? 'on' : 'off'}`);
+      }
+
+      // ── run_frs_now: manually trigger a weekly assessment (testing) ───────
+      else if (cmd === 'run_frs_now') {
+        try {
+          const s = getFRSSettings();
+          if (!s.enabled) return err('FRS is disabled. Enable it first with set_frs.');
+          runWeeklyTaxAssessment(Date.now());
+          setFRSSetting({ last_run_ts: _frsMostRecentSundayNoonLA(Date.now()) });
+          ack('✓ Manual FRS assessment run. Treasury and balances updated.');
+        } catch(e) { err('FRS run failed: ' + e.message); }
+      }
+
+      // ── frs_forgive: clear a player's owed tax (and optional prepaid reset) ─
+      else if (cmd === 'frs_forgive') {
+        const target = getPlayerByName(String(msg.targetName || '').trim());
+        if (!target) return err('Player not found.');
+        try {
+          setPlayerTaxState(target.id, { tax_owed: 0 });
+          broadcastToPlayer(target.id, { type: 'chat_system', data: { text: 'The FRS has cleared your outstanding tax balance.' } });
+          const fresh = getPlayer(target.id); if (fresh) broadcastToPlayer(target.id, { type: 'portfolio', data: snapshotPortfolio(fresh) });
+          ack(`✓ Cleared owed tax for ${target.name}`);
+        } catch(e) { err('Failed: ' + e.message); }
+      }
+
+      // ── frs_player: pull FRS surveillance + tax detail for one player ──────
+      else if (cmd === 'frs_player') {
+        const target = getPlayerByName(String(msg.targetName || '').trim());
+        if (!target) return err('Player not found.');
+        if (!_godActorIsOwner && isOwnerAccount(target.id)) return err('⛔ Cannot look up the Owner account.');
+        try {
+          const tele = getFRSPlayerTelemetry(target.id);
+          const tax  = getPlayerTaxState(target.id);
+          ws.send(JSON.stringify({ type: 'god_frs_player', data: { name: target.name, id: target.id, tax, telemetry: tele } }));
+        } catch(e) { err('Telemetry failed: ' + e.message); }
+      }
+
+      // ── frs_recent: recent purchases across all players (surveillance feed) ─
+      else if (cmd === 'frs_recent') {
+        try {
+          const limit = Math.max(10, Math.min(200, Number(msg.limit) || 60));
+          const minNotional = Math.max(0, Number(msg.minNotional) || 0);
+          ws.send(JSON.stringify({ type: 'god_frs_recent', data: { rows: getFRSRecentPurchases(limit, minNotional) } }));
+        } catch(e) { err('Feed failed: ' + e.message); }
+      }
+
             else {
         err(`Unknown god_cmd: ${cmd}`);
       }
@@ -7320,11 +7540,12 @@ wss.on('connection',(ws,req)=>{
       const _isPresident = !!(president && president.id === actor.id);
       const _isCyborg = isVoidLocked(actor.id);
       const _isEscaped = _isCyborg && isVoidPresidentEscaped(actor.id);
-      // Badge: Owner→★, Dev→null, Cyborg+CEO→♛, Cyborg→🤖, else→tier badge
-      const chatBadge = _isOwner ? '★' : (_isDev ? null : (_isCyborg ? (actor.patreon_tier === 3 ? '♛' : '🤖') : (tier?.badge||null)));
+      const _giftedChat = giftedTitleOf(actor.id);
+      // Badge: Owner→★, Dev→null, Cyborg+CEO→♛, Cyborg→🤖, gifted→gift badge, else→tier badge
+      const chatBadge = _isOwner ? '★' : (_isDev ? null : (_isCyborg ? (actor.patreon_tier === 3 ? '♛' : '🤖') : ((_giftedChat && _giftedChat.badge) || tier?.badge || null)));
       // Color: President→blue, Owner→orange, Dev→null,
       //   Escaped+Syndicate→red, Escaped+other→null (purple gone),
-      //   Cyborg+Guild→green, Cyborg(normal)→purple, else→tier color
+      //   Cyborg+Guild→green, Cyborg(normal)→purple, gifted title→gift color, else→tier color
       let chatColor;
       if (_isPresident) chatColor = '#00bfff';
       else if (_isOwner) chatColor = '#ff6a00';
@@ -7335,11 +7556,12 @@ wss.on('connection',(ws,req)=>{
         chatColor = pFaction === 'syndicate' ? '#e74c3c' : null;
       }
       else if (_isCyborg) chatColor = actor.patreon_tier === 2 ? '#2ecc71' : '#9b59b6';
+      else if (_giftedChat) chatColor = _giftedChat.color;
       else chatColor = tier?.chatColor || null;
       const chatText = channel==='unmod' ? rawText : text;
       // For all channels (except dunce), include room number (1-15) for multi-room support
       const chatRoom = channel !== 'dunce' ? Math.min(5, Math.max(1, parseInt(msg.room) || 1)) : undefined;
-      const payload={type:'chat',data:{id:uuidv4(),t:Date.now(),user:actor.name,text:chatText,badge:chatBadge,color:chatColor,channel,title:actor.title||null,is_dev:_isDev,is_prime:_isOwner,faction:actor.faction||null,portrait:actor.portrait||null,...(chatRoom !== undefined && {room:chatRoom})}};
+      const payload={type:'chat',data:{id:uuidv4(),t:Date.now(),user:actor.name,text:chatText,badge:chatBadge,color:chatColor,channel,title:actor.title||null,giftTitle:(_giftedChat&&_giftedChat.label)||null,is_dev:_isDev,is_prime:_isOwner,faction:actor.faction||null,portrait:actor.portrait||null,...(chatRoom !== undefined && {room:chatRoom})}};
       if(channel==='global'){
         broadcast(payload);
       } else {
@@ -7374,13 +7596,15 @@ wss.on('connection',(ws,req)=>{
       const _isPres=!!(president&&president.id===actor.id);
       const _wCyborg=isVoidLocked(actor.id);
       const _wEscaped=_wCyborg&&isVoidPresidentEscaped(actor.id);
-      const wBadge=_isOwner?'★':(_isDev?null:(_wCyborg?(actor.patreon_tier===3?'♛':'🤖'):(TIERS[actor.patreon_tier||0]?.badge||null)));
+      const _wGifted=giftedTitleOf(actor.id);
+      const wBadge=_isOwner?'★':(_isDev?null:(_wCyborg?(actor.patreon_tier===3?'♛':'🤖'):((_wGifted&&_wGifted.badge)||TIERS[actor.patreon_tier||0]?.badge||null)));
       let wColor;
       if(_isPres) wColor='#00bfff';
       else if(_isOwner) wColor='#ff6a00';
       else if(_isDev) wColor=null;
       else if(_wEscaped){ const wf=getPlayerFaction(actor.id); wColor=wf==='syndicate'?'#e74c3c':null; }
       else if(_wCyborg) wColor=actor.patreon_tier===2?'#2ecc71':'#9b59b6';
+      else if(_wGifted) wColor=_wGifted.color;
       else wColor=TIERS[actor.patreon_tier||0]?.chatColor||null;
       const base={id:uuidv4(),t:Date.now(),from:actor.name,to:target.name,text:wText,badge:wBadge,color:wColor,is_prime:_isOwner,is_dev:_isDev};
       broadcastToPlayer(target.id,{type:'whisper',data:{...base,sent:false}});
@@ -7744,6 +7968,186 @@ wss.on('connection',(ws,req)=>{
 });
 
 // ─── Timers ───────────────────────────────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  FRS (Flesh Revenue Service) — weekly income tax engine + surveillance telemetry
+//  (1.1.8.0). Ships DORMANT: getFRSSettings().enabled defaults to 0, and every path
+//  below short-circuits when disabled, so nothing touches a live balance until an
+//  admin flips it on from the God Panel. Houses are NOT assessed here — capital-house
+//  money is taxed at withdrawal (see frsOnFundWithdraw). Fund stake is excluded from
+//  taxable net worth so the income tax never double-charges house money.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Taxable net worth = cash + long/short equity + locked short collateral. Fund stake
+// is deliberately omitted: capital-house value is sheltered until withdrawal.
+function taxableNetWorth(player, priceMap) {
+  if (!player) return 0;
+  priceMap = priceMap || buildPriceMap();
+  let v = Number(player.cash || 0);
+  for (const [sym, qty] of Object.entries(player.holdings || {})) {
+    if (!qty) continue;
+    const px = priceMap[sym]; if (px == null) continue;
+    v += px * qty;
+  }
+  for (const cc of Object.values(player.shortCollC || {})) v += (Number(cc) || 0) / 100;
+  return v;
+}
+
+// ── Capital-house deposit/withdraw tax hooks ──────────────────────────────────
+// Moving money between your own cash and a fund must be income-tax-neutral, because
+// fund stake is excluded from taxable net worth. Lower the basis by deposits, raise
+// it by net withdrawals. The ONLY charge on house money is the withdrawal tax.
+function frsOnFundDeposit(playerId, depositAmount) {
+  try {
+    const ts = getPlayerTaxState(playerId);
+    if (ts.tax_basis == null) return;        // never assessed — first baseline captures current state
+    setPlayerTaxState(playerId, { tax_basis: ts.tax_basis - Number(depositAmount || 0) });
+  } catch(_) {}
+}
+// gross was already credited to the player's cash by the fund withdraw fn. Tax it,
+// route the tax to the treasury, and bump the basis by the NET inflow. Returns
+// { gross, tax, net }. tax is 0 when FRS is disabled.
+function frsOnFundWithdraw(playerId, grossCashOut) {
+  const gross = Math.max(0, Number(grossCashOut || 0));
+  let tax = 0;
+  try {
+    const s = getFRSSettings();
+    if (s.enabled && gross > 0) tax = Math.floor(gross * s.withdraw_tax_bps / 10000);
+  } catch(_) {}
+  const net = gross - tax;
+  try {
+    const fresh = getPlayer(playerId);
+    if (fresh) {
+      if (tax > 0) { safeAddCash(fresh, -tax); FMI.treasury += tax; FMI.hourlyTaxAccrual += tax; }
+      const ts = getPlayerTaxState(playerId);
+      if (ts.tax_basis != null) setPlayerTaxState(playerId, { tax_basis: ts.tax_basis + net });
+      savePlayer(fresh);
+    }
+  } catch(_) {}
+  return { gross, tax, net };
+}
+
+// ── Weekly assessment ─────────────────────────────────────────────────────────
+function runWeeklyTaxAssessment(boundaryTs) {
+  const s = getFRSSettings();
+  const rate  = s.rate_bps / 10000;
+  const carry = !!s.loss_carryforward;
+  const priceMap = buildPriceMap();
+  const ids = getAllPlayerIdsForTax();
+  let assessed = 0, collected = 0;
+  for (const id of ids) {
+    const p = getPlayer(id);
+    if (!p) continue;
+    if (isOwnerAccount(id) || isDevAccount(id)) continue;   // dev/owner accounts are exempt
+    const now = taxableNetWorth(p, priceMap);
+    const ts  = getPlayerTaxState(id);
+    if (ts.tax_basis == null) { setPlayerTaxState(id, { tax_basis: now }); continue; } // baseline, no retro tax
+
+    let owed       = Number(ts.tax_owed) || 0;
+    let prepaid    = Number(ts.tax_prepaid) || 0;
+    let lossCredit = Number(ts.tax_loss_credit) || 0;
+    const gain = now - ts.tax_basis;
+
+    let taxThis = 0;
+    if (gain > 0) {
+      let taxable = gain;
+      if (carry && lossCredit > 0) { const off = Math.min(lossCredit, taxable); taxable -= off; lossCredit -= off; }
+      taxThis = taxable * rate;
+    } else if (gain < 0 && carry) {
+      lossCredit += (-gain);
+    }
+
+    let due = taxThis + owed, fromPrepaid = 0, fromCash = 0;
+    if (due > 0 && prepaid > 0) { fromPrepaid = Math.min(prepaid, due); prepaid -= fromPrepaid; due -= fromPrepaid; }
+    if (due > 0 && (p.cash || 0) > 0) {
+      fromCash = Math.min(p.cash, due);
+      safeAddCash(p, -fromCash); due -= fromCash;
+      FMI.treasury += fromCash; FMI.hourlyTaxAccrual += fromCash;
+    }
+    const newOwed = due;
+
+    setPlayerTaxState(id, {
+      tax_basis: now, tax_owed: newOwed, tax_prepaid: prepaid,
+      tax_loss_credit: carry ? lossCredit : 0,
+    });
+    savePlayer(p);
+    recordTaxHistory('player', id, gain, taxThis, fromPrepaid, fromCash, newOwed);
+    assessed++; collected += fromCash;
+
+    if (taxThis > 0 || fromCash > 0 || newOwed > 0) {
+      try {
+        broadcastToPlayer(id, { type:'frs_tax', data:{ periodGain: gain, taxAssessed: taxThis, fromCash, fromPrepaid, owed: newOwed } });
+        broadcastToPlayer(id, { type:'chat_system', data:{ text:`FRS weekly assessment: gain Ƒ${Math.round(gain).toLocaleString()}, tax Ƒ${Math.round(taxThis).toLocaleString()}${newOwed>0?`, unpaid balance Ƒ${Math.round(newOwed).toLocaleString()}`:''}.` } });
+        const fresh = getPlayer(id); if (fresh) broadcastToPlayer(id, { type:'portfolio', data: snapshotPortfolio(fresh) });
+      } catch(_) {}
+    }
+  }
+  console.log(`[FRS] Weekly assessment complete: ${assessed} assessed, Ƒ${Math.round(collected).toLocaleString()} collected.`);
+  try { broadcast({ type:'frs_assessment_done', data:{ ts: Date.now() } }); } catch(_) {}
+}
+
+// ── Scheduler: fire once per Sunday 12:00 America/Los_Angeles (DST-correct) ────
+function _frsMostRecentSundayNoonLA(now) {
+  const TZ = 'America/Los_Angeles';
+  const parts = (utcMs) => {
+    const dtf = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour12:false, weekday:'short',
+      year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    const m = {}; for (const p of dtf.formatToParts(new Date(utcMs))) m[p.type] = p.value; return m;
+  };
+  const offsetMs = (utcMs) => { const m = parts(utcMs); return Date.UTC(+m.year,+m.month-1,+m.day,+m.hour,+m.minute,+m.second) - utcMs; };
+  const wallToUTC = (y,mo,d,h,mi) => { const g = Date.UTC(y,mo-1,d,h,mi,0); let o = offsetMs(g); let r = g - o; o = offsetMs(r); return g - o; };
+  const WK = { Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6 };
+  const m = parts(now);
+  const wd = WK[m.weekday] ?? 0;
+  let dateUTC = Date.UTC(+m.year, +m.month-1, +m.day) - wd * 86400000;
+  const at = (ms) => { const d = new Date(ms); return wallToUTC(d.getUTCFullYear(), d.getUTCMonth()+1, d.getUTCDate(), 12, 0); };
+  let cand = at(dateUTC);
+  if (cand > now) cand = at(dateUTC - 7*86400000);   // Sunday before noon LA → previous Sunday
+  return cand;
+}
+// The next Sunday 12:00 LA strictly after `now`. Reuses the most-recent helper by
+// probing just past one week ahead (1h buffer absorbs the DST-week ±1h gap).
+function _frsNextSundayNoonLA(now) {
+  const m = _frsMostRecentSundayNoonLA(now);
+  return _frsMostRecentSundayNoonLA(m + 7*86400000 + 3600000);
+}
+function frsScheduleTick() {
+  try {
+    const s = getFRSSettings();
+    if (!s.enabled) return;
+    const boundary = _frsMostRecentSundayNoonLA(Date.now());
+    if (s.last_run_ts < boundary) {
+      console.log(`[FRS] Boundary crossed (${new Date(boundary).toISOString()}). Running weekly assessment.`);
+      runWeeklyTaxAssessment(boundary);
+      setFRSSetting({ last_run_ts: boundary });
+    }
+  } catch(e) { console.error('[FRS] schedule tick error:', e); }
+}
+setInterval(frsScheduleTick, 60_000);
+
+// ── Telemetry: accumulate playtime for online players, once a minute ──────────
+setInterval(() => {
+  try {
+    const ids = [];
+    for (const [pid, sockets] of playerSockets) { if (sockets && sockets.size > 0) ids.push(pid); }
+    if (ids.length) addPlaySecondsBulk(ids, 60);
+  } catch(_) {}
+}, 60_000);
+
+// ── Telemetry: snapshot online players' positions every 15 min ────────────────
+setInterval(() => {
+  try {
+    const priceMap = buildPriceMap();
+    for (const [pid, sockets] of playerSockets) {
+      if (!sockets || sockets.size === 0) continue;
+      const p = getPlayer(pid); if (!p) continue;
+      const equity = Object.entries(p.holdings || {}).reduce((a,[sym,q]) => { const px = priceMap[sym]; return a + (px ? px*q : 0); }, 0);
+      const fundStake = playerFundStake(p.id, priceMap);
+      recordFRSPositionSnapshot(p.id, (p.cash||0) + equity + fundStake, p.cash||0, equity, fundStake, p.holdings || {});
+    }
+  } catch(_) {}
+}, 15 * 60_000);
+
 
 setInterval(stepMarket, TICK_MS);
 setInterval(broadcastLeaderboard, 15000);

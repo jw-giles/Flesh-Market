@@ -1,6 +1,35 @@
-# FleshMarket — Changelog
+# FleshMarket - Changelog
 
 All versions in chronological order. Each entry corresponds to a former `PATCH_NOTES_X.md` file, now unified here.
+
+---
+
+## v1.1.8.1 (2026-06-22) - God Panel tab bar overflow fix (CLIENT)
+
+Client-only. Hard-refresh after deploy. **No server/DB change.**
+
+- The God Panel grew to 9 tabs in 1.1.8.0 (added `🏛 FRS`), but the tab row was a single non-wrapping flex row in a panel capped at `max-width:400px` with `overflow:hidden`, so the last tab clipped off-screen and the FRS tab was unreachable (`index.html`, `god-panel.css`). Fix: the tab row now wraps (`flex-wrap:wrap`); `.god-tab` is `flex:1 1 auto` with `min-width:84px` so tabs flow into two even rows; the panel widened to `max-width:460px`; and the scrollable content offset went from `calc(88vh - 95px)` to `calc(88vh - 135px)` to allow for the taller two-row header. Scales to further tabs without clipping.
+
+---
+
+## v1.1.8.0 (2026-06-22) - Gifted Titles; FRS weekly income tax; FRS surveillance (SERVER + DB + CLIENT)
+
+Server, DB, and client. Hard-refresh after deploy. **DB migration runs on boot** (`initFRSTables`, additive `ALTER`/`CREATE IF NOT EXISTS`, no data loss). The tax engine **ships dormant** (`frs_settings.enabled = 0`); nothing touches a live balance until an admin enables it from the God Panel FRS tab.
+
+### Gifted Titles (display-only name recolor)
+- New God Panel **FRS** tab can grant a player a display title that recolors their name. Presets: `🍇 S'weet Trader` (#b83265), `😇 Angel Investor` (#8ab8ff), `💰 Loan Shark` (#7a3fb0), plus fully custom label/color/badge. `god_cmd gift_title` / `ungift_title`.
+- Title color and badge apply in chat, whispers, and the portfolio snapshot, inserted **above** Patreon tier and **below** structural roles (President, Owner, Dev, Debtor, escaped Syndicate, Cyborg/Guild). New `gifted_titles` table; `setGiftedTitle` / `clearGiftedTitle` / `getGiftedTitle` in `db.js`.
+
+### FRS weekly income tax
+- New engine in `server.js` assesses tax every **Sunday 12:00 America/Los_Angeles** (DST-correct via `Intl.DateTimeFormat` offset math; a per-minute `frsScheduleTick` fires once per boundary and is crash-safe via `last_run_ts`).
+- Taxes the **week's gain** in taxable net worth (cash + long/short equity + short collateral), default **15%**. Fund stake is excluded from taxable net worth. Losses can carry forward as a credit that offsets later gains (runtime toggle). Dev and Owner accounts are exempt. First assessment baselines with no retroactive tax.
+- **Pooled funds are taxed at withdrawal, not weekly.** Applies to both Capital Houses (`/api/funds/:id`) and the Guild hedge fund (`/api/fund`). Deposits and withdrawals adjust the income-tax basis symmetrically so moving money between your own cash and a fund is income-tax-neutral; the only charge on fund money is a withdrawal tax (separate `withdraw_tax_bps`, default 15%), routed to the treasury. This closes the shelter where fund stake (excluded from taxable net worth) could otherwise dodge the weekly tax.
+- **Pay Taxes Here**: a `🏛 Taxes` header button (new `tax-panel.js`) appears once the FRS is active. Shows next assessment time, taxable net worth, gain this cycle, estimated tax, balance owed, and prepaid/loss credit. Players can pay a balance (`pay_tax`) or prepay ahead of going idle (`prepay_tax`); `tax_status` reports current state. Prepaid credit is applied before cash on future assessments.
+- New columns on `players` (`play_seconds`, `tax_basis`, `tax_owed`, `tax_prepaid`, `tax_loss_credit`) and new `frs_settings`, `frs_tax_history` tables. God controls: `set_frs`, `get_frs`, `run_frs_now`, `frs_forgive`.
+- Tutorial gains an FRS slide (UNIT-7) before orientation complete.
+
+### FRS surveillance (dev-facing)
+- Per-minute playtime accrual for online players (`addPlaySecondsBulk`), 15-minute position snapshots (`frs_position_snapshots`, capped 200/player), and a global executed-trade log (`frs_purchase_log`, capped 20000). God Panel `frs_player` pulls a per-player dossier (playtime, tax state, recent trades, tax history); `frs_recent` streams recent market activity with a min-notional filter.
 
 ---
 

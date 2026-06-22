@@ -3487,3 +3487,201 @@ export function equipMiningShip(playerId, shipId) {
   _setShipsRow(playerId, owned, shipId);
   return { ok: true, equipped: shipId };
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  FRS (Flesh Revenue Service) + Gifted Titles  -  added 1.1.8.0
+//  All tables created idempotently. Tax engine ships DORMANT (frs_settings.enabled
+//  defaults to 0); nothing here touches a balance until an admin enables it.
+// ══════════════════════════════════════════════════════════════════════════════
+
+export function initFRSTables() {
+  // Player-level FRS columns (lazy-added, matches existing migration idiom).
+  try { db.exec('ALTER TABLE players ADD COLUMN play_seconds   INTEGER NOT NULL DEFAULT 0'); } catch(_) {}
+  try { db.exec('ALTER TABLE players ADD COLUMN tax_basis      REAL'); } catch(_) {}            // ex-fund net worth at last assessment; NULL = never assessed
+  try { db.exec('ALTER TABLE players ADD COLUMN tax_owed       REAL NOT NULL DEFAULT 0'); } catch(_) {}
+  try { db.exec('ALTER TABLE players ADD COLUMN tax_prepaid    REAL NOT NULL DEFAULT 0'); } catch(_) {}
+  try { db.exec('ALTER TABLE players ADD COLUMN tax_loss_credit REAL NOT NULL DEFAULT 0'); } catch(_) {}
+  // Lazy-add withdraw_tax_bps in case frs_settings predates 1.1.8.0 final.
+  try { db.exec('ALTER TABLE frs_settings ADD COLUMN withdraw_tax_bps INTEGER NOT NULL DEFAULT 1500'); } catch(_) {}
+
+  db.exec(`
+    -- Gifted Titles: a god-granted display title that recolors the player's chat name.
+    CREATE TABLE IF NOT EXISTS gifted_titles (
+      player_id  TEXT PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+      label      TEXT NOT NULL,
+      color      TEXT NOT NULL,
+      badge      TEXT,
+      granted_by TEXT,
+      granted_at INTEGER NOT NULL
+    );
+
+    -- Single-row settings for the tax engine. id is always 1.
+    CREATE TABLE IF NOT EXISTS frs_settings (
+      id                INTEGER PRIMARY KEY CHECK (id = 1),
+      enabled           INTEGER NOT NULL DEFAULT 0,
+      rate_bps          INTEGER NOT NULL DEFAULT 1500,   -- 1500 = 15.00%
+      loss_carryforward INTEGER NOT NULL DEFAULT 1,
+      house_mode        TEXT    NOT NULL DEFAULT 'gains', -- vestigial; houses now taxed at withdrawal, not assessed weekly
+      withdraw_tax_bps  INTEGER NOT NULL DEFAULT 1500,   -- tax on capital-house withdrawals (1500 = 15.00%)
+      last_run_ts       INTEGER NOT NULL DEFAULT 0
+    );
+    INSERT OR IGNORE INTO frs_settings(id) VALUES(1);
+
+    -- Audit receipts for each weekly assessment (player and house rows).
+    CREATE TABLE IF NOT EXISTS frs_tax_history (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      subject_kind  TEXT NOT NULL,                       -- 'player' | 'house'
+      subject_id    TEXT NOT NULL,
+      ts            INTEGER NOT NULL,
+      period_gain   REAL NOT NULL,
+      tax_assessed  REAL NOT NULL,
+      from_prepaid  REAL NOT NULL DEFAULT 0,
+      from_cash     REAL NOT NULL DEFAULT 0,
+      new_owed      REAL NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_frs_hist_subj ON frs_tax_history(subject_id, ts);
+
+    -- FRS surveillance: periodic position snapshots (dev-facing exploit watch).
+    CREATE TABLE IF NOT EXISTS frs_position_snapshots (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id   TEXT NOT NULL,
+      ts          INTEGER NOT NULL,
+      net_worth   REAL NOT NULL,
+      cash        REAL NOT NULL,
+      equity      REAL NOT NULL,
+      fund_stake  REAL NOT NULL DEFAULT 0,
+      holdings    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_frs_snap_player ON frs_position_snapshots(player_id, ts);
+
+    -- FRS surveillance: purchase / sale log (dev-facing).
+    CREATE TABLE IF NOT EXISTS frs_purchase_log (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id  TEXT NOT NULL,
+      ts         INTEGER NOT NULL,
+      kind       TEXT NOT NULL,                          -- 'stock_buy' | 'stock_sell' | 'short' | 'cover' | 'commodity' | ...
+      symbol     TEXT,
+      qty        REAL,
+      price      REAL,
+      notional   REAL
+    );
+    CREATE INDEX IF NOT EXISTS idx_frs_purch_player ON frs_purchase_log(player_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_frs_purch_ts ON frs_purchase_log(ts);
+  `);
+}
+
+// ── Gifted Titles ─────────────────────────────────────────────────────────────
+export function setGiftedTitle(playerId, label, color, badge, grantedBy) {
+  stmt(`INSERT INTO gifted_titles(player_id,label,color,badge,granted_by,granted_at)
+        VALUES(?,?,?,?,?,?)
+        ON CONFLICT(player_id) DO UPDATE SET label=excluded.label, color=excluded.color,
+          badge=excluded.badge, granted_by=excluded.granted_by, granted_at=excluded.granted_at`)
+    .run(playerId, String(label).slice(0,48), String(color), badge ? String(badge).slice(0,8) : null, grantedBy || null, Date.now());
+}
+export function clearGiftedTitle(playerId) {
+  stmt('DELETE FROM gifted_titles WHERE player_id=?').run(playerId);
+}
+export function getGiftedTitle(playerId) {
+  try { return stmt('SELECT label,color,badge FROM gifted_titles WHERE player_id=?').get(playerId) || null; }
+  catch(_) { return null; }
+}
+
+// ── Telemetry: playtime ───────────────────────────────────────────────────────
+// Bulk-add seconds to a set of online player ids in one transaction.
+export const addPlaySecondsBulk = transaction((ids, seconds) => {
+  const s = stmt('UPDATE players SET play_seconds = play_seconds + ? WHERE id=?');
+  for (const id of ids) s.run(seconds, id);
+});
+export function getPlaySeconds(playerId) {
+  try { return stmt('SELECT play_seconds FROM players WHERE id=?').get(playerId)?.play_seconds || 0; }
+  catch(_) { return 0; }
+}
+
+// ── Telemetry: position snapshots + purchase log (capped retention) ────────────
+export function recordFRSPositionSnapshot(playerId, net, cash, equity, fundStake, holdings) {
+  try {
+    stmt(`INSERT INTO frs_position_snapshots(player_id,ts,net_worth,cash,equity,fund_stake,holdings)
+          VALUES(?,?,?,?,?,?,?)`)
+      .run(playerId, Date.now(), net, cash, equity, fundStake || 0,
+           holdings ? JSON.stringify(holdings) : null);
+    // Keep the most recent 200 rows per player.
+    stmt(`DELETE FROM frs_position_snapshots WHERE player_id=? AND id NOT IN
+          (SELECT id FROM frs_position_snapshots WHERE player_id=? ORDER BY ts DESC LIMIT 200)`)
+      .run(playerId, playerId);
+  } catch(_) {}
+}
+export function logFRSPurchase(playerId, kind, symbol, qty, price) {
+  try {
+    const notional = (Number(qty) || 0) * (Number(price) || 0);
+    stmt(`INSERT INTO frs_purchase_log(player_id,ts,kind,symbol,qty,price,notional)
+          VALUES(?,?,?,?,?,?,?)`)
+      .run(playerId, Date.now(), String(kind), symbol || null, Number(qty) || 0, Number(price) || 0, notional);
+    // Global cap so the table can't grow unbounded on a busy server.
+    stmt(`DELETE FROM frs_purchase_log WHERE id NOT IN
+          (SELECT id FROM frs_purchase_log ORDER BY ts DESC LIMIT 20000)`).run();
+  } catch(_) {}
+}
+export function getFRSPlayerTelemetry(playerId, purchaseLimit=40, snapLimit=40) {
+  return {
+    play_seconds: getPlaySeconds(playerId),
+    purchases: stmt(`SELECT ts,kind,symbol,qty,price,notional FROM frs_purchase_log
+                     WHERE player_id=? ORDER BY ts DESC LIMIT ?`).all(playerId, purchaseLimit),
+    snapshots: stmt(`SELECT ts,net_worth,cash,equity,fund_stake FROM frs_position_snapshots
+                     WHERE player_id=? ORDER BY ts DESC LIMIT ?`).all(playerId, snapLimit),
+    tax: stmt(`SELECT ts,period_gain,tax_assessed,from_prepaid,from_cash,new_owed FROM frs_tax_history
+               WHERE subject_id=? ORDER BY ts DESC LIMIT 12`).all(playerId),
+  };
+}
+// Recent purchases across all players, optionally filtered to large notional, for the live surveillance feed.
+export function getFRSRecentPurchases(limit=60, minNotional=0) {
+  return stmt(`SELECT pl.ts,pl.kind,pl.symbol,pl.qty,pl.price,pl.notional,p.name
+               FROM frs_purchase_log pl LEFT JOIN players p ON p.id=pl.player_id
+               WHERE pl.notional >= ? ORDER BY pl.ts DESC LIMIT ?`).all(minNotional, limit);
+}
+
+// ── Tax engine: settings ──────────────────────────────────────────────────────
+export function getFRSSettings() {
+  const row = stmt('SELECT enabled,rate_bps,loss_carryforward,house_mode,withdraw_tax_bps,last_run_ts FROM frs_settings WHERE id=1').get();
+  return row || { enabled:0, rate_bps:1500, loss_carryforward:1, house_mode:'gains', withdraw_tax_bps:1500, last_run_ts:0 };
+}
+export function setFRSSetting(patch) {
+  const cur = getFRSSettings();
+  const enabled = patch.enabled != null ? (patch.enabled ? 1 : 0) : cur.enabled;
+  const rate = patch.rate_bps != null ? Math.max(0, Math.min(10000, Math.floor(patch.rate_bps))) : cur.rate_bps;
+  const loss = patch.loss_carryforward != null ? (patch.loss_carryforward ? 1 : 0) : cur.loss_carryforward;
+  const house = patch.house_mode != null ? (patch.house_mode === 'total' ? 'total' : 'gains') : cur.house_mode;
+  const wtax = patch.withdraw_tax_bps != null ? Math.max(0, Math.min(10000, Math.floor(patch.withdraw_tax_bps))) : cur.withdraw_tax_bps;
+  const lastRun = patch.last_run_ts != null ? Math.floor(patch.last_run_ts) : cur.last_run_ts;
+  stmt('UPDATE frs_settings SET enabled=?, rate_bps=?, loss_carryforward=?, house_mode=?, withdraw_tax_bps=?, last_run_ts=? WHERE id=1')
+    .run(enabled, rate, loss, house, wtax, lastRun);
+  return getFRSSettings();
+}
+
+// ── Tax engine: per-player state read/write ───────────────────────────────────
+export function getPlayerTaxState(playerId) {
+  const row = stmt('SELECT tax_basis,tax_owed,tax_prepaid,tax_loss_credit FROM players WHERE id=?').get(playerId);
+  return row || { tax_basis:null, tax_owed:0, tax_prepaid:0, tax_loss_credit:0 };
+}
+export function setPlayerTaxState(playerId, { tax_basis, tax_owed, tax_prepaid, tax_loss_credit }) {
+  const cur = getPlayerTaxState(playerId);
+  stmt('UPDATE players SET tax_basis=?, tax_owed=?, tax_prepaid=?, tax_loss_credit=? WHERE id=?')
+    .run(
+      tax_basis      !== undefined ? tax_basis      : cur.tax_basis,
+      tax_owed       !== undefined ? tax_owed       : cur.tax_owed,
+      tax_prepaid    !== undefined ? tax_prepaid    : cur.tax_prepaid,
+      tax_loss_credit!== undefined ? tax_loss_credit: cur.tax_loss_credit,
+      playerId
+    );
+}
+export function recordTaxHistory(kind, subjectId, periodGain, taxAssessed, fromPrepaid, fromCash, newOwed) {
+  try {
+    stmt(`INSERT INTO frs_tax_history(subject_kind,subject_id,ts,period_gain,tax_assessed,from_prepaid,from_cash,new_owed)
+          VALUES(?,?,?,?,?,?,?,?)`)
+      .run(kind, subjectId, Date.now(), periodGain, taxAssessed, fromPrepaid || 0, fromCash || 0, newOwed || 0);
+  } catch(_) {}
+}
+// All player ids with a non-null basis OR currently held shares OR any cash above the starting float,
+// i.e. everyone the engine needs to consider. Cheap: just enumerate players.
+export function getAllPlayerIdsForTax() {
+  return stmt('SELECT id FROM players').all().map(r => r.id);
+}

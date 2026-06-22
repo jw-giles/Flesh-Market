@@ -1,3 +1,53 @@
+# FleshMarket v1.1.8.1 - MANIFEST
+
+## v1.1.8.1 changes (God Panel tab overflow fix, CLIENT)
+
+```
+client/
+  index.html          tab-bar div + flex-wrap; #godPanel max-width 400 -> 460;
+                      content max-height calc(88vh - 95px) -> calc(88vh - 135px)
+  assets/god-panel.css .god-tab flex:1 -> flex:1 1 auto; + min-width:84px
+  version.json        1.1.8.0 -> 1.1.8.1
+```
+
+CLIENT only. Hard-refresh after deploy; no server/DB change.
+
+---
+
+# FleshMarket v1.1.8.0 - MANIFEST
+
+## v1.1.8.0 changes (Gifted Titles + FRS tax + FRS surveillance; SERVER + DB + CLIENT)
+
+```
+server/
+  db.js          + initFRSTables(): ALTER players (play_seconds, tax_basis, tax_owed,
+                   tax_prepaid, tax_loss_credit); CREATE gifted_titles, frs_settings (with
+                   withdraw_tax_bps), frs_tax_history, frs_position_snapshots, frs_purchase_log.
+                   + gifted-title CRUD, telemetry writers/readers, tax settings + per-player tax state.
+  server.js      + GIFTED_TITLE_PRESETS + giftedTitleOf(); gifted color/badge wired into chat,
+                   whisper, snapshotPortfolio (above Patreon, below structural roles).
+                 + FRS engine: taxableNetWorth (fund stake excluded), runWeeklyTaxAssessment,
+                   Sunday-noon-LA scheduler (DST-correct, crash-safe), playtime + snapshot ticks,
+                   purchase-log hook in order handler.
+                 + Withdrawal tax + symmetric basis adjust on BOTH fund systems:
+                   /api/funds/:id (capital houses) and /api/fund (Guild hedge fund).
+                 + god_cmd: gift_title, ungift_title, get_frs, set_frs, run_frs_now, frs_forgive,
+                   frs_player, frs_recent; god_player_info extended (play_seconds, tax, gift_title).
+                 + player WS: tax_status, pay_tax, prepay_tax.
+client/
+  index.html     + God Panel FRS tab (gifted titles, tax controls, surveillance);
+                   + header 'Taxes' button (left of portrait); + tax-panel.js include.
+  assets/god-panel.js   + gift/ungift + FRS control fns + god_frs_settings/player/recent handlers.
+  assets/tax-panel.js   NEW: player tax modal (status/pay/prepay), reveals when FRS active.
+  assets/tutorial.js    + FRS slide before orientation complete.
+  version.json          1.1.7.9 -> 1.1.8.0
+```
+
+SERVER + DB + CLIENT. DB migration runs on boot (additive, no data loss). Tax engine ships
+DORMANT (frs_settings.enabled = 0); enable from God Panel FRS tab. Hard-refresh after deploy.
+
+---
+
 # FleshMarket v1.1.7.9 - MANIFEST
 
 ## v1.1.7.9 changes (Batch B continued, CLIENT)

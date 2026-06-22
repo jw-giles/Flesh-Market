@@ -149,6 +149,12 @@
       tab: 'market',
     },
     {
+      heading: 'THE FLESH REVENUE SERVICE',
+      text: `The <strong>Flesh Revenue Service</strong> assesses a weekly income tax on your gains. Every <strong>Sunday at noon Pacific</strong> it measures how much your taxable net worth (cash plus positions) grew since the last assessment and takes a percentage of that gain, default <strong>15%</strong>. Only growth is taxed, so a flat or losing week owes nothing, and banked losses can offset later gains. When the FRS is collecting, a <strong>🏛 Taxes</strong> button appears in the header where you can clear a balance or <em>prepay</em> ahead of going idle. One shelter worth knowing: money held inside a <em>Capital House</em> is not taxed weekly, it is taxed only when you <strong>withdraw</strong> it.`,
+      callout: 'UNIT-7: Compliance is not optional. The FRS sees the tape. Pay on time and trade freely.',
+      tab: 'market',
+    },
+    {
       heading: 'ORIENTATION COMPLETE',
       text: `All systems reviewed. The key principles: <em>holding pays dividends</em>, <em>commodity arbitrage rewards a good eye for spreads</em>, <em>contracts let you trade those spreads without a ship</em>, <em>smuggling is a gamble guards can tilt</em>, <em>scalping gets taxed</em>, and <em>shorts bleed fees</em>. Use the <em>★ Watchlist</em> to track stocks, set <em>Price Alerts</em> for targets, check the <em>🔥 Heatmap</em> for market-wide moves, and review <em>P&L</em> for your performance metrics. Report bugs through the 🐛 tab. This tutorial replays via the <em>? Tutorial</em> button in the header.<span class="tut-cursor"></span>`,
       callout: 'UNIT-7: Orientation complete. Your terminal is fully operational. Begin when ready.',

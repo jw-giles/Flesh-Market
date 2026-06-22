@@ -1,7 +1,7 @@
 {
-  "version": "1.1.7.9",
-  "built": "2026-06-16T00:00:00Z",
+  "version": "1.1.8.1",
+  "built": "2026-06-22T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.7.9",
-  "notes": "Client only. Two more Batch B items. (1) News watchlist filter: the news panel filter now has a star button that shows only news about tickers on your watchlist; text search and good/bad/neutral tone filters already existed. News lines are tagged with their ticker so the filter can match. (2) Corpo-Cards collection sort: the collection now has a Sort by selector (Cost, Attack, Health, Rarity, Name); it previously always sorted by cost. Carries 1.1.7.8 and earlier."
+  "patch": "1.1.8.1",
+  "notes": "Client only. God Panel tab bar fix. The 9th tab (FRS) overflowed the fixed 400px panel and clipped off-screen, leaving the FRS tab unreachable. The tab row now wraps to two rows (flex-wrap), tabs gained a min-width so they wrap cleanly, the panel widened 400 to 460px, and the content max-height offset was adjusted for the taller two-row header. No server/DB change. Carries 1.1.8.0 and earlier."
 }

@@ -37,6 +37,7 @@
 <input class="input" id="name" placeholder="Your name" style="display:none"/><!-- legacy hidden -->
 <button class="btn" id="helloBtn" style="display:none">Join</button>
 <span id="fm-header-user" style="display:none;align-items:center;gap:6px;font-size:.85rem">
+  <button id="fm-tax-btn" onclick="window.openTaxPanel&&window.openTaxPanel()" title="Pay Taxes" style="display:none;align-items:center;gap:4px;padding:3px 10px;font-size:.78rem;border:1px solid #7a5e1e;border-radius:4px;background:#140d00;color:#ffce4d;cursor:pointer;flex:0 0 auto">🏛 Taxes</button>
   <span id="fm-header-portrait" onclick="window.openPortraitPicker&&window.openPortraitPicker()" title="Change portrait" style="display:none;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1px solid #2e6b4a;background:#0a1813 center/cover no-repeat;cursor:pointer;font-size:.85rem;color:#46ff7d;flex:0 0 auto">＋</span>
   <span id="fm-header-name" style="color:#46ff7d;opacity:.85"></span>
   <span id="fm-tier-badge-hdr" style="font-size:.95rem"></span>
@@ -1598,6 +1599,7 @@ ws.addEventListener('message', function(ev){
 <script src="assets/fm-auth.js"></script>
 <!-- leaderboard-local.js removed: server-frozen EOD snapshot is canonical -->
 <script src="assets/funds.js"></script>
+<script src="assets/tax-panel.js"></script>
 
 <script src="assets/market-state.js"></script>
 <script src="assets/market-tools.js"></script>
@@ -1818,7 +1820,7 @@ ws.addEventListener('message', function(ev){
 <div id="godPanel" style="
   display:none;position:fixed;z-index:10000;top:60px;right:18px;
   background:#080506;border:1px solid #ff990055;
-  border-radius:12px;min-width:340px;max-width:400px;max-height:88vh;
+  border-radius:12px;min-width:340px;max-width:460px;max-height:88vh;
   box-shadow:0 8px 40px #000c,0 0 0 1px #ff990022,0 0 30px #ff990011;
   font-family:inherit;overflow:hidden;display:none;flex-direction:column;
 ">
@@ -1837,7 +1839,7 @@ ws.addEventListener('message', function(ev){
   </div>
 
   <!-- Tab Bar -->
-  <div style="display:flex;border-bottom:1px solid #ff990022;background:#0d0600">
+  <div style="display:flex;flex-wrap:wrap;border-bottom:1px solid #ff990022;background:#0d0600">
     <button class="god-tab active" data-tab="economy"  onclick="godTab('economy')">💰 Economy</button>
     <button class="god-tab"        data-tab="market"   onclick="godTab('market')">📊 Market</button>
     <button class="god-tab"        data-tab="news"     onclick="godTab('news')">📰 News</button>
@@ -1846,10 +1848,11 @@ ws.addEventListener('message', function(ev){
     <button class="god-tab"        data-tab="colony"   onclick="godTab('colony')">🌍 Colony</button>
     <button class="god-tab"        data-tab="control"  onclick="godTab('control')">⚡ Control</button>
     <button class="god-tab"        data-tab="comms"    onclick="godTab('comms')">📡 Comms</button>
+    <button class="god-tab"        data-tab="frs"      onclick="godTab('frs');window.godCmd&&window.godCmd({cmd:'get_frs'})">🏛 FRS</button>
   </div>
 
   <!-- Scrollable Content -->
-  <div style="overflow-y:auto;max-height:calc(88vh - 95px);padding:12px">
+  <div style="overflow-y:auto;max-height:calc(88vh - 135px);padding:12px">
 
     <!-- ECONOMY TAB -->
     <div id="godTab-economy" class="god-tab-content">
@@ -2350,6 +2353,54 @@ ws.addEventListener('message', function(ev){
 
       <div class="god-section-title">Dev Chat Requests</div>
       <div id="god-comms-requests" style="max-height:160px;overflow-y:auto;margin-bottom:12px;font-size:.74rem"></div>
+    </div>
+
+    <!-- ══ FRS: Gifted Titles + Tax Engine + Surveillance ══ -->
+    <div id="godTab-frs" class="god-tab-content" style="display:none">
+      <div class="god-section-title">Gifted Titles</div>
+      <input id="god-frs-target" class="god-input" placeholder="Player name" style="width:100%;margin-bottom:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <button class="god-btn" style="border-color:#b83265;color:#e58aac" onclick="godGiftPreset('sweet_trader')">🍇 S'weet Trader</button>
+        <button class="god-btn" style="border-color:#8ab8ff;color:#8ab8ff" onclick="godGiftPreset('angel_investor')">😇 Angel Investor</button>
+        <button class="god-btn" style="border-color:#7a3fb0;color:#a878d8" onclick="godGiftPreset('loan_shark')">💰 Loan Shark</button>
+        <button class="god-btn" style="border-color:#553" onclick="godUngift()">✕ Remove</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <input id="god-frs-customlabel" class="god-input" placeholder="Custom label" style="flex:2">
+        <input id="god-frs-customcolor" class="god-input" placeholder="#rrggbb" style="flex:1">
+        <input id="god-frs-custombadge" class="god-input" placeholder="emoji" style="width:54px">
+        <button class="god-btn" onclick="godGiftCustom()">Gift</button>
+      </div>
+
+      <div class="god-section-title">Tax Engine (FRS)</div>
+      <div id="god-frs-state" style="font-size:.72rem;color:#ffce4d;margin-bottom:6px">Status: loading…</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+        <button class="god-btn" style="border-color:#3a8a3a;color:#86ff6a" onclick="godSetFRS({enabled:true})">● ENABLE</button>
+        <button class="god-btn" style="border-color:#8a3a3a;color:#ff8a8a" onclick="godSetFRS({enabled:false})">○ DISABLE</button>
+        <span style="font-size:.68rem;color:#888">Income %</span>
+        <input id="god-frs-rate" class="god-input" placeholder="15" style="width:54px">
+        <span style="font-size:.68rem;color:#888">Withdraw %</span>
+        <input id="god-frs-wrate" class="god-input" placeholder="15" style="width:54px">
+        <button class="god-btn" onclick="godSetFRSRates()">Set rates</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+        <button class="god-btn" onclick="godSetFRS({lossCarryforward:true})">Loss credit ON</button>
+        <button class="god-btn" onclick="godSetFRS({lossCarryforward:false})">Loss credit OFF</button>
+        <button class="god-btn" style="border-color:#7a5e1e;color:#ffce4d" onclick="if(confirm('Run a full FRS assessment now? This charges live balances.'))godCmd({cmd:'run_frs_now'})">⏱ Run assessment now</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <button class="god-btn" onclick="godFRSForgive()">Clear owed for target</button>
+      </div>
+
+      <div class="god-section-title" style="display:flex;justify-content:space-between;align-items:center">
+        Surveillance <button class="god-btn" onclick="godFRSRecent()" style="font-size:.65rem;padding:2px 8px">↻ Recent activity</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <button class="god-btn" onclick="godFRSPlayer()">Pull target dossier</button>
+        <span style="font-size:.68rem;color:#888;align-self:center">min Ƒ</span>
+        <input id="god-frs-minnotional" class="god-input" placeholder="0" style="width:80px">
+      </div>
+      <div id="god-frs-out" style="max-height:260px;overflow-y:auto;font-size:.72rem;font-family:'Share Tech Mono',ui-monospace,monospace;color:#86ff6a;white-space:pre-wrap"></div>
     </div>
 
   </div><!-- end scroll -->

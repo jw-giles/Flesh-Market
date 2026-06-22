@@ -1,6 +1,6 @@
 
 .god-tab {
-  flex:1;background:none;border:none;border-bottom:2px solid transparent;
+  flex:1 1 auto;min-width:84px;background:none;border:none;border-bottom:2px solid transparent;
   color:#665544;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;
   padding:7px 4px;cursor:pointer;font-family:inherit;transition:all .15s;
 }

@@ -647,4 +647,92 @@ function escapeHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+
+  // ══ FRS panel (Gifted Titles + Tax Engine + Surveillance) — 1.1.8.0 ══════════
+  const _frsTarget = () => document.getElementById('god-frs-target')?.value?.trim() || '';
+  const _frsFmt = (n) => 'Ƒ' + Math.round(Number(n)||0).toLocaleString();
+  const _frsTime = (s) => { s = Number(s)||0; const h = Math.floor(s/3600), m = Math.floor((s%3600)/60); return h ? `${h}h ${m}m` : `${m}m`; };
+  const _frsOut = (html) => { const el = document.getElementById('god-frs-out'); if (el) el.innerHTML = html; };
+
+  window.godGiftPreset = function(preset) {
+    const t = _frsTarget(); if (!t) return godFeedback('✗ Enter a player name', '#ff6b6b');
+    godSend({ cmd: 'gift_title', targetName: t, preset });
+  };
+  window.godGiftCustom = function() {
+    const t = _frsTarget(); if (!t) return godFeedback('✗ Enter a player name', '#ff6b6b');
+    const label = document.getElementById('god-frs-customlabel')?.value?.trim() || '';
+    const color = document.getElementById('god-frs-customcolor')?.value?.trim() || '';
+    const badge = document.getElementById('god-frs-custombadge')?.value?.trim() || '';
+    if (!label) return godFeedback('✗ Custom label required', '#ff6b6b');
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) return godFeedback('✗ Color must be #rrggbb', '#ff6b6b');
+    godSend({ cmd: 'gift_title', targetName: t, label, color, badge: badge || undefined });
+  };
+  window.godUngift = function() {
+    const t = _frsTarget(); if (!t) return godFeedback('✗ Enter a player name', '#ff6b6b');
+    godSend({ cmd: 'ungift_title', targetName: t });
+  };
+
+  window.godSetFRS = function(patch) { godSend({ cmd: 'set_frs', ...patch }); };
+  window.godSetFRSRates = function() {
+    const r = parseFloat(document.getElementById('god-frs-rate')?.value);
+    const w = parseFloat(document.getElementById('god-frs-wrate')?.value);
+    const patch = { cmd: 'set_frs' };
+    if (isFinite(r)) patch.rateBps = Math.round(r * 100);
+    if (isFinite(w)) patch.withdrawTaxBps = Math.round(w * 100);
+    if (patch.rateBps == null && patch.withdrawTaxBps == null) return godFeedback('✗ Enter a rate', '#ff6b6b');
+    godSend(patch);
+  };
+  window.godFRSForgive = function() {
+    const t = _frsTarget(); if (!t) return godFeedback('✗ Enter a player name', '#ff6b6b');
+    godSend({ cmd: 'frs_forgive', targetName: t });
+  };
+  window.godFRSPlayer = function() {
+    const t = _frsTarget(); if (!t) return godFeedback('✗ Enter a player name', '#ff6b6b');
+    godSend({ cmd: 'frs_player', targetName: t });
+  };
+  window.godFRSRecent = function() {
+    const min = parseFloat(document.getElementById('god-frs-minnotional')?.value) || 0;
+    godSend({ cmd: 'frs_recent', limit: 80, minNotional: min });
+  };
+
+  function _frsRenderState(d) {
+    const el = document.getElementById('god-frs-state'); if (!el) return;
+    el.innerHTML = `Status: <b style="color:${d.enabled ? '#86ff6a' : '#ff8a8a'}">${d.enabled ? 'ENABLED' : 'DISABLED'}</b>`
+      + ` &nbsp; income <b>${((d.rateBps||0)/100).toFixed(2)}%</b>, withdraw <b>${((d.withdrawTaxBps||0)/100).toFixed(2)}%</b>`
+      + (d.lossCarryforward != null ? `, loss credit ${d.lossCarryforward ? 'on' : 'off'}` : '');
+    const ri = document.getElementById('god-frs-rate'); if (ri && !ri.value) ri.value = ((d.rateBps||0)/100).toFixed(2);
+    const wi = document.getElementById('god-frs-wrate'); if (wi && !wi.value) wi.value = ((d.withdrawTaxBps||0)/100).toFixed(2);
+  }
+
+  document.addEventListener('fm_ws_msg', e => {
+    const msg = e.detail; if (!msg) return;
+
+    if (msg.type === 'god_frs_settings' || msg.type === 'frs_settings') { _frsRenderState(msg.data); }
+
+    if (msg.type === 'god_frs_player') {
+      const d = msg.data, tax = d.tax || {}, t = d.telemetry || {};
+      const purch = (t.purchases || []).map(p =>
+        `${new Date(p.ts).toLocaleString()}  ${p.kind.padEnd(10)} ${(p.symbol||'').padEnd(6)} ${(p.qty||0)}@${_frsFmt(p.price)}  =${_frsFmt(p.notional)}`
+      ).join('\n') || '  (none)';
+      const hist = (t.tax || []).map(h =>
+        `${new Date(h.ts).toLocaleDateString()}  gain ${_frsFmt(h.period_gain)}  tax ${_frsFmt(h.tax_assessed)}  owed ${_frsFmt(h.new_owed)}`
+      ).join('\n') || '  (none)';
+      _frsOut(
+        `<b style="color:#ffce4d">DOSSIER: ${escapeHtml(d.name)}</b>\n`
+        + `Playtime: ${_frsTime(t.play_seconds)}\n`
+        + `Tax basis ${tax.tax_basis==null?'(unassessed)':_frsFmt(tax.tax_basis)}  owed ${_frsFmt(tax.tax_owed)}  prepaid ${_frsFmt(tax.tax_prepaid)}  loss credit ${_frsFmt(tax.tax_loss_credit)}\n`
+        + `\n<b>Recent trades</b>\n${escapeHtml(purch)}\n`
+        + `\n<b>Tax history</b>\n${escapeHtml(hist)}`
+      );
+    }
+
+    if (msg.type === 'god_frs_recent') {
+      const rows = (msg.data.rows || []).map(r =>
+        `${new Date(r.ts).toLocaleTimeString()}  ${(r.name||'?').padEnd(14)} ${r.kind.padEnd(10)} ${(r.symbol||'').padEnd(6)} ${(r.qty||0)}@${_frsFmt(r.price)}  =${_frsFmt(r.notional)}`
+      ).join('\n') || '  (no activity)';
+      _frsOut(`<b style="color:#ffce4d">RECENT MARKET ACTIVITY</b>\n${escapeHtml(rows)}`);
+    }
+  });
+
+
 })();
