@@ -4,6 +4,21 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.8.6 (2026-07-07) - Patreon linking fix + pledge reconciliation (CLIENT + SERVER + DB)
+
+Client, server, and DB. Hard-refresh after deploy. **DB adds a `pending_pledges` table on boot** (additive, `CREATE IF NOT EXISTS`).
+
+Two defects meant a new patron could not receive their tier through the normal flow:
+
+- **The link button posted unauthenticated.** `client/assets/funds.js` sent the `/api/patreon/link` POST with no auth token, so `tokenFrom` returned null and the server answered 401 before ever storing the email. `patreon_email` was never written, so the webhook's email lookup always missed. Every "Link Account" click failed for everyone since the button was added. Fixed: the fetch now sends `x-auth-token: FM_TOKEN`, matching every other authenticated call in the client, and bails with "Log in first" when there is no session.
+- **Pledges that arrived before linking were dropped.** Patreon fires `pledge:create` at pledge time, which is normally before the patron has opened the game to link. When the webhook could not resolve a player it returned 200 and discarded the event, and nothing re-checked on a later link. Now an unmatched create/update is queued in `pending_pledges` (keyed by Patreon member id, carrying the email when the payload includes it), and `/api/patreon/link` drains it the instant the email is stored, granting tier, spins, and (tier 3) the CEO epic in one shot. A `delete` event for an unlinked member clears its queued row so a pledge cancelled before linking cannot later self-activate.
+
+Grant logic (set tier + member id + expiry, notify, guild sync, monthly spins, CEO drop) is now a single `grantPatreonTier` helper shared by the webhook and the link-time drain, so the two paths cannot diverge. CEO tier still respects `CEO_MAX`; a queued tier-3 that lands while the house is full stays queued and routes to admin.
+
+Known boundary: if Patreon omits the email from the webhook payload (config dependent), the queued row has no email and cannot be drained by link. Resolve those via the God Panel `set_patreon` command by player name.
+
+---
+
 ## v1.1.8.5 (2026-06-22) - FRS tax engine defaults to ENABLED (DB)
 
 DB only. No client or server-handler change; a restart applies it.

@@ -1,7 +1,7 @@
 {
-  "version": "1.1.8.5",
-  "built": "2026-06-22T00:00:00Z",
+  "version": "1.1.8.6",
+  "built": "2026-07-07T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.8.5",
-  "notes": "DB. The FRS weekly tax engine now defaults to ENABLED. New databases seed it on; an existing settings row that was seeded disabled gets flipped on once, after which a manual disable from the God Panel FRS tab persists across restarts. Rates are unchanged (income 15.00%, capital-house withdrawal 15.00%); adjust from the God Panel FRS tab. Once enabled the engine assesses on the next Sunday noon America/Los_Angeles cycle. Carries 1.1.8.4 and earlier."
+  "patch": "1.1.8.6",
+  "notes": "Patreon linking fix. The in-game 'Link Account' button now sends your auth token, so linking actually stores your email; previously every attempt was rejected and silently did nothing, which is why new patrons never received their tier. Pledges whose Patreon webhook lands before you link are now queued and applied the moment you link. Carries 1.1.8.5 and earlier."
 }

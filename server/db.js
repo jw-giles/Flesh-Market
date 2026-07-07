@@ -128,6 +128,14 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS idx_fnh_fund_ts ON fund_nav_history(fund_id, ts);
     CREATE INDEX IF NOT EXISTS idx_players_patreon_email ON players(patreon_email);
     CREATE INDEX IF NOT EXISTS idx_players_patreon_member ON players(patreon_member_id);
+    CREATE TABLE IF NOT EXISTS pending_pledges (
+      member_id  TEXT PRIMARY KEY,
+      email      TEXT,
+      tier       INTEGER NOT NULL,
+      expires_at INTEGER,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pending_pledges_email ON pending_pledges(email);
     CREATE TABLE IF NOT EXISTS colony_state (
       id                  TEXT PRIMARY KEY,
       faction             TEXT NOT NULL DEFAULT 'coalition',
@@ -513,6 +521,31 @@ export function setPatreonTier(playerId, tier, memberId, expiresAt) {
 
 export function linkPatreonEmail(playerId, email) {
   stmt('UPDATE players SET patreon_email=?,updated_at=? WHERE id=?').run(email.toLowerCase().trim(), Date.now(), playerId);
+}
+
+// ─── Pending Patreon pledges ──────────────────────────────────────────────────
+// A pledge webhook can arrive before the patron has linked their email in-game.
+// We queue those here (keyed by Patreon member id) and drain them at link time.
+export function upsertPendingPledge(memberId, email, tier, expiresAt) {
+  if (!memberId) return;
+  stmt(`INSERT INTO pending_pledges(member_id,email,tier,expires_at,updated_at)
+        VALUES(?,?,?,?,?)
+        ON CONFLICT(member_id) DO UPDATE SET
+          email=excluded.email, tier=excluded.tier,
+          expires_at=excluded.expires_at, updated_at=excluded.updated_at`)
+    .run(memberId, email ? email.toLowerCase().trim() : null, tier, expiresAt || null, Date.now());
+}
+export function getPendingPledgeByEmail(email) {
+  if (!email) return null;
+  return stmt('SELECT * FROM pending_pledges WHERE email=? COLLATE NOCASE').get(email.toLowerCase().trim()) || null;
+}
+export function deletePendingPledge(memberId) {
+  if (!memberId) return;
+  stmt('DELETE FROM pending_pledges WHERE member_id=?').run(memberId);
+}
+export function clearPendingPledge(memberId, email) {
+  if (memberId) stmt('DELETE FROM pending_pledges WHERE member_id=?').run(memberId);
+  if (email)    stmt('DELETE FROM pending_pledges WHERE email=? COLLATE NOCASE').run(email.toLowerCase().trim());
 }
 
 // Revoke expired Patreon tiers (call periodically)

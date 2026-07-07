@@ -1197,11 +1197,13 @@ document.addEventListener('fm:authed', (ev) => {
     linkBtn.onclick = async () => {
       const email = emailInp.value.trim();
       if (!email || !email.includes('@')) { hint.textContent='Enter a valid email.'; hint.style.color='#ff6b6b'; return; }
+      if (!window.FM_TOKEN) { hint.textContent='Log in first.'; hint.style.color='#ff6b6b'; return; }
       linkBtn.disabled = true;
       linkBtn.textContent = '…';
       try {
         const r = await fetch('/api/patreon/link', {
-          method:'POST', headers:{'Content-Type':'application/json'},
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-auth-token': window.FM_TOKEN},
           body: JSON.stringify({email})
         });
         const d = await r.json();

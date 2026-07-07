@@ -35,6 +35,7 @@ import {
   saveLimitOrder as dbSaveLimitOrder, deleteLimitOrder as dbDeleteLimitOrder,
   deletePlayerLimitOrders as dbDeletePlayerLimitOrders, getAllLimitOrders as dbGetAllLimitOrders,
   setPatreonTier, linkPatreonEmail,
+  upsertPendingPledge, getPendingPledgeByEmail, deletePendingPledge, clearPendingPledge,
   revokeExpiredPatreon, creditPassiveIncome, DEV_INCOME_EVERY30,
   countCEOs, TIERS, CEO_MAX,
   initHedgeFund, setupFundTransactions,
@@ -2611,6 +2612,20 @@ app.post('/api/patreon/link',(req,res)=>{
     const email=String(req.body?.email||'').trim().toLowerCase();
     if(!email||!email.includes('@')) return res.status(400).json({ok:false,error:'invalid_email'});
     linkPatreonEmail(p.id,email);
+    // If a pledge webhook arrived before this link, apply it now.
+    const pending = getPendingPledgeByEmail(email);
+    if (pending && pending.tier > 0) {
+      const fresh = getPlayer(p.id); // re-read so the stored email is reflected
+      const freshExpiry = Date.now() + 40*24*60*60*1000;
+      const r = grantPatreonTier(fresh, pending.tier, pending.member_id, freshExpiry);
+      if (r.granted) {
+        deletePendingPledge(pending.member_id);
+        return res.json({ok:true, tier:pending.tier, message:`Patreon email linked. ${TIERS[pending.tier]?.name||'Tier'} activated.`});
+      }
+      if (r.reason === 'ceo_slots_full') {
+        return res.json({ok:true, tier:0, message:'Email linked. CEO slots are currently full, so contact an admin to activate.'});
+      }
+    }
     res.json({ok:true,message:'Patreon email linked.'});
   }catch(e){res.status(500).json({ok:false,error:String(e)});}
 });
@@ -2635,6 +2650,34 @@ function parseTierFromPatreon(data) {
     if (cents >= 500)   return 1;
   } catch(e) {}
   return 0;
+}
+
+// Apply a Patreon tier to an already-resolved player: set tier + member id + expiry,
+// notify, sync guild membership, and grant this month's spins if not yet given.
+// Shared by the webhook and the link-time drain so the two paths cannot diverge.
+// Returns {granted:boolean, reason?:string}. Tier 3 (CEO) respects CEO_MAX.
+// (Function declaration, so it is hoisted and callable from routes defined above.)
+function grantPatreonTier(player, tier, memberId, expiresAt) {
+  if (!player || !tier) return { granted:false, reason:'no_player_or_tier' };
+  if (tier === 3 && (player.patreon_tier || 0) < 3 && countCEOs() >= CEO_MAX) {
+    return { granted:false, reason:'ceo_slots_full' };
+  }
+  setPatreonTier(player.id, tier, memberId, expiresAt);
+  broadcastToPlayer(player.id, {type:'patreon', data:{tier, tierName:TIERS[tier]?.name, message:`Patreon tier activated: ${TIERS[tier]?.name}!`}});
+  if (tier >= 2) { syncFundMembership(); broadcastFundUpdate(); }
+  try {
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+    const spinRow = getSlotRecord(player.id);
+    if ((spinRow.last_monthly_grant || 0) < monthStart) {
+      const spins = grantMonthlySpins(player.id, tier);
+      if (spins > 0) broadcastToPlayer(player.id, { type:'spin_grant', data:{ spins, reason:`Patreon ${TIERS[tier]?.name||'tier'} spin grant` }});
+      if (tier >= 3) {
+        const rr = useSpinAndDrop(player.id, 'epic');
+        if (rr.ok) broadcastToPlayer(player.id, { type:'spin_result', data:{ item:rr.item, invId:rr.invId, rarity:rr.item.rarity, rarityColor:RARITY_CONFIG[rr.item.rarity]?.color, spinsRemaining:getSlotRecord(player.id).spins_remaining, guaranteed:true }});
+      }
+    }
+  } catch(_) {}
+  return { granted:true };
 }
 
 app.post('/api/patreon/webhook', async (req, res) => {
@@ -2662,33 +2705,24 @@ app.post('/api/patreon/webhook', async (req, res) => {
       if (player) {
         setPatreonTier(player.id, 0, null, null);
         broadcastToPlayer(player.id, {type:'patreon', data:{tier:0,message:'Your Patreon membership has ended.'}});
+      } else {
+        clearPendingPledge(memberId, email); // cancelled before ever linking: drop the queued grant
       }
       return res.json({ok:true});
     }
     if (event === 'members:pledge:create' || event === 'members:pledge:update' || event === 'members:create' || event === 'members:update') {
       const tier = parseTierFromPatreon(member);
       if (!tier) return res.json({ok:true});
-      if (tier === 3 && countCEOs() >= CEO_MAX) return res.status(409).json({ok:false,error:'ceo_slots_full'});
       const expiresAt = Date.now() + 40*24*60*60*1000; // 40 days, buffer for late Patreon billing
       let player = memberId ? getPlayerByPatreonMemberId(memberId) : null;
       if (!player && email) player = getPlayerByPatreonEmail(email);
       if (player) {
-        setPatreonTier(player.id, tier, memberId, expiresAt);
-        broadcastToPlayer(player.id, {type:'patreon', data:{tier, tierName:TIERS[tier]?.name, message:`Patreon tier activated: ${TIERS[tier]?.name}!`}});
-        if (tier >= 2) { syncFundMembership(); broadcastFundUpdate(); }
-        // Immediately grant this month's spins if not yet received
-        try {
-          const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
-          const spinRow = getSlotRecord(player.id);
-          if ((spinRow.last_monthly_grant || 0) < monthStart) {
-            const spins = grantMonthlySpins(player.id, tier);
-            if (spins > 0) broadcastToPlayer(player.id, { type:'spin_grant', data:{ spins, reason:`Patreon ${TIERS[tier]?.name||'tier'} spin grant` }});
-            if (tier >= 3) {
-              const rr = useSpinAndDrop(player.id, 'epic');
-              if (rr.ok) broadcastToPlayer(player.id, { type:'spin_result', data:{ item:rr.item, invId:rr.invId, rarity:rr.item.rarity, rarityColor:RARITY_CONFIG[rr.item.rarity]?.color, spinsRemaining:getSlotRecord(player.id).spins_remaining, guaranteed:true }});
-            }
-          }
-        } catch(_) {}
+        const r = grantPatreonTier(player, tier, memberId, expiresAt);
+        if (!r.granted && r.reason === 'ceo_slots_full') return res.status(409).json({ok:false,error:'ceo_slots_full'});
+        clearPendingPledge(memberId, email); // in case an earlier miss was queued for this member
+      } else {
+        // No player has claimed this email yet. Queue it; /api/patreon/link drains it on link.
+        upsertPendingPledge(memberId, email, tier, expiresAt);
       }
       return res.json({ok:true});
     }

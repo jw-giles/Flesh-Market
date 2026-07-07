@@ -1,3 +1,28 @@
+# FleshMarket v1.1.8.6 - MANIFEST
+
+## v1.1.8.6 changes (Patreon linking fix + pledge reconciliation; CLIENT + SERVER + DB)
+
+```
+client/
+  assets/funds.js   /api/patreon/link fetch now sends x-auth-token: FM_TOKEN
+                    (was unauthenticated -> 401 -> email never stored); also
+                    guards on a missing session.
+  version.json      1.1.8.5 -> 1.1.8.6
+server/
+  db.js             + pending_pledges table (member_id PK, email, tier, expires_at)
+                    + upsertPendingPledge / getPendingPledgeByEmail /
+                      deletePendingPledge / clearPendingPledge
+  server.js         + grantPatreonTier() helper (single shared grant path)
+                    webhook create/update: grant via helper, queue pledge on miss
+                    webhook delete: clear queued row on miss
+                    /api/patreon/link: drain queued pledge after storing email
+                    + imports for the 4 new db functions
+```
+
+Client, server, DB. Hard-refresh after deploy. pending_pledges is additive (CREATE IF NOT EXISTS); no migration step.
+
+---
+
 # FleshMarket v1.1.8.5 - MANIFEST
 
 ## v1.1.8.5 changes (FRS defaults to ENABLED; DB)
