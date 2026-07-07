@@ -136,6 +136,15 @@ export function initDB() {
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_pending_pledges_email ON pending_pledges(email);
+    CREATE TABLE IF NOT EXISTS price_cycles (
+      company_id  INTEGER NOT NULL,
+      cycle_ts    INTEGER NOT NULL,
+      symbol      TEXT,
+      start_price REAL NOT NULL,
+      end_price   REAL NOT NULL,
+      PRIMARY KEY (company_id, cycle_ts)
+    );
+    CREATE INDEX IF NOT EXISTS idx_price_cycles_ts ON price_cycles(cycle_ts);
     CREATE TABLE IF NOT EXISTS colony_state (
       id                  TEXT PRIMARY KEY,
       faction             TEXT NOT NULL DEFAULT 'coalition',
@@ -546,6 +555,24 @@ export function deletePendingPledge(memberId) {
 export function clearPendingPledge(memberId, email) {
   if (memberId) stmt('DELETE FROM pending_pledges WHERE member_id=?').run(memberId);
   if (email)    stmt('DELETE FROM pending_pledges WHERE email=? COLLATE NOCASE').run(email.toLowerCase().trim());
+}
+
+// ─── Per-cycle price history ──────────────────────────────────────────────────
+// One row per company per 30-min market cycle: the price at cycle open (start) and
+// at cycle close (end). Keyed on the stable company_id (NOT the symbol glyph) so a
+// symbol reshuffle can't splice two firms' histories together. INSERT OR IGNORE so a
+// double-fired boundary is a no-op. Never pruned by default; retention is a view knob.
+export function insertPriceCycle(companyId, cycleTs, symbol, startP, endP) {
+  if (companyId == null || cycleTs == null) return;
+  stmt(`INSERT OR IGNORE INTO price_cycles(company_id,cycle_ts,symbol,start_price,end_price)
+        VALUES(?,?,?,?,?)`).run(companyId, cycleTs, symbol || null, startP, endP);
+}
+export function getPriceCycles(companyId, sinceTs, limit = 8000) {
+  return stmt(`SELECT cycle_ts AS t, start_price AS s, end_price AS e
+               FROM price_cycles
+               WHERE company_id=? AND cycle_ts>=?
+               ORDER BY cycle_ts DESC
+               LIMIT ?`).all(companyId, sinceTs || 0, limit);
 }
 
 // Revoke expired Patreon tiers (call periodically)

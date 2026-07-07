@@ -1,7 +1,7 @@
 {
-  "version": "1.1.8.6",
+  "version": "1.1.8.7",
   "built": "2026-07-07T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.8.6",
-  "notes": "Patreon linking fix. The in-game 'Link Account' button now sends your auth token, so linking actually stores your email; previously every attempt was rejected and silently did nothing, which is why new patrons never received their tier. Pledges whose Patreon webhook lands before you link are now queued and applied the moment you link. Carries 1.1.8.5 and earlier."
+  "patch": "1.1.8.7",
+  "notes": "New History button next to the Watchlist button in the Companies panel. Click it to open a browser that lists all tickers; pick one to see the start and end price of each 30-minute market cycle for the last ~5 months, newest first. The archive starts empty on this update and fills forward one row per ticker per cycle, so it reaches full 5-month depth about five months from now. Carries 1.1.8.6 and earlier."
 }

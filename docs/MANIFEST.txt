@@ -1,3 +1,28 @@
+# FleshMarket v1.1.8.7 - MANIFEST
+
+## v1.1.8.7 changes (Cycle price history tab; CLIENT + SERVER + DB)
+
+```
+client/
+  index.html                + cycle-history.js script include
+  assets/cycle-history.js   NEW. Injects a "History" button into the watchlist bar
+                            (Companies panel) and opens an overlay: ticker filter
+                            list + per-cycle start/end table (last ~5 months,
+                            newest-first). Listens on fm_ws_msg.
+  version.json              1.1.8.6 -> 1.1.8.7
+server/
+  db.js                     + price_cycles table (PK company_id, cycle_ts; index cycle_ts)
+                            + insertPriceCycle / getPriceCycles
+  server.js                 30-min _passiveIncomeTick records one row per company
+                            (per-cycle _cycleStart / _cycleStartTs accumulator)
+                            + cycle_history WS handler (mirrors chart)
+                            + imports for the 2 new db functions
+```
+
+Client, server, DB. Hard-refresh after deploy. price_cycles is additive (CREATE IF NOT EXISTS), empty on upgrade, fills forward one row per ticker per 30-min cycle.
+
+---
+
 # FleshMarket v1.1.8.6 - MANIFEST
 
 ## v1.1.8.6 changes (Patreon linking fix + pledge reconciliation; CLIENT + SERVER + DB)

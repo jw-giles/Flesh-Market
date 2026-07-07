@@ -36,6 +36,7 @@ import {
   deletePlayerLimitOrders as dbDeletePlayerLimitOrders, getAllLimitOrders as dbGetAllLimitOrders,
   setPatreonTier, linkPatreonEmail,
   upsertPendingPledge, getPendingPledgeByEmail, deletePendingPledge, clearPendingPledge,
+  insertPriceCycle, getPriceCycles,
   revokeExpiredPatreon, creditPassiveIncome, DEV_INCOME_EVERY30,
   countCEOs, TIERS, CEO_MAX,
   initHedgeFund, setupFundTransactions,
@@ -6823,6 +6824,18 @@ wss.on('connection',(ws,req)=>{
 
     if(msg.type==='chart'){const s=String(msg.symbol||'').toUpperCase(),c=companies.find(x=>x.symbol===s);if(c){const _hl=(actor&&hasMarketUpgrade(actor.id,'price_history'))?400:199;const bars=c.ohlc.slice(-_hl);if(c._bar)bars.push({t:c._bar.t,o:c._bar.o,h:c._bar.h,l:c._bar.l,c:c._bar.c,v:0});ws.send(JSON.stringify({type:'chart',data:{symbol:s,ohlc:bars}}));}}
 
+    // Per-cycle price history (start/end per 30-min cycle), last ~5 months, newest-first.
+    if(msg.type==='cycle_history'){
+      const s=String(msg.symbol||'').toUpperCase();
+      const c=companies.find(x=>x.symbol===s);
+      let cycles=[];
+      if(c){
+        const since=Date.now()-152*24*60*60*1000; // ~5 months
+        try{ cycles=getPriceCycles(c.id, since, 8000); }catch(e){ console.error('[cycle_history]', e); }
+      }
+      ws.send(JSON.stringify({type:'cycle_history', data:{ symbol:s, cycles }}));
+    }
+
     // ── Market upgrades: list / buy ────────────────────────────────────────────
     function _muCatalog(pid){ const owned=getMarketUpgrades(pid); return { catalog:Object.entries(MARKET_UPGRADE_CATALOG).map(([id,d])=>({id,name:d.name,desc:d.desc,price:d.price,owned:owned.includes(id)})), owned }; }
     if (msg.type === 'market_upgrades_list') {
@@ -8351,6 +8364,21 @@ const _passiveIncomeTick = () => {
       const snap = snapshotAllHoldings();
       console.log(`[HoldingSnapshot] cycle=${snap.cycle} rows=${snap.snapshotted}`);
     } catch(e) { console.error('[HoldingSnapshot]', e); }
+
+    // Record per-cycle start/end price for every company (durable price history).
+    // start = the price captured at the previous boundary; end = the price right now.
+    // The first cycle after a restart has no prior boundary, so we seed and skip one write.
+    try {
+      const _cycleTsNow = Date.now();
+      for (const c of companies) {
+        const endP = Number(c.price);
+        if (c.id != null && typeof c._cycleStart === 'number' && typeof c._cycleStartTs === 'number' && isFinite(endP)) {
+          insertPriceCycle(c.id, c._cycleStartTs, c.symbol, c._cycleStart, endP);
+        }
+        c._cycleStart   = isFinite(endP) ? endP : c._cycleStart;
+        c._cycleStartTs = _cycleTsNow;
+      }
+    } catch(e) { console.error('[PriceCycle]', e); }
 
     // Rotate hot stocks — 10 new movers each cycle
     try { rotateHotStocks(); } catch(e) { console.error('[Hot Stocks]', e); }

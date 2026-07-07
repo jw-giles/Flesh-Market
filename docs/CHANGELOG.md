@@ -4,6 +4,20 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.8.7 (2026-07-07) - Cycle price history tab (CLIENT + SERVER + DB)
+
+Client, server, and DB. Hard-refresh after deploy. **DB adds a `price_cycles` table on boot** (additive, `CREATE IF NOT EXISTS`). The table starts empty and fills forward one row per company per 30-min cycle, so it reaches ~5 months of depth about five months after deploy. There is nothing to backfill; the only prior price series is the ~33-minute in-memory 5s ring.
+
+New "History" button beside the Watchlist button in the Companies panel. Click it to open an overlay listing all tickers; pick one to see the start and end price of each 30-minute market cycle for the last ~5 months, newest first, with per-cycle change %.
+
+- **Server** (`db.js`): `price_cycles(company_id, cycle_ts, symbol, start_price, end_price)`, PK `(company_id, cycle_ts)`, index on `cycle_ts`. Keyed on the stable company_id, NOT the symbol glyph, so a symbol reshuffle cannot splice two firms' histories together. Functions `insertPriceCycle` (INSERT OR IGNORE) and `getPriceCycles` (window + newest-first).
+- **Server** (`server.js`): the existing 30-min `_passiveIncomeTick` now records one row per company. Each company carries a per-cycle accumulator (`_cycleStart` / `_cycleStartTs`) seeded at every boundary; at the next boundary it writes {open time, start price, end price}. Open of cycle N = close of N-1. A restart drops the one partial cycle in progress, same failure mode as the holding snapshot. A `cycle_history` WS handler (mirrors the `chart` handler) returns the last ~5 months for a symbol.
+- **Client** (`cycle-history.js`, new): injects the History button into the watchlist bar and opens an overlay (ticker filter list + per-cycle start/end table). Self-contained: it builds its own button and overlay and listens on the `fm_ws_msg` event, so it does not touch the center tab strip or the shared `showTab` logic. Retention is non-destructive; the 5-month bound is a view/query window, not a delete. Physical pruning was deliberately not added (193 MB/yr is noise; deletion is irreversible).
+
+Note: the "History" button label is distinct from the existing `price_history` market upgrade ("Extended Price History," which extends live-chart depth). Rename either freely.
+
+---
+
 ## v1.1.8.6 (2026-07-07) - Patreon linking fix + pledge reconciliation (CLIENT + SERVER + DB)
 
 Client, server, and DB. Hard-refresh after deploy. **DB adds a `pending_pledges` table on boot** (additive, `CREATE IF NOT EXISTS`).
