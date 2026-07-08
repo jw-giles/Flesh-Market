@@ -11,3 +11,4 @@ server/fleshmarket.db
 node_modules/
 npm-debug.log*
 *.log
+server/package-lock.json
