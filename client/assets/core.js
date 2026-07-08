@@ -1850,15 +1850,25 @@ ws.addEventListener('message', (ev)=>{
   }
   if (msg.type === 'company_added' && msg.data && msg.data.symbol) {
     // A new ticker (e.g. a freshly Index-listed Capital House) — add it live so
-    // already-connected clients see it without reconnecting.
+    // already-connected clients see it without reconnecting. Also reused to push a
+    // metadata update (name/description) for an existing fund ticker on house edit.
     try {
-      if (!TICKERS.find(t => t.symbol === msg.data.symbol)) {
+      const existing = TICKERS.find(t => t.symbol === msg.data.symbol);
+      if (!existing) {
         TICKERS.push({ id: msg.data.id, name: msg.data.name, symbol: msg.data.symbol,
                        price: msg.data.price || 0, sector: msg.data.sector || 7, pct: 0,
-                       fundTicker: !!msg.data.fundTicker });
+                       fundTicker: !!msg.data.fundTicker, desc: msg.data.desc || '' });
         TICKERS.sort((a, b) => String(a.name).localeCompare(String(b.name)));
         renderTickers();
         window.TICKERS = TICKERS;
+      } else {
+        // Update mutable metadata in place (name/description); leave live price/pct alone.
+        if (msg.data.name) existing.name = msg.data.name;
+        if (msg.data.desc != null) existing.desc = msg.data.desc;
+        if (msg.data.fundTicker != null) existing.fundTicker = !!msg.data.fundTicker;
+        window.TICKERS = TICKERS;
+        // The detail panel re-renders on the next tick (market-tools hooks 'tick'), so the
+        // updated name/description appears within ~1s without a direct call here.
       }
     } catch (e) {}
   }

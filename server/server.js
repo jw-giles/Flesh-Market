@@ -253,6 +253,7 @@ function registerFundTicker(listing) {
     _isAnchored: true,            // use the anchor-pull branch, skip anti-runaway gravity
     _fundTicker: true,            // marks this as a fund ticker (split guard, news/short exclusion)
     _fundId: listing.fund_id,
+    _fundDesc: (getFund(listing.fund_id)?.description) || '',  // house description, shown on the stock detail panel
   };
   companies.push(c);
   FUND_TICKERS.set(listing.fund_id, { fundId: listing.fund_id, companyId: listing.company_id, symbol: listing.symbol });
@@ -4030,7 +4031,7 @@ app.post('/api/funds/:id/list', (req, res) => {
     pushHeadline(`${fund.name} lists on the Index as ${symbol} at Ƒ${listPrice}/share`, 'good', null, 'flesh');
     broadcast({ type:'index_listed', data: fundListingWire(getFundListing(fund.id)) });
     // New ticker must reach every client's companies list.
-    broadcast({ type:'company_added', data:{ id:companyId, name:fund.name, symbol, price:(ticker?ticker.price:listPrice), sector:7, hq:null, fundTicker:true }});
+    broadcast({ type:'company_added', data:{ id:companyId, name:fund.name, symbol, price:(ticker?ticker.price:listPrice), sector:7, hq:null, fundTicker:true, desc:(fund.description||'') }});
 
     res.json({ ok:true, symbol, companyId, listPrice, floatShares, feeburned: INDEX_LIST_FEE, floatProceeds: proceeds });
   } catch(e) { console.error('[index list]', e); res.status(500).json({ ok:false, error:String(e) }); }
@@ -4096,6 +4097,17 @@ app.post('/api/funds/:id/edit', (req, res) => {
     savePlayerFn(p);
 
     updateFundInfo(fund.id, newName, newDesc);
+    // If this house is listed, keep the ticker's cached description + name in sync and
+    // push the change so open detail panels update without a reconnect.
+    try {
+      const reg = FUND_TICKERS.get(fund.id);
+      if (reg) {
+        const tc = companies.find(x => x.id === reg.companyId);
+        if (tc) { tc._fundDesc = newDesc || ''; tc.name = newName; }
+        broadcast({ type:'company_added', data:{ id:reg.companyId, name:newName, symbol:reg.symbol,
+          price:(tc?tc.price:0), sector:7, hq:null, fundTicker:true, desc:(newDesc||'') }});
+      }
+    } catch(_) {}
     broadcastFundDetail(fund.id);
     res.json({ ok:true, name: newName, description: newDesc });
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
@@ -6348,7 +6360,7 @@ wss.on('connection',(ws,req)=>{
     ws.send(JSON.stringify({type:'welcome',data:{id:null,name:'Guest',cash:START_CASH}}));
   }
 
-  ws.send(JSON.stringify({type:'init',data:{companies:companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector,hq:c.hq||null})).sort((a,b)=>a.name.localeCompare(b.name)),headlines:headlines.slice(-30),leaderboard:_leaderboardSnapshot||getLeaderboard(companies),breaking:(breakingNews?{active:true,text:breakingNews.text,tone:breakingNews.tone}:{active:false})}}));
+  ws.send(JSON.stringify({type:'init',data:{companies:companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector,hq:c.hq||null,fundTicker:c._fundTicker?true:undefined,desc:c._fundTicker?(c._fundDesc||''):undefined})).sort((a,b)=>a.name.localeCompare(b.name)),headlines:headlines.slice(-30),leaderboard:_leaderboardSnapshot||getLeaderboard(companies),breaking:(breakingNews?{active:true,text:breakingNews.text,tone:breakingNews.tone}:{active:false})}}));
 
   ws.on('message',(buf)=>{
     let msg; try{msg=JSON.parse(buf.toString());}catch{return;}

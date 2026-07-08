@@ -14,8 +14,10 @@ client/
   assets/funds.js            + owner-panel Index render (gate/eligibility readout,
                                listed status w/ premium) and _fmListIndex/_fmDelistIndex
   assets/tutorial.js         + INDEX FUNDS slide (Capital Houses tab)
+  assets/market-tools.js     + house description subtitle on the stock detail panel
+                               for fund tickers (HTML-escaped)
   assets/core.js             + company_added / index_delisted handling: live add/remove
-                               of a listed ticker in TICKERS without reconnect
+                               of a listed ticker in TICKERS + metadata update on edit
   version.json               1.1.8.8 -> 1.1.9.0
 server/
   db.js                      + fund_listings (PK fund_id; symbol UNIQUE; company_id

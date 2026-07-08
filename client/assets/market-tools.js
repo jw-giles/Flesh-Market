@@ -452,6 +452,7 @@ function updateCompanyDetail() {
           <span style="font-size:1rem;font-weight:700;color:#7fc090">${sym}</span>
           <span style="font-size:.85rem;color:#888">${t.name || ''}</span>
         </div>
+        ${t.fundTicker ? `<div style="font-size:.72rem;color:#b8893a;font-style:italic;margin-bottom:4px">${t.desc ? String(t.desc).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : 'Player-run Capital House, priced off NAV per share.'}</div>` : ''}
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px">
           <span style="color:${sectorColor};border:1px solid ${sectorColor}44;padding:1px 6px;border-radius:3px;font-size:.68rem">${sector}</span>
           <span style="color:#f0b454;font-size:.68rem" title="Headquarters colony">HQ: ${hq}</span>
