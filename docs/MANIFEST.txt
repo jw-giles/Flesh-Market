@@ -1,3 +1,43 @@
+# FleshMarket v1.1.9.0 - MANIFEST
+
+## v1.1.9.0 changes (The Index: Capital Houses as tradeable tickers; CLIENT + SERVER + DB)
+
+```
+client/
+  index.html                 + index-browser.js include; Index owner-panel markup
+                               (g-index-panel: list/delist controls + status)
+  assets/index-browser.js    NEW. "Index Funds" button injected beside History; overlay
+                               listing every listed house (price, NAV/share, premium/
+                               discount, float, manager) with click-through to chart.
+                               Listens on fm_ws_msg (index_listings / index_listed /
+                               index_delisted).
+  assets/funds.js            + owner-panel Index render (gate/eligibility readout,
+                               listed status w/ premium) and _fmListIndex/_fmDelistIndex
+  assets/tutorial.js         + INDEX FUNDS slide (Capital Houses tab)
+  assets/core.js             + company_added / index_delisted handling: live add/remove
+                               of a listed ticker in TICKERS without reconnect
+  version.json               1.1.8.8 -> 1.1.9.0
+server/
+  db.js                      + fund_listings (PK fund_id; symbol UNIQUE; company_id
+                               UNIQUE; float_shares, list_nav, list_price, listed_at)
+                             + listing CRUD, nextFundCompanyId, scaleFundLedgerShares
+                               (ledger only), scaleFundListingFloat (split only),
+                               getHoldersOfSymbol / getFloatOutstanding, FUND_TICKER_ID_BASE
+  server.js                  + Index config; FUND_TICKERS registry; anchor machinery
+                               (fundNavPerShare on fixed-tranche denom, updateFundAnchor,
+                               register/unregister/loadFundTickers); settleFundFloat;
+                               /api/funds/:id/list (point-in-time NAV>=500M gate) + /delist;
+                               disband float settlement; fund-aware 10:1 split branch
+                               (_fundTicker guard); short-open rejection for fund tickers;
+                               anchor retarget in 30-min loop; index_listings WS handler;
+                               fundDetailSnapshot.index block; company_added / index_listed
+                               / index_delisted broadcasts
+```
+
+Client, server, DB. Hard-refresh after deploy. fund_listings is additive (CREATE IF NOT EXISTS); no migration step. New company ids for fund tickers start at 20000.
+
+---
+
 # FleshMarket v1.1.8.8 - MANIFEST
 
 ## v1.1.8.8 changes (Cycle history date filter; CLIENT + SERVER)

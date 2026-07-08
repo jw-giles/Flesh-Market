@@ -4,6 +4,32 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.9.0 (2026-07-08) - The Index: Capital Houses as tradeable tickers (CLIENT + SERVER + DB)
+
+Client, server, and DB. Hard-refresh after deploy. **DB adds a `fund_listings` table on boot** (additive, `CREATE IF NOT EXISTS`; starts empty). A restart applies the schema; no migration step.
+
+A player-run tier on top of the NPC market. A Capital House whose NAV is at or above Ƒ500M can list its NAV-per-share as a real ticker on the main tape, so lower-capital players can invest in a manager's book without joining the house. New **Index Funds** button beside the History button opens a browser of every listed house (price, NAV/share, premium/discount, float, manager) with click-through to the normal chart.
+
+**The instrument.** A listed house becomes a real entry in the `companies` array (company id >= 20000, kept clear of the 0..N index range and the 999x specials, so `price_cycles` can never splice fund history onto a regular ticker). It rides the existing SWT/BRNC anchored-stock path (`_isAnchored`), but the anchor target is LIVE `log(NAV / totalShares)`, retargeted on every NAV snapshot (fund trade / deposit / withdraw / 30-min loop). beta 0, Misc sector, excluded from news and dividends: it moves only for two reasons, manager NAV changing and players trading, so premium and discount to book value are the visible sentiment layer.
+
+**Shared-pool structure (the anti-rug).** Member ledger shares and the public float are claims on ONE NAV pool; the denominator for NAV/share is `internal ledger shares + the fixed 100k float tranche`. Consequences, all verified in isolation: (1) a secondary buyer does not dilute NAV/share (denominator is the fixed tranche, not live-outstanding); (2) torching NAV to hurt float holders costs the owner a multiple of the damage (owner's >=500M stake vs a float capped at 20% of NAV) - arithmetic suicide, enforced by structure not by rule; (3) secondary trades never touch fund cash (buyer cash voids like any ticker), so there is no external pot to drain.
+
+**Listing gate is point-in-time.** Owner-only, `POST /api/funds/:id/list`, requires house NAV >= Ƒ500M at listing time. No trailing-history requirement: the shared-pool structure already blocks a deposit-list-withdraw rug on its own (withdrawal is NAV/share-neutral - pulling X cash burns exactly X/NAVshare ledger shares - and a lister can only withdraw against their own ledger claim, never the float's backing, so float holders are never harmed and the lister comes out down the fee + slippage + dilution). A trailing window would only have been a legibility filter, not a safety mechanism, so it was dropped. Ƒ25M fee paid from house cash, burned to FRS. The internal ledger is rescaled so NAV/(ledger'+float) lands at ~Ƒ1,000 (float untouched by this rescale). The 100k float is sold into the fresh ticker: the house eats the full impact-model slippage (a 100k x Ƒ1,000 notional slams the 12% per-order cap, so the float opens at ~12% discount to book), proceeds land in the pool as NAV where public holders own their claim. No paid re-issuance - the float is fixed.
+
+**Split.** A fund ticker crossing Ƒ5,000 renumbers 10:1 (not the generic 1:1000 - a four-figure NAV/share ticker renumbering to Ƒ5 would sit far under its anchor and get yanked). The split scales the public float (holdings table), the internal ledger (`fund_memberships.shares`), AND the float figure on the listing row by the same ratio, in step, so NAV/totalShares never desyncs from the renumbered price. Regular tickers keep the unchanged 1:1000 path. Guarded by a `_fundTicker` flag.
+
+**Exits (the one hard rule).** Delist (`POST /api/funds/:id/delist`) and disband both buy out ALL public float holders at NAV/share from house cash BEFORE any member payout, DB-driven so offline holders are included. If house cash can't cover the buyout, the exit is blocked until holdings are sold to cash. Disband settles the float first, then pays members at current share value as before.
+
+**No shorting fund tickers** (v1): shorting your own house before tanking its NAV is the one torch play the shared pool doesn't neutralize; the short-open branch rejects fund tickers.
+
+- **Server** (`db.js`): `fund_listings(fund_id PK, symbol, company_id, float_shares, list_nav, list_price, listed_at)`. Accessors: listing CRUD, `nextFundCompanyId`, `scaleFundLedgerShares` (ledger only), `scaleFundListingFloat` (split only), `getHoldersOfSymbol`/`getFloatOutstanding` (offline-inclusive float settlement).
+- **Server** (`server.js`): Index config constants; `FUND_TICKERS` registry; anchor machinery (`fundNavPerShare` on the fixed-tranche denominator, `updateFundAnchor`, `registerFundTicker`/`unregisterFundTicker`, `loadFundTickers` on boot); `settleFundFloat`; list/delist endpoints (point-in-time NAV gate); disband settlement; fund-aware split branch; short-open rejection; anchor retarget in the 30-min loop; `index_listings` WS handler; listing status block in `fundDetailSnapshot`; `company_added`/`index_listed`/`index_delisted` broadcasts.
+- **Client** (`index-browser.js`, new): Index Funds button (injected beside History) + listings overlay, click-through to chart. (`funds.js`): owner-panel Index list/delist controls with NAV-gate/eligibility readout and `_fmListIndex`/`_fmDelistIndex` handlers. (`core.js`): live add/remove of a listed ticker in `TICKERS` on `company_added`/`index_delisted` so already-connected clients see it without reconnect. (`tutorial.js`): new INDEX FUNDS slide (on the Capital Houses tab). (`index.html`): Index owner-panel markup + `index-browser.js` include. The in-game button and browser are titled "Index Funds".
+
+Known, pre-existing (NOT introduced here): the limit-order restore block references `limitOrders` before its `const` declaration (temporal dead zone), so open limit orders are not restored across a restart. Latent in the codebase before this patch; flagged for a later fix.
+
+---
+
 ## v1.1.8.8 (2026-07-08) - Cycle history date filter (CLIENT + SERVER)
 
 Client and server. Hard-refresh after deploy. No DB schema change; `getPriceCycles` gains an upper-bound parameter (single call site, updated together).

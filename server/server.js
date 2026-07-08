@@ -52,6 +52,10 @@ import {
   getFundCashById, setFundCashById, addFundCash,
   getFundPortfolio, setFundPortfolioQty, setFundPortfolioBuy, getTotalFundSharesById,
   getFundNAVById, applyFundSavingsInterest,
+  getFundListing, getFundListingBySymbol, getAllFundListings, isFundListed,
+  fundSymbolTaken, nextFundCompanyId, createFundListing, deleteFundListing,
+  scaleFundLedgerShares, scaleFundListingFloat,
+  getHoldersOfSymbol, getFloatOutstanding, FUND_TICKER_ID_BASE,
   getPlayerFundStake, getPlayerFundMemberships,
   fundDepositFn, fundWithdrawFn,
   getFundActivity, logFundActivity, getLastFundTradeTs,
@@ -176,7 +180,182 @@ function snapshotFund(fundId) {
     const totalShares = getTotalFundSharesById(fundId);
     const spp         = totalShares > 0 && nav > 0 ? nav / totalShares : 1;
     recordFundNAV(fundId, nav, spp, totalShares);
+    // If this fund is listed, retarget its ticker's anchor to the fresh NAV/share.
+    if (FUND_TICKERS.has(fundId)) updateFundAnchor(fundId, priceMap);
   } catch(e) {}
+}
+
+// ─── Fund-ticker machinery ────────────────────────────────────────────────────
+// Live NAV per share for a listed fund (the ticker's anchor target). The denominator
+// is the ONE shared claim base: internal member-ledger shares PLUS the FIXED public
+// float tranche minted at listing (float_shares on the listing row, scaled by any
+// split). It is the fixed tranche, NOT live-outstanding, so a secondary buyer moving
+// float between "held by house" and "held by player" does not change book value per
+// share — only NAV changes (manager performance) and the ledger (member deposits) do.
+// Member value and float value both derive from this single figure: no double-count,
+// and the owner's ledger stake and a small buyer's tape share are claims on the same
+// per-share book value, which is what makes rugging arithmetic suicide.
+function fundTotalClaimShares(fundId) {
+  const ledger = getTotalFundSharesById(fundId) || 0;
+  const listing = getFundListing(fundId);
+  const float = listing ? (Number(listing.float_shares) || 0) : 0;
+  return ledger + float;
+}
+function fundNavPerShare(fundId, priceMap) {
+  const nav = getFundNAVById(fundId, priceMap || buildPriceMap());
+  const denom = fundTotalClaimShares(fundId);
+  if (!(denom > 0) || !(nav > 0)) return null;
+  return nav / denom;
+}
+
+// Point a listed fund ticker's anchor at current NAV/share. The ticker still floats
+// on order flow (stepMarket applies the anchor as a pull, not a peg), so premium and
+// discount to NAV open and close; this only moves the CENTER of that gravity.
+function updateFundAnchor(fundId, priceMap) {
+  const reg = FUND_TICKERS.get(fundId);
+  if (!reg) return;
+  const c = companies.find(x => x.id === reg.companyId);
+  if (!c) return;
+  const nps = fundNavPerShare(fundId, priceMap);
+  if (nps == null) return;
+  const lnNps = Math.log(Math.max(0.50, nps));
+  c._naturalCenter = lnNps;   // anchor pull target (see stepMarket anchored branch)
+  c.ownTargetLnP   = lnNps;   // keep own-target in step so the two pulls agree
+  c._fundNps       = nps;     // cached for wire/UI (premium/discount readout)
+}
+
+// Register an existing listing as a live in-memory ticker (boot + fresh list).
+function registerFundTicker(listing) {
+  if (!listing) return null;
+  if (companies.find(x => x.id === listing.company_id || x.symbol === listing.symbol)) {
+    // Already present (double-register guard).
+    FUND_TICKERS.set(listing.fund_id, { fundId: listing.fund_id, companyId: listing.company_id, symbol: listing.symbol });
+    return companies.find(x => x.id === listing.company_id);
+  }
+  const lnP = Math.log(Math.max(0.50, listing.list_price));
+  const c = {
+    id: listing.company_id,
+    name: (getFund(listing.fund_id)?.name) || listing.symbol,
+    symbol: listing.symbol,
+    price: listing.list_price,
+    lnP, _spawnLnP: lnP,
+    ownTargetLnP: lnP,
+    _naturalCenter: lnP,
+    ownKappa: INDEX_ANCHOR_KAPPA,
+    targetDriftSigma: 0,          // the anchor is driven by NAV, not a random walk
+    targetSectorKappa: 0,         // no sector gravity
+    sigma: INDEX_SIGMA,
+    beta: 0,                      // immune to sector index moves
+    mu: 0,
+    offset: 0,
+    sector: 7,                    // Misc: excluded from dividends + sector news
+    ohlc: [],
+    _isAnchored: true,            // use the anchor-pull branch, skip anti-runaway gravity
+    _fundTicker: true,            // marks this as a fund ticker (split guard, news/short exclusion)
+    _fundId: listing.fund_id,
+  };
+  companies.push(c);
+  FUND_TICKERS.set(listing.fund_id, { fundId: listing.fund_id, companyId: listing.company_id, symbol: listing.symbol });
+  try { updateFundAnchor(listing.fund_id, buildPriceMap()); } catch(_) {}
+  return c;
+}
+
+// Remove a fund ticker from the live array (delist/disband). Any residual public
+// holdings are settled by the caller BEFORE this runs.
+function unregisterFundTicker(fundId) {
+  const reg = FUND_TICKERS.get(fundId);
+  if (!reg) return;
+  const idx = companies.findIndex(x => x.id === reg.companyId);
+  if (idx >= 0) companies.splice(idx, 1);
+  FUND_TICKERS.delete(fundId);
+}
+
+// Rebuild all fund tickers from the listings table on boot.
+function loadFundTickers() {
+  try {
+    const rows = getAllFundListings();
+    for (const r of rows) registerFundTicker(r);
+    if (rows.length) console.log(`[Index] ${rows.length} fund ticker(s) registered`);
+  } catch(e) { console.error('[Index load]', e); }
+}
+
+// Total public float outstanding for a fund ticker (DB-backed, includes offline).
+function fundFloatOutstanding(symbol) {
+  try { return getFloatOutstanding(symbol); } catch(_) { return 0; }
+}
+
+// Settle (buy out) ALL public float holders at NAV/share, paid from the fund's own
+// cash pool. DB-driven so offline holders are included. Returns { paid, shortfall,
+// holders } — shortfall > 0 means fund cash can't cover the buyout, and the caller
+// must block the exit (disband/delist) until the house liquidates holdings to cash.
+function settleFundFloat(fundId, symbol, navPerShare) {
+  const rows = getHoldersOfSymbol(symbol); // [{ player_id, qty }]
+  let needed = 0;
+  for (const r of rows) needed += (Number(r.qty) || 0) * navPerShare;
+  needed = Math.round(needed * 100) / 100;
+  const fundCash = getFundCashById(fundId);
+  if (needed > fundCash + 0.5) {
+    return { paid: 0, shortfall: Math.round((needed - fundCash) * 100) / 100, holders: rows.length };
+  }
+  for (const r of rows) {
+    const q = Number(r.qty) || 0;
+    if (q <= 0) continue;
+    const payout = Math.round(q * navPerShare * 100) / 100;
+    const p = getPlayer(r.player_id);
+    if (!p) continue;
+    p.cash = Math.round((Number(p.cash || 0) + payout) * 100) / 100;
+    p.holdings = p.holdings || {};
+    delete p.holdings[symbol];
+    if (p.basisC) delete p.basisC[symbol];
+    savePlayer(p);
+    try { broadcastToPlayer(p.id, { type:'income', data:{ base:payout, bonus:0, total:payout,
+      text:`+Ƒ${payout.toLocaleString()} float buyout, ${symbol} delisted @ Ƒ${navPerShare.toFixed(2)}/share` }}); } catch(_) {}
+    try { broadcastToPlayer(p.id, { type:'portfolio', data: snapshotPortfolio(p) }); } catch(_) {}
+  }
+  setFundCashById(fundId, Math.round((fundCash - needed) * 100) / 100);
+  return { paid: needed, shortfall: 0, holders: rows.length };
+}
+
+// Wire shape for the Index browser: one listed house.
+function fundListingWire(listing) {
+  const priceMap = buildPriceMap();
+  const c = companies.find(x => x.id === listing.company_id);
+  const nps = fundNavPerShare(listing.fund_id, priceMap);
+  const fund = getFund(listing.fund_id);
+  const price = c ? c.price : listing.list_price;
+  const premium = (nps && nps > 0) ? ((price - nps) / nps) * 100 : 0;
+  return {
+    fundId: listing.fund_id,
+    symbol: listing.symbol,
+    name: fund ? fund.name : listing.symbol,
+    manager: fund ? (getPlayer(fund.owner_id)?.name || '-') : '-',
+    price: Math.round(price * 100) / 100,
+    navPerShare: nps != null ? Math.round(nps * 100) / 100 : null,
+    premiumPct: Math.round(premium * 100) / 100,
+    floatShares: listing.float_shares,
+    nav: Math.round(getFundNAVById(listing.fund_id, priceMap) * 100) / 100,
+    listedAt: listing.listed_at,
+  };
+}
+function fundListingsSnapshot() { return getAllFundListings().map(fundListingWire); }
+
+// Generate a unique ticker symbol for a listing. Fund tickers carry a leading '$' so
+// they never collide with the base company roster (which uses A-Z only) and read as a
+// distinct instrument class in the feed. Falls back to a hash suffix on collision.
+function makeFundSymbol(fundName) {
+  const seen = (sym) => !!companies.find(x => x.symbol === sym) || fundSymbolTaken(sym);
+  const base = symbolize(fundName || 'FUND').slice(0, 3);
+  let sym = '$' + base;
+  if (!seen(sym)) return sym;
+  for (let i = 0; i < 26; i++) {
+    const alt = '$' + base.slice(0, 2) + String.fromCharCode(65 + i);
+    if (!seen(alt)) return alt;
+  }
+  // Last resort: hash-derived suffix.
+  let h = hashStr(fundName || 'FUND') % 900 + 100;
+  let cand = '$' + base.slice(0, 1) + h;
+  while (seen(cand)) { h = (h + 1) % 900 + 100; cand = '$' + base.slice(0, 1) + h; }
+  return cand;
 }
 
 // Shared fund trade execution — used by direct (executive/council) trades and by
@@ -364,6 +543,25 @@ function applyTapeMove(c, lnDelta) {
 // machine-gunning buys to grind the tape. Dev (flsh) and the guild (patreon) funds
 // are exempt — see executeFundTrade.
 const HOUSE_BUY_COOLDOWN_MS = parseInt(process.env.HOUSE_BUY_COOLDOWN_MS || '1800000', 10); // 30 min
+
+// ─── Index Listings (Capital House → tradeable ticker) ────────────────────────
+// A house lists its NAV-per-share as a real ticker. Gate is a TRAILING minimum NAV
+// (so deposit->list->withdraw can't sneak under the bar), fee is burned to FRS, and
+// the public float is a one-time fixed block sold into the tape at listing. Price
+// floats on player order flow but is anchored to log(NAV/totalShares); premium and
+// discount to that anchor are the visible sentiment layer. No paid re-issuance.
+const INDEX_LIST_MIN_NAV   = 500_000_000;              // NAV required to list (point-in-time)
+const INDEX_LIST_FEE       = 25_000_000;               // burned to FRS treasury on list
+const INDEX_FLOAT_SHARES   = 100_000;                  // public float minted at listing
+const INDEX_FLOAT_MAX_FRAC = 0.20;                     // float value capped at 20% of NAV
+const INDEX_TARGET_PRICE   = 1000;                     // ledger rescaled so NAV/share ~ this
+const INDEX_ANCHOR_KAPPA   = 0.00015;                  // pull toward NAV/share (SWT-strength)
+const INDEX_SIGMA          = 0.00045;                  // idiosyncratic vol of a fund ticker
+
+// Registered fund tickers, symbol -> { fundId, companyId }. Rebuilt from the
+// fund_listings table on boot; kept in sync on list/delist. Used to recompute each
+// fund ticker's anchor to live NAV/share on every snapshot.
+const FUND_TICKERS = new Map();
 
 // ── News-as-driver: a headline move splits into an instant gap + decaying drift ──
 // The gap lands the moment the headline prints, so reading the public feed gives no
@@ -1860,6 +2058,10 @@ if (BRNC_COMPANY.price > 5000 || !isFinite(BRNC_COMPANY.price) || BRNC_COMPANY.p
 restoreGalaxySystems();
 resetDailyPrevClose();
 
+// Register Index-listed fund tickers into the live companies array (after all base
+// tickers + specials exist, so ids/symbols are settled before we add ours).
+loadFundTickers();
+
 // ── Restore President from DB ──
 try {
   const savedPres = loadPresidentState();
@@ -3014,6 +3216,32 @@ function fundDetailSnapshot(fundId, playerId) {
       ? Math.max(0, HOUSE_BUY_COOLDOWN_MS - (Date.now() - (getLastFundTradeTs(fundId,'trade_buy')||0)))
       : 0,
     buyCooldownWindowMs: (fund.type==='player') ? HOUSE_BUY_COOLDOWN_MS : 0,
+    // ── Index listing status (drives the list/delist controls on the house panel) ──
+    index: (() => {
+      const listing = getFundListing(fundId);
+      if (listing) {
+        const c = companies.find(x => x.id === listing.company_id);
+        const nps = fundNavPerShare(fundId, priceMap);
+        return {
+          listed: true, symbol: listing.symbol, companyId: listing.company_id,
+          floatShares: listing.float_shares,
+          navPerShare: nps != null ? Math.round(nps*100)/100 : null,
+          price: c ? Math.round(c.price*100)/100 : listing.list_price,
+          premiumPct: (nps && c) ? Math.round(((c.price - nps)/nps*100)*100)/100 : 0,
+        };
+      }
+      // Not listed: report eligibility so the client can enable/disable the list button.
+      return {
+        listed: false,
+        eligible: fund.type === 'player' && nav >= INDEX_LIST_MIN_NAV && cash >= INDEX_LIST_FEE,
+        nav,
+        minNav: INDEX_LIST_MIN_NAV,
+        listFee: INDEX_LIST_FEE,
+        floatShares: INDEX_FLOAT_SHARES,
+        targetPrice: INDEX_TARGET_PRICE,
+        haveCashForFee: cash >= INDEX_LIST_FEE,
+      };
+    })(),
   };
 }
 
@@ -3616,6 +3844,25 @@ app.post('/api/funds/:id/delete', (req, res) => {
     if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
     if (fund.owner_id !== actor.id) return res.status(403).json({ ok:false, error:'not_owner' });
 
+    // If listed, the public float is bought out FIRST, at NAV/share, from the pool.
+    // This is the one hard rule that closes the disband rug: outside holders are made
+    // whole at book value before any member (including the owner) is paid. If pool cash
+    // can't cover the buyout, disband is blocked until the house liquidates to cash.
+    const listing = getFundListing(fund.id);
+    if (listing) {
+      const pm = buildPriceMap();
+      const nps = fundNavPerShare(fund.id, pm);
+      if (nps == null) return res.status(400).json({ ok:false, error:'nav_undefined' });
+      const settle = settleFundFloat(fund.id, listing.symbol, nps);
+      if (settle.shortfall > 0) {
+        return res.status(400).json({ ok:false, error:'insufficient_cash_for_buyout', shortfall: settle.shortfall,
+          msg:`Disband must first buy out ${settle.holders} Index float holder(s) at Ƒ${nps.toFixed(2)}/share. House cash is short by Ƒ${settle.shortfall.toLocaleString()}. Sell holdings to cash, then disband.` });
+      }
+      unregisterFundTicker(fund.id);
+      deleteFundListing(fund.id);
+      broadcast({ type:'index_delisted', data:{ fundId: fund.id, symbol: listing.symbol, companyId: listing.company_id, navPerShare: nps }});
+    }
+
     // Pay out members at CURRENT share value (NAV / total shares), not original deposit.
     // Holdings are valued at live ticker price via the price map, so members keep gains/losses.
     const members       = getFundMemberships(fund.id);
@@ -3647,6 +3894,158 @@ app.post('/api/funds/:id/delete', (req, res) => {
     broadcast({ type:'fund_deleted', data:{ fundId: fund.id, name: fund.name }});
     res.json({ ok:true, refund: DISBAND_REFUND });
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// ─── Index listing (Capital House → tradeable ticker) ─────────────────────────
+// Owner-only. Requires a point-in-time NAV at or above the minimum, burns the listing
+// fee to FRS, rescales the internal share ledger so NAV/(ledger+float) ~ target price,
+// mints the fixed public float, sells that float into the fresh ticker (the house eats
+// its own slippage per the impact model — proceeds land in the pool as NAV, where the
+// public holders own their claim), and registers the ticker on the live tape.
+app.post('/api/funds/:id/list', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund = getFund(req.params.id);
+    if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (fund.type !== 'player') return res.status(400).json({ ok:false, error:'not_a_player_house' });
+    if (fund.owner_id !== actor.id) return res.status(403).json({ ok:false, error:'not_owner' });
+    if (isFundListed(fund.id)) return res.status(409).json({ ok:false, error:'already_listed' });
+
+    // Gate: point-in-time NAV must clear the minimum. (No trailing history requirement:
+    // the shared-pool structure already prevents a deposit-list-withdraw rug — withdrawal
+    // is NAV/share-neutral and a lister can only withdraw their own ledger claim, never the
+    // float's backing — so the only thing a trailing window bought was a legibility filter,
+    // which isn't worth an arbitrary wait.)
+    const priceMap = buildPriceMap();
+    const navNow = getFundNAVById(fund.id, priceMap);
+    if (navNow < INDEX_LIST_MIN_NAV) {
+      return res.status(400).json({ ok:false, error:'below_min_nav', nav: navNow,
+        msg:`Listing requires a house NAV of Ƒ${INDEX_LIST_MIN_NAV.toLocaleString()}. This house holds Ƒ${Math.floor(navNow).toLocaleString()}.` });
+    }
+    // Fee is paid from FUND cash (the house pays to list itself), burned to FRS.
+    if (navNow < INDEX_LIST_FEE) {
+      return res.status(400).json({ ok:false, error:'insufficient_nav_for_fee' });
+    }
+    const fundCash = getFundCashById(fund.id);
+    if (fundCash < INDEX_LIST_FEE) {
+      return res.status(400).json({ ok:false, error:'insufficient_fund_cash_for_fee',
+        msg:`The listing fee of Ƒ${INDEX_LIST_FEE.toLocaleString()} is paid from house cash. This house holds Ƒ${Math.floor(fundCash).toLocaleString()} cash.` });
+    }
+
+    // Float value cap: the public tranche can't exceed INDEX_FLOAT_MAX_FRAC of NAV.
+    // With NAV/share targeted to INDEX_TARGET_PRICE, float value = 100k * target. If
+    // that exceeds the cap for this NAV, the listing is refused (house too small for a
+    // 100k float at target price). Post-fee NAV is what the pool actually has.
+    const navPostFee = navNow - INDEX_LIST_FEE;
+    const floatShares = INDEX_FLOAT_SHARES;
+
+    // Rescale the internal ledger so NAV_postFee / (ledger' + float) == target price.
+    //   ledger' + float = navPostFee / target   =>   ledger' = navPostFee/target - float
+    // Then scale existing ledger shares by ledger'/ledgerNow. If the house has zero
+    // ledger shares (no member deposits beyond the owner's 0), we still define a target
+    // via the float alone.
+    const ledgerNow = getTotalFundSharesById(fund.id);
+    const targetTotal = navPostFee / INDEX_TARGET_PRICE;         // desired (ledger'+float)
+    const targetLedger = targetTotal - floatShares;             // desired ledger'
+    if (targetLedger <= 0) {
+      // NAV too small to carry a 100k float at target price without the float being the
+      // whole book — refuse rather than list something degenerate.
+      return res.status(400).json({ ok:false, error:'nav_too_small_for_float',
+        msg:`House NAV can't support a ${floatShares.toLocaleString()}-share float at Ƒ${INDEX_TARGET_PRICE}/share. Grow the house first.` });
+    }
+    const floatValue = floatShares * INDEX_TARGET_PRICE;
+    if (floatValue > navPostFee * INDEX_FLOAT_MAX_FRAC + 1) {
+      return res.status(400).json({ ok:false, error:'float_exceeds_cap',
+        msg:`Float value (Ƒ${Math.round(floatValue).toLocaleString()}) would exceed ${Math.round(INDEX_FLOAT_MAX_FRAC*100)}% of NAV. House too small to list at these terms.` });
+    }
+
+    // Burn the fee from the pool to FRS.
+    setFundCashById(fund.id, Math.round((fundCash - INDEX_LIST_FEE) * 100) / 100);
+    FMI.treasury += INDEX_LIST_FEE; FMI.hourlyTaxAccrual += INDEX_LIST_FEE;
+
+    // Apply the ledger rescale (owner + members' shares all scale by the same factor,
+    // value-neutral). If ledgerNow is 0, there's nothing to scale; the float defines
+    // the book. We store float on the listing row (denominator source of truth).
+    if (ledgerNow > 0) {
+      const factor = targetLedger / ledgerNow;
+      try { scaleFundLedgerShares(fund.id, factor); } catch(e) { console.error('[list ledger scale]', e); }
+    }
+
+    // Derive list price from the post-fee book: NAV_postFee / (ledger'+float). Because
+    // we scaled the ledger to hit target, this lands at ~INDEX_TARGET_PRICE.
+    const listPrice = INDEX_TARGET_PRICE;
+    const symbol = makeFundSymbol(fund.name);
+    const companyId = nextFundCompanyId();
+
+    // Create the listing row (float is fixed here; scaleFundLedgerShares also scales
+    // float on splits later). Then register the live ticker.
+    createFundListing(fund.id, symbol, companyId, floatShares, navPostFee, listPrice);
+    const ticker = registerFundTicker({
+      fund_id: fund.id, symbol, company_id: companyId,
+      float_shares: floatShares, list_nav: navPostFee, list_price: listPrice, listed_at: Date.now(),
+    });
+
+    // Sell the float into the fresh ticker: the house eats slippage on a
+    // (floatShares * listPrice) notional sell; proceeds (net of slippage) credit the
+    // pool as NAV. Tape pushes DOWN by the slip, opening the initial discount that
+    // players close by bidding it back toward NAV.
+    let proceeds = 0;
+    if (ticker) {
+      const notionalC = toCents(listPrice) * floatShares;
+      const slip = impactSlip(notionalC, -1);
+      const fillPrice = slip > 0 ? listPrice * Math.exp(-slip) : listPrice;
+      proceeds = Math.round(fillPrice * floatShares * 100) / 100;
+      addFundCash(fund.id, proceeds);
+      applyTapeMove(ticker, -slip);
+      // Re-anchor to the post-sale book and snapshot.
+      try { updateFundAnchor(fund.id, buildPriceMap()); } catch(_) {}
+    }
+    snapshotFund(fund.id);
+
+    logFundActivity(fund.id, 'list', actor.id, symbol, floatShares, listPrice, INDEX_LIST_FEE,
+      `Listed as ${symbol} — ${floatShares.toLocaleString()} float @ Ƒ${listPrice}, fee Ƒ${INDEX_LIST_FEE.toLocaleString()}`);
+    pushHeadline(`${fund.name} lists on the Index as ${symbol} at Ƒ${listPrice}/share`, 'good', null, 'flesh');
+    broadcast({ type:'index_listed', data: fundListingWire(getFundListing(fund.id)) });
+    // New ticker must reach every client's companies list.
+    broadcast({ type:'company_added', data:{ id:companyId, name:fund.name, symbol, price:(ticker?ticker.price:listPrice), sector:7, hq:null, fundTicker:true }});
+
+    res.json({ ok:true, symbol, companyId, listPrice, floatShares, feeburned: INDEX_LIST_FEE, floatProceeds: proceeds });
+  } catch(e) { console.error('[index list]', e); res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// ─── Index delist (owner voluntary) ───────────────────────────────────────────
+// Buys out the public float at NAV/share from the pool, then removes the ticker.
+// Blocked if pool cash can't cover the buyout (owner must liquidate holdings first).
+app.post('/api/funds/:id/delist', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const fund = getFund(req.params.id);
+    if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
+    if (fund.owner_id !== actor.id) return res.status(403).json({ ok:false, error:'not_owner' });
+    const listing = getFundListing(fund.id);
+    if (!listing) return res.status(400).json({ ok:false, error:'not_listed' });
+
+    const priceMap = buildPriceMap();
+    const nps = fundNavPerShare(fund.id, priceMap);
+    if (nps == null) return res.status(400).json({ ok:false, error:'nav_undefined' });
+    const settle = settleFundFloat(fund.id, listing.symbol, nps);
+    if (settle.shortfall > 0) {
+      return res.status(400).json({ ok:false, error:'insufficient_cash_for_buyout', shortfall: settle.shortfall,
+        msg:`Delisting buys out ${settle.holders} float holder(s) at Ƒ${nps.toFixed(2)}/share. House cash is short by Ƒ${settle.shortfall.toLocaleString()}. Sell holdings to cash first.` });
+    }
+    unregisterFundTicker(fund.id);
+    deleteFundListing(fund.id);
+    snapshotFund(fund.id);
+    logFundActivity(fund.id, 'delist', actor.id, listing.symbol, settle.holders, nps, settle.paid,
+      `Delisted ${listing.symbol}; bought out ${settle.holders} holder(s) @ Ƒ${nps.toFixed(2)} (Ƒ${settle.paid.toLocaleString()})`);
+    pushHeadline(`${fund.name} delists ${listing.symbol} from the Index`, 'bad', null, 'flesh');
+    broadcast({ type:'index_delisted', data:{ fundId: fund.id, symbol: listing.symbol, companyId: listing.company_id, navPerShare: nps }});
+    res.json({ ok:true, boughtOut: settle.holders, perShare: nps, paid: settle.paid });
+  } catch(e) { console.error('[index delist]', e); res.status(500).json({ ok:false, error:String(e) }); }
 });
 
 // ─── Fund edit (rename + description, Ƒ250k) ─────────────────────────────────
@@ -5697,22 +6096,44 @@ function stepMarket(){
     // ── Stock Split at Ƒ5000 ─────────────────────────────────────────────
     if (c.price >= 4999 && !c._splitting) {
       c._splitting = true;
-      const SPLIT_RATIO = 1000;
-      c.price = 5;
-      c.lnP = Math.log(5);
-      c._trendCheckLnP = Math.log(5);
-      c._spawnLnP = Math.log(5);
-      c.ownTargetLnP = Math.log(5); // reset beta target post-split
-      players.forEach(p => {
-        if (!p.holdings || !p.holdings[c.symbol]) return;
-        const oldQty = p.holdings[c.symbol];
-        p.holdings[c.symbol] = oldQty * SPLIT_RATIO;
-        if (p.basisC && p.basisC[c.symbol]) {}
-        savePlayer(p);
-      });
-      broadcast({ type: 'chat_system', data: { text: `📊 STOCK SPLIT: ${c.symbol} hit Ƒ5,000, splits 1:${SPLIT_RATIO}. All holders now have ${SPLIT_RATIO}× shares at Ƒ5.` }});
-      console.log(`[SPLIT] ${c.symbol}, 1:${SPLIT_RATIO} split executed`);
-      setTimeout(() => { c._splitting = false; }, 10000);
+      if (c._fundTicker) {
+        // Fund ticker: renumber 10:1 (not 1:1000 — a four-figure NAV/share ticker
+        // renumbering to Ƒ5 would sit far below its own anchor and get yanked). Scale
+        // BOTH the public float (holdings table, via executeStockSplit) AND the internal
+        // fund ledger (fund_memberships.shares) in step, or NAV/totalShares desyncs from
+        // the renumbered price by the full ratio and the anchor pull tears the tape.
+        const SPLIT_RATIO = 10;
+        const newPrice = c.price / SPLIT_RATIO;
+        c.price = newPrice;
+        c.lnP = Math.log(newPrice);
+        c._trendCheckLnP = c.lnP;
+        c._spawnLnP = c.lnP;
+        try { executeStockSplit(c.symbol, SPLIT_RATIO); } catch(e) { console.error('[fund split holdings]', e); }
+        try { scaleFundLedgerShares(c._fundId, SPLIT_RATIO); } catch(e) { console.error('[fund split ledger]', e); }
+        try { scaleFundListingFloat(c._fundId, SPLIT_RATIO); } catch(e) { console.error('[fund split float]', e); }
+        // Retarget the anchor to the post-split NAV/share (unchanged NAV, ratio× shares).
+        try { updateFundAnchor(c._fundId, buildPriceMap()); } catch(_) {}
+        broadcast({ type: 'chat_system', data: { text: `📊 SPLIT: ${c.symbol} split ${SPLIT_RATIO}:1 at Ƒ5,000. All holders now hold ${SPLIT_RATIO}× shares.` }});
+        console.log(`[SPLIT] fund ticker ${c.symbol}, ${SPLIT_RATIO}:1 (holdings + ledger)`);
+        setTimeout(() => { c._splitting = false; }, 10000);
+      } else {
+        const SPLIT_RATIO = 1000;
+        c.price = 5;
+        c.lnP = Math.log(5);
+        c._trendCheckLnP = Math.log(5);
+        c._spawnLnP = Math.log(5);
+        c.ownTargetLnP = Math.log(5); // reset beta target post-split
+        players.forEach(p => {
+          if (!p.holdings || !p.holdings[c.symbol]) return;
+          const oldQty = p.holdings[c.symbol];
+          p.holdings[c.symbol] = oldQty * SPLIT_RATIO;
+          if (p.basisC && p.basisC[c.symbol]) {}
+          savePlayer(p);
+        });
+        broadcast({ type: 'chat_system', data: { text: `📊 STOCK SPLIT: ${c.symbol} hit Ƒ5,000, splits 1:${SPLIT_RATIO}. All holders now have ${SPLIT_RATIO}× shares at Ƒ5.` }});
+        console.log(`[SPLIT] ${c.symbol}, 1:${SPLIT_RATIO} split executed`);
+        setTimeout(() => { c._splitting = false; }, 10000);
+      }
     }
 
     // OHLC bar aggregation
@@ -6170,6 +6591,12 @@ wss.on('connection',(ws,req)=>{
           // cash from a short is to cover it at a profit. This removes the limits while
           // making the short-and-extract-then-get-wiped exploit impossible.
           const shortQty = qty - Math.max(0, have);
+          // Fund tickers cannot be shorted (v1): shorting your own house before tanking
+          // its NAV is the one torch-the-book play the shared NAV pool doesn't neutralize.
+          if (c._fundTicker) {
+            try { ws.send(JSON.stringify({ type:'error', data:{ msg:'Index fund tickers cannot be shorted.' }})); } catch(_) {}
+            return;
+          }
           // Liquidity gate: opening a short requires liquid cash >= 3x the notional shorted
           // (price x shortQty). Balance check only, cash is NOT consumed (the short's own
           // proceeds are locked as collateral below); this blocks unbacked shorting. A mixed
@@ -6840,6 +7267,13 @@ wss.on('connection',(ws,req)=>{
         try{ cycles=getPriceCycles(c.id, from, to, 8000); }catch(e){ console.error('[cycle_history]', e); }
       }
       ws.send(JSON.stringify({type:'cycle_history', data:{ symbol:s, cycles }}));
+    }
+
+    // Index browser: all listed Capital House tickers (NAV, NAV/share, premium/discount).
+    if(msg.type==='index_listings'){
+      let listings=[];
+      try{ listings=fundListingsSnapshot(); }catch(e){ console.error('[index_listings]', e); }
+      ws.send(JSON.stringify({type:'index_listings', data:{ listings }}));
     }
 
     // ── Market upgrades: list / buy ────────────────────────────────────────────
@@ -8519,6 +8953,8 @@ const _passiveIncomeTick = () => {
         const totalShares = getTotalFundSharesById(fund.id);
         const spp         = totalShares > 0 && nav > 0 ? nav / totalShares : 1;
         recordFundNAV(fund.id, nav, spp, totalShares);
+        // If listed, retarget the ticker anchor to fresh NAV/share.
+        if (FUND_TICKERS.has(fund.id)) { try { updateFundAnchor(fund.id, priceMap); } catch(_) {} }
       }
     } catch(e) { console.error('[Fund NAV snapshot error]', e); }
 

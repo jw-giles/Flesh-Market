@@ -1848,6 +1848,27 @@ ws.addEventListener('message', (ev)=>{
     // Seed heatmap data immediately
     window.TICKERS = TICKERS;
   }
+  if (msg.type === 'company_added' && msg.data && msg.data.symbol) {
+    // A new ticker (e.g. a freshly Index-listed Capital House) — add it live so
+    // already-connected clients see it without reconnecting.
+    try {
+      if (!TICKERS.find(t => t.symbol === msg.data.symbol)) {
+        TICKERS.push({ id: msg.data.id, name: msg.data.name, symbol: msg.data.symbol,
+                       price: msg.data.price || 0, sector: msg.data.sector || 7, pct: 0,
+                       fundTicker: !!msg.data.fundTicker });
+        TICKERS.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        renderTickers();
+        window.TICKERS = TICKERS;
+      }
+    } catch (e) {}
+  }
+  if (msg.type === 'index_delisted' && msg.data && msg.data.symbol) {
+    // Ticker removed from the tape on delist/disband — drop it from the local list.
+    try {
+      const i = TICKERS.findIndex(t => t.symbol === msg.data.symbol);
+      if (i >= 0) { TICKERS.splice(i, 1); renderTickers(); window.TICKERS = TICKERS; }
+    } catch (e) {}
+  }
   if (msg.type === 'tick') {
     // Merge new prices into TICKERS (don't replace — tick data has no .name)
     if (Array.isArray(msg.data)) {

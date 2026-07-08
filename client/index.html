@@ -714,6 +714,15 @@ window.storeSubTab=storeSubTab;
           <button class="btn" id="g-edit-btn" onclick="window._fmEditFund()" style="border-color:#72e09c;color:#72e09c;font-size:.72rem;padding:3px 10px">Edit Name/Desc (Ƒ250k)</button>
           <button class="btn" id="g-delete-btn" onclick="window._fmDeleteFund()" style="border-color:#ff4444;color:#ff4444;font-size:.72rem;padding:3px 10px">Disband Fund (Refund Ƒ5M)</button>
         </div>
+        <div id="g-index-panel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #1a1a0a">
+          <div style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:5px;color:#f0b454">Index Listing</div>
+          <div id="g-index-status" style="font-size:.74rem;opacity:.75;margin-bottom:6px"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <button class="btn" id="g-index-list-btn" onclick="window._fmListIndex()" style="border-color:#f0b454;color:#f0b454;font-size:.72rem;padding:3px 10px">List on Index</button>
+            <button class="btn" id="g-index-delist-btn" onclick="window._fmDelistIndex()" style="border-color:#ff8080;color:#ff8080;font-size:.72rem;padding:3px 10px;display:none">Delist</button>
+          </div>
+          <div id="g-index-hint" style="font-size:.74rem;min-height:14px;margin-top:5px"></div>
+        </div>
         <div id="g-owner-hint" style="font-size:.78rem;min-height:14px;margin-top:5px"></div>
       </div>
     </div>
@@ -1606,6 +1615,7 @@ ws.addEventListener('message', function(ev){
 <script src="assets/market-state.js"></script>
 <script src="assets/market-tools.js"></script>
 <script src="assets/cycle-history.js"></script>
+<script src="assets/index-browser.js"></script>
 <script src="assets/market-upgrades.js"></script>
 <script src="assets/mobile.js"></script>
 

@@ -1008,6 +1008,21 @@ export function initFundsSystem() {
       closed_at    INTEGER
     );
 
+    -- Index listings: a Capital House whose NAV-per-share trades as a real ticker on
+    -- the main tape. One row per listed house. company_id is the numeric id assigned
+    -- in the in-memory companies array (>= FUND_TICKER_ID_BASE, kept OUT of the 0..N
+    -- index range so price_cycles can never splice fund history onto a regular ticker).
+    -- float_shares is the public block minted at listing (fixed; no paid re-issuance).
+    CREATE TABLE IF NOT EXISTS fund_listings (
+      fund_id      TEXT PRIMARY KEY REFERENCES funds(id) ON DELETE CASCADE,
+      symbol       TEXT NOT NULL UNIQUE,
+      company_id   INTEGER NOT NULL UNIQUE,
+      float_shares REAL NOT NULL,
+      list_nav     REAL NOT NULL,
+      list_price   REAL NOT NULL,
+      listed_at    INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS fund_memberships (
       fund_id    TEXT NOT NULL REFERENCES funds(id) ON DELETE CASCADE,
       player_id  TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -1297,6 +1312,18 @@ export function getTotalFundSharesById(fundId) {
   return (stmt('SELECT SUM(shares) as s FROM fund_memberships WHERE fund_id=?').get(fundId)||{s:0}).s || 0;
 }
 
+// All players holding a positive quantity of a symbol (used to settle a fund ticker's
+// public float on delist/disband — must include OFFLINE holders, so this reads the
+// holdings table directly rather than iterating online sessions).
+export function getHoldersOfSymbol(symbol) {
+  try { return stmt('SELECT player_id, qty FROM holdings WHERE symbol=? AND qty>0').all(symbol); }
+  catch(_) { return []; }
+}
+export function getFloatOutstanding(symbol) {
+  try { return (stmt('SELECT SUM(qty) AS s FROM holdings WHERE symbol=? AND qty>0').get(symbol)||{s:0}).s || 0; }
+  catch(_) { return 0; }
+}
+
 // ── Savings interest ──────────────────────────────────────────────────────────
 // Call every hour — credits interest to all fund cash balances
 
@@ -1374,6 +1401,76 @@ export function getFundNAVById(fundId, priceMap) {
     ? holdings.reduce((acc, h) => acc + (priceMap[h.symbol] || 0) * h.qty, 0)
     : 0;
   return cash + equity;
+}
+
+// ─── Index listings (Capital House → tradeable ticker) ────────────────────────
+// The numeric company-id space for fund tickers starts here, well clear of the
+// 0..(companies-1) index range and the 999x specials (FLSH/SWT/BRNC).
+export const FUND_TICKER_ID_BASE = 20000;
+
+export function getFundListing(fundId) {
+  try { return stmt('SELECT * FROM fund_listings WHERE fund_id=?').get(fundId) || null; }
+  catch(_) { return null; }
+}
+export function getFundListingBySymbol(symbol) {
+  try { return stmt('SELECT * FROM fund_listings WHERE symbol=?').get(symbol) || null; }
+  catch(_) { return null; }
+}
+export function getAllFundListings() {
+  try { return stmt('SELECT * FROM fund_listings ORDER BY listed_at ASC').all(); }
+  catch(_) { return []; }
+}
+export function isFundListed(fundId) {
+  try { return !!stmt('SELECT 1 FROM fund_listings WHERE fund_id=?').get(fundId); }
+  catch(_) { return false; }
+}
+export function fundSymbolTaken(symbol) {
+  // Reserved against BOTH other listings and the base company roster is checked in
+  // server.js (which holds the companies array); here we only guard the listings table.
+  try { return !!stmt('SELECT 1 FROM fund_listings WHERE symbol=?').get(symbol); }
+  catch(_) { return false; }
+}
+// Next free numeric company id for a new fund ticker (max existing + 1, floored at base).
+export function nextFundCompanyId() {
+  try {
+    const row = stmt('SELECT MAX(company_id) AS m FROM fund_listings').get();
+    const m = (row && row.m != null) ? row.m : (FUND_TICKER_ID_BASE - 1);
+    return Math.max(FUND_TICKER_ID_BASE, m + 1);
+  } catch(_) { return FUND_TICKER_ID_BASE; }
+}
+export function createFundListing(fundId, symbol, companyId, floatShares, listNav, listPrice) {
+  stmt(`INSERT INTO fund_listings(fund_id,symbol,company_id,float_shares,list_nav,list_price,listed_at)
+        VALUES(?,?,?,?,?,?,?)`).run(fundId, symbol, companyId, floatShares, listNav, listPrice, Date.now());
+}
+export function deleteFundListing(fundId) {
+  try { stmt('DELETE FROM fund_listings WHERE fund_id=?').run(fundId); } catch(_) {}
+}
+
+// ─── Fund-aware share split ───────────────────────────────────────────────────
+// When a listed fund ticker crosses the tape ceiling, its price renumbers by RATIO
+// and EVERY per-holder share count is multiplied so nothing changes in value. For a
+// fund ticker that means scaling BOTH the public float holders (regular holdings,
+// handled in server.js) AND the internal fund ledger (fund_memberships.shares), or
+// the anchor (NAV / totalShares) would desync from the renumbered price by the full
+// ratio. This scales the internal ledger side, transactionally.
+// Scale every member's ledger share count by a factor (value-neutral renumbering).
+// Used two ways: (1) at listing, to move the ledger so NAV/(ledger'+float) hits the
+// target price — float is NOT touched here (it's the fixed public tranche); (2) inside
+// a split, where the caller ALSO scales float+holdings by the same ratio so the whole
+// book renumbers together. This function deliberately touches only fund_memberships;
+// float on the listing row is scaled explicitly by the split path when needed.
+export const scaleFundLedgerShares = transaction(function (fundId, ratio) {
+  const r = Number(ratio);
+  if (!(r > 0) || r === 1) return;
+  stmt('UPDATE fund_memberships SET shares = shares * ? WHERE fund_id=?').run(r, fundId);
+});
+
+// Scale the fixed float tranche on a listing row (split path only — the public float
+// renumbers 1:ratio alongside member shares and holdings so nothing changes in value).
+export function scaleFundListingFloat(fundId, ratio) {
+  const r = Number(ratio);
+  if (!(r > 0) || r === 1) return;
+  try { stmt('UPDATE fund_listings SET float_shares = float_shares * ? WHERE fund_id=?').run(r, fundId); } catch(_) {}
 }
 
 // All multi-house memberships for one player (reverse of getFundMemberships).

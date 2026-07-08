@@ -149,6 +149,12 @@
       tab: 'market',
     },
     {
+      heading: 'INDEX FUNDS',
+      text: `A <strong>Capital House</strong> that has grown its NAV to <strong>Ƒ500,000,000</strong> can <em>list on the Index</em> from its owner panel, turning the house into a real ticker anyone can trade. Listing costs a <strong>Ƒ25,000,000</strong> fee (burned) and sells a fixed <strong>100,000-share public float</strong> into the market, so smaller players can buy into a manager's book without joining the house. The ticker's price floats on order flow but is anchored to the house's <em>NAV per share</em>, so a well-run house trades at a <span style=\"color:#5fe08a\">premium</span> and a distrusted one at a <span style=\"color:#ff6b6b\">discount</span> to book value. Open the <em>Index Funds</em> browser beside the History button to see every listed house with its price, NAV per share, and premium or discount. <span class=\"warn\">Index tickers cannot be shorted.</span> If a house delists or disbands, all public holders are bought out at NAV per share.`,
+      callout: 'A listed house is a real ticker: chart it, watchlist it, trade it. Its price tracks the manager\u2019s NAV per share.',
+      tab: 'guild',
+    },
+    {
       heading: 'THE FLESH REVENUE SERVICE',
       text: `The <strong>Flesh Revenue Service</strong> assesses a weekly income tax on your gains. Every <strong>Sunday at noon Pacific</strong> it measures how much your taxable net worth (cash plus positions) grew since the last assessment and takes a percentage of that gain, default <strong>15%</strong>. Only growth is taxed, so a flat or losing week owes nothing, and banked losses can offset later gains. When the FRS is collecting, a <strong>🏛 Taxes</strong> button appears in the header where you can clear a balance or <em>prepay</em> ahead of going idle. One shelter worth knowing: money held inside a <em>Capital House</em> is not taxed weekly, it is taxed only when you <strong>withdraw</strong> it.`,
       callout: 'UNIT-7: Compliance is not optional. The FRS sees the tape. Pay on time and trade freely.',

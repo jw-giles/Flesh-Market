@@ -1,7 +1,7 @@
 {
-  "version": "1.1.8.8",
+  "version": "1.1.9.0",
   "built": "2026-07-08T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.8.8",
-  "notes": "Date filter on the Cycle Price History browser. Range chips (24H / 7D / 30D / ALL) plus From/To date pickers; the view now defaults to the last 7 days instead of the full archive, so opening a ticker no longer loads months of rows. ALL still shows the full ~5-month window. Filtering happens server-side, so only the requested range is sent. Carries 1.1.8.7 and earlier."
+  "patch": "1.1.9.0",
+  "notes": "The Index. A Capital House with a NAV of Ƒ500M can list its NAV-per-share as a real ticker on the main tape for a Ƒ25M fee. A fixed 100,000-share public float is sold into the market at listing, so lower-capital players can invest in a manager's book without joining the house. Price floats on order flow but is anchored to NAV per share, so premium and discount to book value open and close. New 'Index Funds' button beside History opens a browser of listed houses. No paid re-issuance; float is fixed. Fund tickers cannot be shorted. Delisting and disband buy out public holders at NAV per share from house cash. Carries 1.1.8.8 and earlier."
 }

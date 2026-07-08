@@ -597,6 +597,49 @@ function renderFundDetail(f) {
   }
   show('g-slots-panel', f.isOwner);
   show('g-owner-panel', f.isOwner && f.type==='player');  // owner controls for player funds
+
+  // ── Index listing panel (owner, player funds only) ──
+  try {
+    const ip = document.getElementById('g-index-panel');
+    if (ip) {
+      const showIndex = f.isOwner && f.type === 'player';
+      ip.style.display = showIndex ? 'block' : 'none';
+      if (showIndex && f.index) {
+        const statusEl = document.getElementById('g-index-status');
+        const listBtn  = document.getElementById('g-index-list-btn');
+        const delistBtn= document.getElementById('g-index-delist-btn');
+        const fmt = (n) => 'Ƒ' + Math.round(Number(n)||0).toLocaleString();
+        if (f.index.listed) {
+          const prem = f.index.premiumPct;
+          const premTxt = prem == null ? '' :
+            ` · ${prem >= 0 ? '+' : ''}${prem.toFixed(2)}% ${prem >= 0 ? 'premium' : 'discount'} to NAV`;
+          if (statusEl) statusEl.innerHTML =
+            `Listed as <b style="color:#f0b454">${f.index.symbol}</b> · ` +
+            `price ${fmt(f.index.price)} · NAV/share ${f.index.navPerShare != null ? fmt(f.index.navPerShare) : '-'}${premTxt}` +
+            ` · float ${Math.round(f.index.floatShares).toLocaleString()}`;
+          if (listBtn)   listBtn.style.display = 'none';
+          if (delistBtn) delistBtn.style.display = 'inline-block';
+        } else {
+          const nav = f.index.nav;
+          const meets = nav != null && nav >= f.index.minNav;
+          const gateTxt = meets
+            ? `House NAV ${fmt(nav)} (meets ${fmt(f.index.minNav)})`
+            : `House NAV ${fmt(nav)}, need ${fmt(f.index.minNav)} to list`;
+          const feeTxt = f.index.haveCashForFee ? '' : ` · house cash below the ${fmt(f.index.listFee)} fee`;
+          if (statusEl) statusEl.innerHTML =
+            `Not listed. ${gateTxt}${feeTxt}<br>` +
+            `<span style="opacity:.6">Lists ${Math.round(f.index.floatShares).toLocaleString()} public shares at ~${fmt(f.index.targetPrice)}; fee ${fmt(f.index.listFee)} (burned).</span>`;
+          if (listBtn) {
+            listBtn.style.display = 'inline-block';
+            listBtn.disabled = !f.index.eligible;
+            listBtn.style.opacity = f.index.eligible ? '1' : '0.4';
+            listBtn.style.cursor  = f.index.eligible ? 'pointer' : 'not-allowed';
+          }
+          if (delistBtn) delistBtn.style.display = 'none';
+        }
+      }
+    }
+  } catch(_) {}
   // For player funds, members can deposit; owner OR treasurer can withdraw
   if (f.isMember && f.type === 'player') {
     show('g-dw-panel', true);
@@ -1248,5 +1291,21 @@ document.addEventListener('fm:authed', (ev) => {
         loadGuildDirectory();
       } catch(_){}
     }
+  };
+
+  window._fmListIndex = async function() {
+    if (!__currentFundId) return;
+    if (!confirm('List this house on the Index?\n\nA public float of 100,000 shares will be sold into the market at ~Ƒ1,000/share. The house pays a Ƒ25,000,000 listing fee (burned) and eats the slippage on the float sale. Members and holdings are unaffected in value.')) return;
+    const d = await guildPost(`/api/funds/${__currentFundId}/list`, {}, 'g-index-hint',
+      '✓ Listed on the Index');
+    if (d?.ok) openFund(__currentFundId);
+  };
+
+  window._fmDelistIndex = async function() {
+    if (!__currentFundId) return;
+    if (!confirm('Delist this house from the Index?\n\nAll public float holders are bought out at the current NAV per share from house cash. If the house lacks the cash to cover the buyout, delisting is blocked until you sell holdings to cash.')) return;
+    const d = await guildPost(`/api/funds/${__currentFundId}/delist`, {}, 'g-index-hint',
+      '✓ Delisted');
+    if (d?.ok) openFund(__currentFundId);
   };
 });
