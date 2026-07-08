@@ -1,3 +1,25 @@
+# FleshMarket v1.1.8.8 - MANIFEST
+
+## v1.1.8.8 changes (Cycle history date filter; CLIENT + SERVER)
+
+```
+client/
+  assets/cycle-history.js   + filter bar (chips 24H/7D/30D/ALL + From/To date pickers)
+                            default view now last 7 days (was full archive); ALL = old
+                            behavior. One shared requestHistory() path for ticker
+                            selection and filter changes; range-aware empty states.
+  version.json              1.1.8.7 -> 1.1.8.8
+server/
+  server.js                 cycle_history handler accepts optional from/to (epoch ms);
+                            from clamped to the ~5-month retention floor server-side.
+  db.js                     getPriceCycles(companyId, sinceTs, untilTs, limit): adds
+                            the upper bound (cycle_ts <= ?). PK covers the range scan.
+```
+
+Client + server. Hard-refresh after deploy. No DB schema change.
+
+---
+
 # FleshMarket v1.1.8.7 - MANIFEST
 
 ## v1.1.8.7 changes (Cycle price history tab; CLIENT + SERVER + DB)

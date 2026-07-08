@@ -6824,14 +6824,20 @@ wss.on('connection',(ws,req)=>{
 
     if(msg.type==='chart'){const s=String(msg.symbol||'').toUpperCase(),c=companies.find(x=>x.symbol===s);if(c){const _hl=(actor&&hasMarketUpgrade(actor.id,'price_history'))?400:199;const bars=c.ohlc.slice(-_hl);if(c._bar)bars.push({t:c._bar.t,o:c._bar.o,h:c._bar.h,l:c._bar.l,c:c._bar.c,v:0});ws.send(JSON.stringify({type:'chart',data:{symbol:s,ohlc:bars}}));}}
 
-    // Per-cycle price history (start/end per 30-min cycle), last ~5 months, newest-first.
+    // Per-cycle price history (start/end per 30-min cycle), newest-first.
+    // Optional msg.from / msg.to (epoch ms) come from the client date filter.
+    // Both are clamped server-side: from can never reach past the ~5-month
+    // retention floor, and a missing/invalid to means "up to now".
     if(msg.type==='cycle_history'){
       const s=String(msg.symbol||'').toUpperCase();
       const c=companies.find(x=>x.symbol===s);
       let cycles=[];
       if(c){
-        const since=Date.now()-152*24*60*60*1000; // ~5 months
-        try{ cycles=getPriceCycles(c.id, since, 8000); }catch(e){ console.error('[cycle_history]', e); }
+        const floor=Date.now()-152*24*60*60*1000; // ~5 months
+        let from=Number(msg.from), to=Number(msg.to);
+        if(!isFinite(from)||from<floor) from=floor;
+        if(!isFinite(to)||to<=from) to=Date.now()+60*60*1000;
+        try{ cycles=getPriceCycles(c.id, from, to, 8000); }catch(e){ console.error('[cycle_history]', e); }
       }
       ws.send(JSON.stringify({type:'cycle_history', data:{ symbol:s, cycles }}));
     }

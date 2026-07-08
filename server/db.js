@@ -567,12 +567,13 @@ export function insertPriceCycle(companyId, cycleTs, symbol, startP, endP) {
   stmt(`INSERT OR IGNORE INTO price_cycles(company_id,cycle_ts,symbol,start_price,end_price)
         VALUES(?,?,?,?,?)`).run(companyId, cycleTs, symbol || null, startP, endP);
 }
-export function getPriceCycles(companyId, sinceTs, limit = 8000) {
+export function getPriceCycles(companyId, sinceTs, untilTs, limit = 8000) {
+  const hi = (Number(untilTs) > 0) ? Number(untilTs) : Date.now() + 86400000;
   return stmt(`SELECT cycle_ts AS t, start_price AS s, end_price AS e
                FROM price_cycles
-               WHERE company_id=? AND cycle_ts>=?
+               WHERE company_id=? AND cycle_ts>=? AND cycle_ts<=?
                ORDER BY cycle_ts DESC
-               LIMIT ?`).all(companyId, sinceTs || 0, limit);
+               LIMIT ?`).all(companyId, sinceTs || 0, hi, limit);
 }
 
 // Revoke expired Patreon tiers (call periodically)

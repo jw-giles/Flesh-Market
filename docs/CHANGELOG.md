@@ -4,6 +4,20 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.8.8 (2026-07-08) - Cycle history date filter (CLIENT + SERVER)
+
+Client and server. Hard-refresh after deploy. No DB schema change; `getPriceCycles` gains an upper-bound parameter (single call site, updated together).
+
+The 1.1.8.7 history browser loaded a ticker's ENTIRE archive per click: at full depth that is 48 cycles/day x 152 days = ~7,300 rows shipped over WS and rendered as one table. This adds a date filter and changes the default view.
+
+- **Client** (`cycle-history.js`): new filter bar under the overlay header: range chips **24H / 7D / 30D / ALL** plus **From / To** native date pickers (local-day boundaries, matching the local-time row rendering). **Default is now 7D** (~336 rows), not the full archive; ALL restores the old behavior in one click. Presets are rolling windows from now; picking either date switches to custom; clearing both dates falls back to 7D. Selecting a ticker and changing the filter share one request path (`requestHistory`). Empty states distinguish "archive still filling" (ALL) from "nothing in this range" (filtered). Detail header shows count + active range. Subtitle no longer claims a fixed ~5-month view.
+- **Server** (`server.js`): the `cycle_history` handler accepts optional `from` / `to` (epoch ms). `from` is clamped to the ~5-month retention floor server-side regardless of client input; missing/invalid `to` means "up to now". Filtering happens in SQL, so only the requested range crosses the wire.
+- **Server** (`db.js`): `getPriceCycles(companyId, sinceTs, untilTs, limit)` adds the upper bound (`cycle_ts <= ?`). The `(company_id, cycle_ts)` primary key covers the range scan; no new index.
+
+No response-race guard was added: WS is FIFO per connection and the handler is synchronous, so the last request's response always arrives last. The existing `symbol !== selected` staleness check is kept.
+
+---
+
 ## v1.1.8.7 (2026-07-07) - Cycle price history tab (CLIENT + SERVER + DB)
 
 Client, server, and DB. Hard-refresh after deploy. **DB adds a `price_cycles` table on boot** (additive, `CREATE IF NOT EXISTS`). The table starts empty and fills forward one row per company per 30-min cycle, so it reaches ~5 months of depth about five months after deploy. There is nothing to backfill; the only prior price series is the ~33-minute in-memory 5s ring.

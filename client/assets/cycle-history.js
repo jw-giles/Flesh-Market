@@ -12,6 +12,37 @@
   var overlayBuilt = false;
   var lastCount = 0;
 
+  // Date filter state. Presets are rolling windows from "now"; 'custom' uses the
+  // two date inputs (local-day boundaries, matching the local-time rendering below).
+  var PRESETS = { '24h': 24 * 3600 * 1000, '7d': 7 * 24 * 3600 * 1000, '30d': 30 * 24 * 3600 * 1000 };
+  var range = { preset: '7d' }; // default: last 7 days (~336 cycles), not the full archive
+
+  function dayStartMs(v) {
+    if (!v) return null;
+    var p = String(v).split('-');
+    if (p.length !== 3) return null;
+    var t = new Date(+p[0], +p[1] - 1, +p[2], 0, 0, 0, 0).getTime();
+    return isFinite(t) ? t : null;
+  }
+  function rangeBounds() {
+    if (range.preset === 'custom') {
+      var f = dayStartMs(range.fromStr);
+      var t = dayStartMs(range.toStr);
+      if (t != null) t += 86399999; // inclusive end of the picked day
+      if (f != null && t != null && f > t) { var tmp = f; f = t - 86399999; t = tmp + 86399999; }
+      return { from: f, to: t };
+    }
+    var w = PRESETS[range.preset];
+    return w ? { from: Date.now() - w, to: null } : { from: null, to: null }; // 'all'
+  }
+  function rangeLabel() {
+    if (range.preset === 'custom') {
+      var f = range.fromStr || 'start', t = range.toStr || 'now';
+      return f + ' to ' + t;
+    }
+    return { '24h': 'last 24 hours', '7d': 'last 7 days', '30d': 'last 30 days', 'all': 'full archive (~5 months)' }[range.preset] || '';
+  }
+
   function fmtP(x) {
     var n = Number(x);
     if (!isFinite(n)) return '-';
@@ -49,8 +80,18 @@
         'border:1px solid #3a2a08;border-radius:12px;box-shadow:0 10px 50px #000c;display:flex;flex-direction:column;overflow:hidden">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #2a1e06">' +
           '<div><span style="color:var(--amber,#f0b454);letter-spacing:.12em;text-transform:uppercase;font-size:.74rem;font-weight:800">Cycle Price History</span>' +
-          '<span style="opacity:.6;font-size:.68rem;margin-left:8px">start / end price per 30-min cycle, last ~5 months</span></div>' +
+          '<span style="opacity:.6;font-size:.68rem;margin-left:8px">start / end price per 30-min cycle</span></div>' +
           '<button id="cyhist-close" style="background:none;border:none;color:var(--amber,#f0b454);font-size:1.1rem;cursor:pointer;line-height:1;padding:0 2px">✕</button>' +
+        '</div>' +
+        '<div id="cyhist-filter" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 14px;border-bottom:1px solid #2a1e06;font-size:.72rem">' +
+          '<span style="opacity:.55;text-transform:uppercase;letter-spacing:.08em;font-size:.62rem">Range</span>' +
+          '<button class="cyhist-chip" data-preset="24h">24H</button>' +
+          '<button class="cyhist-chip" data-preset="7d">7D</button>' +
+          '<button class="cyhist-chip" data-preset="30d">30D</button>' +
+          '<button class="cyhist-chip" data-preset="all" title="Full retention window (~5 months)">ALL</button>' +
+          '<span style="width:1px;height:16px;background:#2a1e06;margin:0 4px"></span>' +
+          '<label style="opacity:.7">From <input id="cyhist-from" type="date" style="background:#0d0a06;border:1px solid rgba(240,180,84,.3);border-radius:4px;color:#cbb78a;font-family:inherit;font-size:.72rem;padding:2px 4px;color-scheme:dark"/></label>' +
+          '<label style="opacity:.7">To <input id="cyhist-to" type="date" style="background:#0d0a06;border:1px solid rgba(240,180,84,.3);border-radius:4px;color:#cbb78a;font-family:inherit;font-size:.72rem;padding:2px 4px;color-scheme:dark"/></label>' +
         '</div>' +
         '<div style="display:flex;flex:1;min-height:0">' +
           '<div style="width:240px;min-width:180px;border-right:1px solid #2a1e06;display:flex;flex-direction:column;min-height:0">' +
@@ -69,7 +110,45 @@
     if (closeBtn) closeBtn.addEventListener('click', closeOverlay);
     var search = document.getElementById('cyhist-search');
     if (search) search.addEventListener('input', renderList);
+
+    Array.prototype.forEach.call(ov.querySelectorAll('.cyhist-chip'), function (b) {
+      b.style.cssText =
+        'background:none;border:1px solid rgba(240,180,84,0.3);border-radius:4px;color:#b8893a;' +
+        'font-size:.68rem;padding:2px 9px;cursor:pointer;font-family:inherit;transition:all .15s';
+      b.addEventListener('click', function () {
+        range = { preset: b.getAttribute('data-preset') };
+        var f = document.getElementById('cyhist-from'), t = document.getElementById('cyhist-to');
+        if (f) f.value = ''; if (t) t.value = '';
+        paintChips();
+        requestHistory();
+      });
+    });
+    function onDateChange() {
+      var f = document.getElementById('cyhist-from'), t = document.getElementById('cyhist-to');
+      var fv = f ? f.value : '', tv = t ? t.value : '';
+      if (!fv && !tv) { range = { preset: '7d' }; }         // both cleared: back to default
+      else { range = { preset: 'custom', fromStr: fv, toStr: tv }; }
+      paintChips();
+      requestHistory();
+    }
+    var fi = document.getElementById('cyhist-from');
+    var ti = document.getElementById('cyhist-to');
+    if (fi) fi.addEventListener('change', onDateChange);
+    if (ti) ti.addEventListener('change', onDateChange);
+
+    paintChips();
     overlayBuilt = true;
+  }
+
+  function paintChips() {
+    var ov = document.getElementById('cyhist-overlay');
+    if (!ov) return;
+    Array.prototype.forEach.call(ov.querySelectorAll('.cyhist-chip'), function (b) {
+      var on = (b.getAttribute('data-preset') === range.preset);
+      b.style.background = on ? '#2a1e06' : 'none';
+      b.style.color = on ? 'var(--amber,#f0b454)' : '#b8893a';
+      b.style.borderColor = on ? '#f0b454' : 'rgba(240,180,84,0.3)';
+    });
   }
 
   function openOverlay() {
@@ -123,11 +202,20 @@
     if (!sym) return;
     selected = sym;
     renderList();
+    requestHistory();
+  }
+
+  function requestHistory() {
+    if (!selected) return;
     var d = document.getElementById('cyhist-detail');
-    if (d) d.innerHTML = '<div style="opacity:.6;font-size:.82rem">Loading ' + esc(sym) + ' history...</div>';
-    try { sendWS({ type: 'cycle_history', symbol: sym }); }
+    if (d) d.innerHTML = '<div style="opacity:.6;font-size:.82rem">Loading ' + esc(selected) + ' history...</div>';
+    var b = rangeBounds();
+    var msg = { type: 'cycle_history', symbol: selected };
+    if (b.from != null) msg.from = b.from;
+    if (b.to != null) msg.to = b.to;
+    try { sendWS(msg); }
     catch (_) {
-      try { if (window.ws && window.ws.readyState === 1) window.ws.send(JSON.stringify({ type: 'cycle_history', symbol: sym })); } catch (__) {}
+      try { if (window.ws && window.ws.readyState === 1) window.ws.send(JSON.stringify(msg)); } catch (__) {}
     }
   }
 
@@ -137,14 +225,17 @@
     if (!data || data.symbol !== selected) return; // stale response for a different ticker
     var cycles = data.cycles || [];
     if (!cycles.length) {
+      var why = (range.preset === 'all')
+        ? 'No history yet. This table fills forward from the next 30-minute cycle.'
+        : 'No cycles in this range (' + esc(rangeLabel()) + '). Try a wider range or ALL.';
       d.innerHTML = '<div style="font-weight:800;color:var(--amber,#f0b454);margin-bottom:6px">' + esc(data.symbol) + '</div>' +
-        '<div style="opacity:.6;font-size:.82rem">No history yet. This table fills forward from the next 30-minute cycle.</div>';
+        '<div style="opacity:.6;font-size:.82rem">' + why + '</div>';
       return;
     }
     var head =
       '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">' +
         '<span style="font-weight:800;color:var(--amber,#f0b454);font-size:1rem">' + esc(data.symbol) + '</span>' +
-        '<span style="opacity:.6;font-size:.72rem">' + cycles.length + ' cycles</span>' +
+        '<span style="opacity:.6;font-size:.72rem">' + cycles.length + ' cycles, ' + esc(rangeLabel()) + '</span>' +
       '</div>';
     var body = cycles.map(function (r) {
       var sp = Number(r.s), ep = Number(r.e);

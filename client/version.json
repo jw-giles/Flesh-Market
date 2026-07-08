@@ -1,7 +1,7 @@
 {
-  "version": "1.1.8.7",
-  "built": "2026-07-07T00:00:00Z",
+  "version": "1.1.8.8",
+  "built": "2026-07-08T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.8.7",
-  "notes": "New History button next to the Watchlist button in the Companies panel. Click it to open a browser that lists all tickers; pick one to see the start and end price of each 30-minute market cycle for the last ~5 months, newest first. The archive starts empty on this update and fills forward one row per ticker per cycle, so it reaches full 5-month depth about five months from now. Carries 1.1.8.6 and earlier."
+  "patch": "1.1.8.8",
+  "notes": "Date filter on the Cycle Price History browser. Range chips (24H / 7D / 30D / ALL) plus From/To date pickers; the view now defaults to the last 7 days instead of the full archive, so opening a ticker no longer loads months of rows. ALL still shows the full ~5-month window. Filtering happens server-side, so only the requested range is sent. Carries 1.1.8.7 and earlier."
 }
