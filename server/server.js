@@ -256,6 +256,10 @@ function registerFundTicker(listing) {
   };
   companies.push(c);
   FUND_TICKERS.set(listing.fund_id, { fundId: listing.fund_id, companyId: listing.company_id, symbol: listing.symbol });
+  // Seed the daily-change baseline: without a prevClose entry the tick loop falls back
+  // to (price - price)/price and the panel %-change sticks at +0.00%. Use the listing
+  // price as the ticker's opening mark until the next midnight reset.
+  try { if (typeof prevClose !== 'undefined' && prevClose && !prevClose.has(listing.symbol)) prevClose.set(listing.symbol, listing.list_price); } catch(_) {}
   try { updateFundAnchor(listing.fund_id, buildPriceMap()); } catch(_) {}
   return c;
 }
@@ -267,6 +271,7 @@ function unregisterFundTicker(fundId) {
   if (!reg) return;
   const idx = companies.findIndex(x => x.id === reg.companyId);
   if (idx >= 0) companies.splice(idx, 1);
+  try { if (typeof prevClose !== 'undefined' && prevClose) prevClose.delete(reg.symbol); } catch(_) {}
   FUND_TICKERS.delete(fundId);
 }
 
@@ -365,6 +370,15 @@ function executeFundTrade(fundId, side, sym, qty, actorId) {
   if (!fund) return { ok:false, error:'not_found' };
   const c = companies.find(x => x.symbol === sym && !x._special);
   if (!c) return { ok:false, error:'unknown_symbol' };
+  // A house may not trade a listed fund ticker with pool cash. Buying its OWN ticker is
+  // circular (pool spends cash to hold a claim on itself; the impact push marks that
+  // holding up, NAV/share and the anchor follow, and the manager manufactures an upward
+  // move with money that never left their control) and recursive (pool NAV would depend
+  // on a price the anchor derives from pool NAV). Buying ANOTHER house's ticker lets two
+  // houses pump each other one step removed. Managers can still buy fund tickers from
+  // their PERSONAL account like any player.
+  if (c._fundTicker) return { ok:false, error:'no_fund_ticker_trades',
+    msg:'A Capital House cannot trade Index fund tickers with house cash. Trade them from your personal account.' };
   const q = Math.max(1, Math.floor(Number(qty)||0));
   const fundCash = fund.cash;
   const haveQty  = getFundPortfolio(fundId).find(h=>h.symbol===sym)?.qty || 0;
@@ -2998,6 +3012,13 @@ function processFundProposals() {
       resolveProposal(prop.id, status);
       if (passed) {
         const c = companies.find(x => x.symbol === prop.symbol);
+        if (c && c._fundTicker) {
+          // Execution blocked: a fund (here the legacy guild) may not trade a listed fund
+          // ticker with pool cash (circular / cross-pumpable). The vote still resolved as
+          // passed above; the fill is simply skipped, same as an insufficient-cash pass.
+          try { pushHeadline(`GUILD: ${prop.symbol} trade not executed (Index tickers can't be traded with guild cash)`, 'bad', null); } catch(_) {}
+          continue;
+        }
         if (c) {
           const { cash } = getFundNAV();
           const holdings = getFundHoldings();
