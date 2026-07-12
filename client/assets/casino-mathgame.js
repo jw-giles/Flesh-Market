@@ -59,12 +59,13 @@
     let qNum=0, score=0, totalEarned=0, playing=false;
     let current=null, currentLvl=null, timerInterval=null, timeLeft=0;
     let cooldownInterval=null;
+    let mqRoundId=null; // server round id for the active session
 
     function getBalance(){ return (typeof ME==='object'&&ME&&typeof ME.cash==='number')?ME.cash:0; }
     function setBalance(v){
       if(typeof ME==='object'&&ME){ME.cash=v;}
       const c=document.getElementById('cash');if(c)c.textContent='Ƒ'+Math.round(v).toLocaleString();
-      try{if(window.ws&&window.ws.readyState===1)window.ws.send(JSON.stringify({type:'casino',sync:Number(v)||0}));}catch(_){}
+      // Legacy {type:'casino',sync} removed — server-authoritative cash.
     }
 
     function randInt(max){ return Math.floor(Math.random()*max)+1; }
@@ -150,7 +151,7 @@
         score++;
         const earned=currentLvl.perQ;
         totalEarned+=earned;
-        setBalance(getBalance()+earned);
+        // Accumulate only — the session total is settled server-side at endTest.
         const fb=document.getElementById('mq-feedback');
         fb.textContent=`✓ Correct! +Ƒ${earned.toLocaleString()}`;
         fb.style.color='#4ecdc4';
@@ -162,6 +163,9 @@
 
     function endTest(){
       playing=false;
+      // Settle the whole session: gross = total earned + the Ƒ1 nominal stake
+      // (returned), netting exactly the earnings. Server caps at mathgame 'flat'.
+      if(mqRoundId){ CasinoNet.result(mqRoundId, totalEarned+1); mqRoundId=null; }
       document.getElementById('mq-input').disabled=true;
       document.getElementById('mq-submit').disabled=true;
       document.getElementById('mq-question').textContent='Test complete!';
@@ -179,6 +183,9 @@
       const last=parseInt(localStorage.getItem(COOLDOWN_KEY)||'0');
       if(Date.now()-last < COOLDOWN_MS){ updateCooldownBar(); return; }
       qNum=0;score=0;totalEarned=0;playing=true;
+      // Open one server-tracked round for the whole session (nominal Ƒ1 stake).
+      mqRoundId=null;
+      CasinoNet.bet('mathgame', 1).then(r=>{ if(r&&r.ok) mqRoundId=r.roundId; });
       document.getElementById('mq-status').textContent='';
       document.getElementById('mq-score').textContent='0';
       document.getElementById('mq-earned').textContent='Ƒ0';

@@ -55,10 +55,11 @@ try { window.PnLBridge && typeof window.PnLBridge.pushNow === 'function' && wind
 try { (window.bus||window.__bus) && typeof (window.bus||window.__bus).emit === 'function' && (window.bus||window.__bus).emit('trade', null, 0); } catch(_e) {}
 }
     const c = document.getElementById('cash'); if (c) c.textContent = fmtLocal(newVal);
-      try{ if(window.ws&&window.ws.readyState===1) window.ws.send(JSON.stringify({type:'casino',sync:Number(newVal)||0})); }catch(_e){}
+      // Legacy {type:'casino',sync} removed — server-authoritative cash.
   refreshChessBalance();
   }
   function adjustBalance(delta){ setBalance(getBalance()+delta); }
+  var chessRoundId=null; // server round id for the in-flight game
   function refreshChessBalance(){
     const lbl = document.getElementById('chessBalance');
     if (lbl) lbl.textContent = 'Balance: ' + fmtLocal(getBalance());
@@ -391,19 +392,22 @@ try { (window.bus||window.__bus) && typeof (window.bus||window.__bus).emit === '
   playing=false;
   const elo = Number(document.getElementById('chessElo').value);
   const fee = feeForElo(elo);
+  // Compute gross payout: win=2.5x fee, draw=fee (refund), loss/surrender=0.
+  let gross=0;
   if (result==='win'){
-    const win = Math.round(fee*2.5);
-    adjustBalance(win);
-    status(timedResult==='time_black' ? 'AI ran out of time! You win ' + fmtLocal(win) : 'Checkmate! You win ' + fmtLocal(win));
+    gross = Math.round(fee*2.5);
+    status(timedResult==='time_black' ? 'AI ran out of time! You win ' + fmtLocal(gross) : 'Checkmate! You win ' + fmtLocal(gross));
   } else if (result==='loss'){
+    gross = 0;
     status(timedResult==='time_white' ? 'You ran out of time.' : 'Checkmated. Better luck next time.');
   } else if (result==='surrender'){
+    gross = 0;
     status('You surrendered.');
   } else {
-    const draw = fee;
-    adjustBalance(draw);
-    status('Draw. Refunded ' + fmtLocal(draw));
+    gross = fee;
+    status('Draw. Refunded ' + fmtLocal(fee));
   }
+  if(chessRoundId){ CasinoNet.result(chessRoundId, gross); chessRoundId=null; }
   refreshChessBalance();
   }
 
@@ -443,14 +447,19 @@ try { (window.bus||window.__bus) && typeof (window.bus||window.__bus).emit === '
   function stopClock(){ clock.running=false; if(clock.interval){clearInterval(clock.interval);clock.interval=null;} }
   function switchTurnClock(prevTurn){}
 
-function startGame(){
+async function startGame(){
   setTimeControlFromSelect(); resetClockUI(); startClock('w');
     
     
     const elo = Number(document.getElementById('chessElo').value);
     const fee = feeForElo(elo);
     if (getBalance() < fee){ status('Insufficient funds for entry fee.'); return; }
-    adjustBalance(-fee);
+    // Settle any prior unfinished game as a loss of its fee so the one-open-round
+    // guard doesn't reject this new game.
+    if(chessRoundId){ CasinoNet.result(chessRoundId, 0); chessRoundId=null; }
+    const round = await CasinoNet.bet('chess', fee);
+    if(!round.ok){ status(round.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Entry rejected: '+(round.error||'unknown'))); return; }
+    chessRoundId=round.roundId;
     refreshChessBalance();
     game = { board: startPosition(), turn:'w' };
     selected=null; moves=[]; playing=true;

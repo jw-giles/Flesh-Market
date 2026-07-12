@@ -51,16 +51,20 @@
 
   let modeIdx=0, grid=[], revealed=[], flagged=[], firstClick=true, gameOver=false;
   let timerInterval=null, elapsed=0;
+  let msRoundId=null; // server round id for the active board
 
   function getBalance(){ return (typeof ME==='object'&&ME&&typeof ME.cash==='number')?ME.cash:0; }
   function setBalance(v){
     if(typeof ME==='object'&&ME){ME.cash=v;}
     const c=document.getElementById('cash');if(c)c.textContent='Ƒ'+Math.round(v).toLocaleString();
-    try{if(window.ws&&window.ws.readyState===1)window.ws.send(JSON.stringify({type:'casino',sync:Number(v)||0}));}catch(_){}
+    // Legacy {type:'casino',sync} removed — server-authoritative cash.
   }
 
   function initGrid(){
     const m=MODES[modeIdx];
+    // Return the nominal stake on any prior in-progress board so the server's
+    // one-open-round-per-game guard doesn't reject the next first-click bet.
+    if(msRoundId){ CasinoNet.result(msRoundId, 1); msRoundId=null; }
     grid=Array(m.rows*m.cols).fill(0);
     revealed=Array(m.rows*m.cols).fill(false);
     flagged=Array(m.rows*m.cols).fill(false);
@@ -145,13 +149,21 @@
       if(!cell)return;
       const i=parseInt(cell.dataset.idx);
       if(isNaN(i)||revealed[i]||flagged[i])return;
-      if(firstClick){firstClick=false;placeMines(i);}
+      if(firstClick){
+        firstClick=false;placeMines(i);
+        // Open a server-tracked round on first reveal (nominal Ƒ1 stake, returned
+        // on win/loss so the game stays free; reward rides the minesweeper 'flat').
+        msRoundId=null;
+        CasinoNet.bet('minesweeper', 1).then(r=>{ if(r&&r.ok) msRoundId=r.roundId; });
+      }
       if(grid[i]===-1){
         gameOver=true;
         if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
         const m=MODES[modeIdx];
         for(let j=0;j<m.rows*m.cols;j++){if(grid[j]===-1)revealed[j]=true;}
         renderBoard();
+        // Loss — return the nominal stake only (net 0).
+        if(msRoundId){ CasinoNet.result(msRoundId, 1); msRoundId=null; }
         document.getElementById('ms-msg').textContent='💥 Boom!';
         document.getElementById('ms-status').textContent='Hit a mine. Better luck next time.';
         return;
@@ -162,7 +174,8 @@
         gameOver=true;
         if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
         const reward=MODES[modeIdx].reward;
-        setBalance(getBalance()+reward);
+        // Win — gross = reward + nominal stake, netting the reward.
+        if(msRoundId){ CasinoNet.result(msRoundId, reward+1); msRoundId=null; }
         document.getElementById('ms-msg').textContent='✓ Board cleared!';
         document.getElementById('ms-status').textContent=`You earned Ƒ${reward.toLocaleString()}! Time: ${elapsed}s`;
       }

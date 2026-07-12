@@ -4,6 +4,37 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.9.1 (2026-07-11) - Server-authoritative casino + activity audit (CLIENT + SERVER + DB)
+
+Client, server, and DB. Hard-refresh after deploy. **DB adds a `casino_rounds` table on boot** (additive, `CREATE IF NOT EXISTS`; starts empty). A restart applies the schema; no migration step.
+
+**The hole.** Every casino game computed its own outcome in the browser and reported the resulting balance to the server via `{type:'casino', sync:N}`. The server set the player's cash to whatever number arrived. No wager, no game, no outcome validation. A crafted WebSocket frame (`{"type":"casino","sync":999999999}`) set any balance, and it did not need dev tools open: a proxy, an extension, or a five-line script could send it. Cash minted this way then flowed into trades, wires, and titles, touching other players' positions, so it could not be cleanly clawed back.
+
+**The fix (two-message protocol).** The single trusted-balance message is gone. Games now:
+- `casino_bet {game, wager}` - server checks funds, deducts the stake, opens a server-tracked round, returns a server-generated `roundId`. The stake is now a server-held fact.
+- `casino_bet_addon {roundId, amount}` - grows the stake mid-round (Blackjack Double, poker calls/raises) so the payout cap scales with total money in.
+- `casino_result {roundId, payout}` - `payout` is the GROSS return (0 on a loss; stake+winnings on a win). Server credits `min(payout, wager*mult + flat)` per game. Anything above the cap is credited at the cap and logged `clamped`.
+
+Because the wager is committed server-side before the outcome is reported, a client can no longer inflate both sides of the cap in one message. No bet-size limit and no net-worth gate: high rollers are unaffected, the cap scales with the wager they actually staked.
+
+**Per-game caps** (from each game's real payout table): roulette 36x (straight-up), horse races 5x, blackjack 2.5x (3:2), chess 2.5x of fee, poker 1x + Ƒ5,000 flat headroom (PvE pot pays AI-held chips), and the no-stake puzzle games (sudoku Ƒ4,200, mathgame Ƒ900, minesweeper Ƒ450) carry their fixed reward in the flat term with a nominal Ƒ1 stake returned on win or loss so they stay free.
+
+**Round lifecycle.** One open round per player per game. A result that arrives faster than a real round could take voids the round (stake refunded, zero payout) and is logged `rejected_fast`. A round left open past its per-game timeout (3 min for quick games, up to 60 min for chess) is swept and FORFEIT: the stake stays gone, because refunding an abandoned round would make every bet risk-free (play it out, report only wins, walk away on losses). On server boot, any round left open by a crash or restart is voided and the stake REFUNDED (players cannot trigger a restart, so this cannot be farmed).
+
+**Dev panel.** New God Panel command `player_activity` returns a player's recent casino rounds (game, wager, payout, cash before/after, status, timestamp), surfaced in the Economy tab under a "Casino Activity" section (target a player, click Pull Casino History). `clamped` and `rejected_fast` rows are a built-in fraud signal: they surface anyone whose client claimed an impossible outcome, with the damage already capped, and the view flags the count at the top. Same table serves both the exploit fix and the audit view.
+
+**Plinko removed.** The under-repair Plinko tab was backed by dead, unreferenced client code (the physics never worked with the engine). Removed the subtab, the pane, and `casino-plinko.js`. Dice was never built (roadmap only), so nothing to remove there.
+
+**Mining split off.** Drone mining also used the `casino` channel to bank cash and is also still client-authoritative. It was moved onto its own `mining_bank` message so the casino faucet could be closed cleanly, and the remaining mining hole is now named and isolated (see the note in `server.js`) rather than hidden inside a shared channel. Mining is NOT fixed by this patch and needs its own server-side settlement next.
+
+- **Server** (`db.js`): `casino_rounds(id PK, player_id, game, wager, status, cash_before, payout, cash_after, opened_ts, resolved_ts)` + two indexes. Accessors: `openCasinoRound`, `getCasinoRound`, `getOpenCasinoRound`, `getOpenRoundForGame`, `addCasinoWager`, `resolveCasinoRound`, `getExpiredOpenCasinoRounds`, `getAllOpenCasinoRounds`, `getCasinoActivity`.
+- **Server** (`server.js`): `CASINO_CFG` per-game cap/timeout table; `casino_bet`/`casino_bet_addon`/`casino_result` handlers replacing the deleted `casino` sync; `sweepCasinoRounds` (forfeit sweep, 15s) + `voidOpenCasinoRoundsOnBoot` (refund on boot); `mining_bank` handler; `player_activity` God Panel command; a stale-client notice on the old `casino` message.
+- **Client** (`casino-net.js`, new): `CasinoNet.bet/addon/result` promise wrappers over the protocol, correlating acks by roundId. Loaded before the games in `index.html`. (`core.js`): roulette rewired (slip stakes on Spin, settles on result); Plinko removed from `CASINO_PANES`/`CASINO_SCRIPTS`; mining `setCash` points at `mining_bank`. (`casino-blackjack.js`): blackjack (bet on deal, addon on Double, single gross settle) and horse races (bet on start, gross settle). (`casino-poker.js`): blind stakes on deal, calls/raises add on, pot settles at endHand. (`casino-chess.js`): fee stakes on start, win/draw/loss settle. (`casino-sudoku.js`, `casino-mathgame.js`, `casino-minesweeper.js`): nominal Ƒ1 round per puzzle/session/board, reward settled server-side. All legacy `{type:'casino',sync}` emitters removed. (`god-panel.js`): "Casino Activity" section in the Economy tab (`godPlayerActivity` sender + `god_player_activity` render with fraud-flag highlighting). (`index.html`): Plinko subtab + pane removed; `casino-net.js` include added; Casino Activity markup added to the God Panel Economy tab.
+
+**Known follow-ups (not in this patch):** puzzle/board integrity (sudoku solutions, minesweeper mine positions are still client-checked; the cap bounds the payout but does not verify the puzzle was solved honestly); server-side cooldowns (sudoku/mathgame cooldowns are still localStorage and bypassable; the ledger will show repeat max-payout claims); mining server-side settlement; poker flat cap may clamp a large legitimate multiway pot (raise the flat if the ledger shows it biting).
+
+---
+
 ## v1.1.9.0 (2026-07-08) - The Index: Capital Houses as tradeable tickers (CLIENT + SERVER + DB)
 
 Client, server, and DB. Hard-refresh after deploy. **DB adds a `fund_listings` table on boot** (additive, `CREATE IF NOT EXISTS`; starts empty). A restart applies the schema; no migration step.

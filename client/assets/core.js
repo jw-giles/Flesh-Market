@@ -1614,10 +1614,9 @@ $all('.tab').forEach(tab=>{
   // Casino subtabs — lazy script loading
   // Scripts for roulette and blackjack load immediately (default views).
   // All others inject their <script> tag on first click, then init.
-  const CASINO_PANES = ['roulette','blackjack','plinko','poker','horseraces','chess','sudoku','mathgame','minesweeper'];
+  const CASINO_PANES = ['roulette','blackjack','poker','horseraces','chess','sudoku','mathgame','minesweeper'];
   const CASINO_SCRIPTS = {
     'blackjack':   'assets/casino-blackjack.js',
-    'plinko':      null, // disabled, under repair
     'poker':       'assets/casino-poker.js',
     'chess':       'assets/casino-chess.js',
     'sudoku':      'assets/casino-sudoku.js',
@@ -2328,13 +2327,18 @@ ws.addEventListener('message', (ev)=>{
       try { (window.bus||window.__bus)&&typeof (window.bus||window.__bus).emit==='function'&&(window.bus||window.__bus).emit('trade',null,0); } catch(_e){}
     }
     const c=document.getElementById('cash'); if(c) c.textContent=fmtLocal(newVal);
-    try{ if(window.ws&&window.ws.readyState===1) window.ws.send(JSON.stringify({type:'casino',sync:Number(newVal)||0})); }catch(_e){}
+    // Legacy {type:'casino',sync} removed — cash is server-authoritative now and
+    // arrives via {type:'me'}/{type:'portfolio'} pushes handled in core's ws layer.
     refreshRouletteBalance();
   }
   function adjustBalance(delta){ setBalance(getBalance()+delta); }
+  let rlRoundId=null; // server round id for the in-flight spin
   function refreshRouletteBalance(){
     const lbl=document.getElementById('rouletteBalance');
-    if(lbl) lbl.textContent=fmtLocal(getBalance());
+    // Show balance minus the un-staked slip so the displayed number matches what
+    // the player has "committed" before the spin actually stakes it server-side.
+    const slip=(typeof bets!=='undefined')?bets.reduce((s,b)=>s+b.amount,0):0;
+    if(lbl) lbl.textContent=fmtLocal(getBalance()-slip);
   }
 
   // ── Bet slip ────────────────────────────────────────────────────
@@ -2637,7 +2641,9 @@ ws.addEventListener('message', (ev)=>{
     const totalBet=bets.reduce((s,b)=>s+b.amount,0);
     const payout=payoutFor(result);
     const net=payout-totalBet;
-    adjustBalance(payout);
+    // Settle server-side: payout is the gross return (stake already deducted at
+    // bet time). Server credits the capped amount and pushes the authoritative cash.
+    if(rlRoundId){ CasinoNet.result(rlRoundId, payout); rlRoundId=null; }
     const lastEl=document.getElementById('lastResult');
     if(lastEl) lastEl.textContent=`Last: ${result} (${col})`;
     const banner=document.getElementById('rl-result-banner');
@@ -2659,13 +2665,17 @@ ws.addEventListener('message', (ev)=>{
   }
 
   // ── Place Bet ───────────────────────────────────────────────────────
+  // Bets accumulate in a local slip only — no cash moves until Spin, when the
+  // whole slip is staked server-side as one round. The displayed balance is
+  // reduced optimistically so the slip feels live; the server reconciles on spin.
   window.rlPlaceBet=function(){
     if(spinning) return;
     const betAmount=document.getElementById('betAmount');
     const betType=document.getElementById('betType');
     const straightNum=document.getElementById('straightNum');
     const amt=Math.max(1,Number(betAmount.value||0));
-    if(amt>getBalance()){ rlLog('Insufficient funds.'); return; }
+    const slipTotal=bets.reduce((s,b)=>s+b.amount,0);
+    if(amt+slipTotal>getBalance()){ rlLog('Insufficient funds.'); return; }
     const type=betType.value;
     let pick=null;
     if(type==='straight'){
@@ -2673,15 +2683,22 @@ ws.addEventListener('message', (ev)=>{
       pick=n;
     } else { pick=type; }
     bets.push({type,pick,amount:amt});
-    adjustBalance(-amt);
     renderBets(); refreshRouletteBalance();
     rlLog(`Bet placed: ${betLabel({type,pick})}, ${fmtLocal(amt)}`);
   };
 
   // ── Spin ────────────────────────────────────────────────────────────
-  window.rlSpin=function(){
+  window.rlSpin=async function(){
     if(spinning) return;
     if(!bets.length){ rlLog('Place a bet first.'); return; }
+    const totalBet=bets.reduce((s,b)=>s+b.amount,0);
+    // Stake the whole slip server-side; only spin if the server accepted it.
+    const round = await CasinoNet.bet('roulette', totalBet);
+    if(!round.ok){
+      rlLog(round.stale ? 'Casino updated — refresh (Ctrl+Shift+R).' : ('Bet rejected: '+(round.error||'unknown')));
+      return;
+    }
+    rlRoundId = round.roundId;
     const lastEl=document.getElementById('lastResult');
     if(lastEl) lastEl.textContent='Spinning…';
     const banner=document.getElementById('rl-result-banner'); if(banner) banner.style.display='none';
@@ -2721,8 +2738,11 @@ ws.addEventListener('message', (ev)=>{
     const c = document.getElementById('cash');
     if (c) c.textContent = 'Ƒ' + (Math.round(v * 100) / 100).toLocaleString();
     try {
+      // Mining banks via its own channel now (was {type:'casino'}). Still client-
+      // authoritative — see the mining_bank note in server.js. Kept working here;
+      // to be replaced by a server-side mining settlement.
       if (window.ws && window.ws.readyState === 1) {
-        window.ws.send(JSON.stringify({ type: 'casino', sync: Number(v) || 0 }));
+        window.ws.send(JSON.stringify({ type: 'mining_bank', sync: Number(v) || 0 }));
       }
     } catch(_){}
   }

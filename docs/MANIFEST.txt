@@ -1,4 +1,44 @@
-# FleshMarket v1.1.9.0 - MANIFEST
+# FleshMarket v1.1.9.1 - MANIFEST
+
+## v1.1.9.1 changes (Server-authoritative casino + activity audit; CLIENT + SERVER + DB)
+
+```
+client/
+  index.html                 - Plinko subtab + pane removed; + casino-net.js include;
+                               + Casino Activity markup in the God Panel Economy tab
+  assets/casino-net.js       NEW. CasinoNet.bet/addon/result promise wrappers over the
+                               server bet/settle protocol; correlates acks by roundId.
+  assets/core.js             Roulette rewired to stake the slip on Spin and settle on
+                               result; Plinko removed from CASINO_PANES/CASINO_SCRIPTS;
+                               mining setCash now sends {type:'mining_bank'} not casino.
+  assets/casino-blackjack.js Blackjack (stake on deal, addon on Double, one gross settle)
+                               and Horse Races (stake on start, gross settle) rewired.
+  assets/casino-poker.js     Blind stakes on deal; calls/raises add on; pot settles once
+                               at endHand with the player's gross winnings.
+  assets/casino-chess.js     Entry fee stakes on start; win/draw/loss settle server-side.
+  assets/casino-sudoku.js    Nominal Ƒ1 round per puzzle; reward settled on solve.
+  assets/casino-mathgame.js  Nominal Ƒ1 round per session; total settled at end.
+  assets/casino-minesweeper.js Nominal Ƒ1 round per board; reward settled on clear.
+  assets/casino-plinko.js    DELETED (was dead, unreferenced code).
+  assets/god-panel.js        + "Casino Activity" section: godPlayerActivity sender +
+                               god_player_activity render (flags clamped/rejected_fast).
+
+server/
+  db.js                      + casino_rounds table (CREATE IF NOT EXISTS) + 2 indexes;
+                               + 9 accessors (open/get/getOpen/getOpenForGame/addWager/
+                               resolve/getExpiredOpen/getAllOpen/getActivity).
+  server.js                  + CASINO_CFG per-game cap/timeout table; casino_bet /
+                               casino_bet_addon / casino_result handlers REPLACE the
+                               deleted casino sync; sweepCasinoRounds (forfeit, 15s) +
+                               voidOpenCasinoRoundsOnBoot (refund on boot); mining_bank
+                               handler; player_activity God Panel command; stale-client
+                               notice on the old casino message.
+```
+
+Deploy: DB adds `casino_rounds` on boot (additive). Hard-refresh required after deploy
+(client asset changes). No migration step.
+
+---
 
 ## v1.1.9.0 changes (The Index: Capital Houses as tradeable tickers; CLIENT + SERVER + DB)
 

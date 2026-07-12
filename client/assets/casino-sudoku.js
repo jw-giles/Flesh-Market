@@ -64,12 +64,13 @@
   // ── State ─────────────────────────────────────────────────
   let puzzle=[], solution=[], userGrid=[], selected=-1;
   let diffIdx=1, hintUses=0, playing=false;
+  let sdkRoundId=null; // server round id for the active puzzle
 
   function getBalance(){ return (typeof ME==='object'&&ME&&typeof ME.cash==='number')?ME.cash:0; }
   function setBalance(v){
     if(typeof ME==='object'&&ME){ME.cash=v;}
     const c=document.getElementById('cash');if(c)c.textContent='Ƒ'+Math.round(v).toLocaleString();
-    try{if(window.ws&&window.ws.readyState===1)window.ws.send(JSON.stringify({type:'casino',sync:Number(v)||0}));}catch(_){}
+    // Legacy {type:'casino',sync} removed — server-authoritative cash.
   }
 
   // ── Puzzle generator ───────────────────────────────────────
@@ -144,6 +145,14 @@
     puzzle=gen.puzzle;solution=gen.solution;
     userGrid=Array(81).fill(0);
     selected=-1;hintUses=0;playing=true;
+    // Return the nominal stake on any prior un-submitted puzzle so the server's
+    // one-open-round-per-game guard doesn't reject this new round.
+    if(sdkRoundId){ CasinoNet.result(sdkRoundId, 1); sdkRoundId=null; }
+    // Open a server-tracked round for this puzzle (nominal Ƒ1 stake, returned in
+    // full on solve or fail so the game stays free; the reward rides the server
+    // 'flat' cap). Non-blocking: the board renders immediately; if the bet is
+    // rejected sdkRoundId stays null and submit simply won't pay out.
+    CasinoNet.bet('sudoku', 1).then(r=>{ if(r&&r.ok) sdkRoundId=r.roundId; });
     render();
     document.getElementById('sdk-status').textContent=`${d.name}, fill the grid, then press Submit.`;
     document.getElementById('sdk-hint').textContent='Hint (−20% reward)';
@@ -162,7 +171,9 @@
       const d=DIFFICULTIES[diffIdx];
       const penalty=hintUses*0.2;
       const reward=Math.floor(d.reward*(1-Math.min(0.8,penalty)));
-      setBalance(getBalance()+reward);
+      // Settle server-side: gross = reward + the Ƒ1 nominal stake (returned), so
+      // net credit is exactly the reward. Server caps at the sudoku 'flat'.
+      if(sdkRoundId){ CasinoNet.result(sdkRoundId, reward+1); sdkRoundId=null; }
       // Start 30-min cooldown on solve
       localStorage.setItem('sudoku_cooldown_'+diffIdx, Date.now());
       render();

@@ -301,6 +301,26 @@ export function initDB() {
       owned     TEXT NOT NULL DEFAULT '{}',
       equipped  TEXT NOT NULL DEFAULT 'default'
     );
+
+    -- Casino rounds: server-authoritative bet/settle ledger.
+    -- One row per round. A round opens on casino_bet (stake deducted, status='open'),
+    -- and closes on casino_result (payout credited, capped) or the timeout sweep.
+    -- status: open | resolved | clamped | expired | voided | rejected_fast
+    -- This table is BOTH the anti-exploit state AND the dev-panel activity feed.
+    CREATE TABLE IF NOT EXISTS casino_rounds (
+      id          TEXT PRIMARY KEY,
+      player_id   TEXT NOT NULL,
+      game        TEXT NOT NULL,
+      wager       REAL NOT NULL,
+      status      TEXT NOT NULL DEFAULT 'open',
+      cash_before REAL NOT NULL,
+      payout      REAL,
+      cash_after  REAL,
+      opened_ts   INTEGER NOT NULL,
+      resolved_ts INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_casino_player ON casino_rounds(player_id, opened_ts DESC);
+    CREATE INDEX IF NOT EXISTS idx_casino_open   ON casino_rounds(status, opened_ts);
   `);
 
   // Migration: player_cargo gained a colony_id (cargo is now located per-colony).
@@ -3965,4 +3985,42 @@ export function recordTaxHistory(kind, subjectId, periodGain, taxAssessed, fromP
 // i.e. everyone the engine needs to consider. Cheap: just enumerate players.
 export function getAllPlayerIdsForTax() {
   return stmt('SELECT id FROM players').all().map(r => r.id);
+}
+
+// ── Casino rounds: server-authoritative bet/settle ledger ─────────────────────
+export function openCasinoRound({ id, playerId, game, wager, cashBefore, openedTs }) {
+  stmt(`INSERT INTO casino_rounds(id,player_id,game,wager,status,cash_before,opened_ts)
+        VALUES(?,?,?,?,'open',?,?)`)
+    .run(id, playerId, game, wager, cashBefore, openedTs);
+}
+export function getCasinoRound(id) {
+  return stmt('SELECT * FROM casino_rounds WHERE id=?').get(id) || null;
+}
+// Only an OPEN round for this player may be mutated by a result / addon.
+export function getOpenCasinoRound(id, playerId) {
+  return stmt("SELECT * FROM casino_rounds WHERE id=? AND player_id=? AND status='open'").get(id, playerId) || null;
+}
+// Does this player already have an open round for this game? (one-at-a-time guard)
+export function getOpenRoundForGame(playerId, game) {
+  return stmt("SELECT * FROM casino_rounds WHERE player_id=? AND game=? AND status='open' LIMIT 1").get(playerId, game) || null;
+}
+export function addCasinoWager(id, addAmount) {
+  stmt('UPDATE casino_rounds SET wager = wager + ? WHERE id=?').run(addAmount, id);
+}
+export function resolveCasinoRound(id, status, payout, cashAfter, resolvedTs) {
+  stmt('UPDATE casino_rounds SET status=?, payout=?, cash_after=?, resolved_ts=? WHERE id=?')
+    .run(status, payout, cashAfter, resolvedTs, id);
+}
+// Rounds still 'open' past the cutoff — used by the sweep to force-resolve stragglers.
+export function getExpiredOpenCasinoRounds(cutoffTs) {
+  return stmt("SELECT * FROM casino_rounds WHERE status='open' AND opened_ts < ?").all(cutoffTs);
+}
+// All rounds still 'open' — used once on boot to void anything a crash left dangling.
+export function getAllOpenCasinoRounds() {
+  return stmt("SELECT * FROM casino_rounds WHERE status='open'").all();
+}
+// Dev panel: recent activity for one player, newest first.
+export function getCasinoActivity(playerId, limit = 100) {
+  return stmt('SELECT * FROM casino_rounds WHERE player_id=? ORDER BY opened_ts DESC LIMIT ?')
+    .all(playerId, Math.max(1, Math.min(500, limit | 0)));
 }

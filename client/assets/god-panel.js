@@ -57,6 +57,11 @@
     if (!name) { godFeedback('Enter a player name', '#ff9900'); return; }
     godSend({ cmd: 'player_info', targetName: name });
   };
+  window.godPlayerActivity = function() {
+    const name = getGodTarget();
+    if (!name) { godFeedback('Enter a player name', '#ff9900'); return; }
+    godSend({ cmd: 'player_activity', targetName: name });
+  };
   window.godQuickCash = function(amount) {
     const name = getGodTarget();
     if (!name) { godFeedback('Enter a player name first', '#ff9900'); return; }
@@ -359,6 +364,51 @@
       // Also populate player search field
       document.getElementById('god-player-input').value = d.name;
       godFeedback(`✓ Loaded: ${d.name}`, '#86ff6a');
+    }
+
+    if (msg.type === 'god_player_activity') {
+      const el = document.getElementById('god-player-activity');
+      if (!el) return;
+      const d = msg.data || {};
+      const rows = d.rows || [];
+      el.style.display = 'block';
+      if (!rows.length) {
+        el.innerHTML = `<div style="color:#666;padding:6px">No casino activity for ${d.name || 'player'}.</div>`;
+        godFeedback(`✓ Activity: ${d.name} (none)`, '#86ff6a');
+        return;
+      }
+      // Status colors: clamped / rejected_fast are the fraud signals — flag them.
+      const stColor = {
+        resolved: '#7fc090', clamped: '#ff5a5a', rejected_fast: '#ff9a00',
+        expired: '#888', voided: '#4da6ff', open: '#ffd24a',
+      };
+      const fmtNum = n => (Number(n)||0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+      const fmtTs = ts => {
+        try { const dt = new Date(Number(ts)); return dt.toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }); }
+        catch(_) { return '-'; }
+      };
+      const flagged = rows.filter(r => r.status === 'clamped' || r.status === 'rejected_fast').length;
+      const header = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid #ff990022">
+          <span style="color:#fff">${d.name} — last ${rows.length} round${rows.length===1?'':'s'}</span>
+          ${flagged ? `<span style="color:#ff5a5a">⚠ ${flagged} flagged</span>` : '<span style="color:#7fc090">clean</span>'}
+        </div>`;
+      const body = rows.map(r => {
+        const c = stColor[r.status] || '#7fc090';
+        const net = (Number(r.payout)||0) - (Number(r.wager)||0);
+        const netColor = net > 0 ? '#86ff6a' : (net < 0 ? '#ff8a8a' : '#888');
+        return `
+          <div style="display:grid;grid-template-columns:70px 1fr auto;gap:4px 8px;padding:3px 0;border-bottom:1px solid #1a1200">
+            <span style="color:#888">${fmtTs(r.opened_ts)}</span>
+            <span style="color:#cfc">${r.game} · bet ${fmtNum(r.wager)} · paid ${fmtNum(r.payout)}</span>
+            <span style="color:${c};text-align:right">${r.status}</span>
+            <span></span>
+            <span style="color:${netColor}">net ${net>0?'+':''}${fmtNum(net)}</span>
+            <span style="color:#555;text-align:right">→ ${fmtNum(r.cash_after)}</span>
+          </div>`;
+      }).join('');
+      el.innerHTML = header + body;
+      godFeedback(`✓ Activity: ${d.name} (${rows.length}${flagged?`, ${flagged} flagged`:''})`, flagged ? '#ff9a00' : '#86ff6a');
     }
 
     if (msg.type === 'god_player_list') {

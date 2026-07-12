@@ -125,6 +125,10 @@ import {
   recordFRSPositionSnapshot, logFRSPurchase, getFRSPlayerTelemetry, getFRSRecentPurchases,
   getFRSSettings, setFRSSetting,
   getPlayerTaxState, setPlayerTaxState, recordTaxHistory, getAllPlayerIdsForTax,
+  // Casino: server-authoritative bet/settle ledger
+  openCasinoRound, getCasinoRound, getOpenCasinoRound, getOpenRoundForGame,
+  addCasinoWager, resolveCasinoRound, getExpiredOpenCasinoRounds,
+  getAllOpenCasinoRounds, getCasinoActivity,
 } from './db.js';
 
 // FleshMarket TCG — collection/deck persistence + server-authoritative pack economy
@@ -626,6 +630,35 @@ const MARGIN_DUNCE_FINE     = 25000;  // flat fine to clear a margin-call dunce
 const DEBTOR_TITLE          = 'Debtor';
 const DIVIDEND_RATE         = 0.006;  // 0.6% of position value per 2h
 const DIVIDEND_SECTORS      = new Set([0, 2, 4, 6]); // Finance, Insurance, Energy, Tech
+
+// ─── Casino: per-game settlement config ───────────────────────────────────────
+// The payout cap on a settled round is  wager * mult + flat.
+//   mult  — max legit payout multiple on the staked wager (from each game's real
+//           payout table). For no-stake games (fixed reward, wager=1 sentinel)
+//           mult is 0 and the whole cap lives in flat.
+//   flat  — fixed headroom in Ƒ. Covers no-stake fixed prizes (sudoku/math/mines)
+//           and PvE pots where the table pays out AI-held chips (poker).
+//   minDurMs — a result arriving faster than this is physically impossible for a
+//           real round → the round is voided (stake refunded, zero payout). Also
+//           the floor that makes server-side cooldowns meaningful.
+//   timeoutMs — a round left open longer than this is swept and FORFEIT (stake
+//           lost, not refunded) so a player can't bet, see a loss, and abandon to
+//           dodge it. Boot-time voids are refunded separately (see sweep + boot).
+// Multipliers verified against source 2026-07: roulette straight ×36 (core.js
+// payoutFor), horse ×5 (one bet/race), blackjack 3:2 → gross ≤2.5× (BJ pays
+// stake+1.5×), chess win 2.5×fee. Poker is multi-street PvE; flat headroom covers
+// AI chips won. No-stake fixed rewards: sudoku max Ƒ4,000, math session ~Ƒ800,
+// minesweeper Ƒ400 — flats carry a little slack for float/rounding.
+const CASINO_CFG = {
+  roulette:    { mult: 36, flat: 0,    minDurMs: 3000,  timeoutMs: 3  * 60_000 },
+  horseraces:  { mult: 5,  flat: 0,    minDurMs: 4000,  timeoutMs: 3  * 60_000 },
+  blackjack:   { mult: 2.5,flat: 0,    minDurMs: 3000,  timeoutMs: 5  * 60_000 },
+  poker:       { mult: 1,  flat: 5000, minDurMs: 5000,  timeoutMs: 10 * 60_000 },
+  chess:       { mult: 2.5,flat: 0,    minDurMs: 1500,  timeoutMs: 60 * 60_000 },
+  sudoku:      { mult: 0,  flat: 4200, minDurMs: 20000, timeoutMs: 45 * 60_000 },
+  mathgame:    { mult: 0,  flat: 900,  minDurMs: 15000, timeoutMs: 15 * 60_000 },
+  minesweeper: { mult: 0,  flat: 450,  minDurMs: 4000,  timeoutMs: 30 * 60_000 },
+};
 const SECTOR_NAMES          = ['Finance','Biotech','Insurance','Manufacturing','Energy','Logistics','Tech','Misc'];
 
 // DEV_ACCOUNTS env: comma-separated list of dev account names.
@@ -4535,6 +4568,43 @@ function sweepContracts() {
   catch(e) { console.error('[Contracts sweep]', e); }
 }
 
+// Casino round sweep. A round left open past its per-game timeout is FORFEIT:
+// the stake stays gone (already deducted at bet time), payout is zero. This is
+// deliberate — refunding an abandoned round would make every bet risk-free (play
+// it out locally, send the result only on a win, walk away on a loss). An
+// abandoned round therefore settles exactly like a loss. The cutoff is per game
+// because a depth-5 chess game legitimately runs far longer than a roulette spin.
+function sweepCasinoRounds() {
+  try {
+    const now = Date.now();
+    for (const r of getExpiredOpenCasinoRounds(now)) {
+      const cfg = CASINO_CFG[r.game];
+      const timeoutMs = (cfg && cfg.timeoutMs) || 3 * 60_000;
+      if (now - r.opened_ts < timeoutMs) continue; // not yet past this game's window
+      const p = getPlayer(r.player_id);
+      const cashAfter = p ? p.cash : r.cash_before - r.wager;
+      resolveCasinoRound(r.id, 'expired', 0, cashAfter, now);
+    }
+  } catch(e) { console.error('[CasinoSweep]', e); }
+}
+
+// On boot, void every round left 'open' by a crash/restart and REFUND the stake.
+// Players can't trigger server restarts, so this can't be farmed the way the
+// timeout forfeit could be. Genuine mid-round interruptions are made whole.
+function voidOpenCasinoRoundsOnBoot() {
+  try {
+    const open = getAllOpenCasinoRounds();
+    if (!open.length) return;
+    const now = Date.now();
+    for (const r of open) {
+      const p = getPlayer(r.player_id);
+      if (p) { safeAddCash(p, r.wager); p.cash = Math.round(p.cash*100)/100; savePlayer(p); }
+      resolveCasinoRound(r.id, 'voided', 0, p ? p.cash : r.cash_before, now);
+    }
+    console.log(`[CasinoBoot] Voided + refunded ${open.length} open round(s) from previous run.`);
+  } catch(e) { console.error('[CasinoBoot]', e); }
+}
+
 // ─── COMMODITY MARKET (trade) ─────────────────────────────────────────────────
 app.post('/api/commodities/buy', (req, res) => {
   try {
@@ -6948,20 +7018,106 @@ wss.on('connection',(ws,req)=>{
       ws.send(JSON.stringify({ type: 'portfolio', data: snapshotPortfolio(actor) }));
     }
 
-    // ── Casino sync ──────────────────────────────────────────────────────────
+    // ── Casino: LEGACY sync — DELETED (was an unbounded cash faucet) ───────────
+    // The old handler set actor.cash to any client-reported number. Every casino
+    // game now uses the server-authoritative casino_bet / casino_result protocol
+    // below. A stale client still emitting the old message gets told to refresh
+    // rather than silently having its balance trusted (or silently ignored, which
+    // would look like "my winnings vanished").
     if(msg.type==='casino'){
-      if(typeof msg.sync==='number'&&Number.isFinite(msg.sync)){
-        const newCash = Math.max(0, msg.sync);
-        actor.cash = Math.round(newCash * 100) / 100;
+      ws.send(JSON.stringify({ type:'casino_stale', data:{
+        msg:'Casino updated — hard-refresh (Ctrl+Shift+R) to load the new version.' } }));
+    }
+
+    // ── Casino: place a bet (opens a server-tracked round) ────────────────────
+    // Client sends { type:'casino_bet', game, wager }. Server validates funds,
+    // deducts the stake immediately, and returns a server-generated roundId. The
+    // stake is now a server-held fact, so the later payout can be capped against
+    // it — the client cannot inflate both sides of the cap in one message.
+    if(msg.type==='casino_bet'){
+      const game  = String(msg.game||'');
+      const cfg   = CASINO_CFG[game];
+      const wager = Math.round((Number(msg.wager)||0)*100)/100;
+      if(!cfg){ ws.send(JSON.stringify({type:'casino_bet_ack',data:{ok:false,error:'Unknown game.'}})); return; }
+      if(!(wager>0)){ ws.send(JSON.stringify({type:'casino_bet_ack',data:{ok:false,error:'Invalid wager.'}})); return; }
+      if(wager > actor.cash){ ws.send(JSON.stringify({type:'casino_bet_ack',data:{ok:false,error:'Insufficient funds.'}})); return; }
+      // One open round per player per game — blocks parallel-round shenanigans and
+      // orphaned stakes piling up.
+      if(getOpenRoundForGame(actor.id, game)){
+        ws.send(JSON.stringify({type:'casino_bet_ack',data:{ok:false,error:'Finish your current round first.'}})); return;
+      }
+      const roundId = uuidv4();
+      safeAddCash(actor, -wager);
+      actor.cash = Math.round(actor.cash*100)/100;
+      savePlayer(actor);
+      openCasinoRound({ id:roundId, playerId:actor.id, game, wager, cashBefore:actor.cash+wager, openedTs:Date.now() });
+      ws.send(JSON.stringify({type:'casino_bet_ack',data:{ok:true, roundId, game, wager, cash:actor.cash}}));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+    }
+
+    // ── Casino: increase the stake on an open round (Double, poker raises) ─────
+    // Client sends { type:'casino_bet_addon', roundId, amount }. Same validation
+    // as a bet; grows round.wager so the payout cap scales with total money in.
+    if(msg.type==='casino_bet_addon'){
+      const round  = getOpenCasinoRound(String(msg.roundId||''), actor.id);
+      const amount = Math.round((Number(msg.amount)||0)*100)/100;
+      if(!round){ ws.send(JSON.stringify({type:'casino_addon_ack',data:{ok:false,error:'No open round.'}})); return; }
+      if(!(amount>0)){ ws.send(JSON.stringify({type:'casino_addon_ack',data:{ok:false,error:'Invalid amount.'}})); return; }
+      if(amount > actor.cash){ ws.send(JSON.stringify({type:'casino_addon_ack',data:{ok:false,error:'Insufficient funds.'}})); return; }
+      safeAddCash(actor, -amount);
+      actor.cash = Math.round(actor.cash*100)/100;
+      savePlayer(actor);
+      addCasinoWager(round.id, amount);
+      ws.send(JSON.stringify({type:'casino_addon_ack',data:{ok:true, roundId:round.id, addedWager:amount, totalWager:round.wager+amount, cash:actor.cash}}));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+    }
+
+    // ── Casino: settle a round (credit the capped payout) ─────────────────────
+    // Client sends { type:'casino_result', roundId, payout } where payout is the
+    // GROSS return (0 on a loss; stake+winnings on a win — the stake was already
+    // removed at bet time, so crediting the gross return restores it). Payout is
+    // clamped to wager*mult + flat; anything above is logged 'clamped'. A result
+    // that arrives implausibly fast voids the round (refund stake, zero payout).
+    if(msg.type==='casino_result'){
+      const round  = getOpenCasinoRound(String(msg.roundId||''), actor.id);
+      if(!round){ ws.send(JSON.stringify({type:'casino_result_ack',data:{ok:false,error:'No open round.'}})); return; }
+      const cfg    = CASINO_CFG[round.game] || { mult:1, flat:0, minDurMs:0 };
+      const payout = Number(msg.payout);
+      if(!Number.isFinite(payout) || payout < 0){
+        // Malformed — leave the round open; the sweep will forfeit it on timeout.
+        ws.send(JSON.stringify({type:'casino_result_ack',data:{ok:false,error:'Invalid payout.'}})); return;
+      }
+      const now     = Date.now();
+      const elapsed = now - round.opened_ts;
+      if(elapsed < (cfg.minDurMs||0)){
+        // Physically impossible speed for a real round → void: refund stake, pay nothing.
+        safeAddCash(actor, round.wager);
+        actor.cash = Math.round(actor.cash*100)/100;
         savePlayer(actor);
-        try {
-          const equity = Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{
-            const co=companies.find(x=>x.symbol===sym); return acc+(co?co.price*qty:0);
-          },0);
-          recordNetWorth(actor.id, actor.cash+equity, actor.cash, equity);
-        } catch(_) {}
-        ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
+        resolveCasinoRound(round.id, 'rejected_fast', 0, actor.cash, now);
+        ws.send(JSON.stringify({type:'casino_result_ack',data:{ok:false,error:'Round voided (too fast).', cash:actor.cash}}));
         ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+        broadcastToAdmins({ type:'admin_log', data:{ action:'casino_fast_void', by:actor.name, game:round.game, wager:round.wager } });
+        return;
+      }
+      const cap      = round.wager * (cfg.mult||1) + (cfg.flat||0);
+      const credited = Math.round(Math.min(Math.max(payout,0), cap)*100)/100;
+      const clamped  = payout > cap + 0.005;
+      safeAddCash(actor, credited);
+      actor.cash = Math.round(actor.cash*100)/100;
+      savePlayer(actor);
+      resolveCasinoRound(round.id, clamped ? 'clamped' : 'resolved', credited, actor.cash, now);
+      try {
+        const equity = Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{
+          const co=companies.find(x=>x.symbol===sym); return acc+(co?co.price*qty:0);
+        },0);
+        recordNetWorth(actor.id, actor.cash+equity, actor.cash, equity);
+      } catch(_) {}
+      ws.send(JSON.stringify({type:'casino_result_ack',data:{ok:true, roundId:round.id, credited, clamped, cash:actor.cash}}));
+      ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      if(clamped){
+        broadcastToAdmins({ type:'admin_log', data:{ action:'casino_clamped', by:actor.name, game:round.game, wager:round.wager, claimed:payout, paid:credited } });
       }
     }
 
@@ -7150,6 +7306,31 @@ wss.on('connection',(ws,req)=>{
         }
       } catch(e) {
         // Don't leak errors; run already completed client-side
+      }
+    }
+
+    // ── Mining: bank cash from a run ───────────────────────────────────────
+    // NOTE (security debt, tracked separately from the casino fix): mining cash
+    // is still CLIENT-AUTHORITATIVE. recordMiningRun() only writes stats; the
+    // actual banked Ƒ arrives as a client-reported balance here. This carries the
+    // same class of exploit the casino sync had and needs its own server-side
+    // settlement (server computes banked cash from a validated run, not a reported
+    // total). It is split out onto its own message (was riding {type:'casino'})
+    // so the casino faucet could be closed cleanly and this remaining hole is
+    // named and isolated rather than hidden. DO NOT treat this as fixed.
+    if (msg.type === 'mining_bank') {
+      if (typeof msg.sync === 'number' && Number.isFinite(msg.sync)) {
+        const newCash = Math.max(0, msg.sync);
+        actor.cash = Math.round(newCash * 100) / 100;
+        savePlayer(actor);
+        try {
+          const equity = Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{
+            const co=companies.find(x=>x.symbol===sym); return acc+(co?co.price*qty:0);
+          },0);
+          recordNetWorth(actor.id, actor.cash+equity, actor.cash, equity);
+        } catch(_) {}
+        ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
+        ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
       }
     }
 
@@ -7663,6 +7844,21 @@ wss.on('connection',(ws,req)=>{
             tax: (()=>{ try { return getPlayerTaxState(target.id); } catch(_) { return null; } })(),
             gift_titles: (()=>{ try { return getGiftedTitles(target.id); } catch(_) { return []; } })(),
           }
+        }));
+      }
+
+      // ── player_activity: casino round history for one player (dev audit) ───
+      else if (cmd === 'player_activity') {
+        const target = getPlayerByName(String(msg.targetName || '').trim());
+        if (!target) return err('Player not found.');
+        if (!_godActorIsOwner && isOwnerAccount(target.id)) {
+          return err('⛔ Cannot look up the Owner account.');
+        }
+        let rows = [];
+        try { rows = getCasinoActivity(target.id, 100); } catch(_) { rows = []; }
+        ws.send(JSON.stringify({
+          type: 'god_player_activity',
+          data: { id: target.id, name: target.name, rows }
         }));
       }
 
@@ -9295,6 +9491,10 @@ try { stepCargoShipments(); const n = getActiveCargoShipments().length; if (n) c
 setInterval(() => { try { stepCargoShipments(); } catch(e) { console.error('[CargoStep]', e); } }, 3_000);
 // Shipping contracts: auto-settle expired ones every 15s (auto-exercises if in-the-money).
 setInterval(() => { try { sweepContracts(); } catch(e) { console.error('[Contracts]', e); } }, 15_000);
+// Casino rounds: void + refund anything a crash left open, then forfeit-sweep
+// abandoned rounds on a 15s cadence (per-game timeout enforced inside the sweep).
+try { voidOpenCasinoRoundsOnBoot(); } catch(e) { console.error('[CasinoBoot]', e); }
+setInterval(() => { try { sweepCasinoRounds(); } catch(e) { console.error('[CasinoSweep]', e); } }, 15_000);
 // Server NPC trade fleet: spawn ships that carry real manifests and move prices.
 setInterval(() => { try { npcSpawn(); } catch(e) { console.error('[NPC spawn]', e); } }, NPC_SPAWN_MS);
 setInterval(() => { try { npcTick(); } catch(e) { console.error('[NPC tick]', e); } }, NPC_TICK_MS);

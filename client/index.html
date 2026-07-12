@@ -153,7 +153,6 @@
 <div class="tabs" id="casinoTabs">
 <div class="subtab active" data-subtab="roulette">Roulette</div>
 <div class="subtab" data-subtab="blackjack">Blackjack</div>
-<div class="subtab" data-subtab="plinko" style="color:#ff4444;border-color:#ff4444;opacity:.7">Plinko</div>
 <div class="subtab" data-subtab="poker">Poker</div>
 <div class="subtab" data-subtab="horseraces">Horse Races</div>
 <div class="subtab" data-subtab="chess">Chess</div>
@@ -165,7 +164,6 @@
 <link rel="stylesheet" href="assets/casino-roulette.css">
 <div class="casino-pane" id="casino-roulette" style="display:block"></div>
 <div class="casino-pane" id="casino-blackjack" style="display:none"></div>
-<div class="casino-pane" id="casino-plinko" style="display:none"><div style="display:flex;align-items:center;justify-content:center;min-height:400px"><div style="text-align:center;padding:40px;border:1px solid #4a1a1a;border-radius:8px;background:#0a0404"><div style="font-size:2.5rem;margin-bottom:12px">&#9888;</div><div style="font-family:monospace;font-size:1.2rem;letter-spacing:.14em;color:#ff4444;text-transform:uppercase;margin-bottom:8px">Under Repair</div><div style="font-family:monospace;font-size:.8rem;color:#6a3a3a;max-width:280px">Plinko is temporarily offline for maintenance. Check back soon.</div></div></div></div>
 <div class="casino-pane" id="casino-poker" style="display:none">
 <link rel="stylesheet" href="assets/casino-poker.css">
 <div id="poker-wrap">
@@ -1615,6 +1613,7 @@ ws.addEventListener('message', function(ev){
 <script src="assets/market-state.js"></script>
 <script src="assets/market-tools.js"></script>
 <script src="assets/cycle-history.js"></script>
+<script src="assets/casino-net.js"></script>
 <script src="assets/index-browser.js"></script>
 <script src="assets/market-upgrades.js"></script>
 <script src="assets/mobile.js"></script>
@@ -1876,6 +1875,12 @@ ws.addEventListener('message', function(ev){
         <button class="god-btn" onclick="godLookup()">Look Up</button>
       </div>
       <div id="god-player-info" style="display:none;background:#0d0800;border:1px solid #ff990022;border-radius:7px;padding:8px 10px;margin-bottom:10px;font-size:.76rem;color:#7fc090;line-height:1.7"></div>
+
+      <div class="god-section-title">Casino Activity</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <button class="god-btn" onclick="godPlayerActivity()">Pull Casino History</button>
+      </div>
+      <div id="god-player-activity" style="display:none;background:#0d0800;border:1px solid #ff990022;border-radius:7px;padding:6px 8px;margin-bottom:10px;font-size:.7rem;color:#7fc090;max-height:260px;overflow:auto"></div>
 
       <div class="god-section-title">Add / Remove Cash</div>
       <div style="display:flex;gap:5px;margin-bottom:6px;flex-wrap:wrap">

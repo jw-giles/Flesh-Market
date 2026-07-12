@@ -59,10 +59,13 @@ function pkAdjBalance(n){
   if(typeof ME==='object'&&ME&&typeof ME.cash==='number'){
     ME.cash+=n; window.__MY_CASH=ME.cash;
     const c=document.getElementById('cash');if(c)c.textContent='Ƒ'+Math.round(ME.cash).toLocaleString();
-    try{if(window.ws&&ws.readyState===1)ws.send(JSON.stringify({type:'casino',sync:ME.cash}));}catch(e){}
+    // Legacy {type:'casino',sync} removed — cash is server-authoritative and
+    // reconciled by {type:'me'}/{type:'portfolio'} pushes. pkAdjBalance now only
+    // updates the local display; real money moves via CasinoNet bet/addon/result.
     try{liveUpdatePnL(null,null);}catch(e){}
   }
 }
+var pkRoundId=null; // server round id for the in-flight hand
 
 function pkLog(msg){const log=document.getElementById('pk-log');if(!log)return;const d=document.createElement('div');d.textContent=msg;log.insertBefore(d,log.firstChild);while(log.children.length>40)log.removeChild(log.lastChild);}
 
@@ -276,9 +279,12 @@ function showdown(){
   const winners=contenders.filter(c=>c.rank.score===best.rank.score);
   if(winners.length>1){
     const share=Math.floor(pkState.pot/winners.length);
-    winners.forEach(w=>{if(w.who==='player'){pkAdjBalance(share);}else{w.ai.stack+=share;}});
+    // AI shares still credit their local stacks; the player's share is settled
+    // server-side via endHand (pass it through so there's one settlement point).
+    winners.forEach(w=>{if(w.who!=='player'){w.ai.stack+=share;}});
     const names=winners.map(w=>w.who==='player'?'You':w.who).join(' & ');
-    endHand('push',`Split pot! ${names}, ${best.rank.name}, Ƒ${share} each`);
+    const playerWon=winners.some(w=>w.who==='player');
+    endHand('push',`Split pot! ${names}, ${best.rank.name}, Ƒ${share} each`, playerWon?share:0);
   } else if(best.who==='player'){
     endHand('player',`You win with ${best.rank.name}!`);
   } else {
@@ -286,11 +292,19 @@ function showdown(){
   }
 }
 
-function endHand(winner,msg){
+function endHand(winner,msg,playerSplitShare){
   pkState.street='idle';pkState.playerFolded=false;
   const pot=pkState.pot;
+  // Determine the player's GROSS winnings for this hand:
+  //   sole winner → the whole pot; split winner → their share (passed in);
+  //   AI wins / push with no player share → 0. The player's contributions to the
+  //   pot were already staked server-side (blind + calls/raises via add-on), so
+  //   crediting the gross restores stake + profit. Server caps at wager + flat.
+  let playerGross=0;
+  if(winner==='player'){ playerGross=pot; }
+  else if(typeof playerSplitShare==='number'){ playerGross=playerSplitShare; }
+  if(pkRoundId){ CasinoNet.result(pkRoundId, playerGross); pkRoundId=null; }
   if(winner==='player'){
-    pkAdjBalance(pot);
     showResult(`🏆 ${msg} +Ƒ${pot}`,'win');
     pkLog(`You win Ƒ${pot}.`);
     document.querySelectorAll('.pk-seat').forEach(s=>s.classList.remove('winner'));
@@ -309,12 +323,19 @@ function endHand(winner,msg){
   renderCards();pkUpdateInfo();
 }
 
-window.pkDeal=function(){
+window.pkDeal=async function(){
   const bl=BLIND_LEVELS[pkState.blindLevel]||BLIND_LEVELS[0];
   const buyin=bl.bb*5;
   const balance=pkGetBalance();
   if(balance<buyin){showResult(`Need at least Ƒ${buyin} to play.`,'lose');return;}
-  pkAdjBalance(-bl.sb);
+  // Settle any prior un-finished hand as a loss of its stake (return 0) so the
+  // server's one-open-round-per-game guard doesn't reject this new hand.
+  if(pkRoundId){ CasinoNet.result(pkRoundId, 0); pkRoundId=null; }
+  // Stake the small blind server-side to open the hand's round; subsequent
+  // calls/raises are added on. Winnings settle at endHand.
+  const round=await CasinoNet.bet('poker', bl.sb);
+  if(!round.ok){ showResult(round.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Bet rejected: '+(round.error||'unknown')),'lose'); return; }
+  pkRoundId=round.roundId;
   pkState.playerStack=balance-bl.sb;
   pkState.deck=shuffle(makeDeck());
   pkState.playerHand=pkState.deck.splice(0,2);
@@ -383,7 +404,8 @@ window.pkCall=function(){
   const toCall=Math.max(0,maxBet-pkState.playerBet);
   if(toCall<=0){pkCheck();return;}
   const pay=Math.min(toCall,pkGetBalance());
-  pkAdjBalance(-pay);pkState.pot+=pay;pkState.playerBet+=pay;
+  if(pkRoundId){ CasinoNet.addon(pkRoundId, pay); }
+  pkState.pot+=pay;pkState.playerBet+=pay;
   pkLog(`You call Ƒ${pay}.`);setActionsEnabled(false);
   advanceStreet();
 };
@@ -392,7 +414,8 @@ window.pkRaise=function(){
   if(pkState.street==='idle')return;
   const amt=parseInt(document.getElementById('pk-bet-input').value)||20;
   if(amt<=0||amt>pkGetBalance()){pkLog('Invalid raise amount.');return;}
-  pkAdjBalance(-amt);pkState.pot+=amt;pkState.playerBet+=amt;
+  if(pkRoundId){ CasinoNet.addon(pkRoundId, amt); }
+  pkState.pot+=amt;pkState.playerBet+=amt;
   pkLog(`You raise Ƒ${amt}. Pot: Ƒ${pkState.pot}`);
   setActionsEnabled(false);
   // AIs respond to the raise

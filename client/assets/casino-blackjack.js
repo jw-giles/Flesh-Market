@@ -186,7 +186,8 @@
       try{(window.bus||window.__bus)&&typeof(window.bus||window.__bus).emit==='function'&&(window.bus||window.__bus).emit('trade',null,0);}catch(_e){}
     }}catch(e){}
     const c=document.getElementById('cash'); if(c) c.textContent=fmtLocal(newVal);
-    try{if(window.ws&&window.ws.readyState===1)window.ws.send(JSON.stringify({type:'casino',sync:Number(newVal)||0}));}catch(_e){}
+    // Legacy {type:'casino',sync} removed — cash is server-authoritative; the
+    // server pushes {type:'me'}/{type:'portfolio'} which core applies to ME.cash.
     refreshBjBalance();
   }
   function deltaBalance(d){ setBalance(getBalance()+d); }
@@ -198,6 +199,7 @@
 
   // ── Game state ───────────────────────────────────────────────────
   let playerHand=[],dealerHand=[],playerBet=0,canDouble=false,clearTmr=null,gamePhase='idle';
+  let bjRoundId=null; // server round id for the in-flight hand
 
   function setPhase(p){ gamePhase=p; }
 
@@ -238,14 +240,18 @@
     const pBJ=isBJ(playerHand);
     const dBJ=isBJ(dealerHand);
 
-    if(pBJ&&dBJ){ deltaBalance(playerBet); showResult('Push, both Blackjack!','push'); bjLog('Push (both BJ).'); }
-    else if(pBJ){ const pay=Math.floor(playerBet*1.5); deltaBalance(playerBet+pay); showResult(`BLACKJACK! +${fmtLocal(pay)}`, 'bj'); bjLog(`Blackjack! +${fmtLocal(pay)}`); }
-    else if(dBJ){ showResult('Dealer Blackjack, You lose.','lose'); bjLog(`Dealer BJ. -${fmtLocal(playerBet)}`); }
-    else if(isBust(playerHand)){ showResult('BUST, You lose.','lose'); bjLog(`Bust. -${fmtLocal(playerBet)}`); }
-    else if(isBust(dealerHand)||pTot>dTot){ deltaBalance(playerBet*2); showResult(`You win! +${fmtLocal(playerBet)}`, 'win'); bjLog(`Win. +${fmtLocal(playerBet)}`); }
-    else if(pTot===dTot){ deltaBalance(playerBet); showResult('Push, Bet returned.','push'); bjLog('Push.'); }
-    else { showResult('Dealer wins, You lose.','lose'); bjLog(`Lose. -${fmtLocal(playerBet)}`); }
+    // Compute a single GROSS payout for the round (stake was deducted server-side
+    // at deal / double). loss=0, push=stake, win=2x stake, blackjack=2.5x stake.
+    let gross=0;
+    if(pBJ&&dBJ){ gross=playerBet; showResult('Push, both Blackjack!','push'); bjLog('Push (both BJ).'); }
+    else if(pBJ){ const pay=Math.floor(playerBet*1.5); gross=playerBet+pay; showResult(`BLACKJACK! +${fmtLocal(pay)}`, 'bj'); bjLog(`Blackjack! +${fmtLocal(pay)}`); }
+    else if(dBJ){ gross=0; showResult('Dealer Blackjack, You lose.','lose'); bjLog(`Dealer BJ. -${fmtLocal(playerBet)}`); }
+    else if(isBust(playerHand)){ gross=0; showResult('BUST, You lose.','lose'); bjLog(`Bust. -${fmtLocal(playerBet)}`); }
+    else if(isBust(dealerHand)||pTot>dTot){ gross=playerBet*2; showResult(`You win! +${fmtLocal(playerBet)}`, 'win'); bjLog(`Win. +${fmtLocal(playerBet)}`); }
+    else if(pTot===dTot){ gross=playerBet; showResult('Push, Bet returned.','push'); bjLog('Push.'); }
+    else { gross=0; showResult('Dealer wins, You lose.','lose'); bjLog(`Lose. -${fmtLocal(playerBet)}`); }
 
+    if(bjRoundId){ CasinoNet.result(bjRoundId, gross); bjRoundId=null; }
     playerBet=0; setBtns('done'); setPhase('done');
     clearTmr=setTimeout(resetRound,4000);
   }
@@ -279,10 +285,15 @@
     const amt=Math.max(1,Number(betInp.value||20));
     if(amt>getBalance()){ bjLog('Insufficient funds.'); return; }
 
+    // Stake server-side; only proceed if accepted.
+    const round=await CasinoNet.bet('blackjack', amt);
+    if(!round.ok){ bjLog(round.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Bet rejected: '+(round.error||'unknown'))); return; }
+    bjRoundId=round.roundId;
+
     // Check if shoe needs reshuffling before dealing
     await shoeCheckAndShuffle();
 
-    playerBet=amt; deltaBalance(-playerBet);
+    playerBet=amt;
     bjLog(`Bet ${fmtLocal(playerBet)}.`);
 
     // Deal: player, dealer, player, dealer
@@ -321,7 +332,10 @@
   window.bjDouble=async function(){
     if(gamePhase!=='player'||!canDouble) return;
     if(getBalance()<playerBet){ bjLog('Not enough to double.'); return; }
-    deltaBalance(-playerBet); playerBet*=2; canDouble=false;
+    // Add the doubling stake to the open round server-side.
+    const add=await CasinoNet.addon(bjRoundId, playerBet);
+    if(!add.ok){ bjLog(add.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Double rejected: '+(add.error||'unknown'))); return; }
+    playerBet*=2; canDouble=false;
     bjLog(`Double down, bet now ${fmtLocal(playerBet)}.`);
     playerHand.push(shoe.draw());
     renderHands(true); setBtns('resolving'); setPhase('resolving');
@@ -385,7 +399,7 @@
       try{window.PnLBridge&&typeof window.PnLBridge.pushNow==='function'&&window.PnLBridge.pushNow();}catch(_e){}
     }}catch(e){}
     const c=document.getElementById('cash'); if(c) c.textContent=fmt(v);
-    try{if(window.ws&&window.ws.readyState===1)window.ws.send(JSON.stringify({type:'casino',sync:Number(v)||0}));}catch(_e){}
+    // Legacy {type:'casino',sync} removed — server-authoritative cash.
     refreshBal();
   }
   function adj(d){ setBal(getBal()+d); }
@@ -405,6 +419,7 @@
 
   let horses=[], legPhase=[], running=false, winner=-1, planned=-1;
   let escrow=0, pick=0, startT=0, animId=null, clearTmr=null;
+  let hrRoundId=null; // server round id for the in-flight race
 
   function init(){
     if(animId){cancelAnimationFrame(animId);animId=null;}
@@ -567,28 +582,34 @@
 
   function settle(wi){
     const bet=escrow|0, sel=pick|0;
+    let gross=0;
     if(sel===wi){
-      const pay=Math.floor(bet*5); adj(pay);
-      pushLog('WIN  #'+(wi+1)+' '+NAMES[wi]+'  +'+fmt(pay), true);
-      setStatus('\u25c6 WINNER: #'+(wi+1)+' '+NAMES[wi]+'   PAYOUT: '+fmt(pay),'#86ff6a');
+      gross=Math.floor(bet*5);
+      pushLog('WIN  #'+(wi+1)+' '+NAMES[wi]+'  +'+fmt(gross), true);
+      setStatus('\u25c6 WINNER: #'+(wi+1)+' '+NAMES[wi]+'   PAYOUT: '+fmt(gross),'#86ff6a');
     } else {
       pushLog('LOSS  Winner: #'+(wi+1)+' '+NAMES[wi], false);
       setStatus('\u25c6 Winner: #'+(wi+1)+' '+NAMES[wi]+'  \u2014  Better luck next race','#ff6b6b');
     }
+    if(hrRoundId){ CasinoNet.result(hrRoundId, gross); hrRoundId=null; }
     escrow=0;
     clearTmr=setTimeout(()=>{ init(); drawFrame(); setStatus('\u25c8 Place a bet and start the race',null); },5000);
   }
 
-  document.getElementById('horseStart').onclick=function(){
+  document.getElementById('horseStart').onclick=async function(){
     if(running) return;
     pick=Number(document.getElementById('horsePick')?.value||0);
     const amt=Math.floor(Number(document.getElementById('horseBet')?.value||0));
     if(!amt||amt<1){ setStatus('Enter a valid bet amount.','#ff9900'); return; }
     if(amt>getBal()){ setStatus('Insufficient balance.','#ff6b6b'); return; }
+    // Stake server-side; only start the race if accepted.
+    const round=await CasinoNet.bet('horseraces', amt);
+    if(!round.ok){ setStatus(round.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Bet rejected: '+(round.error||'unknown')),'#ff6b6b'); return; }
+    hrRoundId=round.roundId;
     if(clearTmr){clearTimeout(clearTmr);clearTmr=null;}
     init(); drawFrame();
     planned=Math.floor(Math.random()*LANES);
-    adj(-amt); escrow=amt; running=true; winner=-1;
+    escrow=amt; running=true; winner=-1;
     setStatus('\u25c8 Racing\u2026  You picked #'+(pick+1)+' ('+NAMES[pick]+')  \u2014  Bet: '+fmt(amt),'#46ff7d');
     startT=performance.now();
     animId=requestAnimationFrame(tick);
