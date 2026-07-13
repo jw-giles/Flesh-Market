@@ -30,6 +30,7 @@ import {
   getNetWorthHistory, getFundNAVHistory, getLeaderboard,
   verifyPassword, createPasswordHash,
   saveMarketState, loadMarketState,
+  appendChatLog, loadChatLogAll, pruneChatLog,
   saveGalaxySystemsState, loadGalaxySystemsState,
   savePresidentState, loadPresidentState,
   saveLimitOrder as dbSaveLimitOrder, deleteLimitOrder as dbDeleteLimitOrder,
@@ -2083,6 +2084,24 @@ function restoreMarketState(){
   if(Array.isArray(data.headlines))headlines.push(...data.headlines.slice(-200));
   console.log('[Market] State restored');
 }
+function restoreFundTickerPrices(){
+  const data = loadMarketState();
+  if(!data || !Array.isArray(data.companies)) return;
+  const saved = new Map(data.companies.map(s => [s && s.symbol, s]));
+  let n = 0;
+  for(const c of companies){
+    if(!c._fundTicker) continue;
+    const s = saved.get(c.symbol);
+    if(!s) continue;
+    if(typeof s.price === 'number') c.price = s.price;
+    if(typeof s.lnP   === 'number') c.lnP   = s.lnP;
+    if(typeof s.sigma === 'number') c.sigma = s.sigma;
+    if(Array.isArray(s.ohlc))       c.ohlc  = s.ohlc;
+    try { if(typeof prevClose !== 'undefined' && prevClose) prevClose.set(c.symbol, c.price); } catch(_){}
+    n++;
+  }
+  if(n) console.log(`[Index] Restored last price for ${n} fund ticker(s)`);
+}
 restoreMarketState();
 // Force FLSH back to Ƒ1B on startup — it should always start at the post-split base price
 FLSH_COMPANY.price = 1_000_000_000;
@@ -2109,6 +2128,9 @@ resetDailyPrevClose();
 // Register Index-listed fund tickers into the live companies array (after all base
 // tickers + specials exist, so ids/symbols are settled before we add ours).
 loadFundTickers();
+// Fund tickers register after restoreMarketState() ran, so their saved price was
+// skipped and registerFundTicker seeded them at list price. Reapply saved prices now.
+restoreFundTickerPrices();
 
 // ── Restore President from DB ──
 try {
@@ -5702,6 +5724,7 @@ function pushChatHistory(msg) {
   if (!ring) { ring = []; chatRings.set(key, ring); }
   ring.push(msg);
   if (ring.length > CHAT_RING_MAX) ring.shift();
+  try { appendChatLog(key, (d.t || Date.now()), JSON.stringify(msg)); } catch(_) {}
 }
 function getChatHistory() {
   // Flatten all rooms. Client routes each by data.channel/room; intra-room order kept.
@@ -5709,6 +5732,22 @@ function getChatHistory() {
   for (const ring of chatRings.values()) for (const m of ring) out.push(m);
   return out;
 }
+// Repopulate the in-memory rings from the DB on boot so scrollback survives restarts.
+function restoreChatHistory() {
+  try {
+    const rows = loadChatLogAll();
+    for (const r of rows) {
+      let msg; try { msg = JSON.parse(r.payload); } catch { continue; }
+      const key = ringKey(msg.data || {});
+      let ring = chatRings.get(key);
+      if (!ring) { ring = []; chatRings.set(key, ring); }
+      ring.push(msg);
+      if (ring.length > CHAT_RING_MAX) ring.shift();
+    }
+    if (rows.length) console.log(`[Chat] Restored ${rows.length} messages from DB`);
+  } catch(e) { console.error('[Chat restore]', e); }
+}
+restoreChatHistory();
 
 function broadcast(msg){const data=JSON.stringify(msg);wss.clients.forEach(ws=>{if(ws.readyState===1)ws.send(data);});
   // Track chat messages for new-login history
@@ -8971,7 +9010,7 @@ setInterval(() => {
 setInterval(stepMarket, TICK_MS);
 setInterval(broadcastLeaderboard, 15000);
 setInterval(genHeadline, NEWS_MS);
-setInterval(() => { try { saveMarketState(companies, headlines); } catch(e) {} try { saveGalaxySystems(); } catch(e) {} try { savePresidentState(president); } catch(e) {} }, 60_000);
+setInterval(() => { try { saveMarketState(companies, headlines); } catch(e) {} try { saveGalaxySystems(); } catch(e) {} try { savePresidentState(president); } catch(e) {} try { pruneChatLog(CHAT_RING_MAX); } catch(e) {} }, 60_000);
 setInterval(() => { try { processFundProposals(); } catch(e) {} }, 60_000);
 
 // ── House proposal resolution (Capital Houses, fund-scoped voting) ────────────

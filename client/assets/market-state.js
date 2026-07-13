@@ -629,7 +629,7 @@
   // --- Tab switching: include Store ---
   (function(){
     function showTab(name){
-      var ids = ['marketTab','pnlTab','casinoTab','guildTab','storeTab','heatTab','galacticTab','bugsTab'];
+      var ids = ['marketTab','pnlTab','casinoTab','guildTab','storeTab','heatTab','galacticTab','bugsTab','devlogsTab'];
       ids.forEach(function(id){
         var el = document.getElementById(id);
         if (!el) return;

@@ -71,7 +71,17 @@
 <div class="tab active" data-tab="market">Market</div>
 <div class="tab" data-tab="heat">🔥 Heat</div>
 <div class="tab" data-tab="pnl">P&amp;L</div>
-<div class="tab" data-tab="casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none">⚖ Capital Houses</div><div class="tab" data-tab="store">Store</div><div class="tab" data-tab="galactic">⬡ Galaxy</div><div class="tab" data-tab="mining">⛏ Mining</div><div class="tab" data-tab="fleshbook">📣 Fleshbook<span id="unread-fleshbook" style="display:none;background:#a78bfa;color:#000;border-radius:8px;font-size:.6rem;padding:0 5px;margin-left:4px;font-weight:bold">0</span></div><div class="tab" data-tab="arena">🃏 Corpo-Cards</div><div class="tab" data-tab="bugs" id="bugsTabBtnHidden" style="display:none">🐛 Bugs</div>
+<div class="tab" data-tab="casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none">⚖ Capital Houses</div><div class="tab" data-tab="store">Store</div><div class="tab" data-tab="galactic">⬡ Galaxy</div><div class="tab" data-tab="mining">⛏ Mining</div><div class="tab" data-tab="fleshbook">📣 Fleshbook<span id="unread-fleshbook" style="display:none;background:#a78bfa;color:#000;border-radius:8px;font-size:.6rem;padding:0 5px;margin-left:4px;font-weight:bold">0</span></div><div class="tab" data-tab="arena">🃏 Corpo-Cards</div><div class="tab" data-tab="devlogs">📺 Dev Logs</div><div class="tab" data-tab="bugs" id="bugsTabBtnHidden" style="display:none">🐛 Bugs</div>
+</div>
+<div id="devlogsTab" style="display:none">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    <span style="color:var(--amber);font-weight:bold;letter-spacing:.08em">📺 DEV LOGS</span>
+    <span class="muted" style="font-size:.7rem">Broadcasts, dev logs, lore and news</span>
+    <a href="https://www.youtube.com/@FleshMarketNews" target="_blank" rel="noopener" class="btn" style="margin-left:auto;font-size:.72rem;padding:4px 10px">Open channel</a>
+  </div>
+  <div style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border:1px solid #0a3315;border-radius:6px;overflow:hidden">
+    <iframe id="devlogsFrame" data-src="https://www.youtube.com/embed/videoseries?list=UU7jGc6Xo_-Koo8IyQCD9iQA&rel=0&autoplay=1&mute=1" title="Flesh Market News" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%"></iframe>
+  </div>
 </div>
 <div id="marketTab">
 <canvas id="chart"></canvas>

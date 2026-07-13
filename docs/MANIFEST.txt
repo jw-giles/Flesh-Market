@@ -1,4 +1,41 @@
-# FleshMarket v1.1.9.1 - MANIFEST
+# FleshMarket v1.1.9.2 - MANIFEST
+
+## v1.1.9.2 changes (Index price persistence + chat persistence + Dev Logs tab; CLIENT + SERVER + DB)
+
+```
+client/
+  index.html              + Dev Logs tab button (data-tab="devlogs") and #devlogsTab
+                            panel with a lazy-loaded YouTube uploads iframe (src applied
+                            on open, cleared on leave; no src attribute in markup).
+  assets/core.js          + Dev Logs case in the tab-bar click handler: toggles #devlogsTab
+                            and sets/clears the iframe src by attribute compare.
+  assets/market-state.js  + 'devlogsTab' registered in the programmatic showTab id list so
+                            ticker clicks that jump to Market also hide the Dev Logs panel.
+  version.json            1.1.9.1 -> 1.1.9.2.
+
+server/
+  db.js                   + chat_log table (CREATE IF NOT EXISTS) + index; + appendChatLog,
+                            loadChatLogAll, pruneChatLog accessors.
+  server.js               + restoreFundTickerPrices() (called after loadFundTickers) to
+                            reapply saved Index-ticker prices on boot; + chat persistence:
+                            append on push, restoreChatHistory() on boot, pruneChatLog in the
+                            60s save interval; + db imports.
+
+docs/
+  CHANGELOG.md            + v1.1.9.2 entry.
+  MANIFEST.txt            this file.
+
+repo root/
+  apply.sh                NEW. Local build applier: mirrors the newest FleshMarket_*.zip
+                            from Downloads into this folder (tracked files only, so .env,
+                            local DBs and node_modules survive), then shows the diff.
+  ship.sh                 NEW. One-command deploy: commit as v<version>, push, then
+                            ssh pull + pm2 restart on the VPS. Both scripts refuse to run
+                            if the folder's git remote is not jw-giles/Flesh-Market.
+  .gitattributes          NEW. Pins LF endings on *.sh so scripts run under Git Bash.
+  .gitignore              + *.db-shm / *.db-wal / *.db-journal (SQLite WAL sidecars were
+                            uncovered and could have been committed by git add -A).
+```
 
 ## v1.1.9.1 changes (Server-authoritative casino + activity audit; CLIENT + SERVER + DB)
 

@@ -124,6 +124,13 @@ export function initDB() {
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS chat_log (
+      id      INTEGER PRIMARY KEY AUTOINCREMENT,
+      k       TEXT NOT NULL,
+      ts      INTEGER NOT NULL,
+      payload TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_chatlog_k_id ON chat_log(k, id);
     CREATE INDEX IF NOT EXISTS idx_nwh_player_ts ON net_worth_history(player_id, ts);
     CREATE INDEX IF NOT EXISTS idx_fnh_fund_ts ON fund_nav_history(fund_id, ts);
     CREATE INDEX IF NOT EXISTS idx_players_patreon_email ON players(patreon_email);
@@ -720,6 +727,19 @@ export function loadPresidentState() {
   const row = stmt('SELECT value FROM market_state WHERE key=?').get('president');
   if (!row) return null;
   try { return JSON.parse(row.value); } catch { return null; }
+}
+
+// Chat log persistence: bounded per-room scrollback that survives restarts.
+export function appendChatLog(key, ts, payload) {
+  stmt('INSERT INTO chat_log(k,ts,payload) VALUES(?,?,?)').run(key, ts, payload);
+}
+export function loadChatLogAll() {
+  return stmt('SELECT payload FROM chat_log ORDER BY id ASC').all();
+}
+export function pruneChatLog(perKeyMax) {
+  for (const { k } of stmt('SELECT DISTINCT k FROM chat_log').all()) {
+    stmt('DELETE FROM chat_log WHERE k=? AND id NOT IN (SELECT id FROM chat_log WHERE k=? ORDER BY id DESC LIMIT ?)').run(k, k, perKeyMax);
+  }
 }
 
 // ─── Lane Shares ──────────────────────────────────────────────────────────────

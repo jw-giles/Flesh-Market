@@ -4,6 +4,20 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.9.2 (2026-07-13) - Index price persistence + chat persistence + Dev Logs tab (CLIENT + SERVER + DB)
+
+Client, server, and DB. Hard-refresh after deploy. **DB adds a `chat_log` table on boot** (additive, `CREATE IF NOT EXISTS`; starts empty). A restart applies the schema; no migration step.
+
+**Index tickers reset to list price on restart (SERVER).** Capital House Index tickers snapped back to their listing price on every restart, discarding all trading movement. Cause was boot ordering, not missing persistence: `restoreMarketState()` reapplies saved prices only to tickers already in the live array, but fund tickers are registered later by `loadFundTickers()`, so their persisted price was skipped and `registerFundTicker` seeded them at `list_price`. Fix: `restoreFundTickerPrices()` runs right after `loadFundTickers()` and reapplies saved price/lnP/sigma/ohlc to fund tickers, setting their daily-open baseline to the restored price like every other ticker. The NAV anchor is untouched: `updateFundAnchor` derives it from `fundNavPerShare` (persisted holdings), so the ticker resumes at its last price and re-anchors to NAV as normal.
+
+**Chat history wiped on restart (SERVER + DB).** Chat lived only in the in-memory `chatRings` map and was never persisted, so any restart or reset cleared all scrollback. Fix: a bounded `chat_log` table (`k`, `ts`, `payload`), written on each chat/system message after the transient check, pruned every 60s to the same 200-per-room bound as the ring, and reloaded into the rings on boot via `restoreChatHistory()`. New logins already receive `chat_history` (the full ring; the old "last 30min" comment in that block is stale, there is no time filter), so no client change was needed. Chat is now on disk (`chat_log`); the deploy restart itself clears the current in-memory chat one last time, and it persists from then on.
+
+**Dev Logs tab (CLIENT).** New `Dev Logs` tab in the center tab bar embeds the Flesh Market News uploads playlist (`UU7jGc6Xo_-Koo8IyQCD9iQA`) at 16:9. The iframe src is applied on tab open and cleared on leave (attribute-level compare, since an empty src attribute reflects as the page URL through the `.src` property), so nothing plays in the background. Autoplay is muted (browser policy); the viewer unmutes. The tab is registered in both tab-switch paths: the tab-bar click handler (core.js) and the programmatic `window.showTab` (market-state.js), so ticker clicks that jump to Market also hide it. An `Open channel` link is always present as a fallback for an empty or unavailable embed.
+
+**Tooling (repo root).** `apply.sh` mirrors the newest `FleshMarket_*.zip` from Downloads into the working tree (tracked files only, so `.env`, local DBs, and `node_modules` survive) and `ship.sh` deploys in one command (commit as `v<version>`, push, VPS pull + pm2 restart). Both refuse to run if the folder's git remote is not `jw-giles/Flesh-Market`. `.gitattributes` pins LF on `*.sh`; `.gitignore` now also excludes SQLite WAL sidecars (`*.db-shm`, `*.db-wal`, `*.db-journal`).
+
+---
+
 ## v1.1.9.1 (2026-07-11) - Server-authoritative casino + activity audit (CLIENT + SERVER + DB)
 
 Client, server, and DB. Hard-refresh after deploy. **DB adds a `casino_rounds` table on boot** (additive, `CREATE IF NOT EXISTS`; starts empty). A restart applies the schema; no migration step.

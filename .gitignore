@@ -12,3 +12,8 @@ node_modules/
 npm-debug.log*
 *.log
 server/package-lock.json
+
+# SQLite sidecar files (WAL mode) - never commit these either
+*.db-shm
+*.db-wal
+*.db-journal
