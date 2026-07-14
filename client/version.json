@@ -1,7 +1,7 @@
 {
-  "version": "1.1.9.5",
+  "version": "1.1.9.7",
   "built": "2026-07-14T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.9.5",
-  "notes": "Chess AI is much stronger. The game was running a weak inline engine (material-only eval, no move ordering, no transposition table) while a stronger engine (chess_worker.js: ordered alpha-beta, transposition table, iterative deepening, time-budgeted) sat in the repo unused. The game now uses the worker, which also runs off the main thread so the board no longer freezes while the AI thinks. The worker's evaluation was upgraded from material-only to material + piece-square tables, so it develops pieces, fights for the center, and keeps its king tucked instead of only trading material; auto-queen promotion was added. The inline engine is kept as an automatic fallback if the worker can't load or hangs. Client only, no server or DB change. Hard-refresh after deploy. Carries 1.1.9.4 and earlier. NOTE: poker was NOT changed this build; see the delivery note."
+  "patch": "1.1.9.7",
+  "notes": "UI: the space between windows now matches the dark top of the page. The body background was a radial gradient with a green center (#04130a) fading to dark at the edges, so the header at the top read dark while the panels and the gaps between them sat in the green center. Flattened --body-bg to the dark edge color (#020703) so the header and the between-window gaps are the same color by construction, and tightened the panel glow (24px to 10px spread, lower alpha) so it no longer bleeds green into the gaps; the bold panel border already defines the windows, so it doesn't need the wide halo. As a bonus, panels now sit on a flat near-black field, which makes them separate even more cleanly. Client CSS only, no server or DB change, hard-refresh to see it. Carries 1.1.9.6 and earlier."
 }

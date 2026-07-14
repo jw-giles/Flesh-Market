@@ -1,4 +1,34 @@
-# FleshMarket v1.1.9.5 - MANIFEST
+# FleshMarket v1.1.9.7 - MANIFEST
+
+## v1.1.9.7 changes (Dark background between windows; CLIENT)
+
+```
+client/
+  style.css               --body-bg flattened from the green-centered radial gradient
+                            to flat #020703 (matches the dark top / header). --panel-shadow
+                            outer glow tightened 0 0 24px #1aff5e1a -> 0 0 10px #1aff5e14
+                            so it stops bleeding green into the gaps.
+  version.json            1.1.9.6 -> 1.1.9.7.
+
+docs/
+  CHANGELOG.md            + v1.1.9.7 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.6 changes (Bolder panel edges / window contrast; CLIENT)
+
+```
+client/
+  style.css               + --panel-edge:#2f9f4a variable. .panel and #chart borders
+                            switched from 1px var(--dim) to 1.5px var(--panel-edge).
+                            --panel-bg opacity raised 0.22 -> 0.5. Inputs/dividers/news
+                            keep var(--dim) (dimmer) for hierarchy.
+  version.json            1.1.9.5 -> 1.1.9.6.
+
+docs/
+  CHANGELOG.md            + v1.1.9.6 entry.
+  MANIFEST.txt            this file.
+```
 
 ## v1.1.9.5 changes (Stronger chess AI; CLIENT)
 

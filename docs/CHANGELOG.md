@@ -4,6 +4,28 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.9.7 (2026-07-14) - Dark background between windows (CLIENT)
+
+Client CSS only. Hard-refresh after deploy. No server or DB change.
+
+Follow-up to the bolder panel edges. A player noted the space between windows read slightly green while the top of the page read dark. Cause: `--body-bg` was `radial-gradient(ellipse at 50% 40%, #04130a 0%, #020703 80%)` — a green center fading to a dark edge. The header sits at the top (dark edge); the panels and the gaps between them sit in the green center. Same background, different position on the gradient.
+
+Flattened `--body-bg` to the dark edge color `#020703`. Because the header and the inter-panel gaps both render this one background, they are now identical by construction. Also tightened `--panel-shadow` from `0 0 24px #1aff5e1a` to `0 0 10px #1aff5e14` so the panel bloom no longer bleeds green into the 12px gaps — the bold 1.5px border already defines each window, so the wide halo was redundant and was the remaining source of gap tint. Side benefit: panels now sit on a flat near-black field, which separates them even more cleanly than over the gradient. All still one-line tunable (`--body-bg` for the field, the spread/alpha in `--panel-shadow` for bloom).
+
+---
+
+## v1.1.9.6 (2026-07-14) - Bolder panel edges / window contrast (CLIENT)
+
+Client CSS only. Hard-refresh after deploy. No server or DB change.
+
+**The note.** A player pointed out the panels barely separated from the background, so the layout read as one dark field rather than distinct windows. Root cause in `style.css`: `.panel` used `border:1px solid var(--dim)` (`--dim` is `#1f7a3aaa`, a dim semi-transparent green) over `--panel-bg:rgba(8,30,14,0.22)` — a near-transparent fill, so panels were essentially the body gradient with a faint outline.
+
+**The change.** Added a dedicated `--panel-edge` variable (`#2f9f4a`, brighter, 1.5px) and pointed `.panel` and `#chart` at it, and raised `--panel-bg` opacity from `0.22` to `0.5` so panels sit as a distinguishable surface (still translucent, so the CRT glow-through depth is preserved). Crucially this uses a *separate* variable from `--dim`, so inputs, dividers, the chatlog, and news accents keep the dimmer border on purpose — windows now read bolder than the controls inside them, which also tightens the visual hierarchy. The existing subtle panel glow (`--panel-shadow`) is untouched; this is the "bold, not neon" option from the mockup.
+
+**Not touched.** Feature sub-panels that hardcode their own borders inline (casino panes, the limit-order box at `#0a3315`, etc.) still use their own dimmer edges. Bringing those in line with the window edge is a separate, more scattered pass. Everything is one-line-tunable: `--panel-edge` for the color/brightness, the `1.5px` in `.panel` for weight, `--panel-bg` alpha for fill separation.
+
+---
+
 ## v1.1.9.5 (2026-07-14) - Stronger chess AI (CLIENT)
 
 Client only. Hard-refresh after deploy. No server or DB change.
