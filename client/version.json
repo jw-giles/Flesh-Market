@@ -1,7 +1,7 @@
 {
-  "version": "1.1.9.2",
-  "built": "2026-07-13T00:00:00Z",
+  "version": "1.1.9.5",
+  "built": "2026-07-14T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.9.2",
-  "notes": "Index fund tickers keep their last traded price across restarts (were snapping back to list price on boot; a boot-order bug skipped their persisted price). Chat history now persists across restarts and server resets (was memory only; added a bounded chat_log table, written per message, reloaded on boot, pruned to 200 per room). Added a Dev Logs tab: embedded Flesh Market News uploads, muted autoplay, loads on open and unloads on leave. Hard-refresh after deploy. DB adds a chat_log table on boot (additive, CREATE IF NOT EXISTS; starts empty). Carries 1.1.9.1 and earlier."
+  "patch": "1.1.9.5",
+  "notes": "Chess AI is much stronger. The game was running a weak inline engine (material-only eval, no move ordering, no transposition table) while a stronger engine (chess_worker.js: ordered alpha-beta, transposition table, iterative deepening, time-budgeted) sat in the repo unused. The game now uses the worker, which also runs off the main thread so the board no longer freezes while the AI thinks. The worker's evaluation was upgraded from material-only to material + piece-square tables, so it develops pieces, fights for the center, and keeps its king tucked instead of only trading material; auto-queen promotion was added. The inline engine is kept as an automatic fallback if the worker can't load or hangs. Client only, no server or DB change. Hard-refresh after deploy. Carries 1.1.9.4 and earlier. NOTE: poker was NOT changed this build; see the delivery note."
 }

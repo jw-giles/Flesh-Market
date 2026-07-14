@@ -1,4 +1,87 @@
-# FleshMarket v1.1.9.2 - MANIFEST
+# FleshMarket v1.1.9.5 - MANIFEST
+
+## v1.1.9.5 changes (Stronger chess AI; CLIENT)
+
+```
+client/
+  chess_worker.js         Now actually used (was dead code). + piece-square tables in
+                            evaluate() (was material-only) + auto-queen promotion in
+                            pawn move generation. Ordered alpha-beta + transposition
+                            table + iterative deepening were already present.
+  assets/casino-chess.js  + getChessWorker()/aiMove(): the AI move now runs through the
+                            web worker (off-thread, no board freeze), with the inline
+                            engine kept as a fallback (worker missing/erroring/>4s hang).
+                            The AI-turn call site in checkEndOrAI switched to aiMove.
+  version.json            1.1.9.4 -> 1.1.9.5.
+
+docs/
+  CHANGELOG.md            + v1.1.9.5 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.4 changes (Server-bounded drone mining bank; SERVER + CLIENT)
+
+```
+server/
+  server.js               + MINING_MAX_YIELD_PER_SEC / MINING_RUN_FALLBACK_SEC /
+                            MINING_MAX_RUN_BANK env constants and the _miningRuns
+                            (playerId -> {startTs}) map.
+                          + mining_bank_delta handler: 'loadout' (negative) opens a
+                            run window and deducts the overdraft-bounded cost;
+                            'banked' (positive) credits min(reported, rate*elapsed,
+                            hard cap), clears the run, and logs mining_clamped on
+                            over-report. mining_bank (sync total) is now ignored
+                            (was: actor.cash = client-reported total; the faucet).
+
+client/
+  assets/core.js          setCash no longer sends {type:'mining_bank', sync:total}.
+                            The bank_delta bridge now forwards {type:'mining_bank_delta',
+                            delta, reason} to the server and lets me/portfolio reconcile.
+                            The drone-mining game (iframe) is unchanged.
+  version.json            1.1.9.3 -> 1.1.9.4.
+
+docs/
+  CHANGELOG.md            + v1.1.9.4 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.3 changes (Server-authoritative roulette + horse races; casino play-speed fixes; CLIENT + SERVER)
+
+```
+server/
+  server.js               + import randomInt from 'crypto'.
+                          + secureInt(), RL_REDS/rlColorOf/RL_BET_TYPES, rlPayoutFor()
+                            (ported verbatim from client payoutFor), HR_LANES, and the
+                            CASINO_ONESHOT registry (roulette, horseraces) with per-game
+                            parse()+roll(); ONESHOT_GAMES set.
+                          + casino_play handler: validate input, server-roll, cap as
+                            backstop, atomic stake-out/gross-in, ledger row (open+resolve
+                            in one tick), me/portfolio push, clamped admin log.
+                          + casino_bet now refuses ONESHOT_GAMES (roulette/horseraces) with
+                            a casino_stale refresh nudge, closing the client-declared path.
+                            CASINO_CFG: blackjack minDurMs 3000 -> 1500, mathgame 15000 -> 5000
+                            (roulette/horseraces minDurMs now unused; kept for the cap only).
+
+client/
+  assets/casino-net.js    + CasinoNet.play(game, input) for one-shot atomic play;
+                            casino_play_ack added to the ack listener filter. Stale doc
+                            example switched from roulette to blackjack.
+  assets/core.js          Roulette: rlSpin sends CasinoNet.play('roulette',{slip}) and
+                            animates to the server result (no client wheel roll); finalizeSpin
+                            shows the server-credited amount (no CasinoNet.result send); added
+                            rlLastServer. Client payoutFor kept as a reference copy only.
+  assets/casino-blackjack.js  Horses: start sends CasinoNet.play('horseraces',{pick,amount})
+                            and animates the server winner; settle shows server-credited gross
+                            (no CasinoNet.result send); added hrCredited. Blackjack: added
+                            bjDealTs, settle is async and pads the result send to ~1600ms from
+                            deal (Deal locked until the round closes) so fast hands are not
+                            voided as too-fast.
+  version.json            1.1.9.2 -> 1.1.9.3.
+
+docs/
+  CHANGELOG.md            + v1.1.9.3 entry.
+  MANIFEST.txt            this file.
+```
 
 ## v1.1.9.2 changes (Index price persistence + chat persistence + Dev Logs tab; CLIENT + SERVER + DB)
 

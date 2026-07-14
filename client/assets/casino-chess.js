@@ -411,6 +411,34 @@ try { (window.bus||window.__bus) && typeof (window.bus||window.__bus).emit === '
   refreshChessBalance();
   }
 
+  // ── AI move via the stronger web-worker engine ────────────────────────────
+  // chess_worker.js runs an ordered alpha-beta with a transposition table and
+  // iterative deepening off the main thread (no UI freeze). The inline pickAIMove
+  // above is kept only as a fallback if the worker can't be created (e.g. file:// )
+  // or errors. Board/move formats are identical, so the worker's move applies via
+  // the same applyMove.
+  let _chessWorker = null, _chessWorkerBroken = false;
+  function getChessWorker(){
+    if (_chessWorker || _chessWorkerBroken) return _chessWorker;
+    try { _chessWorker = new Worker('chess_worker.js'); }
+    catch(e){ _chessWorkerBroken = true; _chessWorker = null; }
+    return _chessWorker;
+  }
+  function aiMove(board, elo, cb){
+    const snapshot = board.map(r=>r.slice());
+    const w = getChessWorker();
+    if (!w){ cb(pickAIMove(snapshot, 'b', elo)); return; }
+    let settled = false;
+    const done = (mv)=>{ if (settled) return; settled = true; clearTimeout(timer); w.removeEventListener('message', onMsg); cb(mv); };
+    const onMsg = (e)=>{ const d = e.data || {}; done(d.ok && d.mv ? d.mv : pickAIMove(snapshot, 'b', elo)); };
+    // Safety net: if the worker never replies (crash/hang), fall back so the game
+    // never stalls on the AI's turn.
+    const timer = setTimeout(()=>{ done(pickAIMove(snapshot, 'b', elo)); }, 4000);
+    w.addEventListener('message', onMsg);
+    try { w.postMessage({ type:'move', board: snapshot, turn:'b', elo }); }
+    catch(_){ done(pickAIMove(snapshot, 'b', elo)); }
+  }
+
   function checkEndOrAI(){
     const end = checkmateOrStalemate(game.board, game.turn);
     if (end==='mate'){ endGame(game.turn==='w'?'loss':'win'); return; }
@@ -421,17 +449,18 @@ try { (window.bus||window.__bus) && typeof (window.bus||window.__bus).emit === '
       // AI move with small delay
       setTimeout(()=>{
         const elo = Number(document.getElementById('chessElo').value);
-        const mv = pickAIMove(game.board, 'b', elo);
-        if (!mv){ endGame('draw'); return; }
-        game.board = applyMove(game.board, mv);
-        game.turn='w';
-        switchTurnClock('b');
-        drawBoard(game.board);
-        const end2 = checkmateOrStalemate(game.board, 'w');
-        if (end2==='mate'){ endGame('loss'); return; }
-        if (end2==='stalemate'){ endGame('draw'); return; }
-        turnLabel('w');
-        status('Your move.');
+        aiMove(game.board, elo, (mv)=>{
+          if (!mv){ endGame('draw'); return; }
+          game.board = applyMove(game.board, mv);
+          game.turn='w';
+          switchTurnClock('b');
+          drawBoard(game.board);
+          const end2 = checkmateOrStalemate(game.board, 'w');
+          if (end2==='mate'){ endGame('loss'); return; }
+          if (end2==='stalemate'){ endGame('draw'); return; }
+          turnLabel('w');
+          status('Your move.');
+        });
       }, 250);
     }
   }

@@ -4,6 +4,54 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.9.5 (2026-07-14) - Stronger chess AI (CLIENT)
+
+Client only. Hard-refresh after deploy. No server or DB change.
+
+**The problem.** Casino chess ran a weak inline engine: a plain alpha-beta with a material-only evaluation, no move ordering (so pruning was poor), no transposition table, and fixed shallow depth by ELO. It played positionally blind and dropped pieces to the horizon effect. Meanwhile a much stronger engine already existed in the repo, `client/chess_worker.js` (ordered alpha-beta with MVV-LVA move ordering, a transposition table, iterative deepening with a time budget, depth cap 5 to 7 by ELO), and was never instantiated anywhere. It was dead code.
+
+**The fix.** The game now uses the worker for the AI's move. Because it is a Web Worker, the search runs off the main thread, so the board no longer freezes while the AI thinks. Board and move formats are identical between the two engines, so the worker's returned move applies through the same `applyMove` unchanged. The inline engine is kept as an automatic fallback: if the worker cannot be created (e.g. a restrictive CSP, or `file://`), errors, or fails to reply within 4s, the AI move falls back to the inline engine so the game never stalls on the AI's turn.
+
+**Engine upgrades (in the worker).** Evaluation was upgraded from material-only to material plus piece-square tables (the classic simplified-evaluation set), so the AI develops its pieces, contests the center, advances pawns sensibly, and keeps its king tucked instead of only counting material. Auto-queen promotion was added to the worker's pawn move generation (it previously left a pawn on the last rank un-promoted). Net effect: noticeably stronger tactical and positional play, especially at higher ELO where the deeper ordered search and the transposition table compound.
+
+**Not touched.** Chess still settles its fee×2.5 win the same way (client-declared, bounded by the casino cap); this build is an AI-quality change, not a security change. Poker was not changed in this build (see the session notes on why it is being handled as its own focused build).
+
+---
+
+## v1.1.9.4 (2026-07-14) - Server-bounded drone mining bank (SERVER + CLIENT)
+
+Client and server. Hard-refresh after deploy. No DB schema change.
+
+**The hole.** Drone mining cash was client-authoritative. The mining game (an iframe) reported bank changes to the parent, and the parent pushed the browser's new cash TOTAL to the server via `{type:'mining_bank', sync:N}`, which set `actor.cash = N` with no validation. This is the same faucet class the casino sync used to be: a crafted `{"type":"mining_bank","sync":999999999}` set any balance, and it did not need dev tools (a proxy, extension, or short script sends it). It was left named and isolated when the casino faucet was closed, on its own message, precisely so it could be fixed next.
+
+**Why this one is bounded, not recomputed.** Unlike a casino game, the server cannot roll the mining outcome. Mining yield is the output of an interactive skill+risk game: a seeded asteroid field, the player's piloting and route choices, RNG hostiles, fuel/heat limits, and survival (dying loses your carried cargo). Re-deriving the exact banked amount would require simulating the whole real-time game server-side, which is disproportionate for a minigame. So banked cash is BOUNDED instead: the server caps a run's credit to a plausible yield and clamps anything above.
+
+**The fix (server-owned bounded deltas).** The reported total is now ignored. Cash moves through `mining_bank_delta {delta, reason}`, tagged by the game (it already sends these):
+- `reason:'loadout'` (negative) is a run START: the server deducts the loadout cost (overdraft-bounded, a negative delta cannot mint cash) and opens a run window with a start timestamp.
+- `reason:'banked'` (positive) is a run END: the server credits the reported profit but clamped to `MINING_MAX_YIELD_PER_SEC * elapsedRunSeconds`, with a hard `MINING_MAX_RUN_BANK` per-run ceiling as a backstop. If the run-start wasn't seen (e.g. a restart landed mid-run), it falls back to `MINING_RUN_FALLBACK_SEC` of assumed run length.
+
+The server owns the balance throughout and reconciles the client's optimistic local value via the usual `me`/`portfolio` push. The client bridge (`core.js`) was changed to forward the delta and its reason instead of collapsing to a total; the mining game itself is unchanged. A run banking above the cap is clamped and logged to the dev panel as `mining_clamped` (reported vs paid vs elapsed), the same fraud signal the casino cap produces.
+
+**Honest limitation.** This bounds and logs; it does not eliminate. Because the game can't be audited server-side without simulating it, a modified client can still claim up to the plausible ceiling per run (bounded to a yield rate over real elapsed time, not an instant total), which the log flags. The unbounded "set balance to anything in one message" faucet is gone. The default ceiling (`MINING_MAX_YIELD_PER_SEC=5000`) is set generous so it never clamps a legitimate run; it can be tightened from real best-run data (the `mining_stats` table records best-run profit) and the clamp log once live. All three bounds are env overrides.
+
+---
+
+## v1.1.9.3 (2026-07-14) - Server-authoritative roulette + horse races, casino play-speed fixes (CLIENT + SERVER)
+
+Client and server. Hard-refresh after deploy. No DB schema change (the existing `casino_rounds` table records one-shot plays too).
+
+**The hole.** v1.1.9.1 moved the casino STAKE server-side but left every game's OUTCOME in the browser: each game rolled its own result and sent the payout via `casino_result`, which the server only capped at `wager*mult + flat`. For roulette the client literally rolled the wheel (`Math.floor(Math.random()*ORDER.length)`) and reported the payout, capped at 36x with no flat ceiling. A crafted or modified client could claim `wager*36` every spin and compound it (a win funds a larger next bet), unbounded. Horse races were the same shape at 5x. The per-round time floor (`minDurMs`) was the only "did you actually play" signal and it never stopped a script (a script just waits it out); it mostly punished fast legitimate players.
+
+**The fix (server rolls, atomic settle).** New `casino_play {game, input}` message. The client sends only its bet SELECTION (roulette slip, or horse pick+amount), never a payout. The server validates the input, rolls the outcome itself with `crypto.randomInt` (unbiased, unpredictable), prices it from its own result, and settles in one atomic step (stake out, gross in). There is no open round to fake a result on and no time gate, because the client no longer reports the outcome. The client animates the wheel/race to the number the server rolled. This is the same pattern the TCG pack purchase already uses ("the client never decides what it receives or what it costs"), now extended to the two pure-RNG games. The `wager*mult + flat` cap is kept purely as a backstop so a resolver bug still cannot overpay. The old client-declared `casino_bet`/`casino_result` path is refused for roulette and horse races (a stale or crafted client gets the `casino_stale` refresh nudge), which closes the loop: with no way to open a client-settled round for those games, there is nothing for a fabricated `casino_result` to land on. The roulette payout table was ported verbatim from the client `payoutFor` so gross matches exactly. `casino_play` results are written to the same `casino_rounds` ledger (opened and resolved in one tick), so the dev panel Casino Activity view and the `clamped` fraud signal cover them too.
+
+**Math game paid nothing on fast sessions (SERVER).** The `mathgame` round is a 10-question session wrapped in one round, but its `minDurMs` floor was 15000ms while the session's forced client delays only guarantee ~9000ms. A player answering faster than ~600ms/question finished under the floor, so the whole session voided (Ƒ1 sentinel refunded, zero paid) despite correct answers, while the on-screen Earned counter still climbed. Floor lowered to 5000ms, below the ~9000ms guaranteed forced-delay floor, so a real session can never void while an instant scripted settle still trips.
+
+**Blackjack rejected fast hands (CLIENT + SERVER).** A natural blackjack resolves in ~1100ms of hardcoded animation and an instant stand vs a pat dealer in ~700ms, both well under the old 3000ms `minDurMs`, so the best outcomes voided (you saw "BLACKJACK!" and your cash did not move). Floor lowered to 1500ms and the client now pads the settle send so a hand cannot report under ~1600ms from deal, with Deal kept locked until the round closes so a fast re-deal cannot collide with the still-open round. Deterministically no false rejects, floor preserved as an anti-instant-script bump.
+
+**Scope.** This is the first slice of a broader casino move to server-authoritative outcomes (client sends inputs, server derives payout). Roulette and horse races were done first because they are both the highest-severity faucets and the cheapest to convert (pure one-shot RNG). Blackjack (stateful, medium), the puzzle games (server-generated + graded, medium), and poker/chess (harder, lower severity) remain on the client-declared-but-capped path with their time floors for now; the math and blackjack fixes above are the interim floors for those until they convert.
+
+---
+
 ## v1.1.9.2 (2026-07-13) - Index price persistence + chat persistence + Dev Logs tab (CLIENT + SERVER + DB)
 
 Client, server, and DB. Hard-refresh after deploy. **DB adds a `chat_log` table on boot** (additive, `CREATE IF NOT EXISTS`; starts empty). A restart applies the schema; no migration step.
