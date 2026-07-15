@@ -1599,10 +1599,11 @@ $all('.tab').forEach(tab=>{
     const _mineTab = el('#miningTab'); if(_mineTab) _mineTab.style.display = sel==='mining'?'flex':'none';
     const _arenaTab = el('#arenaTab'); if(_arenaTab) _arenaTab.style.display = sel==='arena'?'block':'none';
     const _dlTab = el('#devlogsTab'); if(_dlTab){ _dlTab.style.display = sel==='devlogs'?'block':'none';
-      const _dlF = document.getElementById('devlogsFrame');
-      if(_dlF){ const _dlWant = _dlF.getAttribute('data-src');
-        if(sel==='devlogs'){ if(_dlF.getAttribute('src') !== _dlWant) _dlF.setAttribute('src', _dlWant); }
-        else if(_dlF.getAttribute('src')) _dlF.setAttribute('src',''); } }
+      if(window.__devlogsSync){ window.__devlogsSync(sel==='devlogs'); }
+      else { const _dlF = document.getElementById('devlogsFrame');
+        if(_dlF){ const _dlWant = _dlF.getAttribute('data-src');
+          if(sel==='devlogs'){ if(_dlF.getAttribute('src') !== _dlWant) _dlF.setAttribute('src', _dlWant); }
+          else if(_dlF.getAttribute('src')) _dlF.setAttribute('src',''); } } }
     if (sel==='guild') { loadGuildDirectory(); }
     if (sel==='bugs') { if(window.bugsTabLoad) window.bugsTabLoad(); else lazyLoad('assets/dev-comms.js', ()=>window.bugsTabLoad&&window.bugsTabLoad()); }
     if (sel==='fleshbook') { if(window.fleshbookTabLoad) window.fleshbookTabLoad(); else lazyLoad('assets/fleshbook.js', ()=>window.fleshbookTabLoad&&window.fleshbookTabLoad()); }

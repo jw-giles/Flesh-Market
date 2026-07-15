@@ -1,4 +1,28 @@
-# FleshMarket v1.1.9.7 - MANIFEST
+# FleshMarket v1.1.9.8 - MANIFEST
+
+## v1.1.9.8 changes (Kick tab in Dev Logs + streaming OBS overlay; CLIENT)
+
+```
+client/
+  index.html              Dev Logs tab: Videos / Live-on-Kick sub-tabs, Kick player
+                            embed (player.kick.com/fleshmarket), live badge, Follow link.
+                            Inline script owns both iframes (window.__devlogsSync).
+  assets/core.js          Dev Logs handler defers to window.__devlogsSync (YouTube
+                            fallback kept).
+  obs-stream-anchor.html  NEW. Streaming broadcast desk: left rail (brain relay + voice
+                            waveform + live market movers), middle framed GAME window,
+                            right Kick chat column that auto-embeds chat.kick.cx (Kick
+                            blocks iframing its own popout; ?chat=0 for an OBS source),
+                            funnel-CTA ticker, guest WS feed. Facecam attempts mic on
+                            load (OBS --use-fake-ui-for-media-stream); brain reused from
+                            obs-flesh-anchor.html. Params ?guide=0 / ?ws= / ?boot=0 /
+                            ?kick= / ?mic=0 / ?mic=1 / ?chat=URL / ?chat=0.
+  version.json            1.1.9.7 -> 1.1.9.8.
+
+docs/
+  CHANGELOG.md            + v1.1.9.8 entry.
+  MANIFEST.txt            this file.
+```
 
 ## v1.1.9.7 changes (Dark background between windows; CLIENT)
 

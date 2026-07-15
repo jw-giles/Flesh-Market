@@ -1,7 +1,7 @@
 {
-  "version": "1.1.9.7",
+  "version": "1.1.9.8",
   "built": "2026-07-14T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.9.7",
-  "notes": "UI: the space between windows now matches the dark top of the page. The body background was a radial gradient with a green center (#04130a) fading to dark at the edges, so the header at the top read dark while the panels and the gaps between them sat in the green center. Flattened --body-bg to the dark edge color (#020703) so the header and the between-window gaps are the same color by construction, and tightened the panel glow (24px to 10px spread, lower alpha) so it no longer bleeds green into the gaps; the bold panel border already defines the windows, so it doesn't need the wide halo. As a bonus, panels now sit on a flat near-black field, which makes them separate even more cleanly. Client CSS only, no server or DB change, hard-refresh to see it. Carries 1.1.9.6 and earlier."
+  "patch": "1.1.9.8",
+  "notes": "Two streaming features. (1) Dev Logs now has sub-tabs: the existing YouTube videos, plus a Live on Kick tab that embeds the official Kick player for kick.com/fleshmarket, with a Follow-on-Kick link. (2) A streaming OBS overlay, obs-stream-anchor.html: a 1920x1080 broadcast desk with a left rail (Mr. Flesh brain relay + voice waveform over a live market-movers panel), a framed GAME window in the middle for a capture, and a Kick chat column on the right that auto-embeds chat via chat.kick.cx (a third-party widget, because Kick blocks iframing its own popout; ?chat=0 falls back to an OBS browser source). Bottom ticker weaves funnel calls to action to FLESHMARKET.IO. Reads the same guest WebSocket feed the news anchor uses. The facecam attempts mic capture on load, so with OBS launched using --enable-media-stream --use-fake-ui-for-media-stream the waveform tracks your voice; ?mic=0 forces procedural. Client only, no server or DB change, hard-refresh to see the tab. Carries 1.1.9.7 and earlier."
 }

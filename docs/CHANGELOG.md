@@ -4,6 +4,22 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.9.8 (2026-07-14) - Kick tab in Dev Logs + streaming OBS overlay (CLIENT)
+
+Client only. Hard-refresh after deploy. No server or DB change.
+
+**Kick sub-tab (Dev Logs).** Dev Logs was a single YouTube playlist embed; it now has two sub-tabs, `Videos` and `Live on Kick`. The Kick tab embeds the official Kick player (`https://player.kick.com/fleshmarket`), which shows the live stream when broadcasting and Kick's offline card otherwise, so it needs no live-detection. There is a best-effort LIVE badge (a direct Kick API fetch that may be Cloudflare-blocked, in which case it hides) and a Follow-on-Kick link. One inline script owns both iframes (`window.__devlogsSync`) so only the visible one loads; `core.js` defers to it with the old YouTube-only path as a fallback.
+
+**Streaming OBS overlay (`obs-stream-anchor.html`).** A broadcast desk for streaming the game, separate from the news-anchor overlay. 1920x1080 transparent frame in three columns:
+- Left rail: the Mr. Flesh relay facecam (the anchor's brain-in-jar portrait pulsing to a voice waveform) over a live market-movers panel (top movers by percent change, updated on tick).
+- Middle: a framed GAME window (about 1048x900) for a Window/Game Capture, so the capture is a window, not fullscreen, and nothing overlaps it.
+- Right: a Kick chat column that auto-embeds Kick chat via `chat.kick.cx` (a third-party embeddable widget, because Kick blocks iframing of its own popout); `?chat=0` falls back to an OBS browser source pointed at the Kick popout.
+- Top bar (branding, live breadth, PLAY FREE / FLESHMARKET.IO) and a bottom funnel ticker weaving calls to action (Mr. Flesh voice, no em dashes) between live movers and breaking news.
+
+It reads the same token-less guest WebSocket feed the anchor uses (init, tick, news, breaking_news), read-only. The facecam attempts mic capture on load, so with OBS launched using `--enable-media-stream --use-fake-ui-for-media-stream` the waveform tracks your voice with no prompt, falling back to a procedural signal otherwise. To use a real webcam, add a Video Capture source above the overlay over the relay box. URL params: `?guide=0` (hide setup labels), `?ws=`, `?boot=0`, `?kick=USERNAME`, `?mic=0` (procedural only), `?mic=1` (click card), `?chat=URL` (swap the embedded chat widget), `?chat=0` (disable the embed for an OBS source). OBS setup is documented in the file header.
+
+---
+
 ## v1.1.9.7 (2026-07-14) - Dark background between windows (CLIENT)
 
 Client CSS only. Hard-refresh after deploy. No server or DB change.
