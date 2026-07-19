@@ -76,10 +76,12 @@ self.onmessage = (e)=>{
           case 'p': {
             const dir = (t==='w')?-1:1;
             const ny = y+dir;
-            if (inBounds(x,ny) && b[ny][x]==='') add(x,ny,x,y);
+            const promo = (ny===0 || ny===7) ? (t==='w'?'Q':'q') : null;
+            const addPawn = (nx2,ny2)=>{ mv.push({x, y, nx:nx2, ny:ny2, piece:b[y][x], cap:b[ny2][nx2], promo}); };
+            if (inBounds(x,ny) && b[ny][x]==='') addPawn(x,ny);
             for (const dx of [-1,1]){
               const nx = x+dx;
-              if (inBounds(nx,ny) && b[ny][nx]!=='' && side(b[ny][nx])!==t) add(nx,ny,x,y);
+              if (inBounds(nx,ny) && b[ny][nx]!=='' && side(b[ny][nx])!==t) addPawn(nx,ny);
             }
             break;
           }
@@ -133,12 +135,28 @@ self.onmessage = (e)=>{
   }
 
   const PV = { p:100, n:320, b:330, r:500, q:900, k:0 };
+  // Piece-square tables (classic simplified-evaluation set), white's perspective,
+  // indexed [y][x] with y=0 the far (8th) rank and y=7 white's home (1st) rank.
+  // Black pieces read the vertically mirrored square, table[7-y][x]. This turns a
+  // material-only engine into one that develops, centralizes, and keeps its king
+  // tucked instead of only trading pieces.
+  const PST = {
+    p:[[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]],
+    n:[[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]],
+    b:[[-20,-10,-10,-10,-10,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,10,10,5,0,-10],[-10,5,5,10,10,5,5,-10],[-10,0,10,10,10,10,0,-10],[-10,10,10,10,10,10,10,-10],[-10,5,0,0,0,0,5,-10],[-20,-10,-10,-10,-10,-10,-10,-20]],
+    r:[[0,0,0,0,0,0,0,0],[5,10,10,10,10,10,10,5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[0,0,0,5,5,0,0,0]],
+    q:[[-20,-10,-10,-5,-5,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,5,5,5,0,-10],[-5,0,5,5,5,5,0,-5],[0,0,5,5,5,5,0,-5],[-10,5,5,5,5,5,0,-10],[-10,0,5,0,0,0,0,-10],[-20,-10,-10,-5,-5,-10,-10,-20]],
+    k:[[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-20,-30,-30,-40,-40,-30,-30,-20],[-10,-20,-20,-20,-20,-20,-20,-10],[20,20,0,0,0,0,20,20],[20,30,10,0,0,10,30,20]],
+  };
   function evaluate(b){
     let s=0;
     for (let y=0;y<8;y++) for (let x=0;x<8;x++){
       const p=b[y][x]; if (p==='') continue;
-      const v = PV[p.toLowerCase()] || 0;
-      s += (p===p.toUpperCase()? v : -v);
+      const lp = p.toLowerCase();
+      const v = PV[lp] || 0;
+      const t = PST[lp];
+      if (p===p.toUpperCase()) s += v + (t ? t[y][x] : 0);       // white
+      else                     s -= v + (t ? t[7-y][x] : 0);     // black (mirrored)
     }
     return s;
   }

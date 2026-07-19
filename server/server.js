@@ -11,7 +11,7 @@ import 'dotenv/config';
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
-import { createHmac } from 'crypto';
+import { createHmac, randomInt } from 'crypto';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -131,6 +131,7 @@ import {
   addCasinoWager, resolveCasinoRound, getExpiredOpenCasinoRounds,
   getAllOpenCasinoRounds, getCasinoActivity,
 } from './db.js';
+import { replay as solitaireReplay } from './solitaire.js';
 
 // FleshMarket TCG — collection/deck persistence + server-authoritative pack economy
 import {
@@ -650,16 +651,253 @@ const DIVIDEND_SECTORS      = new Set([0, 2, 4, 6]); // Finance, Insurance, Ener
 // stake+1.5×), chess win 2.5×fee. Poker is multi-street PvE; flat headroom covers
 // AI chips won. No-stake fixed rewards: sudoku max Ƒ4,000, math session ~Ƒ800,
 // minesweeper Ƒ400 — flats carry a little slack for float/rounding.
+// Solitaire (Klondike, draw-3, no recycle): server-authoritative via replay.
+// The buy-in is committed at solitaire_start and forfeited if the game is
+// abandoned (the expiry sweep resolves it as a loss). The payout is
+// foundation_cards * per-card, plus a bonus for a full 52-card clear, computed by
+// the server replaying the client move log at solitaire_finish. All tunable; the
+// break-even sits near 36 of 52 cards, so partial games return less than the
+// buy-in and only a near-complete solve profits. Retune from live payout data.
+const SOLITAIRE_BUYIN     = 250;   // committed at start
+const SOLITAIRE_PER_CARD  = 20;    // per card to a foundation; break-even ~12.5 of 52 (data-collection placeholder, retune from the ledger)
+const SOLITAIRE_WIN_BONUS = 500;   // extra for clearing all 52 (a rare jackpot)
+const SOLITAIRE_MAX_MOVES = 4000;  // reject absurd move logs (a real game is a few hundred)
 const CASINO_CFG = {
   roulette:    { mult: 36, flat: 0,    minDurMs: 3000,  timeoutMs: 3  * 60_000 },
   horseraces:  { mult: 5,  flat: 0,    minDurMs: 4000,  timeoutMs: 3  * 60_000 },
-  blackjack:   { mult: 2.5,flat: 0,    minDurMs: 3000,  timeoutMs: 5  * 60_000 },
+  blackjack:   { mult: 2.5,flat: 0,    minDurMs: 1500,  timeoutMs: 5  * 60_000 },
   poker:       { mult: 1,  flat: 5000, minDurMs: 5000,  timeoutMs: 10 * 60_000 },
   chess:       { mult: 2.5,flat: 0,    minDurMs: 1500,  timeoutMs: 60 * 60_000 },
   sudoku:      { mult: 0,  flat: 4200, minDurMs: 20000, timeoutMs: 45 * 60_000 },
-  mathgame:    { mult: 0,  flat: 900,  minDurMs: 15000, timeoutMs: 15 * 60_000 },
+  mathgame:    { mult: 0,  flat: 900,  minDurMs: 5000,  timeoutMs: 15 * 60_000 },
   minesweeper: { mult: 0,  flat: 450,  minDurMs: 4000,  timeoutMs: 30 * 60_000 },
+  // One-shot games (settled atomically in casino_play): only mult/flat are read as
+  // the payout-cap backstop; minDurMs/timeoutMs are inert (no round is left open).
+  baccarat:    { mult: 12, flat: 0,    minDurMs: 0,     timeoutMs: 3  * 60_000 },  // cap = pair 11:1 (12x gross)
+  sicbo:       { mult: 160,flat: 0,    minDurMs: 0,     timeoutMs: 3  * 60_000 },  // cap > specific triple 150:1 (151x gross)
+  // Stateful, server-authoritative via replay (solitaire_start / solitaire_finish).
+  // Payout is computed server-side; mult:0 + flat cap is a pure backstop set 20%
+  // above the theoretical max (52*perCard + winBonus) and tracks the constants.
+  solitaire:   { mult: 0,  flat: Math.ceil((52*SOLITAIRE_PER_CARD + SOLITAIRE_WIN_BONUS) * 1.2), minDurMs: 0, timeoutMs: 30 * 60_000 },
 };
+// ─── Casino: server-authoritative one-shot games (roulette, horse races) ──────
+// These pure-RNG games no longer trust a client-declared payout. The client sends
+// only its bet selection; the server rolls with crypto.randomInt (unbiased, not
+// predictable), computes the payout from its own outcome, and settles atomically
+// via the casino_play handler. Same shape as the TCG pack purchase: the client
+// never decides the outcome or what it pays. The wager*mult+flat cap from
+// CASINO_CFG stays as a backstop so a resolver bug still can't overpay.
+function secureInt(min, max){ return randomInt(min, max + 1); } // inclusive [min, max]
+
+const RL_REDS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+function rlColorOf(n){ return n === 0 ? 'green' : (RL_REDS.has(n) ? 'red' : 'black'); }
+const RL_BET_TYPES = new Set(['straight','red','black','odd','even','low','high',
+  'dozen1','dozen2','dozen3','col1','col2','col3']);
+// Ported verbatim from the client payoutFor (core.js) so gross matches exactly.
+function rlPayoutFor(slip, result){
+  let payout = 0;
+  for(const b of slip){
+    const amt = b.amount, t = b.type;
+    if(t==='straight'){ if(result===b.pick) payout += amt*36; }
+    else if(t==='red'){ if(rlColorOf(result)==='red') payout += amt*2; }
+    else if(t==='black'){ if(rlColorOf(result)==='black') payout += amt*2; }
+    else if(t==='odd'){ if(result!==0 && result%2===1) payout += amt*2; }
+    else if(t==='even'){ if(result!==0 && result%2===0) payout += amt*2; }
+    else if(t==='low'){ if(result>=1 && result<=18) payout += amt*2; }
+    else if(t==='high'){ if(result>=19 && result<=36) payout += amt*2; }
+    else if(t==='dozen1'){ if(result>=1 && result<=12) payout += amt*3; }
+    else if(t==='dozen2'){ if(result>=13 && result<=24) payout += amt*3; }
+    else if(t==='dozen3'){ if(result>=25 && result<=36) payout += amt*3; }
+    else if(t==='col1'){ if(result!==0 && result%3===1) payout += amt*3; }
+    else if(t==='col2'){ if(result!==0 && result%3===2) payout += amt*3; }
+    else if(t==='col3'){ if(result!==0 && result%3===0) payout += amt*3; }
+  }
+  return payout;
+}
+
+const HR_LANES = 6;
+
+// ── Baccarat (Punto Banco) helpers ────────────────────────────────────────────
+const BACC_RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const BACC_SUITS = ['C','S','H','D'];
+function baccVal(r){ if(r===0) return 1; if(r<=8) return r+1; return 0; } // A=1, 2-9 pip, 10/J/Q/K=0
+function baccBuildShoe(decks){
+  const shoe=[];
+  for(let d=0;d<decks;d++) for(let r=0;r<13;r++) for(let s=0;s<4;s++) shoe.push({r,s});
+  for(let i=shoe.length-1;i>0;i--){ const j=secureInt(0,i); const t=shoe[i]; shoe[i]=shoe[j]; shoe[j]=t; } // crypto Fisher-Yates
+  return shoe;
+}
+function baccCard(c){ return { rank:BACC_RANKS[c.r], suit:BACC_SUITS[c.s] }; }
+
+// ── Sic Bo (3d6) helpers ──────────────────────────────────────────────────────
+// Totals table + per-spot pricing. Edges verified by full 216-outcome enumeration
+// (2.78%-30% band, no player-favored spot). Max single-spot gross = 151x (specific
+// triple), which sets the CASINO_CFG.sicbo cap.
+const SIC_TOTAL_PAY = {4:60,17:60, 5:30,16:30, 6:18,15:18, 7:12,14:12, 8:8,13:8, 9:6,12:6, 10:6,11:6};
+const SIC_SPOTS = (function(){
+  const s = new Set(['small','big','odd','even','anytriple']);
+  for(let f=1;f<=6;f++){ s.add('s'+f); s.add('d'+f); s.add('t'+f); }
+  for(let v=4;v<=17;v++) s.add('n'+v);
+  for(let f=1;f<=6;f++) for(let g=f+1;g<=6;g++) s.add('c'+f+g);
+  return s;
+})();
+function sicPrice(bets, dice){
+  const [a,b,c]=dice, total=a+b+c;
+  const counts=[0,0,0,0,0,0,0]; counts[a]++; counts[b]++; counts[c]++;
+  const isTrip=(a===b&&b===c);
+  let gross=0;
+  for(const spot in bets){
+    const amt=bets[spot]; if(!(amt>0)) continue;
+    if(spot==='small'){ if(!isTrip&&total>=4&&total<=10) gross+=amt*2; }
+    else if(spot==='big'){ if(!isTrip&&total>=11&&total<=17) gross+=amt*2; }
+    else if(spot==='odd'){ if(!isTrip&&total%2===1) gross+=amt*2; }
+    else if(spot==='even'){ if(!isTrip&&total%2===0) gross+=amt*2; }
+    else if(spot==='anytriple'){ if(isTrip) gross+=amt*31; }               // any triple 30:1
+    else if(spot[0]==='s'){ const n=counts[+spot.slice(1)]; if(n>0) gross+=amt*(1+n); }   // single 1/2/3:1
+    else if(spot[0]==='d'){ if(counts[+spot.slice(1)]>=2) gross+=amt*11; }  // specific double 10:1
+    else if(spot[0]==='t'){ if(counts[+spot.slice(1)]===3) gross+=amt*151; }// specific triple 150:1
+    else if(spot[0]==='n'){ const v=+spot.slice(1); if(total===v) gross+=amt*(1+SIC_TOTAL_PAY[v]); } // total
+    else if(spot[0]==='c'){ const f=+spot[1],g=+spot[2]; if(counts[f]>=1&&counts[g]>=1) gross+=amt*6; } // combo 5:1
+  }
+  return gross;
+}
+
+// Each one-shot game validates its client input into a trusted {stake, ...} shape
+// (or null to reject), then rolls + prices the outcome server-side.
+const CASINO_ONESHOT = {
+  roulette: {
+    parse(input){
+      const slipIn = Array.isArray(input && input.slip) ? input.slip : [];
+      if(!slipIn.length || slipIn.length > 60) return null;
+      const slip = [];
+      for(const b of slipIn){
+        const type = String(b && b.type || '');
+        if(!RL_BET_TYPES.has(type)) return null;
+        const amount = Math.round((Number(b && b.amount) || 0) * 100) / 100;
+        if(!(amount > 0)) return null;
+        let pick = null;
+        if(type === 'straight'){
+          pick = Math.floor(Number(b && b.pick));
+          if(!Number.isInteger(pick) || pick < 0 || pick > 36) return null;
+        }
+        slip.push({ type, pick, amount });
+      }
+      const stake = Math.round(slip.reduce((s,b)=>s+b.amount,0) * 100) / 100;
+      if(!(stake > 0)) return null;
+      return { stake, slip };
+    },
+    roll(p){
+      const result = secureInt(0, 36);
+      return { payout: rlPayoutFor(p.slip, result), view: { result } };
+    },
+  },
+  horseraces: {
+    parse(input){
+      const pick   = Math.floor(Number(input && input.pick));
+      const amount = Math.floor(Number(input && input.amount) || 0);
+      if(!Number.isInteger(pick) || pick < 0 || pick >= HR_LANES) return null;
+      if(!(amount > 0)) return null;
+      return { stake: amount, pick, amount };
+    },
+    roll(p){
+      const winner = secureInt(0, HR_LANES - 1);
+      const payout = (p.pick === winner) ? Math.floor(p.amount * 5) : 0;
+      return { payout, view: { winner } };
+    },
+  },
+  // Baccarat (Punto Banco): pure chance, no player decisions. Server deals an
+  // 8-deck shoe, applies the fixed third-card table, prices the coup. Gross
+  // multipliers: Player 2x, Banker 1.95x (5% commission), Tie 9x, pairs 12x.
+  // On a Tie the Player/Banker bets push (stake returned). Max single-bet gross
+  // = 12x (pair) -> CASINO_CFG.baccarat cap.
+  baccarat: {
+    parse(input){
+      const b = input && input.bets;
+      if(!b || typeof b !== 'object') return null;
+      const bets = {}; let stake = 0;
+      for(const k of ['player','banker','tie','ppair','bpair']){
+        let amt = Math.round((Number(b[k])||0)*100)/100;
+        if(!Number.isFinite(amt) || amt < 0) amt = 0;   // NaN/Infinity/neg -> 0
+        bets[k] = amt; stake += amt;
+      }
+      stake = Math.round(stake*100)/100;
+      if(!(stake>0)) return null;
+      return { stake, bets };
+    },
+    roll(p){
+      const shoe = baccBuildShoe(8);
+      const P=[], B=[];
+      P.push(shoe.pop()); B.push(shoe.pop()); P.push(shoe.pop()); B.push(shoe.pop());
+      const tot = h => h.reduce((s,c)=>s+baccVal(c.r),0)%10;
+      let pt=tot(P), bt=tot(B);
+      const natural = (pt>=8 || bt>=8);
+      let p3v=null;
+      if(!natural){
+        if(pt<=5){ const c=shoe.pop(); P.push(c); p3v=baccVal(c.r); } // player draws on 0-5
+        const drew = (p3v!==null);
+        let bankerDraws;
+        if(!drew){ bankerDraws = (bt<=5); }        // player stood -> banker draws on 0-5
+        else if(bt<=2){ bankerDraws=true; }
+        else if(bt===3){ bankerDraws=(p3v!==8); }
+        else if(bt===4){ bankerDraws=(p3v>=2 && p3v<=7); }
+        else if(bt===5){ bankerDraws=(p3v>=4 && p3v<=7); }
+        else if(bt===6){ bankerDraws=(p3v>=6 && p3v<=7); }
+        else { bankerDraws=false; }                // banker 7 stands
+        if(bankerDraws){ B.push(shoe.pop()); }
+        pt=tot(P); bt=tot(B);
+      }
+      let outcome; if(pt>bt) outcome='player'; else if(bt>pt) outcome='banker'; else outcome='tie';
+      const pPair = (P[0].r===P[1].r), bPair = (B[0].r===B[1].r);
+      const bet = p.bets; let payout = 0;
+      if(bet.player>0){ if(outcome==='player') payout+=bet.player*2;    else if(outcome==='tie') payout+=bet.player; }
+      if(bet.banker>0){ if(outcome==='banker') payout+=bet.banker*1.95; else if(outcome==='tie') payout+=bet.banker; }
+      if(bet.tie>0){    if(outcome==='tie')    payout+=bet.tie*9; }
+      if(bet.ppair>0){  if(pPair)              payout+=bet.ppair*12; }
+      if(bet.bpair>0){  if(bPair)              payout+=bet.bpair*12; }
+      return { payout, view:{ P:P.map(baccCard), B:B.map(baccCard), pt, bt, outcome, pPair, bPair } };
+    },
+  },
+  // Sic Bo (3d6): pure chance, full standard board. Server rolls three dice and
+  // prices every spot via sicPrice. Max single-spot gross = 151x (specific triple)
+  // -> CASINO_CFG.sicbo cap.
+  sicbo: {
+    parse(input){
+      const b = input && input.bets;
+      if(!b || typeof b !== 'object') return null;
+      const bets = {}; let stake = 0, n = 0;
+      for(const k in b){
+        if(!SIC_SPOTS.has(k)) continue;              // ignore unknown spots
+        let amt = Math.round((Number(b[k])||0)*100)/100;
+        if(!Number.isFinite(amt) || amt <= 0) continue;  // NaN/Infinity/<=0 skipped
+        bets[k] = amt; stake += amt;
+        if(++n > 60) return null;                    // absurd spot count -> reject
+      }
+      stake = Math.round(stake*100)/100;
+      if(!(stake>0)) return null;
+      return { stake, bets };
+    },
+    roll(p){
+      const dice = [secureInt(1,6), secureInt(1,6), secureInt(1,6)];
+      return { payout: sicPrice(p.bets, dice), view:{ dice } };
+    },
+  },
+};
+const ONESHOT_GAMES = new Set(Object.keys(CASINO_ONESHOT));
+
+// ─── Mining: server-bounded banking ───────────────────────────────────────────
+// Mining yield is the output of an interactive skill+risk game (seeded field,
+// player piloting, RNG hostiles, survival). The server can't re-derive it the way
+// it rolls a casino game, and full server-side simulation is disproportionate, so
+// banked cash is BOUNDED, not recomputed: a run's credit is capped to a plausible
+// yield rate over its elapsed run time, with a hard per-run ceiling as a backstop.
+// This closes the old unbounded faucet (a client set any balance via mining_bank
+// sync) while never clamping a real run. Over-reports are clamped and logged as a
+// fraud signal, the same way the casino cap surfaces impossible claims.
+const MINING_MAX_YIELD_PER_SEC = parseFloat(process.env.MINING_MAX_YIELD_PER_SEC || '5000');     // Ƒ/sec ceiling on run time
+const MINING_RUN_FALLBACK_SEC  = parseFloat(process.env.MINING_RUN_FALLBACK_SEC  || '90');       // assumed length if run-start wasn't seen
+const MINING_MAX_RUN_BANK      = parseFloat(process.env.MINING_MAX_RUN_BANK      || '10000000');  // hard per-run credit ceiling
+const _miningRuns = new Map(); // playerId -> { startTs } for the open run, to bound the banked credit
+
 const SECTOR_NAMES          = ['Finance','Biotech','Insurance','Manufacturing','Energy','Logistics','Tech','Misc'];
 
 // DEV_ACCOUNTS env: comma-separated list of dev account names.
@@ -7068,6 +7306,59 @@ wss.on('connection',(ws,req)=>{
         msg:'Casino updated — hard-refresh (Ctrl+Shift+R) to load the new version.' } }));
     }
 
+    // ── Casino: one-shot server-authoritative play (roulette, horse races) ────
+    // Client sends { type:'casino_play', game, input } where input is only the bet
+    // SELECTION (roulette slip / horse pick+amount), never a payout. The server
+    // validates the input, rolls the outcome itself, prices it, and settles in one
+    // atomic step: stake out, gross in. There is no open round to fake a result on
+    // and no time gate, because the client no longer reports the outcome at all.
+    // The wager*mult+flat cap is kept purely as a backstop against a resolver bug.
+    if(msg.type==='casino_play'){
+      const game = String(msg.game||'');
+      const g    = CASINO_ONESHOT[game];
+      if(!g){ ws.send(JSON.stringify({type:'casino_play_ack',data:{ok:false,error:'Unknown game.'}})); return; }
+      const parsed = g.parse(msg.input);
+      if(!parsed){ ws.send(JSON.stringify({type:'casino_play_ack',data:{ok:false,error:'Invalid bet.'}})); return; }
+      if(parsed.stake > actor.cash){ ws.send(JSON.stringify({type:'casino_play_ack',data:{ok:false,error:'Insufficient funds.'}})); return; }
+
+      const { payout, view } = g.roll(parsed);
+
+      const cfg      = CASINO_CFG[game] || { mult:1, flat:0 };
+      const cap      = parsed.stake * (cfg.mult||1) + (cfg.flat||0);
+      const credited = Math.round(Math.min(Math.max(payout,0), cap) * 100) / 100;
+      const clamped  = payout > cap + 0.005;
+
+      const now        = Date.now();
+      const cashBefore = actor.cash;
+      safeAddCash(actor, -parsed.stake);   // stake out
+      safeAddCash(actor, credited);        // gross in (net = credited - stake)
+      actor.cash = Math.round(actor.cash*100)/100;
+      savePlayer(actor);
+
+      // Ledger row for the dev panel — opened and resolved in the same tick, so the
+      // sweep never sees it open and no one-open-round guard is needed here.
+      const roundId = uuidv4();
+      try {
+        openCasinoRound({ id:roundId, playerId:actor.id, game, wager:parsed.stake, cashBefore, openedTs:now });
+        resolveCasinoRound(roundId, clamped ? 'clamped' : 'resolved', credited, actor.cash, now);
+      } catch(_) {}
+
+      try {
+        const equity = Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{
+          const co=companies.find(x=>x.symbol===sym); return acc+(co?co.price*qty:0);
+        },0);
+        recordNetWorth(actor.id, actor.cash+equity, actor.cash, equity);
+      } catch(_) {}
+
+      ws.send(JSON.stringify({type:'casino_play_ack',data:{ok:true, roundId, game, view, credited, clamped, cash:actor.cash}}));
+      ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      if(clamped){
+        broadcastToAdmins({ type:'admin_log', data:{ action:'casino_clamped', by:actor.name, game, wager:parsed.stake, claimed:payout, paid:credited } });
+      }
+      return;
+    }
+
     // ── Casino: place a bet (opens a server-tracked round) ────────────────────
     // Client sends { type:'casino_bet', game, wager }. Server validates funds,
     // deducts the stake immediately, and returns a server-generated roundId. The
@@ -7075,6 +7366,14 @@ wss.on('connection',(ws,req)=>{
     // it — the client cannot inflate both sides of the cap in one message.
     if(msg.type==='casino_bet'){
       const game  = String(msg.game||'');
+      // Roulette and horse races are now fully server-authoritative via casino_play
+      // (server rolls + settles atomically). The old client-declared bet/result path
+      // is closed for them so a stale or crafted client can't reopen the payout hole.
+      if(ONESHOT_GAMES.has(game)){
+        ws.send(JSON.stringify({ type:'casino_stale', data:{
+          msg:'Casino updated — hard-refresh (Ctrl+Shift+R) to load the new version.' } }));
+        return;
+      }
       const cfg   = CASINO_CFG[game];
       const wager = Math.round((Number(msg.wager)||0)*100)/100;
       if(!cfg){ ws.send(JSON.stringify({type:'casino_bet_ack',data:{ok:false,error:'Unknown game.'}})); return; }
@@ -7158,6 +7457,72 @@ wss.on('connection',(ws,req)=>{
       if(clamped){
         broadcastToAdmins({ type:'admin_log', data:{ action:'casino_clamped', by:actor.name, game:round.game, wager:round.wager, claimed:payout, paid:credited } });
       }
+    }
+
+    // ── Solitaire: start a game (commit the buy-in, open a round) ─────────────
+    // Client sends { type:'solitaire_start' }. The server deducts the buy-in, opens
+    // a round, and returns the round id. The client derives the deal from that id
+    // (identical PRNG in solitaire.js / casino-solitaire.js) and plays locally. The
+    // buy-in is committed here so a player cannot cherry-pick only winning games; an
+    // abandoned game is forfeited by the expiry sweep exactly like a loss.
+    if(msg.type==='solitaire_start'){
+      const buyin = SOLITAIRE_BUYIN;
+      if(buyin > actor.cash){ ws.send(JSON.stringify({type:'solitaire_start_ack',data:{ok:false,error:'Insufficient funds.'}})); return; }
+      // Auto-forfeit any prior open solitaire round (e.g. a game abandoned by a
+      // refresh) so the player is never locked out; the old buy-in stays forfeited.
+      const stale = getOpenRoundForGame(actor.id, 'solitaire');
+      if(stale){ resolveCasinoRound(stale.id, 'abandoned', 0, actor.cash, Date.now()); }
+      const roundId = uuidv4();
+      safeAddCash(actor, -buyin);
+      actor.cash = Math.round(actor.cash*100)/100;
+      savePlayer(actor);
+      openCasinoRound({ id:roundId, playerId:actor.id, game:'solitaire', wager:buyin, cashBefore:actor.cash+buyin, openedTs:Date.now() });
+      ws.send(JSON.stringify({type:'solitaire_start_ack',data:{ok:true, roundId, buyin, perCard:SOLITAIRE_PER_CARD, winBonus:SOLITAIRE_WIN_BONUS, cash:actor.cash}}));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      return;
+    }
+
+    // ── Solitaire: finish a game (replay the log server-side, pay the result) ──
+    // Client sends { type:'solitaire_finish', roundId, moves }. The server replays
+    // the move log against the deal it derives from roundId, validating every move,
+    // and pays foundation_count * per-card (+ win bonus for a full clear). The payout
+    // is entirely server-computed; the client never reports an outcome. A tampered or
+    // foreign log fails validation early and scores only its valid prefix.
+    if(msg.type==='solitaire_finish'){
+      const round = getOpenCasinoRound(String(msg.roundId||''), actor.id);
+      if(!round){ ws.send(JSON.stringify({type:'solitaire_finish_ack',data:{ok:false,error:'No open game.'}})); return; }
+      const moves = msg.moves;
+      if(!Array.isArray(moves)){
+        // Malformed send - leave the round open so the client can retry finishing.
+        ws.send(JSON.stringify({type:'solitaire_finish_ack',data:{ok:false,error:'Invalid move log.'}})); return;
+      }
+      if(moves.length > SOLITAIRE_MAX_MOVES){
+        ws.send(JSON.stringify({type:'solitaire_finish_ack',data:{ok:false,error:'Move log too long.'}})); return;
+      }
+      const rep   = solitaireReplay(round.id, moves);               // server owns the deal + validation
+      const gross = rep.foundations * SOLITAIRE_PER_CARD + (rep.won ? SOLITAIRE_WIN_BONUS : 0);
+      const cfg   = CASINO_CFG['solitaire'] || { mult:0, flat:0 };
+      const cap   = round.wager * (cfg.mult||0) + (cfg.flat||0);    // pure backstop; server payout is already bounded
+      const credited = Math.round(Math.min(Math.max(gross,0), cap) * 100) / 100;
+      const clamped  = gross > cap + 0.005;
+      const now = Date.now();
+      safeAddCash(actor, credited);
+      actor.cash = Math.round(actor.cash*100)/100;
+      savePlayer(actor);
+      resolveCasinoRound(round.id, clamped ? 'clamped' : 'resolved', credited, actor.cash, now);
+      try {
+        const equity = Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{
+          const co=companies.find(x=>x.symbol===sym); return acc+(co?co.price*qty:0);
+        },0);
+        recordNetWorth(actor.id, actor.cash+equity, actor.cash, equity);
+      } catch(_) {}
+      ws.send(JSON.stringify({type:'solitaire_finish_ack',data:{ok:true, roundId:round.id, foundations:rep.foundations, won:rep.won, credited, buyin:round.wager, net:Math.round((credited-round.wager)*100)/100, clamped, cash:actor.cash}}));
+      ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      if(clamped){
+        broadcastToAdmins({ type:'admin_log', data:{ action:'casino_clamped', by:actor.name, game:'solitaire', wager:round.wager, claimed:gross, paid:credited } });
+      }
+      return;
     }
 
     // ── Mining: list owned upgrades + catalog (sanitized) ──────────────────
@@ -7348,29 +7713,66 @@ wss.on('connection',(ws,req)=>{
       }
     }
 
-    // ── Mining: bank cash from a run ───────────────────────────────────────
-    // NOTE (security debt, tracked separately from the casino fix): mining cash
-    // is still CLIENT-AUTHORITATIVE. recordMiningRun() only writes stats; the
-    // actual banked Ƒ arrives as a client-reported balance here. This carries the
-    // same class of exploit the casino sync had and needs its own server-side
-    // settlement (server computes banked cash from a validated run, not a reported
-    // total). It is split out onto its own message (was riding {type:'casino'})
-    // so the casino faucet could be closed cleanly and this remaining hole is
-    // named and isolated rather than hidden. DO NOT treat this as fixed.
+    // ── Mining: bank cash (server-bounded delta protocol) ─────────────────────
+    // The old {type:'mining_bank', sync:N} set cash to a client-reported TOTAL and
+    // was an unbounded faucet, the same class as the retired casino sync. It is
+    // closed: a reported total is ignored, never trusted. Cash now moves via
+    // mining_bank_delta, where the server owns the balance and BOUNDS each run's
+    // credit (it can't audit a skill game, so it caps rather than recomputes).
+    // Deltas are tagged by the game: 'loadout' (negative) = run start, deduct the
+    // cost and open a run window; 'banked' (positive) = run end, credit the
+    // reported profit but clamped to a plausible cap for the elapsed run time.
     if (msg.type === 'mining_bank') {
-      if (typeof msg.sync === 'number' && Number.isFinite(msg.sync)) {
-        const newCash = Math.max(0, msg.sync);
-        actor.cash = Math.round(newCash * 100) / 100;
+      // Legacy client-authoritative total. Closed. A hard-refresh moves the client
+      // to the delta protocol below; we never set cash from a reported total again.
+      return;
+    }
+
+    if (msg.type === 'mining_bank_delta') {
+      const delta  = Number(msg.delta);
+      const reason = String(msg.reason || '');
+      if (!Number.isFinite(delta) || delta === 0) return;
+      const now = Date.now();
+
+      if (delta < 0 || reason === 'loadout') {
+        // Run start: deduct the (overdraft-bounded) loadout cost, open the window.
+        // A negative delta cannot mint cash, so we only guard against going under 0.
+        const cost = Math.min(Math.abs(delta), actor.cash);
+        safeAddCash(actor, -cost);
+        actor.cash = Math.round(actor.cash * 100) / 100;
         savePlayer(actor);
-        try {
-          const equity = Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{
-            const co=companies.find(x=>x.symbol===sym); return acc+(co?co.price*qty:0);
-          },0);
-          recordNetWorth(actor.id, actor.cash+equity, actor.cash, equity);
-        } catch(_) {}
+        _miningRuns.set(actor.id, { startTs: now });
         ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
         ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+        return;
       }
+
+      // Run end (positive): bound the credit to a plausible yield for the elapsed
+      // run time (never clamps a real run; caps a fabricated one), then a hard
+      // per-run ceiling as a final backstop. Fall back to an assumed run length if
+      // the run-start wasn't recorded (e.g. a restart landed mid-run).
+      const run     = _miningRuns.get(actor.id);
+      const elapsed = run ? Math.max(1, (now - run.startTs) / 1000) : MINING_RUN_FALLBACK_SEC;
+      const cap      = Math.min(MINING_MAX_YIELD_PER_SEC * elapsed, MINING_MAX_RUN_BANK);
+      const credited = Math.round(Math.min(delta, cap) * 100) / 100;
+      const clamped  = delta > cap + 0.005;
+      _miningRuns.delete(actor.id);
+
+      safeAddCash(actor, credited);
+      actor.cash = Math.round(actor.cash * 100) / 100;
+      savePlayer(actor);
+      try {
+        const equity = Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{
+          const co=companies.find(x=>x.symbol===sym); return acc+(co?co.price*qty:0);
+        },0);
+        recordNetWorth(actor.id, actor.cash+equity, actor.cash, equity);
+      } catch(_) {}
+      ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      if (clamped) {
+        broadcastToAdmins({ type:'admin_log', data:{ action:'mining_clamped', by:actor.name, reported:delta, paid:credited, elapsedSec:Math.round(elapsed) } });
+      }
+      return;
     }
 
     // ── Mining: leaderboard fetch ──────────────────────────────────────────

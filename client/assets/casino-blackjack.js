@@ -200,6 +200,7 @@
   // ── Game state ───────────────────────────────────────────────────
   let playerHand=[],dealerHand=[],playerBet=0,canDouble=false,clearTmr=null,gamePhase='idle';
   let bjRoundId=null; // server round id for the in-flight hand
+  let bjDealTs=0;     // client clock at round open, for the min-hand settle pad
 
   function setPhase(p){ gamePhase=p; }
 
@@ -233,7 +234,7 @@
     setTimeout(()=>{ if(box) box.innerHTML=''; },4500);
   }
 
-  function settle(){
+  async function settle(){
     renderHands(false);
     const dTot=handTotal(dealerHand);
     const pTot=handTotal(playerHand);
@@ -251,7 +252,15 @@
     else if(pTot===dTot){ gross=playerBet; showResult('Push, Bet returned.','push'); bjLog('Push.'); }
     else { gross=0; showResult('Dealer wins, You lose.','lose'); bjLog(`Lose. -${fmtLocal(playerBet)}`); }
 
-    if(bjRoundId){ CasinoNet.result(bjRoundId, gross); bjRoundId=null; }
+    if(bjRoundId){
+      // Pad to the server's min hand time so a fast hand (natural BJ / instant
+      // stand) isn't voided as too-fast. The result banner already showed above;
+      // only the settle send waits, and Deal stays locked until it lands so a
+      // fast re-deal can't collide with the still-open round.
+      const wait=1600-(Date.now()-bjDealTs);
+      if(wait>0) await sleep(wait);
+      CasinoNet.result(bjRoundId, gross); bjRoundId=null;
+    }
     playerBet=0; setBtns('done'); setPhase('done');
     clearTmr=setTimeout(resetRound,4000);
   }
@@ -289,6 +298,7 @@
     const round=await CasinoNet.bet('blackjack', amt);
     if(!round.ok){ bjLog(round.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Bet rejected: '+(round.error||'unknown'))); return; }
     bjRoundId=round.roundId;
+    bjDealTs=Date.now();
 
     // Check if shoe needs reshuffling before dealing
     await shoeCheckAndShuffle();
@@ -420,6 +430,7 @@
   let horses=[], legPhase=[], running=false, winner=-1, planned=-1;
   let escrow=0, pick=0, startT=0, animId=null, clearTmr=null;
   let hrRoundId=null; // server round id for the in-flight race
+  let hrCredited=0;   // server-settled gross for the current race, for settle()
 
   function init(){
     if(animId){cancelAnimationFrame(animId);animId=null;}
@@ -582,16 +593,15 @@
 
   function settle(wi){
     const bet=escrow|0, sel=pick|0;
-    let gross=0;
+    // Result was priced and credited server-side; show the server's number.
+    const gross=hrCredited|0; hrCredited=0;
     if(sel===wi){
-      gross=Math.floor(bet*5);
       pushLog('WIN  #'+(wi+1)+' '+NAMES[wi]+'  +'+fmt(gross), true);
       setStatus('\u25c6 WINNER: #'+(wi+1)+' '+NAMES[wi]+'   PAYOUT: '+fmt(gross),'#86ff6a');
     } else {
       pushLog('LOSS  Winner: #'+(wi+1)+' '+NAMES[wi], false);
       setStatus('\u25c6 Winner: #'+(wi+1)+' '+NAMES[wi]+'  \u2014  Better luck next race','#ff6b6b');
     }
-    if(hrRoundId){ CasinoNet.result(hrRoundId, gross); hrRoundId=null; }
     escrow=0;
     clearTmr=setTimeout(()=>{ init(); drawFrame(); setStatus('\u25c8 Place a bet and start the race',null); },5000);
   }
@@ -602,13 +612,15 @@
     const amt=Math.floor(Number(document.getElementById('horseBet')?.value||0));
     if(!amt||amt<1){ setStatus('Enter a valid bet amount.','#ff9900'); return; }
     if(amt>getBal()){ setStatus('Insufficient balance.','#ff6b6b'); return; }
-    // Stake server-side; only start the race if accepted.
-    const round=await CasinoNet.bet('horseraces', amt);
-    if(!round.ok){ setStatus(round.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Bet rejected: '+(round.error||'unknown')),'#ff6b6b'); return; }
-    hrRoundId=round.roundId;
+    // Server-authoritative: send only pick + amount. The server picks the winner,
+    // prices the result, and credits atomically. The client animates the winner
+    // the server chose — it no longer decides the outcome or report the payout.
+    const res=await CasinoNet.play('horseraces', { pick, amount:amt });
+    if(!res.ok){ setStatus(res.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Bet rejected: '+(res.error||'unknown')),'#ff6b6b'); return; }
+    hrCredited=(typeof res.credited==='number') ? res.credited : 0;
     if(clearTmr){clearTimeout(clearTmr);clearTmr=null;}
     init(); drawFrame();
-    planned=Math.floor(Math.random()*LANES);
+    planned=(res.view && Number.isInteger(res.view.winner)) ? res.view.winner : 0;
     escrow=amt; running=true; winner=-1;
     setStatus('\u25c8 Racing\u2026  You picked #'+(pick+1)+' ('+NAMES[pick]+')  \u2014  Bet: '+fmt(amt),'#46ff7d');
     startT=performance.now();

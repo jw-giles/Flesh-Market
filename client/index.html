@@ -74,13 +74,32 @@
 <div class="tab" data-tab="casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none">⚖ Capital Houses</div><div class="tab" data-tab="store">Store</div><div class="tab" data-tab="galactic">⬡ Galaxy</div><div class="tab" data-tab="mining">⛏ Mining</div><div class="tab" data-tab="fleshbook">📣 Fleshbook<span id="unread-fleshbook" style="display:none;background:#a78bfa;color:#000;border-radius:8px;font-size:.6rem;padding:0 5px;margin-left:4px;font-weight:bold">0</span></div><div class="tab" data-tab="arena">🃏 Corpo-Cards</div><div class="tab" data-tab="devlogs">📺 Dev Logs</div><div class="tab" data-tab="bugs" id="bugsTabBtnHidden" style="display:none">🐛 Bugs</div>
 </div>
 <div id="devlogsTab" style="display:none">
+  <style>
+  #devlogsTab .sub-on{border-color:var(--amber)!important;color:var(--amber)!important;background:#141007!important}
+  #devlogsTab .kick-badge{font-size:.72rem;letter-spacing:.08em;color:var(--dim)}
+  #devlogsTab .kick-badge.live{color:#53fc18;font-weight:bold}
+  </style>
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
     <span style="color:var(--amber);font-weight:bold;letter-spacing:.08em">📺 DEV LOGS</span>
-    <span class="muted" style="font-size:.7rem">Broadcasts, dev logs, lore and news</span>
-    <a href="https://www.youtube.com/@FleshMarketNews" target="_blank" rel="noopener" class="btn" style="margin-left:auto;font-size:.72rem;padding:4px 10px">Open channel</a>
+    <span class="muted" id="devlogsSubtitle" style="font-size:.7rem">Broadcasts, dev logs, lore and news</span>
+    <a id="devlogsOpenLink" href="https://www.youtube.com/@FleshMarketNews" target="_blank" rel="noopener" class="btn" style="margin-left:auto;font-size:.72rem;padding:4px 10px">Open channel</a>
   </div>
-  <div style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border:1px solid #0a3315;border-radius:6px;overflow:hidden">
+  <div style="display:flex;gap:6px;margin-bottom:8px">
+    <button class="btn sub-on" id="dlSubYt" data-sub="yt" style="font-size:.72rem;padding:4px 12px">▶ Videos</button>
+    <button class="btn" id="dlSubKick" data-sub="kick" style="font-size:.72rem;padding:4px 12px">🟢 Live on Kick</button>
+  </div>
+  <div id="dlPaneYt" style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border:1px solid #0a3315;border-radius:6px;overflow:hidden">
     <iframe id="devlogsFrame" data-src="https://www.youtube.com/embed/videoseries?list=UU7jGc6Xo_-Koo8IyQCD9iQA&rel=0&autoplay=1&mute=1" title="Flesh Market News" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%"></iframe>
+  </div>
+  <div id="dlPaneKick" style="display:none">
+    <div style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border:1px solid #0a3315;border-radius:6px;overflow:hidden">
+      <iframe id="kickFrame" data-src="https://player.kick.com/fleshmarket?autoplay=true&muted=true" title="FleshMarket on Kick" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%"></iframe>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
+      <span id="kickLiveBadge" class="kick-badge"></span>
+      <span class="muted" style="font-size:.68rem">Streams show here live; offline shows Kick's placeholder. Unmute in the player.</span>
+      <a href="https://kick.com/fleshmarket" target="_blank" rel="noopener" class="btn" style="margin-left:auto;font-size:.72rem;padding:4px 10px;border-color:#53fc18;color:#53fc18">Follow on Kick ▸</a>
+    </div>
   </div>
 </div>
 <div id="marketTab">
@@ -165,10 +184,13 @@
 <div class="subtab" data-subtab="blackjack">Blackjack</div>
 <div class="subtab" data-subtab="poker">Poker</div>
 <div class="subtab" data-subtab="horseraces">Horse Races</div>
+<div class="subtab" data-subtab="baccarat">Baccarat</div>
+<div class="subtab" data-subtab="sicbo">Sic Bo</div>
 <div class="subtab" data-subtab="chess">Chess</div>
 <div class="subtab" data-subtab="sudoku">Sudoku</div>
 <div class="subtab" data-subtab="mathgame">Math Quiz</div>
 <div class="subtab" data-subtab="minesweeper">Minesweeper</div>
+<div class="subtab" data-subtab="solitaire">Solitaire</div>
 </div>
 <div id="casinoContent" style="margin-top:8px">
 <link rel="stylesheet" href="assets/casino-roulette.css">
@@ -235,6 +257,9 @@
 <div class="casino-pane" id="casino-mathgame" style="display:none"></div>
 <link rel="stylesheet" href="assets/casino-minesweeper.css">
 <div class="casino-pane" id="casino-minesweeper" style="display:none"></div>
+<div class="casino-pane" id="casino-baccarat" style="display:none"></div>
+<div class="casino-pane" id="casino-sicbo" style="display:none"></div>
+<div class="casino-pane" id="casino-solitaire" style="display:none"></div>
 </div>
 </div><div class="tab-pane" id="storeTab" style="display:none; padding:8px;"><div id="patreon-panel" style="margin-bottom:16px;padding:12px;border:1px solid #3a2a08;border-radius:8px;background:#060504">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -1224,6 +1249,55 @@ window.storeSubTab=storeSubTab;
   </div>
 </div>
 <script src="assets/core.js"></script>
+<script>
+/* Dev Logs sub-tabs (Videos / Live on Kick). Owns both iframes so only the
+   visible one loads; the Kick player shows the stream live and Kick's own
+   offline placeholder otherwise, so no live-detection is required for it. */
+(function(){
+  var KICK_USER='fleshmarket', sub='yt', visible=false;
+  function fr(id){ return document.getElementById(id); }
+  function load(f){ if(f){ var w=f.getAttribute('data-src'); if(w && f.getAttribute('src')!==w) f.setAttribute('src',w); } }
+  function clear(f){ if(f && f.getAttribute('src')) f.setAttribute('src',''); }
+  window.__devlogsSync=function(vis){
+    visible=vis;
+    var yt=fr('dlPaneYt'), kk=fr('dlPaneKick');
+    if(yt) yt.style.display=(sub==='yt')?'block':'none';
+    if(kk) kk.style.display=(sub==='kick')?'block':'none';
+    if(!vis){ clear(fr('devlogsFrame')); clear(fr('kickFrame')); return; }
+    if(sub==='yt'){ load(fr('devlogsFrame')); clear(fr('kickFrame')); }
+    else { load(fr('kickFrame')); clear(fr('devlogsFrame')); }
+  };
+  function setSub(s){
+    sub=s;
+    var by=fr('dlSubYt'), bk=fr('dlSubKick');
+    if(by) by.classList.toggle('sub-on', s==='yt');
+    if(bk) bk.classList.toggle('sub-on', s==='kick');
+    var st=fr('devlogsSubtitle'), lk=fr('devlogsOpenLink');
+    if(s==='kick'){ if(st) st.textContent='Live streams on Kick'; if(lk){ lk.textContent='Open on Kick'; lk.href='https://kick.com/'+KICK_USER; } checkLive(); }
+    else { if(st) st.textContent='Broadcasts, dev logs, lore and news'; if(lk){ lk.textContent='Open channel'; lk.href='https://www.youtube.com/@FleshMarketNews'; } }
+    if(visible) window.__devlogsSync(true);
+  }
+  /* Best-effort LIVE badge. Kick's channel API is behind Cloudflare, so this
+     request may be blocked from the browser; if so we simply hide the badge and
+     the embedded player still reflects live/offline correctly. */
+  function checkLive(){
+    var b=fr('kickLiveBadge'); if(!b) return;
+    b.textContent='● checking'; b.className='kick-badge';
+    fetch('https://kick.com/api/v2/channels/'+KICK_USER,{headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(d){
+        if(d && d.livestream){ b.textContent='● LIVE'; b.className='kick-badge live'; }
+        else if(d){ b.textContent='● offline'; b.className='kick-badge'; }
+        else { b.textContent=''; }
+      })
+      .catch(function(){ b.textContent=''; });
+  }
+  document.addEventListener('click', function(e){
+    var t=e.target && e.target.closest ? e.target.closest('[data-sub]') : null;
+    if(t) setSub(t.getAttribute('data-sub'));
+  });
+})();
+</script>
 <script>
 /* Collapsible right-panel sections (Wire Credits, Leaderboard). Default collapsed; state persists per section. */
 (function(){

@@ -4,6 +4,195 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.1.9.13 (2026-07-19) - Solitaire drag and drop + tutorial game list (CLIENT)
+
+Client only. Hard-refresh after deploy. No server or DB change.
+
+**Solitaire drag and drop.** Added drag as the primary interaction, with click-to-move kept as a fallback. It is pointer-based so it covers mouse and touch from one code path: pressing a card and moving past a small threshold starts a drag (a face-up tableau card carries its valid run, or the top of the waste), a ghost follows the pointer, the drop target under the pointer highlights, and the drop is hit-tested with elementFromPoint. An illegal or off-target drop snaps back. A press without movement is treated as a click, so the existing tap-to-select, double-click-to-foundation, stock-draw, and Auto button all keep working; a small guard suppresses the click that fires at the end of a drag so the two do not both fire. Drag and click both call the same validated doMove path, so the server-authoritative scoring is untouched.
+
+Verified: the mirrored deal and rule functions were not changed, so client and server deals still match byte-for-byte and client move logs still replay to the identical server score. A hand-simulation suite was run against the engine: invariants (52 unique cards conserved, foundations ascending by suit from Ace, no face-down card left on top, no face-up card below a face-down one) held after every one of 17000+ legal moves across 400 games and through 200000 random-move fuzz steps (no throw, illegal moves never mutated state), and a solvable deal replayed to 52 of 52 with the correct payout while a truncated log could not fake completion.
+
+**Tutorial.** The casino slide listed eight games; updated it to the current eleven, adding Baccarat (Punto Banco), Sic Bo (three-dice board), and Solitaire (Klondike).
+
+**Changed files.**
+- client/assets/casino-solitaire.js Added the pointer-based drag layer (ghost, hover highlight, snap-back) and the post-drag click guard; click-to-move and the mirrored engine untouched.
+- client/assets/tutorial.js Casino slide now lists all eleven games.
+- client/version.json 1.1.9.12 -> 1.1.9.13.
+- docs/CHANGELOG.md this entry.
+- docs/MANIFEST.txt updated.
+
+---
+
+## v1.1.9.12 (2026-07-19) - Solitaire (Klondike), server-authoritative (SERVER + CLIENT)
+
+Server and client, plus a new server file (server/solitaire.js). Hard-refresh after deploy. No DB change and no new npm dependency (it reuses the casino_rounds ledger), so git pull and pm2 restart is sufficient.
+
+New casino game: Klondike solitaire, draw-3, one pass through the stock, no redeal. It is stateful and skill-based, so unlike the RNG games it cannot ride the one-shot casino_play path. It is made server-authoritative by replay: the server owns the deal and the score, the client only plays locally and submits a move log.
+
+**Trust model.** solitaire_start commits the buy-in and opens a round via the existing casino_rounds ledger, returning a round id. The client derives the deal from that id using a PRNG mirrored byte-for-byte from the server, plays locally, and records a move log. solitaire_finish sends only the move log; the server replays it against the deal it derives from the same round id, validates every move, and pays foundation_cards * per-card plus a bonus for a full 52-card clear. The payout is entirely server-computed - the client never reports an outcome - so a tampered or foreign move log fails validation early and scores only its legitimate prefix (it can never inflate the count, nor transfer another deal's solution). The buy-in is committed at start so wins cannot be cherry-picked; an abandoned game is forfeited by the expiry sweep, and a mid-game server restart refunds it via the boot handler. solitaire_start also auto-forfeits any prior open solitaire round so a refresh never locks the player out.
+
+**Verification.** Client and server produced identical deals across 2000 ids (including uuid shapes); 300 client-played move logs replayed fully server-side to the identical foundation count; the engine passed an adversarial suite (draw-from-empty rejected, fabricated foundation moves rejected, no score inflation, foreign logs score low, junk logs never throw); the payout cap never clamps a full win.
+
+**Pricing (placeholder, tunable server-side).** Buy-in 250, per-card 20 (break-even about 12.5 of 52 cards), win bonus 500. A heuristic solver is too weak to estimate skilled play, so these are house-safe starting values to be retuned from the real foundation-count distribution, which is recoverable from the casino_rounds payout column. Probability that skilled play averages past the 12.5-card break-even (which would flip it player-positive) is judged low for this hard variant, but is not something a weak solver can rule out; severity is bounded (capped per game, tunable with no client change, visible in the ledger).
+
+**New / changed files.**
+- server/solitaire.js NEW. Deterministic deal + PRNG, move validation for all Klondike move types with auto-flip, foundation scoring, and replay (stops at the first illegal move).
+- client/assets/casino-solitaire.js NEW. Klondike client: mirrors the deal and rules verbatim, click-to-move (double-click or Auto sends to foundations), builds the move log, and calls solitaire_start / solitaire_finish. Self-inits into #casino-solitaire.
+- server/server.js Import of the engine; SOLITAIRE_* tunables; CASINO_CFG solitaire cap (backstop only, tracks the constants); solitaire_start and solitaire_finish handlers.
+- client/index.html Solitaire subtab after Minesweeper and an empty pane after the Sic Bo pane.
+- client/assets/core.js solitaire added to CASINO_PANES and CASINO_SCRIPTS (lazy-load).
+- client/version.json 1.1.9.11 -> 1.1.9.12.
+- docs/CHANGELOG.md this entry.
+- docs/MANIFEST.txt updated.
+
+Post-deploy check: open the Solitaire tab, New Game (confirm the buy-in leaves your balance), play a few moves, Cash Out, and confirm the credit equals foundation cards times the per-card rate.
+
+---
+
+## v1.1.9.11 (2026-07-19) - Baccarat Tie crash fix (CLIENT)
+
+Client only. Hard-refresh (Ctrl+Shift+R) required. No server or DB change.
+
+The Baccarat winning-hand highlight built its element id from the outcome (player -> bac-hand-P, banker -> bac-hand-B) but produced an empty suffix (bac-hand-) on a Tie, looking up a non-existent element and throwing a TypeError on .classList. The throw aborted the reveal callback, so on a Tie the result banner and bet-slip reset never ran and the table looked frozen. It fired only on Ties (about 1 coup in 10), so Player/Banker wins masked it during casual testing.
+
+No money was affected: casino_play settles server-side and pushes the balance before the client reveal animation runs, so every Tie was priced and paid correctly (Player/Banker bets push, Tie bets pay) regardless of the client throw. The element lookup is now guarded - a Tie highlights neither hand, which is correct since both bets push.
+
+**Changed files.**
+- client/assets/casino-baccarat.js Guard the winning-hand lookup so a Tie no longer dereferences null.
+- client/version.json 1.1.9.10 -> 1.1.9.11.
+- docs/CHANGELOG.md this entry.
+- docs/MANIFEST.txt updated.
+
+---
+
+## v1.1.9.10 (2026-07-19) - Casino bet-input hardening (SERVER)
+
+Server only. No client change (no hard-refresh needed). No DB change and no new dependency; git pull and pm2 restart.
+
+Adversarial testing of the 1.1.9.9 casino_play resolvers (Baccarat, Sic Bo) found that a positive-Infinity bet amount in the client payload flowed through parse() and produced an Infinity stake. It was not exploitable: the handler's affordability check (stake greater than cash) rejects an Infinity stake before any cash moves, and the finite-guard in safeAddCash prevents balance corruption regardless, so no money could be created and no round settled. Closed at the source anyway - both parsers now reject non-finite bet values (Number.isFinite) rather than relying on the downstream affordability gate to catch a malformed return. A stray Infinity is dropped (zeroed) if mixed with a real bet, or the bet is rejected as invalid if it was the only entry. Legitimate finite bets are unchanged.
+
+Verified by a suite covering hostile input (no throw, no non-finite or under-counted stake), 500k fuzzed rounds (no gross ever exceeds the payout cap and no legit max win is clamped), an exact 216-outcome Sic Bo payout audit across all 52 spots, RNG uniformity (dice chi-square, 8-deck shoe composition, unbiased shuffle), Baccarat rule behavior (naturals stand, Tie pushes), and an arbitrage check (covering the whole board still loses to the house at 15.5 percent).
+
+**Changed files.**
+- server/server.js Both casino_play parsers (baccarat, sicbo) reject non-finite bet amounts.
+- client/version.json 1.1.9.9 -> 1.1.9.10.
+- docs/CHANGELOG.md this entry.
+- docs/MANIFEST.txt updated.
+
+---
+
+## v1.1.9.9 (2026-07-19) - Baccarat + Sic Bo casino games (SERVER + CLIENT)
+
+Server and client. Hard-refresh after deploy. No DB change and no new npm dependency (crypto randomInt was already imported and the casino_rounds ledger is reused), so git pull and pm2 restart is sufficient.
+
+Two new gambling games, both built on the hardened casino_play one-shot path that roulette and horse races already use. The client sends only the bet selection; the server rolls with crypto randomness, prices the outcome, caps the payout, and settles stake-out/gross-in atomically. There is no client-reported payout, so the forgeable-win class closed across the 1.1.9.x casino work does not reopen here. Adding each game was one resolver plus a payout cap, with no change to the casino_play handler.
+
+**Baccarat (Punto Banco).** Pure chance, no player decisions. The server deals an 8-deck shoe (crypto Fisher-Yates), applies the fixed third-card table, and prices the coup. Bets and gross multipliers: Player 2x, Banker 1.95x (5% commission on the win), Tie 9x, Player Pair and Banker Pair 12x. On a Tie the Player and Banker bets push (stake returned). The 12x cap in CASINO_CFG exactly fits the both-pairs win (24 gross on a stake of 2) without clipping. Edges verified by Monte-Carlo against published Punto Banco values: Player about 1.24 percent, Banker about 1.06 percent, Tie about 14.4 percent, pairs about 10.4 percent.
+
+**Sic Bo (three dice).** Pure chance, full standard board: Small/Big, Odd/Even, single number (1/2/3:1 by count), specific double (10:1), any triple (30:1), specific triple (150:1), total 4 through 17, and two-dice combo (5:1). All 216 outcomes were enumerated exactly; every one of the 52 bet types lands in a 2.78 to 30 percent house-edge band with no player-favored bet. The totals payouts (4/17 at 60:1 down to 10/11 at 6:1) were derived from the true dice probabilities rather than a standard casino table, and two initially over-generous payouts (a specific double and the 4/17 total) were corrected inward. The one deliberately steep bet is the specific-triple lottery. The 160x cap sits just above the 151x specific-triple gross.
+
+**New files.**
+- client/assets/casino-baccarat.js NEW. Punto Banco table: five bet spots, chip controls, staggered deal reveal, history strip, phosphor-CRT styling. Self-inits into #casino-baccarat, plays via CasinoNet.play('baccarat', {bets}).
+- client/assets/casino-sicbo.js NEW. Sic Bo board: unicode dice with a shake/settle animation landing on the server roll, data-driven 52-spot board with winning-spot highlight, chip controls. Self-inits into #casino-sicbo, plays via CasinoNet.play('sicbo', {bets}).
+
+**Changed files.**
+- server/server.js Added baccarat and sicbo resolvers to CASINO_ONESHOT (parse() rejects unknown bet spots and negative amounts before pricing) and their caps to CASINO_CFG, plus a shared helper block (shoe build, baccarat value/deal, Sic Bo pricing and totals table). No handler change.
+- client/index.html Two subtabs (Baccarat, Sic Bo) after Horse Races and two empty panes after the minesweeper pane.
+- client/assets/core.js baccarat and sicbo added to CASINO_PANES and CASINO_SCRIPTS (lazy-load).
+- client/version.json 1.1.9.8 -> 1.1.9.9.
+- docs/CHANGELOG.md this entry.
+- docs/MANIFEST.txt updated.
+
+Post-deploy check: open each new tab, place a small bet, confirm cash decreases on play and a win credits at the listed multiplier.
+
+---
+
+## v1.1.9.8 (2026-07-14) - Kick tab in Dev Logs + streaming OBS overlay (CLIENT)
+
+Client only. Hard-refresh after deploy. No server or DB change.
+
+**Kick sub-tab (Dev Logs).** Dev Logs was a single YouTube playlist embed; it now has two sub-tabs, `Videos` and `Live on Kick`. The Kick tab embeds the official Kick player (`https://player.kick.com/fleshmarket`), which shows the live stream when broadcasting and Kick's offline card otherwise, so it needs no live-detection. There is a best-effort LIVE badge (a direct Kick API fetch that may be Cloudflare-blocked, in which case it hides) and a Follow-on-Kick link. One inline script owns both iframes (`window.__devlogsSync`) so only the visible one loads; `core.js` defers to it with the old YouTube-only path as a fallback.
+
+**Streaming OBS overlay (`obs-stream-anchor.html`).** A broadcast desk for streaming the game, separate from the news-anchor overlay. 1920x1080 transparent frame in three columns:
+- Left rail: the Mr. Flesh relay facecam (the anchor's brain-in-jar portrait pulsing to a voice waveform) over a live market-movers panel (top movers by percent change, updated on tick).
+- Middle: a framed GAME window (about 1048x900) for a Window/Game Capture, so the capture is a window, not fullscreen, and nothing overlaps it.
+- Right: a Kick chat column that auto-embeds Kick chat via `chat.kick.cx` (a third-party embeddable widget, because Kick blocks iframing of its own popout); `?chat=0` falls back to an OBS browser source pointed at the Kick popout.
+- Top bar (branding, live breadth, PLAY FREE / FLESHMARKET.IO) and a bottom funnel ticker weaving calls to action (Mr. Flesh voice, no em dashes) between live movers and breaking news.
+
+It reads the same token-less guest WebSocket feed the anchor uses (init, tick, news, breaking_news), read-only. The facecam attempts mic capture on load, so with OBS launched using `--enable-media-stream --use-fake-ui-for-media-stream` the waveform tracks your voice with no prompt, falling back to a procedural signal otherwise. To use a real webcam, add a Video Capture source above the overlay over the relay box. URL params: `?guide=0` (hide setup labels), `?ws=`, `?boot=0`, `?kick=USERNAME`, `?mic=0` (procedural only), `?mic=1` (click card), `?chat=URL` (swap the embedded chat widget), `?chat=0` (disable the embed for an OBS source). OBS setup is documented in the file header.
+
+---
+
+## v1.1.9.7 (2026-07-14) - Dark background between windows (CLIENT)
+
+Client CSS only. Hard-refresh after deploy. No server or DB change.
+
+Follow-up to the bolder panel edges. A player noted the space between windows read slightly green while the top of the page read dark. Cause: `--body-bg` was `radial-gradient(ellipse at 50% 40%, #04130a 0%, #020703 80%)` — a green center fading to a dark edge. The header sits at the top (dark edge); the panels and the gaps between them sit in the green center. Same background, different position on the gradient.
+
+Flattened `--body-bg` to the dark edge color `#020703`. Because the header and the inter-panel gaps both render this one background, they are now identical by construction. Also tightened `--panel-shadow` from `0 0 24px #1aff5e1a` to `0 0 10px #1aff5e14` so the panel bloom no longer bleeds green into the 12px gaps — the bold 1.5px border already defines each window, so the wide halo was redundant and was the remaining source of gap tint. Side benefit: panels now sit on a flat near-black field, which separates them even more cleanly than over the gradient. All still one-line tunable (`--body-bg` for the field, the spread/alpha in `--panel-shadow` for bloom).
+
+---
+
+## v1.1.9.6 (2026-07-14) - Bolder panel edges / window contrast (CLIENT)
+
+Client CSS only. Hard-refresh after deploy. No server or DB change.
+
+**The note.** A player pointed out the panels barely separated from the background, so the layout read as one dark field rather than distinct windows. Root cause in `style.css`: `.panel` used `border:1px solid var(--dim)` (`--dim` is `#1f7a3aaa`, a dim semi-transparent green) over `--panel-bg:rgba(8,30,14,0.22)` — a near-transparent fill, so panels were essentially the body gradient with a faint outline.
+
+**The change.** Added a dedicated `--panel-edge` variable (`#2f9f4a`, brighter, 1.5px) and pointed `.panel` and `#chart` at it, and raised `--panel-bg` opacity from `0.22` to `0.5` so panels sit as a distinguishable surface (still translucent, so the CRT glow-through depth is preserved). Crucially this uses a *separate* variable from `--dim`, so inputs, dividers, the chatlog, and news accents keep the dimmer border on purpose — windows now read bolder than the controls inside them, which also tightens the visual hierarchy. The existing subtle panel glow (`--panel-shadow`) is untouched; this is the "bold, not neon" option from the mockup.
+
+**Not touched.** Feature sub-panels that hardcode their own borders inline (casino panes, the limit-order box at `#0a3315`, etc.) still use their own dimmer edges. Bringing those in line with the window edge is a separate, more scattered pass. Everything is one-line-tunable: `--panel-edge` for the color/brightness, the `1.5px` in `.panel` for weight, `--panel-bg` alpha for fill separation.
+
+---
+
+## v1.1.9.5 (2026-07-14) - Stronger chess AI (CLIENT)
+
+Client only. Hard-refresh after deploy. No server or DB change.
+
+**The problem.** Casino chess ran a weak inline engine: a plain alpha-beta with a material-only evaluation, no move ordering (so pruning was poor), no transposition table, and fixed shallow depth by ELO. It played positionally blind and dropped pieces to the horizon effect. Meanwhile a much stronger engine already existed in the repo, `client/chess_worker.js` (ordered alpha-beta with MVV-LVA move ordering, a transposition table, iterative deepening with a time budget, depth cap 5 to 7 by ELO), and was never instantiated anywhere. It was dead code.
+
+**The fix.** The game now uses the worker for the AI's move. Because it is a Web Worker, the search runs off the main thread, so the board no longer freezes while the AI thinks. Board and move formats are identical between the two engines, so the worker's returned move applies through the same `applyMove` unchanged. The inline engine is kept as an automatic fallback: if the worker cannot be created (e.g. a restrictive CSP, or `file://`), errors, or fails to reply within 4s, the AI move falls back to the inline engine so the game never stalls on the AI's turn.
+
+**Engine upgrades (in the worker).** Evaluation was upgraded from material-only to material plus piece-square tables (the classic simplified-evaluation set), so the AI develops its pieces, contests the center, advances pawns sensibly, and keeps its king tucked instead of only counting material. Auto-queen promotion was added to the worker's pawn move generation (it previously left a pawn on the last rank un-promoted). Net effect: noticeably stronger tactical and positional play, especially at higher ELO where the deeper ordered search and the transposition table compound.
+
+**Not touched.** Chess still settles its fee×2.5 win the same way (client-declared, bounded by the casino cap); this build is an AI-quality change, not a security change. Poker was not changed in this build (see the session notes on why it is being handled as its own focused build).
+
+---
+
+## v1.1.9.4 (2026-07-14) - Server-bounded drone mining bank (SERVER + CLIENT)
+
+Client and server. Hard-refresh after deploy. No DB schema change.
+
+**The hole.** Drone mining cash was client-authoritative. The mining game (an iframe) reported bank changes to the parent, and the parent pushed the browser's new cash TOTAL to the server via `{type:'mining_bank', sync:N}`, which set `actor.cash = N` with no validation. This is the same faucet class the casino sync used to be: a crafted `{"type":"mining_bank","sync":999999999}` set any balance, and it did not need dev tools (a proxy, extension, or short script sends it). It was left named and isolated when the casino faucet was closed, on its own message, precisely so it could be fixed next.
+
+**Why this one is bounded, not recomputed.** Unlike a casino game, the server cannot roll the mining outcome. Mining yield is the output of an interactive skill+risk game: a seeded asteroid field, the player's piloting and route choices, RNG hostiles, fuel/heat limits, and survival (dying loses your carried cargo). Re-deriving the exact banked amount would require simulating the whole real-time game server-side, which is disproportionate for a minigame. So banked cash is BOUNDED instead: the server caps a run's credit to a plausible yield and clamps anything above.
+
+**The fix (server-owned bounded deltas).** The reported total is now ignored. Cash moves through `mining_bank_delta {delta, reason}`, tagged by the game (it already sends these):
+- `reason:'loadout'` (negative) is a run START: the server deducts the loadout cost (overdraft-bounded, a negative delta cannot mint cash) and opens a run window with a start timestamp.
+- `reason:'banked'` (positive) is a run END: the server credits the reported profit but clamped to `MINING_MAX_YIELD_PER_SEC * elapsedRunSeconds`, with a hard `MINING_MAX_RUN_BANK` per-run ceiling as a backstop. If the run-start wasn't seen (e.g. a restart landed mid-run), it falls back to `MINING_RUN_FALLBACK_SEC` of assumed run length.
+
+The server owns the balance throughout and reconciles the client's optimistic local value via the usual `me`/`portfolio` push. The client bridge (`core.js`) was changed to forward the delta and its reason instead of collapsing to a total; the mining game itself is unchanged. A run banking above the cap is clamped and logged to the dev panel as `mining_clamped` (reported vs paid vs elapsed), the same fraud signal the casino cap produces.
+
+**Honest limitation.** This bounds and logs; it does not eliminate. Because the game can't be audited server-side without simulating it, a modified client can still claim up to the plausible ceiling per run (bounded to a yield rate over real elapsed time, not an instant total), which the log flags. The unbounded "set balance to anything in one message" faucet is gone. The default ceiling (`MINING_MAX_YIELD_PER_SEC=5000`) is set generous so it never clamps a legitimate run; it can be tightened from real best-run data (the `mining_stats` table records best-run profit) and the clamp log once live. All three bounds are env overrides.
+
+---
+
+## v1.1.9.3 (2026-07-14) - Server-authoritative roulette + horse races, casino play-speed fixes (CLIENT + SERVER)
+
+Client and server. Hard-refresh after deploy. No DB schema change (the existing `casino_rounds` table records one-shot plays too).
+
+**The hole.** v1.1.9.1 moved the casino STAKE server-side but left every game's OUTCOME in the browser: each game rolled its own result and sent the payout via `casino_result`, which the server only capped at `wager*mult + flat`. For roulette the client literally rolled the wheel (`Math.floor(Math.random()*ORDER.length)`) and reported the payout, capped at 36x with no flat ceiling. A crafted or modified client could claim `wager*36` every spin and compound it (a win funds a larger next bet), unbounded. Horse races were the same shape at 5x. The per-round time floor (`minDurMs`) was the only "did you actually play" signal and it never stopped a script (a script just waits it out); it mostly punished fast legitimate players.
+
+**The fix (server rolls, atomic settle).** New `casino_play {game, input}` message. The client sends only its bet SELECTION (roulette slip, or horse pick+amount), never a payout. The server validates the input, rolls the outcome itself with `crypto.randomInt` (unbiased, unpredictable), prices it from its own result, and settles in one atomic step (stake out, gross in). There is no open round to fake a result on and no time gate, because the client no longer reports the outcome. The client animates the wheel/race to the number the server rolled. This is the same pattern the TCG pack purchase already uses ("the client never decides what it receives or what it costs"), now extended to the two pure-RNG games. The `wager*mult + flat` cap is kept purely as a backstop so a resolver bug still cannot overpay. The old client-declared `casino_bet`/`casino_result` path is refused for roulette and horse races (a stale or crafted client gets the `casino_stale` refresh nudge), which closes the loop: with no way to open a client-settled round for those games, there is nothing for a fabricated `casino_result` to land on. The roulette payout table was ported verbatim from the client `payoutFor` so gross matches exactly. `casino_play` results are written to the same `casino_rounds` ledger (opened and resolved in one tick), so the dev panel Casino Activity view and the `clamped` fraud signal cover them too.
+
+**Math game paid nothing on fast sessions (SERVER).** The `mathgame` round is a 10-question session wrapped in one round, but its `minDurMs` floor was 15000ms while the session's forced client delays only guarantee ~9000ms. A player answering faster than ~600ms/question finished under the floor, so the whole session voided (Ƒ1 sentinel refunded, zero paid) despite correct answers, while the on-screen Earned counter still climbed. Floor lowered to 5000ms, below the ~9000ms guaranteed forced-delay floor, so a real session can never void while an instant scripted settle still trips.
+
+**Blackjack rejected fast hands (CLIENT + SERVER).** A natural blackjack resolves in ~1100ms of hardcoded animation and an instant stand vs a pat dealer in ~700ms, both well under the old 3000ms `minDurMs`, so the best outcomes voided (you saw "BLACKJACK!" and your cash did not move). Floor lowered to 1500ms and the client now pads the settle send so a hand cannot report under ~1600ms from deal, with Deal kept locked until the round closes so a fast re-deal cannot collide with the still-open round. Deterministically no false rejects, floor preserved as an anti-instant-script bump.
+
+**Scope.** This is the first slice of a broader casino move to server-authoritative outcomes (client sends inputs, server derives payout). Roulette and horse races were done first because they are both the highest-severity faucets and the cheapest to convert (pure one-shot RNG). Blackjack (stateful, medium), the puzzle games (server-generated + graded, medium), and poker/chess (harder, lower severity) remain on the client-declared-but-capped path with their time floors for now; the math and blackjack fixes above are the interim floors for those until they convert.
+
+---
+
 ## v1.1.9.2 (2026-07-13) - Index price persistence + chat persistence + Dev Logs tab (CLIENT + SERVER + DB)
 
 Client, server, and DB. Hard-refresh after deploy. **DB adds a `chat_log` table on boot** (additive, `CREATE IF NOT EXISTS`; starts empty). A restart applies the schema; no migration step.

@@ -5,7 +5,7 @@
  * the new balance via {type:'casino', sync:N} (which the server trusted blindly —
  * an unbounded cash faucet). Games now:
  *
- *   const round = await CasinoNet.bet('roulette', wager);   // stake deducted server-side
+ *   const round = await CasinoNet.bet('blackjack', wager);  // stake deducted server-side
  *   if (!round.ok) { ...insufficient funds / rejected... }
  *   await CasinoNet.addon(round.roundId, extra);            // optional (Double / raises)
  *   await CasinoNet.result(round.roundId, grossPayout);     // 0 on loss; stake+win on win
@@ -48,7 +48,8 @@
     const m = e && e.detail;
     if (!m || !m.type) return;
     if (m.type !== 'casino_bet_ack' && m.type !== 'casino_addon_ack'
-        && m.type !== 'casino_result_ack' && m.type !== 'casino_stale') return;
+        && m.type !== 'casino_result_ack' && m.type !== 'casino_play_ack'
+        && m.type !== 'casino_stale') return;
     for (const [key, entry] of PENDING) {
       let hit = false;
       try { hit = entry.matchFn(m); } catch(_) { hit = false; }
@@ -104,6 +105,20 @@
       if (!sock())  return { ok:false, error:'Not connected.' };
       const p = waitFor((m)=> (m.type==='casino_result_ack' && (!m.data || m.data.roundId===roundId)) || m.type==='casino_stale');
       send({ type:'casino_result', roundId, payout:pay });
+      return p;
+    },
+
+    /**
+     * One-shot server-authoritative play (roulette, horse races). Sends only the
+     * bet SELECTION; the server rolls, prices, and settles atomically. Resolves
+     * with { ok, view, credited, clamped, cash } or { ok:false, error, stale }.
+     * `view` carries the server's outcome (e.g. { result } / { winner }) for the
+     * client to animate toward — the client no longer decides the outcome.
+     */
+    async play(game, input){
+      if (!sock()) return { ok:false, error:'Not connected.' };
+      const p = waitFor((m)=> m.type==='casino_play_ack' || m.type==='casino_stale');
+      send({ type:'casino_play', game, input });
       return p;
     },
   };

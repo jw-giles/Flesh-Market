@@ -132,7 +132,7 @@
     },
     {
       heading: 'THE CASINO',
-      text: `Eight casino games are available. <em>Roulette</em>, 13 bet types with animated wheel. <em>Blackjack</em>, 6-deck shoe with card tracking. <em>Poker</em>, Texas Hold'em 6-max vs AI. <em>Horse Racing</em>, <em>Chess</em>, <em>Sudoku</em>, <em>Math Quiz</em>, and <em>Minesweeper</em>. All games use your Social Credit balance directly, wins are real, losses are real. No house tokens, no abstraction.`,
+      text: `Eleven casino games are available. <em>Roulette</em>, 13 bet types with animated wheel. <em>Blackjack</em>, 6-deck shoe with card tracking. <em>Baccarat</em>, Punto Banco with Player, Banker, Tie, and pair bets. <em>Sic Bo</em>, a three-dice betting board. <em>Poker</em>, Texas Hold'em 6-max vs AI. <em>Solitaire</em>, Klondike scored on the cards you move to the foundations. <em>Horse Racing</em>, <em>Chess</em>, <em>Sudoku</em>, <em>Math Quiz</em>, and <em>Minesweeper</em>. All games use your Social Credit balance directly, wins are real, losses are real. No house tokens, no abstraction.`,
       callout: 'Casino winnings are the fastest way to grow early. Also the fastest way to go broke.',
       tab: 'casino',
     },

@@ -1,4 +1,264 @@
-# FleshMarket v1.1.9.2 - MANIFEST
+# FleshMarket v1.1.9.13 - MANIFEST
+
+## v1.1.9.13 changes (Solitaire drag and drop + tutorial game list; CLIENT)
+
+```
+client/
+  assets/casino-solitaire.js  + pointer-based drag and drop as the primary
+                            interaction (ghost follows the pointer, drop target
+                            highlights, elementFromPoint hit-test, snap-back on an
+                            illegal/off-target drop). Click-to-move kept as a tap
+                            fallback; a suppressClick guard stops the post-drag click
+                            from double-firing. Mirrored deal/rule functions and the
+                            doMove path are unchanged, so scoring and deal-match hold.
+  assets/tutorial.js      Casino slide updated from eight games to the current eleven
+                            (adds Baccarat, Sic Bo, Solitaire).
+  version.json            1.1.9.12 -> 1.1.9.13.
+
+docs/
+  CHANGELOG.md            + v1.1.9.13 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.12 changes (Solitaire / Klondike, server-authoritative; SERVER + CLIENT)
+
+```
+server/
+  solitaire.js            NEW. Klondike engine: seedFromId + mulberry32 PRNG,
+                            deterministic deal, applyMove (draw/w2f/w2t/t2f/t2t with
+                            auto-flip), foundationCount, and replay (validates a move
+                            log, stops at the first illegal move). Mirrored verbatim
+                            in the client; a test asserts identical deals.
+  server.js               + import { replay } from solitaire.js. + SOLITAIRE_BUYIN /
+                            PER_CARD / WIN_BONUS / MAX_MOVES tunables. + CASINO_CFG
+                            solitaire entry (mult:0 + flat cap = 1.2x max payout,
+                            backstop only). + solitaire_start (commits buy-in, opens a
+                            round, auto-forfeits any stale open round) and
+                            solitaire_finish (replays the log, pays the server-computed
+                            score) handlers.
+
+client/
+  assets/casino-solitaire.js  NEW. Klondike client: deal + rules mirrored from
+                            solitaire.js, click-to-move (double-click / Auto sends to
+                            foundations), move-log capture, self-contained WS
+                            request/await for solitaire_start / solitaire_finish. Self-
+                            init into #casino-solitaire.
+  index.html              + Solitaire subtab after Minesweeper; + empty .casino-pane
+                            after the Sic Bo pane.
+  assets/core.js          + 'solitaire' in CASINO_PANES; + script path in
+                            CASINO_SCRIPTS (lazy-load).
+  version.json            1.1.9.11 -> 1.1.9.12.
+
+docs/
+  CHANGELOG.md            + v1.1.9.12 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.11 changes (Baccarat Tie crash fix; CLIENT)
+
+```
+client/
+  assets/casino-baccarat.js  Tie outcome built element id bac-hand- (empty suffix)
+                            and threw on .classList of null, aborting the reveal
+                            callback (banner + slip reset skipped). Lookup now guarded;
+                            a Tie highlights neither hand. Server/payout unaffected
+                            (coup settled before the client animation runs).
+  version.json            1.1.9.10 -> 1.1.9.11.
+
+docs/
+  CHANGELOG.md            + v1.1.9.11 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.10 changes (Casino bet-input hardening; SERVER)
+
+```
+server/
+  server.js               casino_play parsers (baccarat, sicbo): reject non-finite
+                            bet amounts (Number.isFinite guard) so a positive-Infinity
+                            payload can no longer produce an Infinity stake. Not
+                            exploitable pre-fix (the affordability gate rejected it and
+                            safeAddCash fails safe); closed at source for a clean parse
+                            contract.
+
+client/
+  version.json            1.1.9.9 -> 1.1.9.10.
+
+docs/
+  CHANGELOG.md            + v1.1.9.10 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.9 changes (Baccarat + Sic Bo casino games; SERVER + CLIENT)
+
+```
+server/
+  server.js               CASINO_ONESHOT: + baccarat (Punto Banco, 8-deck shoe,
+                            fixed third-card rule) and + sicbo (3d6, full board)
+                            resolvers. Each parse() validates client bets (unknown
+                            spots and negative amounts rejected) into a trusted
+                            {stake,bets} shape before roll()/pricing. CASINO_CFG:
+                            + baccarat {mult:12} and + sicbo {mult:160} payout caps.
+                            + shared helper block (baccBuildShoe crypto shuffle,
+                            baccVal, sicPrice, SIC_TOTAL_PAY, SIC_SPOTS). No handler
+                            change: both ride the existing casino_play one-shot path.
+
+client/
+  assets/casino-baccarat.js  NEW. Punto Banco table client: 5 bet spots, chip
+                            controls, staggered deal reveal, history strip, CRT
+                            styling. Self-init into #casino-baccarat via
+                            CasinoNet.play('baccarat',{bets}).
+  assets/casino-sicbo.js     NEW. Sic Bo client: unicode dice shake/settle on the
+                            server roll, data-driven 52-spot board with winning-spot
+                            highlight, chip controls. Self-init into #casino-sicbo
+                            via CasinoNet.play('sicbo',{bets}).
+  index.html              + Baccarat and Sic Bo subtabs after Horse Races; + two
+                            empty .casino-pane divs after the minesweeper pane.
+  assets/core.js          + 'baccarat','sicbo' in CASINO_PANES; + both script paths
+                            in CASINO_SCRIPTS (lazy-load).
+  version.json            1.1.9.8 -> 1.1.9.9.
+
+docs/
+  CHANGELOG.md            + v1.1.9.9 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.8 changes (Kick tab in Dev Logs + streaming OBS overlay; CLIENT)
+
+```
+client/
+  index.html              Dev Logs tab: Videos / Live-on-Kick sub-tabs, Kick player
+                            embed (player.kick.com/fleshmarket), live badge, Follow link.
+                            Inline script owns both iframes (window.__devlogsSync).
+  assets/core.js          Dev Logs handler defers to window.__devlogsSync (YouTube
+                            fallback kept).
+  obs-stream-anchor.html  NEW. Streaming broadcast desk: left rail (brain relay + voice
+                            waveform + live market movers), middle framed GAME window,
+                            right Kick chat column that auto-embeds chat.kick.cx (Kick
+                            blocks iframing its own popout; ?chat=0 for an OBS source),
+                            funnel-CTA ticker, guest WS feed. Facecam attempts mic on
+                            load (OBS --use-fake-ui-for-media-stream); brain reused from
+                            obs-flesh-anchor.html. Params ?guide=0 / ?ws= / ?boot=0 /
+                            ?kick= / ?mic=0 / ?mic=1 / ?chat=URL / ?chat=0.
+  version.json            1.1.9.7 -> 1.1.9.8.
+
+docs/
+  CHANGELOG.md            + v1.1.9.8 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.7 changes (Dark background between windows; CLIENT)
+
+```
+client/
+  style.css               --body-bg flattened from the green-centered radial gradient
+                            to flat #020703 (matches the dark top / header). --panel-shadow
+                            outer glow tightened 0 0 24px #1aff5e1a -> 0 0 10px #1aff5e14
+                            so it stops bleeding green into the gaps.
+  version.json            1.1.9.6 -> 1.1.9.7.
+
+docs/
+  CHANGELOG.md            + v1.1.9.7 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.6 changes (Bolder panel edges / window contrast; CLIENT)
+
+```
+client/
+  style.css               + --panel-edge:#2f9f4a variable. .panel and #chart borders
+                            switched from 1px var(--dim) to 1.5px var(--panel-edge).
+                            --panel-bg opacity raised 0.22 -> 0.5. Inputs/dividers/news
+                            keep var(--dim) (dimmer) for hierarchy.
+  version.json            1.1.9.5 -> 1.1.9.6.
+
+docs/
+  CHANGELOG.md            + v1.1.9.6 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.5 changes (Stronger chess AI; CLIENT)
+
+```
+client/
+  chess_worker.js         Now actually used (was dead code). + piece-square tables in
+                            evaluate() (was material-only) + auto-queen promotion in
+                            pawn move generation. Ordered alpha-beta + transposition
+                            table + iterative deepening were already present.
+  assets/casino-chess.js  + getChessWorker()/aiMove(): the AI move now runs through the
+                            web worker (off-thread, no board freeze), with the inline
+                            engine kept as a fallback (worker missing/erroring/>4s hang).
+                            The AI-turn call site in checkEndOrAI switched to aiMove.
+  version.json            1.1.9.4 -> 1.1.9.5.
+
+docs/
+  CHANGELOG.md            + v1.1.9.5 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.4 changes (Server-bounded drone mining bank; SERVER + CLIENT)
+
+```
+server/
+  server.js               + MINING_MAX_YIELD_PER_SEC / MINING_RUN_FALLBACK_SEC /
+                            MINING_MAX_RUN_BANK env constants and the _miningRuns
+                            (playerId -> {startTs}) map.
+                          + mining_bank_delta handler: 'loadout' (negative) opens a
+                            run window and deducts the overdraft-bounded cost;
+                            'banked' (positive) credits min(reported, rate*elapsed,
+                            hard cap), clears the run, and logs mining_clamped on
+                            over-report. mining_bank (sync total) is now ignored
+                            (was: actor.cash = client-reported total; the faucet).
+
+client/
+  assets/core.js          setCash no longer sends {type:'mining_bank', sync:total}.
+                            The bank_delta bridge now forwards {type:'mining_bank_delta',
+                            delta, reason} to the server and lets me/portfolio reconcile.
+                            The drone-mining game (iframe) is unchanged.
+  version.json            1.1.9.3 -> 1.1.9.4.
+
+docs/
+  CHANGELOG.md            + v1.1.9.4 entry.
+  MANIFEST.txt            this file.
+```
+
+## v1.1.9.3 changes (Server-authoritative roulette + horse races; casino play-speed fixes; CLIENT + SERVER)
+
+```
+server/
+  server.js               + import randomInt from 'crypto'.
+                          + secureInt(), RL_REDS/rlColorOf/RL_BET_TYPES, rlPayoutFor()
+                            (ported verbatim from client payoutFor), HR_LANES, and the
+                            CASINO_ONESHOT registry (roulette, horseraces) with per-game
+                            parse()+roll(); ONESHOT_GAMES set.
+                          + casino_play handler: validate input, server-roll, cap as
+                            backstop, atomic stake-out/gross-in, ledger row (open+resolve
+                            in one tick), me/portfolio push, clamped admin log.
+                          + casino_bet now refuses ONESHOT_GAMES (roulette/horseraces) with
+                            a casino_stale refresh nudge, closing the client-declared path.
+                            CASINO_CFG: blackjack minDurMs 3000 -> 1500, mathgame 15000 -> 5000
+                            (roulette/horseraces minDurMs now unused; kept for the cap only).
+
+client/
+  assets/casino-net.js    + CasinoNet.play(game, input) for one-shot atomic play;
+                            casino_play_ack added to the ack listener filter. Stale doc
+                            example switched from roulette to blackjack.
+  assets/core.js          Roulette: rlSpin sends CasinoNet.play('roulette',{slip}) and
+                            animates to the server result (no client wheel roll); finalizeSpin
+                            shows the server-credited amount (no CasinoNet.result send); added
+                            rlLastServer. Client payoutFor kept as a reference copy only.
+  assets/casino-blackjack.js  Horses: start sends CasinoNet.play('horseraces',{pick,amount})
+                            and animates the server winner; settle shows server-credited gross
+                            (no CasinoNet.result send); added hrCredited. Blackjack: added
+                            bjDealTs, settle is async and pads the result send to ~1600ms from
+                            deal (Deal locked until the round closes) so fast hands are not
+                            voided as too-fast.
+  version.json            1.1.9.2 -> 1.1.9.3.
+
+docs/
+  CHANGELOG.md            + v1.1.9.3 entry.
+  MANIFEST.txt            this file.
+```
 
 ## v1.1.9.2 changes (Index price persistence + chat persistence + Dev Logs tab; CLIENT + SERVER + DB)
 

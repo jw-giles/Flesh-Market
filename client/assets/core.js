@@ -1599,10 +1599,11 @@ $all('.tab').forEach(tab=>{
     const _mineTab = el('#miningTab'); if(_mineTab) _mineTab.style.display = sel==='mining'?'flex':'none';
     const _arenaTab = el('#arenaTab'); if(_arenaTab) _arenaTab.style.display = sel==='arena'?'block':'none';
     const _dlTab = el('#devlogsTab'); if(_dlTab){ _dlTab.style.display = sel==='devlogs'?'block':'none';
-      const _dlF = document.getElementById('devlogsFrame');
-      if(_dlF){ const _dlWant = _dlF.getAttribute('data-src');
-        if(sel==='devlogs'){ if(_dlF.getAttribute('src') !== _dlWant) _dlF.setAttribute('src', _dlWant); }
-        else if(_dlF.getAttribute('src')) _dlF.setAttribute('src',''); } }
+      if(window.__devlogsSync){ window.__devlogsSync(sel==='devlogs'); }
+      else { const _dlF = document.getElementById('devlogsFrame');
+        if(_dlF){ const _dlWant = _dlF.getAttribute('data-src');
+          if(sel==='devlogs'){ if(_dlF.getAttribute('src') !== _dlWant) _dlF.setAttribute('src', _dlWant); }
+          else if(_dlF.getAttribute('src')) _dlF.setAttribute('src',''); } } }
     if (sel==='guild') { loadGuildDirectory(); }
     if (sel==='bugs') { if(window.bugsTabLoad) window.bugsTabLoad(); else lazyLoad('assets/dev-comms.js', ()=>window.bugsTabLoad&&window.bugsTabLoad()); }
     if (sel==='fleshbook') { if(window.fleshbookTabLoad) window.fleshbookTabLoad(); else lazyLoad('assets/fleshbook.js', ()=>window.fleshbookTabLoad&&window.fleshbookTabLoad()); }
@@ -1619,7 +1620,7 @@ $all('.tab').forEach(tab=>{
   // Casino subtabs — lazy script loading
   // Scripts for roulette and blackjack load immediately (default views).
   // All others inject their <script> tag on first click, then init.
-  const CASINO_PANES = ['roulette','blackjack','poker','horseraces','chess','sudoku','mathgame','minesweeper'];
+  const CASINO_PANES = ['roulette','blackjack','poker','horseraces','baccarat','sicbo','chess','sudoku','mathgame','minesweeper','solitaire'];
   const CASINO_SCRIPTS = {
     'blackjack':   'assets/casino-blackjack.js',
     'poker':       'assets/casino-poker.js',
@@ -1627,6 +1628,9 @@ $all('.tab').forEach(tab=>{
     'sudoku':      'assets/casino-sudoku.js',
     'mathgame':    'assets/casino-mathgame.js',
     'minesweeper': 'assets/casino-minesweeper.js',
+    'baccarat':    'assets/casino-baccarat.js',
+    'sicbo':       'assets/casino-sicbo.js',
+    'solitaire':   'assets/casino-solitaire.js',
   };
   const casinoScriptLoaded = new Set(['roulette']); // roulette is inline in galaxy/sound block; blackjack loads below
   const casinoInited = new Set(['roulette']);
@@ -2349,6 +2353,7 @@ ws.addEventListener('message', (ev)=>{
   // ── Bet slip ────────────────────────────────────────────────────
   const bets=[];
   let lastResults=[];
+  let rlLastServer=null;   // { credited } from the server-settled spin, for finalizeSpin
 
   function colorOf(n){ if(n===0) return 'green'; return REDS.has(n)?'red':'black'; }
 
@@ -2644,26 +2649,26 @@ ws.addEventListener('message', (ev)=>{
   function finalizeSpin(result){
     const col=colorOf(result);
     const totalBet=bets.reduce((s,b)=>s+b.amount,0);
-    const payout=payoutFor(result);
-    const net=payout-totalBet;
-    // Settle server-side: payout is the gross return (stake already deducted at
-    // bet time). Server credits the capped amount and pushes the authoritative cash.
-    if(rlRoundId){ CasinoNet.result(rlRoundId, payout); rlRoundId=null; }
+    // Payout was computed and credited server-side; display the server's number.
+    // (payoutFor is kept above only as a reference copy of the table.)
+    const credited=(rlLastServer && typeof rlLastServer.credited==='number') ? rlLastServer.credited : 0;
+    rlLastServer=null;
+    const net=credited-totalBet;
     const lastEl=document.getElementById('lastResult');
     if(lastEl) lastEl.textContent=`Last: ${result} (${col})`;
     const banner=document.getElementById('rl-result-banner');
     if(banner){
       banner.style.display='block';
-      if(payout>0){
+      if(credited>0){
         banner.className='rl-result-banner win';
-        banner.textContent=`✓ ${result} ${col.toUpperCase()}, Won ${fmtLocal(net)} (paid ${fmtLocal(payout)})`;
+        banner.textContent=`✓ ${result} ${col.toUpperCase()}, Won ${fmtLocal(net)} (paid ${fmtLocal(credited)})`;
       } else {
         banner.className='rl-result-banner lose';
         banner.textContent=`✗ ${result} ${col.toUpperCase()}, No win`;
       }
       setTimeout(()=>{ if(banner) banner.style.display='none'; },4000);
     }
-    rlLog(`${result} (${col}), ${payout>0?`+${fmtLocal(net)}`:'No win'} | bet ${fmtLocal(totalBet)}`);
+    rlLog(`${result} (${col}), ${credited>0?`+${fmtLocal(net)}`:'No win'} | bet ${fmtLocal(totalBet)}`);
     updateHistory(result);
     bets.length=0;
     renderBets(); refreshRouletteBalance();
@@ -2696,18 +2701,21 @@ ws.addEventListener('message', (ev)=>{
   window.rlSpin=async function(){
     if(spinning) return;
     if(!bets.length){ rlLog('Place a bet first.'); return; }
-    const totalBet=bets.reduce((s,b)=>s+b.amount,0);
-    // Stake the whole slip server-side; only spin if the server accepted it.
-    const round = await CasinoNet.bet('roulette', totalBet);
-    if(!round.ok){
-      rlLog(round.stale ? 'Casino updated — refresh (Ctrl+Shift+R).' : ('Bet rejected: '+(round.error||'unknown')));
+    // Server-authoritative: send only the bet slip. The server rolls the wheel,
+    // prices the win, and credits atomically. The client animates to the number
+    // the server rolled — it no longer picks the outcome or reports the payout.
+    const slip=bets.map(b=>({type:b.type, pick:b.pick, amount:b.amount}));
+    const res=await CasinoNet.play('roulette', { slip });
+    if(!res.ok){
+      rlLog(res.stale ? 'Casino updated — refresh (Ctrl+Shift+R).' : ('Bet rejected: '+(res.error||'unknown')));
       return;
     }
-    rlRoundId = round.roundId;
+    rlLastServer={ credited: (typeof res.credited==='number') ? res.credited : 0 };
     const lastEl=document.getElementById('lastResult');
     if(lastEl) lastEl.textContent='Spinning…';
     const banner=document.getElementById('rl-result-banner'); if(banner) banner.style.display='none';
-    const idx=Math.floor(Math.random()*ORDER.length);
+    const result=(res.view && typeof res.view.result==='number') ? res.view.result : 0;
+    const idx=Math.max(0, ORDER.indexOf(result));
     startSpin(idx);
   };
 
@@ -2742,14 +2750,10 @@ ws.addEventListener('message', (ev)=>{
     } catch(e){}
     const c = document.getElementById('cash');
     if (c) c.textContent = 'Ƒ' + (Math.round(v * 100) / 100).toLocaleString();
-    try {
-      // Mining banks via its own channel now (was {type:'casino'}). Still client-
-      // authoritative — see the mining_bank note in server.js. Kept working here;
-      // to be replaced by a server-side mining settlement.
-      if (window.ws && window.ws.readyState === 1) {
-        window.ws.send(JSON.stringify({ type: 'mining_bank', sync: Number(v) || 0 }));
-      }
-    } catch(_){}
+    // Mining banking no longer pushes a client-authoritative TOTAL here. The server
+    // owns the balance and receives bounded DELTAS (see the bank_delta bridge below
+    // and mining_bank_delta in server.js); its me/portfolio push reconciles this
+    // optimistic local value.
   }
 
   // --- Brief-screen bank refresh -----------------------------------
@@ -2966,13 +2970,20 @@ ws.addEventListener('message', (ev)=>{
     }
 
     if (msg.type === 'bank_delta') {
-      // Game is reporting a bank change (run start deduction, or run end credit).
-      // Apply it to FM's cash and sync via WS.
+      // Game reports a bank change: run-start loadout deduction (negative) or
+      // run-end banked credit (positive). setCash updates the local UI optimistically;
+      // the DELTA and its reason go to the server, which owns the balance and bounds
+      // the run's credit, then reconciles via me/portfolio.
       const delta = Number(msg.delta) || 0;
+      const reason = String(msg.reason || '');
       if (delta === 0) return;
-      const newCash = Math.max(0, getCash() + delta);
-      setCash(newCash);
-      // Echo the new authoritative bank back to the game so it stays aligned
+      setCash(Math.max(0, getCash() + delta));
+      try {
+        if (window.ws && window.ws.readyState === 1) {
+          window.ws.send(JSON.stringify({ type: 'mining_bank_delta', delta, reason }));
+        }
+      } catch(_){}
+      // Echo the local bank back to the game so it stays aligned
       pushBankToIframe();
       return;
     }

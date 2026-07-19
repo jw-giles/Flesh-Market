@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<title>FLESH MARKET // STREAM FRAME</title>
+<!--
+  FleshMarket streaming frame for OBS. A broadcast desk built to stream the
+  game: a left rail with the Mr. Flesh relay (brain + voice waveform) over a
+  live market movers panel, a framed GAME window in the middle for a capture,
+  and a Kick chat column on the right. A funnel ticker runs along the bottom.
+
+  Reads the token-less guest WebSocket the anchor uses (init, tick, news,
+  breaking_news), read-only. Never sends a mutating frame. No em dashes here.
+
+  ===================  OBS SETUP  ===================
+  1. Scene > Browser source:
+       URL   http://localhost:7777/obs-stream-anchor.html   (or the fleshmarket.io URL)
+       Width 1920  Height 1080  "Shutdown source when not visible": OFF
+     Keep this source at the TOP of the scene so the frame draws over the rest.
+  2. GAME: add a Window/Game Capture of the FleshMarket tab, sized into the
+     middle GAME box (about 1048x900 at 1080p). It is a window, not fullscreen.
+  3. KICK CHAT: the right column AUTO-EMBEDS chat via chat.kick.cx (a third-party
+     embeddable widget), so you likely need no separate chat source. Kick's own
+     popout cannot be iframed. If you prefer Kick-native chat, or the third-party
+     widget is down, open the frame with ?chat=0 and add a Browser source instead:
+     URL https://kick.com/popout/fleshmarket/chat, sized to the right CHAT column.
+
+  MIC / WAVEFORM: by default the facecam tries to capture your mic on load, so
+  with OBS launched as
+     obs64.exe --enable-media-stream --use-fake-ui-for-media-stream
+  the waveform tracks your voice with no prompt. If the mic is unavailable it
+  falls back to a procedural signal. Use ?mic=0 for a silent browser preview.
+
+  REAL WEBCAM: to replace the brain with a real camera, add a Video Capture
+  source ABOVE this overlay and place it over the top-left relay box.
+
+  Once placed, open with ?guide=0 to hide the GAME/CHAT setup labels.
+
+  URL params:
+    ?ws=ws://127.0.0.1:7777   force a specific socket
+    ?guide=0                  hide the GAME / CHAT setup labels
+    ?boot=0                   skip the power-on sweep
+    ?kick=USERNAME            override the Kick handle shown in the frame
+    ?mic=0                    procedural waveform only (no mic capture)
+    ?mic=1                    click-to-authorize card (real browser)
+    ?chat=URL                 embed a specific chat widget URL in the chat column
+    ?chat=0                   disable the chat embed (use an OBS browser source)
+-->
+<style>
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(assets/fonts/ibm-plex-mono-400.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:700;font-display:swap;src:url(assets/fonts/ibm-plex-mono-700.woff2) format('woff2')}
+@font-face{font-family:'Share Tech Mono';font-style:normal;font-weight:400;font-display:swap;src:url(assets/fonts/share-tech-mono-400.woff2) format('woff2')}
+
+:root{
+  --fac:#f0b454; --edge:#2f9f4a; --edge2:#12261e; --hdr:#5f8f74;
+  --txt:#b6ffcf; --dim:#7fa590; --up:#42ff7e; --down:#ff6a6a; --flat:#6f8c80;
+  --kick:#53fc18; --panel-a:#0c1a15; --panel-b:#070f0c; --ink:#03100a;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:transparent}
+body{font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;color:var(--txt);-webkit-font-smoothing:antialiased}
+.m2{font-family:'Share Tech Mono',ui-monospace,monospace}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--flat)}
+
+#viewport{position:fixed;inset:0;display:grid;place-items:center;background:transparent}
+#stage{position:relative;width:1920px;height:1080px;transform-origin:center center}
+
+.chrome{position:absolute;border:1.5px solid var(--edge);border-radius:12px;
+  background:linear-gradient(180deg,rgba(12,26,21,.92),rgba(7,15,12,.92));
+  box-shadow:0 0 0 1px #000 inset,0 14px 40px rgba(0,0,0,.55),0 0 22px rgba(47,159,74,.10)}
+.scan::before{content:"";position:absolute;inset:0;z-index:40;pointer-events:none;border-radius:12px;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px);mix-blend-mode:multiply;opacity:.4}
+.phead{display:flex;align-items:center;gap:8px;height:30px;padding:0 12px;border-bottom:1px solid var(--edge);
+  font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--hdr);
+  background:linear-gradient(180deg,rgba(12,26,21,.95),rgba(7,15,12,.5))}
+.phead .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.phead .k{margin-left:auto;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:.06em}
+
+/* ---------- top bar ---------- */
+#topbar{left:28px;top:22px;width:1864px;height:58px;display:flex;align-items:center;gap:20px;padding:0 18px}
+#wordmark{display:flex;align-items:baseline;gap:8px;font-family:'Share Tech Mono',monospace;font-weight:700;letter-spacing:.16em}
+#wordmark .a{font-size:22px;color:var(--txt);text-shadow:0 0 10px rgba(66,255,126,.35)}
+#wordmark .b{font-size:22px;color:var(--fac);text-shadow:0 0 10px rgba(240,180,84,.35)}
+#onair{display:flex;align-items:center;gap:8px;font-family:'Share Tech Mono',monospace;font-size:12px;letter-spacing:.26em;color:var(--down)}
+#onair .rec{width:9px;height:9px;border-radius:50%;background:var(--down);box-shadow:0 0 9px var(--down);animation:rec 1.4s steps(1) infinite}
+@keyframes rec{50%{opacity:.22}}
+.breadth{flex:1;display:flex;align-items:center;gap:12px;min-width:0}
+.breadth .lbl{font-size:10px;letter-spacing:.2em;color:var(--hdr);text-transform:uppercase;white-space:nowrap}
+.breadth .bar{flex:1;height:12px;border-radius:6px;overflow:hidden;display:flex;border:1px solid var(--edge2);background:#0a1712;min-width:120px}
+.breadth .bar .a{background:linear-gradient(90deg,#1f6f3f,var(--up))}
+.breadth .bar .d{background:linear-gradient(90deg,var(--down),#7a2626)}
+.breadth .cnt{font-size:11px;letter-spacing:.06em;color:var(--hdr);white-space:nowrap}
+.breadth .cnt b.a{color:var(--up)} .breadth .cnt b.d{color:var(--down)}
+#clk{font-family:'Share Tech Mono',monospace;font-size:15px;letter-spacing:.06em;color:var(--fac);white-space:nowrap}
+#cta-top{display:flex;align-items:center;gap:9px;padding:7px 14px;border:1px solid var(--fac);border-radius:8px;
+  background:linear-gradient(180deg,#1a1305,#0d0a03);white-space:nowrap;box-shadow:0 0 14px rgba(240,180,84,.14)}
+#cta-top .play{width:0;height:0;border-left:9px solid var(--fac);border-top:6px solid transparent;border-bottom:6px solid transparent}
+#cta-top .t{font-size:12px;letter-spacing:.12em;color:var(--fac);font-weight:700}
+#cta-top .u{font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:.08em;color:var(--txt)}
+
+/* ---------- left rail: facecam ---------- */
+#facecam{left:28px;top:92px;width:400px;height:336px;padding:0;overflow:hidden}
+#facecam .phead .dot{background:var(--fac);box-shadow:0 0 9px var(--fac)}
+#facecam .phead .k{color:var(--fac)}
+#facecam .port{position:absolute;left:0;right:0;top:30px;height:248px;overflow:hidden;display:grid;place-items:center;
+  background:radial-gradient(120% 100% at 50% 42%,#06140d,#020a06)}
+#fcBrain{width:212px;height:212px;image-rendering:pixelated;image-rendering:crisp-edges;
+  filter:drop-shadow(0 0 18px color-mix(in srgb,var(--fac) 55%,transparent));transform:scale(1);transition:transform .05s linear;will-change:transform}
+#facecam.ring #fcBrain{animation:fcglitch .14s steps(2) infinite}
+@keyframes fcglitch{0%{transform:translate(0,0)}50%{transform:translate(-1px,1px)}100%{transform:translate(1px,-1px)}}
+#facecam .pmeta{position:absolute;top:0;left:0;right:0;z-index:3;display:flex;justify-content:space-between;
+  font-size:9px;letter-spacing:.14em;color:var(--hdr);padding:6px 10px;background:linear-gradient(180deg,rgba(0,0,0,.6),transparent)}
+#facecam .pscan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.18) 2px 4px);mix-blend-mode:multiply}
+#facecam .pvig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 100% at 50% 45%,transparent 55%,rgba(0,0,0,.5) 100%)}
+#facecam .wave{position:absolute;left:0;right:0;bottom:0;height:58px;border-top:1px solid var(--edge);background:#05100c}
+#fcWave{position:absolute;inset:0;width:100%;height:100%;display:block}
+#facecam .wtag{position:absolute;left:11px;bottom:7px;z-index:2;font-size:9px;letter-spacing:.16em;color:var(--hdr);text-transform:uppercase}
+#fcMic{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:rgba(2,6,8,.6);cursor:pointer}
+#fcMic.hidden{display:none}
+#fcMic .card{border:1px solid var(--fac);border-radius:10px;padding:16px 18px;text-align:center;background:linear-gradient(180deg,var(--panel-a),var(--panel-b))}
+#fcMic .t{font-family:'Share Tech Mono',monospace;font-size:12px;letter-spacing:.12em;color:var(--fac);text-transform:uppercase}
+#fcMic .d{margin-top:6px;font-size:10px;color:var(--hdr);line-height:1.5;max-width:230px}
+
+/* ---------- left rail: market movers ---------- */
+#market{left:28px;top:442px;width:400px;height:550px;padding:0;overflow:hidden}
+#market .phead .dot{background:var(--up);box-shadow:0 0 9px var(--up)}
+#market .phead .k{color:var(--up)}
+#mkList{position:absolute;left:0;right:0;top:31px;bottom:0;overflow:hidden;padding:6px 0}
+.mv{display:flex;align-items:center;gap:8px;height:25px;padding:0 14px;font-size:14px}
+.mv .s{font-family:'Share Tech Mono',monospace;color:var(--txt);width:78px;letter-spacing:.04em}
+.mv .p{color:var(--dim);width:96px;text-align:right}
+.mv .c{margin-left:auto;text-align:right;min-width:64px;font-family:'Share Tech Mono',monospace}
+.mv .spark{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.mv .spark.u{background:var(--up);box-shadow:0 0 7px var(--up)} .mv .spark.d{background:var(--down);box-shadow:0 0 7px var(--down)} .mv .spark.f{background:var(--flat)}
+
+/* ---------- middle: game window ---------- */
+#gamezone{position:absolute;left:444px;top:92px;width:1048px;height:900px;
+  border:1.5px solid var(--edge);border-radius:12px;background:transparent;
+  box-shadow:0 0 0 1px rgba(0,0,0,.5) inset,0 0 22px rgba(47,159,74,.08)}
+.bracket{position:absolute;width:34px;height:34px;border:2px solid var(--fac);opacity:.85}
+.bracket.tl{left:-1px;top:-1px;border-right:0;border-bottom:0;border-top-left-radius:12px}
+.bracket.tr{right:-1px;top:-1px;border-left:0;border-bottom:0;border-top-right-radius:12px}
+.bracket.bl{left:-1px;bottom:-1px;border-right:0;border-top:0;border-bottom-left-radius:12px}
+.bracket.br{right:-1px;bottom:-1px;border-left:0;border-top:0;border-bottom-right-radius:12px}
+.zone-tag{position:absolute;top:10px;left:12px;font-size:10px;letter-spacing:.24em;color:var(--hdr);text-transform:uppercase}
+#gameguide{position:absolute;inset:0;display:grid;place-items:center;text-align:center;pointer-events:none}
+#gameguide .box{padding:18px 26px;border:1px dashed var(--edge2);border-radius:10px;background:rgba(3,16,10,.5)}
+#gameguide .h{font-family:'Share Tech Mono',monospace;font-size:20px;letter-spacing:.2em;color:var(--dim)}
+#gameguide .s{margin-top:8px;font-size:12px;letter-spacing:.05em;color:var(--hdr);opacity:.8}
+
+/* ---------- right: chat ---------- */
+#chatzone{position:absolute;left:1508px;top:92px;width:384px;height:900px;padding:0;overflow:hidden}
+#chatzone .phead .dot{background:var(--kick);box-shadow:0 0 9px var(--kick)}
+#chatzone .phead .k{color:var(--kick)}
+#chatzone .cbody{position:absolute;left:0;right:0;top:30px;bottom:34px;background:transparent}
+#chatguide{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:16px;pointer-events:none}
+#chatguide .h{font-family:'Share Tech Mono',monospace;font-size:15px;letter-spacing:.16em;color:var(--dim)}
+#chatguide .s{margin-top:10px;font-size:11px;line-height:1.5;letter-spacing:.03em;color:var(--hdr);opacity:.85}
+#chatguide code{color:var(--kick);word-break:break-all}
+#chatzone .cfoot{position:absolute;left:0;right:0;bottom:0;height:34px;display:flex;align-items:center;justify-content:center;gap:8px;
+  border-top:1px solid var(--edge);font-family:'Share Tech Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--kick);
+  background:linear-gradient(0deg,rgba(12,26,21,.95),rgba(7,15,12,.4))}
+
+/* ---------- ticker ---------- */
+#ticker{left:28px;bottom:22px;width:1864px;height:52px;display:flex;align-items:center;overflow:hidden;padding:0}
+#ticker .cap{flex:0 0 auto;height:100%;display:flex;align-items:center;gap:8px;padding:0 16px;border-right:1px solid var(--edge);
+  font-family:'Share Tech Mono',monospace;font-size:12px;letter-spacing:.18em;color:var(--ink);background:linear-gradient(180deg,var(--fac),#c98a24)}
+#ticker .cap .rec{width:8px;height:8px;border-radius:50%;background:var(--ink);animation:rec 1.2s steps(1) infinite}
+#tick-view{flex:1;height:100%;overflow:hidden;position:relative}
+#tick-track{position:absolute;left:0;top:0;height:100%;display:flex;align-items:center;white-space:nowrap;will-change:transform;animation:crawl 60s linear infinite}
+@keyframes crawl{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.tk{display:inline-flex;align-items:center;padding:0 26px;font-size:15px;letter-spacing:.03em}
+.tk .sym{font-family:'Share Tech Mono',monospace;color:var(--txt);margin-right:8px}
+.tk.sep{color:var(--edge);padding:0 6px}
+.tk.cta{color:var(--fac);font-family:'Share Tech Mono',monospace;letter-spacing:.06em}
+.tk.cta b{color:var(--txt)}
+.tk.breaking{color:var(--down);font-weight:700;letter-spacing:.05em}
+.tk.breaking::before{content:"BREAKING ";color:#160404;background:var(--down);padding:2px 8px;border-radius:4px;margin-right:10px;font-size:12px}
+
+/* ---------- boot ---------- */
+#boot{position:fixed;inset:0;z-index:200;background:#02100a;pointer-events:none}
+#boot .line{position:absolute;left:0;right:0;height:3px;top:0;background:linear-gradient(90deg,transparent,var(--up),transparent);box-shadow:0 0 20px var(--up)}
+</style>
+</head>
+<body>
+<div id="viewport"><div id="stage">
+
+  <div id="topbar" class="chrome scan">
+    <div id="wordmark"><span class="a">FLESH</span><span class="b">MARKET</span></div>
+    <div id="onair"><span class="rec"></span>ON AIR</div>
+    <div class="breadth">
+      <span class="lbl">Breadth</span>
+      <div class="bar"><div class="a" id="brA" style="width:50%"></div><div class="d" id="brD" style="width:50%"></div></div>
+      <span class="cnt"><b class="a" id="advN">0</b> adv / <b class="d" id="decN">0</b> dec</span>
+    </div>
+    <div id="clk" class="m2">--:--:--</div>
+    <div id="cta-top"><span class="play"></span><span class="t">PLAY FREE</span><span class="u">FLESHMARKET.IO</span></div>
+  </div>
+
+  <div id="facecam" class="chrome scan ring">
+    <div class="phead"><span class="dot"></span>Flesh Relay<span class="k">CAM</span></div>
+    <div class="port">
+      <div class="pmeta"><span>FLESH SYSTEM</span><span class="m2">NULL RELAY // v9.6</span></div>
+      <img id="fcBrain" alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA2ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDo0OURERkRCMTBDM0RFRDExOUFBNjk3OTQ2RUU5NkZFNyIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDoxRTBCRkY5MUMwRjIxMUVFQTEyMkU0MTNBNEY1NkQ1RSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDoxRTBCRkY5MEMwRjIxMUVFQTEyMkU0MTNBNEY1NkQ1RSIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M2IChXaW5kb3dzKSI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjVBQzA4QUQzRUZDMEVFMTFBMzZBOTg0RjQ1RUNGRTQ0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQ5RERGREIxMEMzREVEMTE5QUE2OTc5NDZFRTk2RkU3Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+kLAX9wAAACRQTFRFOAAsVmqJIipcqx9lgAxTi6u/N0Ru5jNqzOLhAAAA////AAAAgCcNhwAAAAx0Uk5T//////////////8AEt/OzgAAAPpJREFUeNqE04sOQiEIBmAUvFDv/74BImpZsbZa/zfAsyM8/xRsvznqCphL6ValbCQAe+qG3wH3t+ITjJwQARBpF7D6NykkQv1eUyAa6P+NAKi1h9RsAbOBpiS5iIeVtwBvII1hdnDQT4Bgw8knqAggE1B2l88JbEYAWYDaTyDhscMOegB9UAH6AaQ9yBpaN6DPj/QZqbyBbiv+At3OcJ5iB6WUccqU6AMwaJ5qVIDMChhA8lpvQISA+h3UATLcR+Q0gYlVkQ/w5JxPMuOU2I+Z82H6SC33FyZ7+RJp5fOlddIqYm0DMJ8Xx0x0WPcTbnd3v73w7/q/BBgA8fAfdqek7SAAAAAASUVORK5CYII=">
+      <div class="pscan"></div><div class="pvig"></div>
+    </div>
+    <div class="wave"><canvas id="fcWave"></canvas><div class="wtag m2" id="fcWaveTag">VOICE RELAY // SIGNAL</div></div>
+    <div id="fcMic" class="hidden"><div class="card"><div class="t">&#9673; Authorize Mic</div><div class="d">Click to route your mic into the waveform. Skip and a procedural signal runs.</div></div></div>
+  </div>
+
+  <div id="market" class="chrome scan">
+    <div class="phead"><span class="dot"></span>Market // Live<span class="k" id="mkCount">0</span></div>
+    <div id="mkList"></div>
+  </div>
+
+  <div id="gamezone">
+    <span class="bracket tl"></span><span class="bracket tr"></span><span class="bracket bl"></span><span class="bracket br"></span>
+    <span class="zone-tag">&#9635; GAME</span>
+    <div id="gameguide"><div class="box">
+      <div class="h">GAME CAPTURE</div>
+      <div class="s">Place a Window / Game Capture of FleshMarket in this box, behind this overlay.<br>Open with ?guide=0 to hide this label.</div>
+    </div></div>
+  </div>
+
+  <div id="chatzone" class="chrome scan">
+    <div class="phead"><span class="dot"></span>Live Chat<span class="k">KICK</span></div>
+    <div class="cbody">
+      <div id="chatguide">
+        <div class="h">KICK CHAT</div>
+        <div class="s">Chat embed off (?chat=0). Add a Browser source here instead:<br><code>kick.com/popout/fleshmarket/chat</code></div>
+      </div>
+      <iframe id="chatFrame" title="Kick chat" frameborder="0" scrolling="no" style="position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent;display:none"></iframe>
+    </div>
+    <div class="cfoot"><span>kick.com/</span><span id="kickHandle">fleshmarket</span></div>
+  </div>
+
+  <div id="ticker" class="chrome scan">
+    <div class="cap"><span class="rec"></span>FLESH FEED</div>
+    <div id="tick-view"><div id="tick-track"></div></div>
+  </div>
+
+</div></div>
+
+<div id="boot"><div class="line"></div></div>
+
+<script>
+(function(){
+  var qs=new URLSearchParams(location.search);
+  var KICK=(qs.get('kick')||'fleshmarket').replace(/[^a-z0-9_]/gi,'');
+  document.getElementById('kickHandle').textContent=KICK;
+  document.querySelector('#chatguide code').textContent='kick.com/popout/'+KICK+'/chat';
+
+  var stage=document.getElementById('stage');
+  function fit(){ var s=Math.min(innerWidth/1920, innerHeight/1080); stage.style.transform='scale('+s+')'; }
+  addEventListener('resize',fit); fit();
+
+  if(qs.get('guide')==='0'){ var g1=document.getElementById('gameguide'),g2=document.getElementById('chatguide'); if(g1)g1.style.display='none'; if(g2)g2.style.display='none'; }
+
+  /* ---- Kick chat embed. Kick's own popout cannot be iframed (X-Frame-Options),
+     so the auto-embed uses an embeddable third-party widget (chat.kick.cx by
+     default). ?chat=URL points elsewhere; ?chat=0 disables it for an OBS source. */
+  (function(){
+    var cf=document.getElementById('chatFrame'), cg=document.getElementById('chatguide');
+    var cp=qs.get('chat');
+    if(cp==='0'){ if(cg) cg.style.display=''; return; }
+    var url=cp ? cp : ('https://chat.kick.cx/embed/'+KICK);
+    if(cf){ cf.src=url; cf.style.display='block'; }
+    if(cg) cg.style.display='none';
+  })();
+
+  function tickClock(){ var d=new Date(); function p(n){return(n<10?'0':'')+n;} document.getElementById('clk').textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
+  setInterval(tickClock,1000); tickClock();
+
+  /* ---- facecam: brain pulse + voice waveform ---- */
+  (function(){
+    var cvs=document.getElementById('fcWave'), wctx=cvs.getContext('2d');
+    var micOn=false, analyser=null, timeData=null, rms=0;
+    var brain=document.getElementById('fcBrain'), fc=document.getElementById('facecam');
+    function sizeWave(){ var r=cvs.getBoundingClientRect(), dpr=Math.min(window.devicePixelRatio||1,2); cvs.width=Math.max(2,r.width*dpr); cvs.height=Math.max(2,r.height*dpr); wctx.setTransform(dpr,0,0,dpr,0,0); }
+    addEventListener('resize', sizeWave); sizeWave();
+    function drawWave(t){
+      var w=cvs.clientWidth,h=cvs.clientHeight,mid=h/2; wctx.clearRect(0,0,w,h);
+      wctx.lineWidth=2; wctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--fac').trim()||'#f0b454';
+      wctx.shadowColor=wctx.strokeStyle; wctx.shadowBlur=8; wctx.beginPath();
+      var N=150,x,y,amp;
+      if(micOn&&analyser){
+        analyser.getByteTimeDomainData(timeData); var sum=0;
+        for(var i=0;i<N;i++){ var idx=Math.floor(i/N*timeData.length); var v=(timeData[idx]-128)/128; sum+=v*v; x=i/(N-1)*w; y=mid+v*(mid*0.9); i===0?wctx.moveTo(x,y):wctx.lineTo(x,y); }
+        rms=Math.sqrt(sum/N);
+      } else {
+        var tt=t/1000, env=0.18+0.10*Math.sin(tt*0.7), e2=0;
+        for(var j=0;j<N;j++){ var u=j/(N-1); amp=Math.sin(u*Math.PI*7+tt*3.1)*0.5+Math.sin(u*Math.PI*13-tt*2.2)*0.28+Math.sin(u*Math.PI*3+tt*1.3)*0.22; amp*=env*(0.6+0.4*Math.sin(u*Math.PI)); e2+=amp*amp; x=u*w; y=mid+amp*(mid*0.9); j===0?wctx.moveTo(x,y):wctx.lineTo(x,y); }
+        rms=Math.sqrt(e2/N)*0.8;
+      }
+      wctx.stroke(); wctx.shadowBlur=0;
+      if(brain && !(fc&&fc.classList.contains('ring'))){
+        var pulse=1+Math.min(0.14,rms*0.55); brain.style.transform='scale('+pulse.toFixed(3)+')';
+        var glow=14+Math.min(26,rms*120); brain.style.filter='drop-shadow(0 0 '+glow.toFixed(0)+'px color-mix(in srgb,var(--fac) 60%,transparent))';
+      }
+      requestAnimationFrame(drawWave);
+    }
+    requestAnimationFrame(drawWave);
+    function startMic(){
+      var mp=document.getElementById('fcMic'); if(mp) mp.classList.add('hidden'); micOn=false;
+      var tag=document.getElementById('fcWaveTag'); if(tag) tag.textContent='VOICE RELAY // SIGNAL';
+      if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return;
+      var done=false, to=setTimeout(function(){ done=true; },4000);
+      navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})
+        .then(function(stream){ clearTimeout(to); if(done) return; var AC=window.AudioContext||window.webkitAudioContext; var ac=new AC(); var src=ac.createMediaStreamSource(stream); analyser=ac.createAnalyser(); analyser.fftSize=1024; analyser.smoothingTimeConstant=0.55; timeData=new Uint8Array(analyser.fftSize); src.connect(analyser); micOn=true; if(tag) tag.textContent='VOICE RELAY // LIVE'; })
+        .catch(function(){ clearTimeout(to); });
+    }
+    window.__fcStartMic=startMic;
+    var micMode=qs.get('mic');
+    if(micMode==='0'){ /* procedural only */ }
+    else if(micMode==='1'){ var mp=document.getElementById('fcMic'); if(mp){ mp.classList.remove('hidden'); mp.addEventListener('click', startMic); } }
+    else { startMic(); }   /* default: attempt on load; works in OBS with --use-fake-ui-for-media-stream, else falls back */
+  })();
+
+  /* ---- boot sweep + facecam un-glitch ---- */
+  (function(){
+    var boot=document.getElementById('boot'), fc=document.getElementById('facecam');
+    function unring(){ if(fc) fc.classList.remove('ring'); }
+    if(qs.get('boot')==='0'){ boot.style.display='none'; unring(); return; }
+    var line=boot.querySelector('.line'), t0=performance.now();
+    (function step(now){ var k=Math.min(1,(now-t0)/900); line.style.top=(k*100)+'%';
+      if(k<1) requestAnimationFrame(step);
+      else { boot.style.transition='opacity .35s'; boot.style.opacity='0'; setTimeout(function(){boot.style.display='none';},400); unring(); } })(t0);
+  })();
+
+  /* ---- live market via the token-less guest feed ---- */
+  var FLSH=['FLSH','FLESH'];
+  var market={}, prevPx={}, names={}, breaking='', newsQ=[];
+  function wsUrl(){ var f=qs.get('ws'); if(f) return f; if(!location.host) return 'ws://localhost:7777'; return (location.protocol==='https:'?'wss:':'ws:')+'//'+location.host; }
+  var sock=null, retry=0;
+  function connect(){
+    try{ sock=new WebSocket(wsUrl()); }catch(e){ return schedule(); }
+    sock.onopen=function(){ retry=0; };
+    sock.onmessage=function(ev){ var m; try{ m=JSON.parse(ev.data); }catch(_){ return; } if(m&&typeof m==='object') route(m); };
+    sock.onclose=function(){ schedule(); };
+    sock.onerror=function(){ try{sock.close();}catch(_){} };
+  }
+  function schedule(){ retry=Math.min(retry+1,6); setTimeout(connect, 800*retry); }
+  function route(m){
+    if(m.type==='init' && m.data){
+      var arr=m.data.companies||m.data.market||m.data.stocks||[];
+      if(Array.isArray(arr)) arr.forEach(function(c){ var s=c.symbol||c.sym; if(!s) return; market[s]={price:+c.price}; prevPx[s]=+c.price; if(c.name) names[s]=c.name; });
+      recompute(true);
+    } else if(m.type==='tick' && Array.isArray(m.data)){
+      m.data.forEach(function(c){ var s=c.symbol||c.sym; if(!s) return; if(!market[s]) market[s]={price:+c.price}; prevPx[s]=market[s].price; market[s].price=+c.price; });
+      recompute(false);
+    } else if(m.type==='news' && m.data){ var t=m.data.text||m.data.headline||''; if(t){ newsQ.unshift(t); if(newsQ.length>4) newsQ.pop(); buildTicker(); } }
+    else if(m.type==='breaking_news' && m.data){ breaking=m.data.active?(m.data.text||''):''; buildTicker(); }
+    else if(m.type==='company_added' && m.data){ var s=m.data.symbol; if(s){ market[s]={price:+m.data.price}; prevPx[s]=+m.data.price; if(m.data.name) names[s]=m.data.name; } }
+  }
+
+  function tradables(){ return Object.keys(market).filter(function(s){ return FLSH.indexOf(s)<0 && isFinite(market[s].price); }); }
+  function fmtPx(n){ return 'Ƒ'+(n>=1000?Math.round(n).toLocaleString():n>=100?n.toFixed(0):n.toFixed(2)); }
+
+  var lastList=0;
+  function recompute(force){
+    var syms=tradables(), adv=0, dec=0;
+    syms.forEach(function(s){ var pv=prevPx[s], p=market[s].price; if(pv>0){ if(p>pv) adv++; else if(p<pv) dec++; } });
+    var tot=Math.max(1,adv+dec);
+    document.getElementById('brA').style.width=(adv/tot*100)+'%';
+    document.getElementById('brD').style.width=(dec/tot*100)+'%';
+    document.getElementById('advN').textContent=adv;
+    document.getElementById('decN').textContent=dec;
+    document.getElementById('mkCount').textContent=syms.length;
+    var now=Date.now();
+    if(force || now-lastList>2000){ lastList=now; renderMovers(syms); }
+  }
+  function renderMovers(syms){
+    var rows=syms.map(function(s){ var pv=prevPx[s]||market[s].price, p=market[s].price; return {s:s,p:p,pct:pv>0?(p/pv-1)*100:0}; });
+    rows.sort(function(a,b){ return Math.abs(b.pct)-Math.abs(a.pct); });
+    rows=rows.slice(0,19);
+    var html=rows.map(function(r){
+      var cls=r.pct>0?'up':(r.pct<0?'down':'flat'), sp=r.pct>0?'u':(r.pct<0?'d':'f'), sign=r.pct>0?'+':'';
+      return '<div class="mv"><span class="spark '+sp+'"></span><span class="s">'+r.s+'</span><span class="p">'+fmtPx(r.p)+'</span><span class="c '+cls+'">'+sign+r.pct.toFixed(1)+'%</span></div>';
+    }).join('');
+    document.getElementById('mkList').innerHTML=html || '<div class="mv"><span class="s" style="color:var(--dim)">awaiting feed</span></div>';
+  }
+
+  /* ---- funnel ticker ---- */
+  var CTAS=[
+    'NEW HERE // The market is open and the house is always watching. Play free in your browser at <b>FLESHMARKET.IO</b>',
+    'Every ticker on this screen is a real trader. Come take their money // <b>FLESHMARKET.IO</b>',
+    'Mr. Flesh is accepting new clients. No cost of entry // <b>FLESHMARKET.IO</b>',
+    'Trade, gamble, mine, or run a Capital House. Free to play // <b>FLESHMARKET.IO</b>',
+    'Follow on Kick so the feed finds you first // <b>kick.com/'+KICK+'</b>',
+    'Fortunes are made and lost here every cycle. Bring yours // <b>FLESHMARKET.IO</b>'
+  ];
+  function moverHTML(m){ var cls=m.pct>0?'up':(m.pct<0?'down':'flat'), sign=m.pct>0?'+':''; return '<span class="tk"><span class="sym">'+m.s+'</span>'+fmtPx(m.p)+' <span class="'+cls+'">'+sign+m.pct.toFixed(1)+'%</span></span>'; }
+  function topMovers(){ var r=tradables().map(function(s){ var pv=prevPx[s]||market[s].price,p=market[s].price; return {s:s,p:p,pct:pv>0?(p/pv-1)*100:0}; }); r.sort(function(a,b){return Math.abs(b.pct)-Math.abs(a.pct);}); return r.slice(0,8); }
+  function buildTicker(){
+    var parts=[], mv=topMovers(), ci=0, mi=0, guard=0;
+    if(breaking) parts.push('<span class="tk breaking">'+breaking+'</span>');
+    while((mi<mv.length || ci<CTAS.length) && guard++<40){
+      parts.push('<span class="tk cta">'+CTAS[ci%CTAS.length]+'</span>'); ci++;
+      for(var k=0;k<2 && mi<mv.length;k++){ parts.push(moverHTML(mv[mi++])); }
+      if(newsQ.length && ci%2===0){ parts.push('<span class="tk">'+newsQ[ci%newsQ.length]+'</span>'); }
+      parts.push('<span class="tk sep">///</span>');
+    }
+    var html=parts.join('');
+    document.getElementById('tick-track').innerHTML=html+html;
+  }
+  buildTicker(); setInterval(buildTicker, 30000);
+
+  connect();
+})();
+</script>
+</body>
+</html>
