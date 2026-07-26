@@ -16,6 +16,8 @@
 var pane = document.getElementById('casino-baccarat');
 if (!pane || pane.__bacInit) return;
 pane.__bacInit = true;
+var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+var TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
 
 var SPOTS = [
   { key:'player', label:'Player',      odds:'1 : 1'   },
@@ -84,34 +86,35 @@ pane.innerHTML = [
 '<div id="bac-wrap">',
 '  <div id="bac-felt">',
 '    <div class="bac-info">',
-'      <span>Balance: <strong id="bac-bal">-</strong></span>',
-'      <span>On table: <strong id="bac-slip">Ƒ0</strong></span>',
+'      <span><span data-i18n="casino.common.balance">Balance:</span> <strong id="bac-bal">-</strong></span>',
+'      <span><span data-i18n="casino.common.onTable">On table:</span> <strong id="bac-slip">Ƒ0</strong></span>',
 '    </div>',
 '    <div id="bac-hands">',
-'      <div class="bac-hand" id="bac-hand-P"><h4>Player <span id="bac-pt"></span></h4><div class="bac-cards" id="bac-cards-P"></div></div>',
+'      <div class="bac-hand" id="bac-hand-P"><h4><span data-i18n="casino.bacc.player">Player</span> <span id="bac-pt"></span></h4><div class="bac-cards" id="bac-cards-P"></div></div>',
 '      <div class="bac-vs">VS</div>',
-'      <div class="bac-hand" id="bac-hand-B"><h4>Banker <span id="bac-bt"></span></h4><div class="bac-cards" id="bac-cards-B"></div></div>',
+'      <div class="bac-hand" id="bac-hand-B"><h4><span data-i18n="casino.bacc.banker">Banker</span> <span id="bac-bt"></span></h4><div class="bac-cards" id="bac-cards-B"></div></div>',
 '    </div>',
 '    <div id="bac-banner"></div>',
 '    <div class="bac-spots" id="bac-spots"></div>',
 '    <div class="bac-ctrl">',
-'      <span style="font-size:.7rem;color:#8a6a40;letter-spacing:.1em">CHIP</span>',
+'      <span style="font-size:.7rem;color:#8a6a40;letter-spacing:.1em" data-i18n="casino.common.chip">CHIP</span>',
 '      <input id="bac-chip" type="number" min="1" value="50"/>',
 '      <div class="bac-chips">',
 '        <button data-c="10">+10</button><button data-c="50">+50</button>',
 '        <button data-c="100">+100</button><button data-c="500">+500</button>',
-'        <button data-c="max">Max</button>',
+'        <button data-c="max" data-i18n="casino.common.max">Max</button>',
 '      </div>',
 '    </div>',
 '    <div class="bac-actions">',
-'      <button id="bac-deal">Deal</button>',
-'      <button id="bac-clear">Clear</button>',
+'      <button id="bac-deal" data-i18n="casino.bacc.deal">Deal</button>',
+'      <button id="bac-clear" data-i18n="casino.common.clear">Clear</button>',
 '    </div>',
 '    <div id="bac-hist"></div>',
 '    <div id="bac-log"></div>',
 '  </div>',
 '</div>'
 ].join('');
+if(window.applyI18n) window.applyI18n(pane);
 
 function log(m){
   var box = document.getElementById('bac-log'); if(!box) return;
@@ -129,7 +132,7 @@ function renderSpots(){
   SPOTS.forEach(function(sp){
     var el = document.createElement('div');
     el.className = 'bac-spot' + (bets[sp.key] > 0 ? ' has' : '');
-    el.innerHTML = '<div class="bs-lbl">'+sp.label+'</div><div class="bs-odds">'+sp.odds+'</div>'+
+    el.innerHTML = '<div class="bs-lbl">'+T('casino.bacc.'+sp.key,sp.label)+'</div><div class="bs-odds">'+sp.odds+'</div>'+
                    '<div class="bs-amt">'+(bets[sp.key]>0?fmt(bets[sp.key]):'')+'</div>';
     el.onclick = function(){ addChip(sp.key); };
     box.appendChild(el);
@@ -138,7 +141,7 @@ function renderSpots(){
 function addChip(key){
   if (dealing) return;
   var c = chipVal();
-  if (slipTotal() + c > getBalance()){ log('Insufficient funds.'); return; }
+  if (slipTotal() + c > getBalance()){ log(T('casino.common.insufficient','Insufficient funds.')); return; }
   bets[key] += c;
   renderSpots(); refreshBal();
 }
@@ -197,14 +200,14 @@ function pushHistory(outcome){
   history.unshift(m); history = history.slice(0, 24);
   var h = document.getElementById('bac-hist'); if(!h) return;
   h.innerHTML = '';
-  history.forEach(function(x){ var d=document.createElement('div'); d.className='bac-dot '+x; d.textContent=x; h.appendChild(d); });
+  history.forEach(function(x){ var d=document.createElement('div'); d.className='bac-dot '+x; d.textContent=(x==='P'?T('casino.bacc.dotP','P'):x==='B'?T('casino.bacc.dotB','B'):T('casino.bacc.dotT','T')); h.appendChild(d); });
 }
 
 async function deal(){
   if (dealing) return;
   var stake = slipTotal();
-  if (!(stake > 0)){ log('Place a bet first.'); return; }
-  if (window.CasinoNet == null){ log('Casino net not ready - refresh.'); return; }
+  if (!(stake > 0)){ log(T('casino.common.placeBetFirst','Place a bet first.')); return; }
+  if (window.CasinoNet == null){ log(T('casino.common.netNotReady','Casino net not ready - refresh.')); return; }
   dealing = true;
   var dealBtn = document.getElementById('bac-deal'); if(dealBtn) dealBtn.disabled = true;
   var bn = document.getElementById('bac-banner'); if(bn) bn.style.display='none';
@@ -213,7 +216,7 @@ async function deal(){
   var res = await window.CasinoNet.play('baccarat', { bets: sent });
   if (!res || !res.ok){
     dealing = false; if(dealBtn) dealBtn.disabled = false;
-    log(res && res.stale ? 'Casino updated - refresh (Ctrl+Shift+R).' : ('Rejected: ' + ((res&&res.error)||'unknown')));
+    log(res && res.stale ? T('casino.common.stale','Casino updated, refresh (Ctrl+Shift+R).') : TF('casino.common.rejected','Rejected: {err}',{err:((res&&res.error)||'unknown')}));
     return;
   }
   var view = res.view || {};
@@ -228,13 +231,13 @@ async function deal(){
                    (view.pt>=8 || view.bt>=8));
     if (bn){
       bn.style.display = 'block';
-      var head = (out==='player'?'PLAYER':out==='banker'?'BANKER':'TIE') + ' ' + (view.pt) + ' : ' + (view.bt) + (natural?' (natural)':'');
-      if (credited > stake){ bn.className='win';  bn.textContent = 'W ' + head + ', won ' + fmt(net) + ' (paid ' + fmt(credited) + ')'; }
-      else if (credited > 0){ bn.className='push'; bn.textContent = head + ', ' + fmt(net) + ' (push ' + fmt(credited) + ')'; }
-      else                  { bn.className='lose'; bn.textContent = 'L ' + head + ', lost ' + fmt(stake); }
+      var head = (out==='player'?T('casino.bacc.pUp','PLAYER'):out==='banker'?T('casino.bacc.bUp','BANKER'):T('casino.bacc.tUp','TIE')) + ' ' + (view.pt) + ' : ' + (view.bt) + (natural?T('casino.bacc.natural',' (natural)'):'');
+      if (credited > stake){ bn.className='win';  bn.textContent = TF('casino.common.bannerWin','W {head}, won {net} (paid {paid})',{head:head,net:fmt(net),paid:fmt(credited)}); }
+      else if (credited > 0){ bn.className='push'; bn.textContent = TF('casino.bacc.bannerPush','{head}, {net} (push {paid})',{head:head,net:fmt(net),paid:fmt(credited)}); }
+      else                  { bn.className='lose'; bn.textContent = TF('casino.common.bannerLose','L {head}, lost {stake}',{head:head,stake:fmt(stake)}); }
     }
-    var extra = (view.pPair?' P-pair':'') + (view.bPair?' B-pair':'');
-    log((out==='player'?'Player':out==='banker'?'Banker':'Tie') + ' ' + view.pt + ':' + view.bt + extra + ' | ' + (net>=0?'+':'') + fmt(net));
+    var extra = (view.pPair?T('casino.bacc.pPairTag',' P-pair'):'') + (view.bPair?T('casino.bacc.bPairTag',' B-pair'):'');
+    log((out==='player'?T('casino.bacc.player','Player'):out==='banker'?T('casino.bacc.banker','Banker'):T('casino.bacc.tie','Tie')) + ' ' + view.pt + ':' + view.bt + extra + ' | ' + (net>=0?'+':'') + fmt(net));
     pushHistory(out);
     // reset the slip for the next coup; balance already reconciled by server push
     SPOTS.forEach(function(sp){ bets[sp.key] = 0; });

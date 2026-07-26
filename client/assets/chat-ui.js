@@ -56,7 +56,7 @@
         if (ciSw) ciSw.placeholder = window._whisperTarget ? ('Whisper to '+window._whisperTarget+'…') : '@name message…';
       } else {
         if (wtbSw) wtbSw.style.display='none';
-        if (ciSw && _activeChatChannel !== 'dunce') ciSw.placeholder = 'Say something… @mention';
+        if (ciSw && _activeChatChannel !== 'dunce') ciSw.placeholder = (window.t?window.t('ph.chat','Say something… @mention'):'Say something… @mention');
       }
     });
   });

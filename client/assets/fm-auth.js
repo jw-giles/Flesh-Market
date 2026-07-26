@@ -104,10 +104,10 @@
     card.id = 'fm-auth-card';
 
     const title = document.createElement('h2');
-    title.textContent = mode === 'login' ? '⬡ FLESH MARKET' : '⬡ CREATE ACCOUNT';
+    title.textContent = '⬡ ' + (mode === 'login' ? (window.t?window.t('auth.titleLogin','FLESH MARKET'):'FLESH MARKET') : (window.t?window.t('auth.titleRegister','CREATE ACCOUNT'):'CREATE ACCOUNT'));
 
-    const nameField = makeField('Name', 'text', 'username');
-    const passField = makeField('Password', 'password', mode==='login'?'current-password':'new-password');
+    const nameField = makeField((window.t?window.t('auth.name','Name'):'Name'), 'text', 'username');
+    const passField = makeField((window.t?window.t('auth.password','Password'):'Password'), 'password', mode==='login'?'current-password':'new-password');
     if (mode==='login' && getName()) nameField.input.value = getName();
 
     const hint = document.createElement('div');
@@ -118,14 +118,45 @@
 
     const switchBtn = document.createElement('button');
     switchBtn.className = 'secondary';
-    switchBtn.textContent = mode==='login' ? 'New Account' : 'Log In';
+    switchBtn.textContent = mode==='login' ? (window.t?window.t('auth.newAccount','New Account'):'New Account') : (window.t?window.t('auth.logIn','Log In'):'Log In');
 
     const submitBtn = document.createElement('button');
-    submitBtn.textContent = mode==='login' ? 'Log In' : 'Register';
+    submitBtn.textContent = mode==='login' ? (window.t?window.t('auth.logIn','Log In'):'Log In') : (window.t?window.t('auth.newAccount','Register'):'Register');
 
     actions.appendChild(switchBtn);
     actions.appendChild(submitBtn);
 
+    // Language selector. This modal is the first thing a new player sees and
+    // it is the only place where switching costs nothing, since nothing has
+    // rendered and there is no session to lose, so the reload is unconditional
+    // here. Both labels stay in their own language: someone who cannot read the
+    // current UI still has to be able to find the one they want.
+    const langRow = document.createElement('div');
+    langRow.className = 'fm-lang';
+    langRow.style.cssText = 'display:flex;gap:6px;align-items:center;justify-content:center;margin:0 0 12px';
+    const langLbl = document.createElement('span');
+    langLbl.style.cssText = 'font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;opacity:.5;margin-right:2px';
+    langLbl.textContent = (window.t?window.t('auth.languagePrompt','Language'):'Language');
+    langRow.appendChild(langLbl);
+    const curZh = (window._lang === 'zh');
+    [['en', 'English'], ['zh', '\u4e2d\u6587']].forEach(function (pair) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'secondary fm-lang-btn';
+      b.textContent = pair[1];
+      const active = (pair[0] === 'zh') === curZh;
+      b.style.cssText = 'padding:2px 12px;font-size:.74rem;font-family:inherit;cursor:pointer;border-radius:4px;' +
+        'background:' + (active ? 'rgba(126,224,156,.14)' : 'transparent') + ';' +
+        'border:1px solid ' + (active ? '#7ee09c' : 'rgba(126,224,156,.28)') + ';' +
+        'color:' + (active ? '#7ee09c' : '#6f8f7a');
+      b.addEventListener('click', function () {
+        if (active) return;                       // already in this language
+        if (window.setLanguage) window.setLanguage(pair[0], { skipConfirm: true });
+      });
+      langRow.appendChild(b);
+    });
+
+    card.appendChild(langRow);
     card.appendChild(title);
     card.appendChild(nameField.wrap);
     card.appendChild(passField.wrap);
@@ -179,7 +210,7 @@
     ui.submitBtn.onclick = async () => {
       const name = ui.nameInput.value.trim();
       const pass = ui.passInput.value;
-      if (!name || !pass) { setHint(ui.hint,'Fill in all fields.','err'); return; }
+      if (!name || !pass) { setHint(ui.hint,(window.t?window.t('auth.fillAllFields','Fill in all fields.'):'Fill in all fields.'),'err'); return; }
       ui.submitBtn.disabled = true;
       ui.submitBtn.textContent = '…';
       try {
@@ -190,16 +221,16 @@
           closeModal();
           emit({name:data.name, token:data.token, cash:data.cash, faction:data.faction||null, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_prime:!!(data.is_prime)});
         } else {
-          const msgs = {invalid_credentials:'Wrong name or password.',missing_fields:'Fill in all fields.'};
-          setHint(ui.hint, msgs[data.error]||data.error||'Login failed.','err');
+          const msgs = {invalid_credentials:(window.t?window.t('auth.wrongCredentials','Wrong name or password.'):'Wrong name or password.'),missing_fields:(window.t?window.t('auth.fillAllFields','Fill in all fields.'):'Fill in all fields.')};
+          setHint(ui.hint, msgs[data.error]||data.error||(window.t?window.t('auth.loginFailed','Login failed.'):'Login failed.'),'err');
           ui.passInput.value = '';
           ui.submitBtn.disabled = false;
-          ui.submitBtn.textContent = 'Log In';
+          ui.submitBtn.textContent = (window.t?window.t('auth.logIn','Log In'):'Log In');
         }
       } catch(e) {
-        setHint(ui.hint,'Server unreachable.','err');
+        setHint(ui.hint,(window.t?window.t('auth.serverUnreachable','Server unreachable.'):'Server unreachable.'),'err');
         ui.submitBtn.disabled = false;
-        ui.submitBtn.textContent = 'Log In';
+        ui.submitBtn.textContent = (window.t?window.t('auth.logIn','Log In'):'Log In');
       }
     };
   }
@@ -228,8 +259,8 @@
     ui.submitBtn.onclick = async () => {
       const name = ui.nameInput.value.trim();
       const pass = ui.passInput.value;
-      if (!name) { setHint(ui.hint,'Name required.','err'); return; }
-      if (!pass || pass.length < 4) { setHint(ui.hint,'Password must be at least 4 characters.','err'); return; }
+      if (!name) { setHint(ui.hint,(window.t?window.t('auth.nameRequired','Name required.'):'Name required.'),'err'); return; }
+      if (!pass || pass.length < 4) { setHint(ui.hint,(window.t?window.t('auth.passwordMin','Password must be at least 4 characters.'):'Password must be at least 4 characters.'),'err'); return; }
       ui.submitBtn.disabled = true;
       ui.submitBtn.textContent = '…';
       try {
@@ -240,13 +271,13 @@
           closeModal();
           emit({name:data.name, token:data.token, cash:data.cash, faction:data.faction||null, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_prime:!!(data.is_prime)});
         } else {
-          const msgs = {name_taken:'That name is taken.',password_too_short:'Password too short (min 4).',name_required:'Name required.'};
-          setHint(ui.hint, msgs[data.error]||data.error||'Registration failed.','err');
+          const msgs = {name_taken:(window.t?window.t('auth.nameTaken','That name is taken.'):'That name is taken.'),password_too_short:(window.t?window.t('auth.passwordTooShort','Password too short (min 4).'):'Password too short (min 4).'),name_required:(window.t?window.t('auth.nameRequired','Name required.'):'Name required.')};
+          setHint(ui.hint, msgs[data.error]||data.error||(window.t?window.t('auth.registrationFailed','Registration failed.'):'Registration failed.'),'err');
           ui.submitBtn.disabled = false;
           ui.submitBtn.textContent = 'Register';
         }
       } catch(e) {
-        setHint(ui.hint,'Server unreachable.','err');
+        setHint(ui.hint,(window.t?window.t('auth.serverUnreachable','Server unreachable.'):'Server unreachable.'),'err');
         ui.submitBtn.disabled = false;
         ui.submitBtn.textContent = 'Register';
       }

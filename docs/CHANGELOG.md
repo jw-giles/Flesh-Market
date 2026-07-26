@@ -4,6 +4,1527 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.2.0 (2026-07-26) - FleshMarket 1.2 (SERVER + CLIENT)
+
+The public release. 1.1.9.13 is what has been running; this is everything since.
+
+Server change. `pm2 restart fleshmarket` required. Every schema change in here is additive, so a rollback to 1.1.9.13 leaves the new columns and tables in place, unread, and needs no down migration. The migration itself was rehearsed against a copy of a real database on the old schema: 275 districts and 25,236 storefronts preserved, every added column present with its defaults, and a forced settlement completing clean.
+
+THE JADE CIRCUIT. A second galaxy, reached through a sealed passage, with its own exchange, its own sixteen worlds, its own lane network and its own shipbuilding. The Circuit trades with itself: no lane crosses the border, Circuit freight flies Changzheng hulls built at Changzheng Yards and nothing else, and the Flesh Station deep scan stops at the passage, so a Circuit manifest cannot be read from this side. It has its own map, its own palette and its own news.
+
+CHINESE. The client speaks it. Not a menu pass: the trading chrome, the order form, the galaxy and colony data, every casino game, the P&L tab, the chat panel, the tax office, the news engine down to the individual generated headline, and the faction and ticker names. Where the server generates prose it now sends structured data and the client builds the sentence, which is the only way a headline written at runtime can be read in two languages.
+
+CITIES. The largest single addition. Nineteen colonies carry a city; a city carries districts; a player buys mayoral office over a district and runs it. Four policy levers drive six simulated conditions. Development and civic works build a skyline that is legible from orbit. Anyone, mayor or not, can lease a storefront or buy out one of the twenty five thousand established businesses, and the mayor taxes what they earn. Seats are contestable, offices default on unpaid debt, and conquest vacates the lot.
+
+AND CITIES ARE NO LONGER A CLOSED SYSTEM. What a city cannot grow, it buys, and that shows up in that colony's own commodity prices. A world that zones its districts for food is where food is cheap; a world that zones for nothing pays for it on its own board; a blockaded world that never zoned pays through the nose. That coupling was simulated across two hundred runs before it was written, because it is a permanent directional pressure on a market that was tuned without it.
+
+WHAT THE LAST WEEK OF IT WAS ACTUALLY SPENT ON. Cities shipped, and then a long pass looking for what a player could turn. The tick paid a fixed hour of income on every restart regardless of elapsed time. NPC business buyouts were priced off live income, two inputs of which the sitting mayor could move and move back inside a second. The websocket had no rate limit of any kind. Every one of those is closed, and the checks that would have caught them exist now.
+
+THE TUTORIAL DESCRIBES THE GAME AGAIN. UNIT-7 was walking new players through a game that had moved on: nothing in it mentioned the Circuit, and nothing in it mentioned cities. Three slides added, in both languages. The Jade Circuit, what it is and why a Coalition hull is never seen there. Cities, which you can earn from without ever holding office, by leasing a storefront or buying out one of the businesses already trading. Holding office, the levers, the development, the rate you set and the bill you pay. And a fourth on what it costs to govern badly, because a seat priced on legitimacy is the part a new mayor most needs to know before they buy one. The commodity slide now says that a colony with a city on it presses on its own prices, and the closing slide names both galaxies.
+
+The tutorial keeps its content in two arrays matched by index, and the renderer falls back to English per field when a Chinese entry is missing. That is a kind failure mode and a useless warning system: a slide added to one array and not the other does not throw, it shifts every slide after it so headings and bodies belong to different topics. tools/tutorial-check.mjs, new, 19 checks. Both arrays the same length, every Chinese heading, body and callout actually in Chinese, known slides anchored at matching indices in both, every tab and galaxy sub-tab the tutorial drives present in the markup, the content covering what this release shipped, and no em dashes. Verified by deleting a Chinese slide and confirming it fails three ways.
+
+The development series below, 1.2.0.0 through 1.6.3.0, is the full record of how this was built, including the parts that were wrong on the way. Those version numbers were never public and never will be. They are kept as written because two hundred and twenty four references between those entries depend on them, and renumbering would quietly break every one.
+
+---
+
+# ── Development series for 1.2.0 ─────────────────────────────────────────────
+# Internal builds. None of these shipped. Read downward for how 1.2.0 was made,
+# or skip to v1.1.9.13 for the last thing that was actually live.
+
+## v1.6.3.0 (2026-07-26) - Corruption, stores, and firms that fold (SERVER)
+
+Server change. `pm2 restart fleshmarket` required. Three additive columns, no data migration.
+
+CORRUPTION COSTS MONEY. It was in exactly the position legitimacy was in before 1.6.2.0: simulated every tick, shown to the player, and read by nothing except its own feed into crime and output. It now skims the civic bill. A clean district pays what its services cost; a rotten one pays up to 45% more for the same services. Graft below 20 is ordinary friction and free, so there is no cliff to fall off. The panel breaks the bill into what the services cost and what is being taken, because a number that goes up for invisible reasons is just a bug with extra steps. lv_politics is now a spending decision rather than a slider feeding a scalar nobody could act on.
+
+SIEGE STORES. A blockade used to leave a mayor with nothing to do but rezone, which is a decision measured in weeks against a siege measured in days. Cover can now be bought ahead of the lane closing. It counts as local supply while it lasts, it spoils at 14% a week whether or not it is needed, and a world that is not short only pays the spoilage, which is what makes laying it in early cost something.
+
+FIRMS FOLD AND FIRMS OPEN. Twenty five thousand businesses that never failed and never started were scenery. Churn is small on purpose, half a firm a week out of forty in a calm district and two and a half where unrest and crime are at 95. It exists so a district run into the ground visibly loses its trade and so the buyout market is not the same rows forever. The oldest go first, nothing below four firms is touched, and no single settlement can take more than a quarter of a district however bad it gets.
+
+THE MIGRATION HAS NOW ACTUALLY BEEN RUN. Everything since 1.6.1.0 has added columns and tables to the city schema and none of it had ever been executed against a database that predates it. Building one on the 1.6.0.1 schema, playing mayors and arrears and player shops into it, and then booting this build against it: 275 districts and 25,236 storefronts preserved, all five added columns present with their defaults, all three new tables created, the charter computed and written for the first time, and a forced three hour settlement completing without error. Eight simulated days of settlement left the shop table oscillating in a twenty row band rather than drifting, which is the churn reaching equilibrium against the refounding rather than draining the largest table in the database.
+
+COST ON REAL DATA, since this adds work to two hot paths. The commodity coupling is 13ms per five minute tick across 35 colonies. A full city tick, every district stepped plus churn plus stores, is 413ms hourly. Resolving every storefront in every city, which is the worst thing a client can ask for, is 319ms for 42,000 rows, and the rate limiter caps a single socket at three of those a second.
+
+TWO THINGS THE CHECKS CAUGHT THAT I HAD WRONG. Stores were added to local supply as a raw quantity, but demand and local are RATES, so six weeks of cover read as six weeks of production every week and flipped a besieged world from maximum scarcity straight to maximum surplus. Cover now fills the gap it exists to fill and stops. And the panel reported cover in colony weeks while purchases were sized in a district's share of them, which would have claimed eighty four weeks of cover for what was really six.
+
+The churn check also failed first time and was wrong rather than the code: it drained a district without refounding, so the WORSE district hit the four firm floor sooner and appeared to lose less trade. It refounds between weeks now, exactly as the tick does.
+
+CHECKS. tools/city-check.mjs 64 to 84.
+
+Changed files: server/server.js, server/city.js, server/db_city.js, server/ratelimit.js, client/assets/city.js, client/assets/core.js, client/version.json, tools/city-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.6.2.4 (2026-07-26) - The district record speaks Chinese (CLIENT)
+
+Client, plus one additive column. No data migration.
+
+1.6.2.1 and 1.6.2.3 both fixed the same shape of fault: strings built in JS that were never wired to the language layer. The district record shipped in 1.6.2.0 is another one, and a worse one, because it does not just render English, it WRITES English into the database. Every seat taken, every development, every petition went into city_history as a finished sentence and came back out through `esc(String(r.detail))`. In CN the whole record read in English, and because the prose is persisted rather than generated at render time, no later translation pass could ever reach it.
+
+Rows now carry structured parameters alongside the sentence. The client builds the line through tf() from a template keyed on the event kind, and falls back to the stored English when there are no parameters, which is what keeps the rows already written in the live database readable instead of blank. Seven templates, en and zh.
+
+The charter headline had the same problem in the other direction. Every other event headline in server.js passes a meta object so the news layer can re-render it in Chinese, fifty two of them, and the one added in 1.6.2.0 passed none. It does now, and the client news switch learned the two charter cases.
+
+AND A TERMINOLOGY COLLISION, MINE. 1.6.2.0 introduced a colony level charter while the district seat history line already said "takes the charter of". A district has a seat. A colony has a charter. The history line said charter for both, which made the new colony office unreadable the moment it shipped. The seat line now says seat.
+
+NEW CHECK. tools/city-check.mjs 57 to 64. It parses every kind the server can write out of the pushCityHistory call sites, including the ones chosen by a ternary, and asserts each has an i18n key, an English fallback in the renderer, a zh that is not just the English copied across, and the same token set on both sides so a template cannot render a sentence with a hole in it. Then it checks a paramless row still carries its English and a new row round-trips its parameters. Verified by deleting city.hist.works and confirming it fails, before being accepted.
+
+That check is the point of this release more than the seven templates are. Six kinds shipped untranslatable and nothing caught it; a seventh would have done the same.
+
+Changed files: server/server.js, server/db_city.js, client/assets/city.js, client/assets/core.js, client/version.json, tools/city-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.6.2.3 (2026-07-26) - The FRS panel speaks Chinese (CLIENT)
+
+Client only. No server restart.
+
+THE TAX PANEL WAS NEVER WIRED TO THE LANGUAGE LAYER AT ALL. Same shape as the transit log in 1.6.2.1: `tax-panel.js` builds its entire body as a template string in JS, so there was no `data-i18n` surface for `applyI18n` to reach and nothing in the modal had ever been translated. In CN a player opened it and read an English tax bill. 24 new `tax.*` keys, every player-visible string in the file now routed through a local `T(key, fallback)` shim over `window.t`.
+
+THE ASSESSMENT DATE WAS ALSO ENGLISH, and less obviously so, because it was not a literal: `fmtPT` hardcodes `toLocaleString('en-US', ...)`, so "Sun, Jul 26, 12:00 PM PT" was generated rather than written and would have survived a string sweep. Now `zh-CN` when the language is CN, with the timezone suffix as its own key. The timezone itself stays America/Los_Angeles, because the assessment really does run at noon Pacific and localising the clock would be a lie.
+
+"CAPITAL HOUSE" IS TRANSLATED TWO WAYS IN THIS CODEBASE, four uses each. `tab.guild` and `sec.capitalHouses` say one thing; `fnd.capitalHouse`, `fnd.patreonPerk` and `mt.capitalHouseNav` say another. The withdrawal-tax line uses the finance-side term, because that is the surface it belongs to and because the other term is already carrying the city storefront and Jade House senses elsewhere. This is a tie that wants an author's decision, not a majority vote, so nothing else was touched.
+
+The price-alert button read as a bare "settings" next to a bell. Now names what it sets. EN unchanged.
+
+---
+
+## v1.6.2.2 (2026-07-26) - Hotfix: the manifest modal stopped opening (CLIENT)
+
+Client only. No server restart. This fixes a regression shipped in 1.6.2.1.
+
+WHAT BROKE. Clicking any Coalition NPC ship logged `ReferenceError: comZ is not defined` and opened nothing. 1.6.2.1 routed the real NPC cargo lines through `comZ`, the commodity name resolver already used elsewhere in galaxy.js. `comZ` is declared at galaxy.js:1620, inside the FIRST of that file's three sibling IIFEs. The ship manifest panel lives in the THIRD. A bare identifier in one is invisible in the others, so the reference threw, the throw landed in `openShipManifest`'s own try/catch, and the modal never reached `classList.add('open')`. Non-NPC ships took the other branch and were unaffected, which is why it looked like only some ships were dead.
+
+THIS FILE HAS FALLEN INTO THIS EXACT TRAP BEFORE. The comment at galaxy.js:2209 documents it for `FLEET_HULLS` and is the reason `window._fmFleet` exists at all: "The manifest panel lives in a different IIFE in this file and cannot see any of the above." That comment was in the search output when 1.6.2.1 was written and was not acted on. A brace-depth count was used instead, which reported both sites at depth 1 because each IIFE body IS depth 1. Wrong tool, confident answer.
+
+THE FIX. New `window.commodityNameZh(n)` in core.js, beside the other cross-scope resolvers (`tickerNameZh`, `hullNameZh`, `colonyNameZh`), and the manifest calls that. The local `comZ` in the first IIFE is untouched and its four existing call sites still work; deduplicating them is a separate change and this one keeps its blast radius at one line.
+
+NEW CHECK, tools/scopecheck.py. Diffs galaxy.js against the previous release, finds the top-level IIFE ranges, and for every changed line resolves each called identifier against the declarations of its OWN IIFE plus globals. It was verified to fail on the exact regression above before being accepted, then run clean on all 27 changed lines across the 3 IIFEs. `node --check` cannot see this class of bug and neither can a data-coverage test, which is what 1.6.2.1 shipped with.
+
+---
+
+## v1.6.2.1 (2026-07-26) - The parts of Jade mode that were still English (CLIENT)
+
+Client only. No server restart. Three reported gaps, one unreported one found while reading the code for them.
+
+CIRCUIT TICKERS RENDERED IN ENGLISH IN TWO PANELS. Coalition company names live in `CO_NAME_ZH`, Circuit company names live in `JADE_I18N.ticker`, and the two key spaces are disjoint. `cycle-history.js` and `market-tools.js` only ever checked the first map, so `Wukong Deepscan` and its nineteen siblings fell straight through to English while every Coalition name beside them translated. The main ticker list did it correctly by branching on `t.jade`, and `newsZhText` did it correctly by checking both maps, which is three call sites and two different right answers. Replaced with one resolver, `window.tickerNameZh(name)`, that strips the trailing spawn digit and checks both maps in turn. All four call sites now use it. The next panel that renders a company name cannot reintroduce this.
+
+THE TAXES BUTTON HAD NO `data-i18n` ATTRIBUTE AT ALL. Every other header button has one. Added `hdr.taxes`, and with it `data-i18n-title` support in `applyI18n` plus `hdr.taxesTitle`, because the tooltip was English for the same reason and would have been reported next.
+
+THE INTERCEPTED TRANSIT LOG WAS NEVER WIRED TO i18n. Not partially: the modal was built before the language layer existed and nothing in it was ever connected. Now translated end to end. Static labels (close, Route, Cargo Manifest) carry `data-i18n` and the modal runs through `applyI18n` once on injection. The header, crew line and redacted line item go through `tf()` with `{id}` and `{n}` interpolation. Route endpoints resolve through `colonyNameZh`, which meant threading `fromId`/`toId` through `generateManifest` rather than translating the display strings back into ids. Real NPC cargo goes through the existing `comZ` commodity map. Hull name and hull class resolve through two new maps covering all 21 fleet hulls plus the three `SHIP_CLASS` fallbacks, so `Titan's Fist / Class-3 Pocket Carrier` reads as a ship and not as a leak. The Circuit deep-scan refusal toast names the hull it refused, so that name localizes now too.
+
+188 CARGO MANIFEST LINES TRANSLATED. The flavour pool is keyed per colony and the lines carry `{N}`/`{M}` tokens, so the lookup happens on the raw template inside `pickCargo`, before substitution, and the numbers fill into the translated string. Embedded company names are pinned to their existing `CO_NAME_ZH` values rather than retranslated, so a manifest cannot contradict the ticker list. This is first-pass CN prose, same status as the colony lore block: terms are checked, voice wants a native read.
+
+COLONY_ZH AND COLONY_NAME_ZH DISAGREED ON 13 OF 21 COLONIES. Not reported, found while reading. The galaxy renderer resolves colony names through `COLONY_ZH[id].name` and the news feed resolves them through `COLONY_NAME_ZH[id]`, and the two carried different Chinese for The Hollow, Null Point, Limbosis, Margin Call and nine others. In ZH a player read one name on the map and a different name for the same place in the ticker, every session. `COLONY_NAME_ZH` is the better prose and is now the single source; `COLONY_ZH` was realigned to it by reading the canonical map at build time rather than by transcription, so the two cannot drift apart through a typo again.
+
+One em dash was reaching the DOM: the market-card symbol placeholder fell back to U+2014 when a symbol was missing. Now `--`, matching the EOD timer. The other 24 in `core.js` are in code comments.
+
+Coverage is checked rather than asserted: 188/188 cargo templates, 23/23 hull names, 21/21 hull classes, 21/21 colony names in agreement, and EN mode verified as a pass-through on every new resolver.
+
+STILL OPEN: `window.FACTION_ZH.jade.desc` is still placeholder CN awaiting a hand-written faction description. Coalition is translated two ways across the codebase, 39 uses of the first form and 18 of the second; new strings in this release use the majority form but the stragglers need a decision before a blind replace.
+
+---
+
+## v1.6.2.0 (2026-07-25) - Cities join the rest of the game (SERVER)
+
+Server change. `pm2 restart fleshmarket` required. Two new tables, both additive.
+
+The last pass hardened cities against being turned. This one is about the thing that was actually wrong with them: a trader could play the entire game without cities existing, and a mayor governed an economy nobody else could see.
+
+THE CITY LAYER AND THE COMMODITY GRID HAVE NEVER TOUCHED. server/city.js imports nothing from the market. It invented its own food, med and tech supply against its own demand and stopped there, while the commodity grid priced 120 goods per colony a few hundred lines away. Those 120 goods are 40 agri, 40 med and 40 tech. City trades are food, med, tech and export. That is a one to one mapping sitting unused, with export left over as exactly what export should be: goods moving through rather than eaten.
+
+Unmet civic demand now presses on the colony's own commodity prices. A world that zones districts for food is where agri is cheap. A world that zones for nothing buys its food in and pays for it on its own board. A blockade multiplies whatever is already unmet, so a self sufficient world shrugs a siege off and an import dependent one does not, which is the whole reason zoning is a decision rather than a preference. A besieged surplus world cannot ship the surplus out either, so it gluts and softens, which is correct and was not designed, it fell out.
+
+THIS WAS SIMULATED BEFORE IT WAS WRITTEN, because it is a persistent directional pressure on a model that was tuned without it. tools/city-commodity-sim.mjs, 200 runs of two weeks of five minute ticks. The model cannot run away, supplyMod clamps at +/-0.4 and price at half to 1.8x target, so the real risk was never instability, it was flattening: every colony pinned to the clamp, no spread, no trade. At a draw of 0.020 three of six test colonies sat on the clamp 98% of the time. At 0.008 nothing clamps in peacetime, the cheapest to dearest spread across colonies is 47%, and a siege still reaches the clamp, which is the one time the map is supposed to go extreme. Shipped at 0.008.
+
+Six of fourteen districts on a capital have to zone for a trade before that world feeds itself. That number is generated by the checks rather than asserted here.
+
+LEGITIMACY PRICES THE SEAT. It was simulated, displayed, and read by nothing except its own contribution to unrest. Governing badly already cost occupancy through tax flight, which is slow and private. Now it is public: a district that has turned on its mayor is cheap to take, 0.4x base at the floor and 1.6x at the ceiling. Applied to the baseline term only, never to the invested passthrough, because that passthrough is the property that stops seat trading printing money and the checks assert compensation can never exceed what was spent at any legitimacy.
+
+AND TENANTS CAN PUSH IT DOWN. An established shopholder may file a petition against the sitting mayor. Three guards against the obvious abuse, which is to lease in, petition, and buy the seat you just devalued: the frontage has to predate the filing by half a ramp so it cannot be bought for the purpose, one filing per player per district per day, and the hit is weighted by how much of the district's trade is actually yours. The effect is deliberately not permanent. Every scalar relaxes 35% of the way to its target each week, so one filing washes out and only sustained discontent moves a district. One angry afternoon does not.
+
+REAL TRADERS BRING REAL TRADE. A player storefront and one of the twenty five thousand established firms counted identically toward how busy a district read, so nothing improved when real people moved in and a mayor had no reason to court anybody. A district's commercial pool now grows with the number of DISTINCT players trading in it, saturating at +35%. Distinct, not shop count, or one player leasing twenty units collects the whole bonus and the incentive inverts into the monopoly it exists to discourage. Four separate traders are worth measurably more than one holding four units.
+
+THE CHARTER IS WRITTEN FOR THE FIRST TIME. charter_owner has been in the schema since cities shipped and was read in exactly one place, the conquest path, where a city held by one of the capturing faction's own is spared. Nothing ever wrote it, so it was always null, so that branch has never once been able to fire and every capture has always seized everything. It now belongs to whoever has the most capital standing on the world, recomputed every tick, with the previous holder recorded and a headline when it changes hands.
+
+AND THE COLONY REMEMBERS. Districts had no memory at all. city_history logs seats taken and lost, development, works, petitions and charter changes, trimmed per district so a busy capital cannot bury a quiet frontier one, and the panel shows it.
+
+CHECKS. tools/city-check.mjs 29 to 57, still driving the real persistence layer in memory with nothing mocked that is under test. Three of the new ones failed on the first run and all three were worth having: two caught a fixture that seeded two districts on a colony whose population implies fourteen, which made every per district supply figure wrong by seven times, and the third was measuring pool growth from adding shops and calling it the player bonus. The saturation check now holds shop count fixed and only reassigns owners.
+
+Changed files: server/server.js, server/city.js, server/db_city.js, server/ratelimit.js, client/assets/city.js, client/assets/core.js, client/version.json, tools/city-check.mjs, tools/city-commodity-sim.mjs (new), docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.6.1.0 (2026-07-25) - City audit (SERVER)
+
+Server change. `pm2 restart fleshmarket` required. Two additive columns, no data migration.
+
+A pass over the whole city system looking for anything a player could turn. Three things were real.
+
+THE TICK PAID BY THE CLOCK ON THE WALL, NOT THE ONE THAT PASSED. dtWeeks was CITY_TICK_MS / WEEK_MS, a constant, and runCityTick() also ran unconditionally at module load. So every deploy credited a full hour of tenant net and mayoral take to every player in the galaxy regardless of when the last tick actually ran, and a six hour outage credited one hour. Five restarts in an afternoon was five free hours. Nothing else in the file works this way; cargo shipments and contracts have stepped off real timestamps since they shipped.
+
+Elapsed time now comes off a persisted clock in city_kv. A restart moments after a tick settles nothing at all. An outage settles what it owes, bounded per tick and carried forward, so a long one catches up over the next few ticks rather than dumping the backlog into one payout. A clock in the future, which is what a restored older database or a system time change looks like, resyncs and pays nothing, because a tick that cannot measure its own elapsed time must not guess.
+
+A MAYOR COULD MARK DOWN THEIR OWN BUYOUTS. NPC businesses were priced at a lease plus twenty weeks of live net income, and live net income has two inputs the sitting mayor moves in one message each: the commerce rate, a band from 5% to 25%, and the favoured trade, worth +35% to the trade named and -12% to everything else. Drop both, buy the business, put them back. Measured against the real pricing code: 25% off an ordinary storefront and 44.4% off one in the favoured trade, free, instant, reversible, and available only to the player who could also read the books.
+
+A going concern is now quoted off a NEUTRAL resolution, default rate and no zoning, so the price is what the business earns under ordinary governance. The panel and the handler both quote it the same way, or the button would lie about what it is about to charge. The rate and the zoning also got an hour's cooldown each, not because the pricing still reads them but because a lever that moves every tenant's income should not be movable twice in a second for any reason.
+
+THE WEBSOCKET HAD NO RATE LIMIT. None, of any kind, on any message type. Most handlers are cheap enough that it never showed, but city_data_request resolves every storefront in every district of a colony through an eight pass spill loop and this database is carrying twenty five thousand established businesses. One socket in a loop was a real CPU sink and nothing stopped it. Two token buckets per connection now: a wide one for ordinary traffic and a much tighter one for the handlers that walk the shop tables or rebuild a snapshot. Keepalives are exempt. A connection that outruns its budget loses the frame and not the socket, because a client that trips this is bursting rather than attacking, and it is told once every few seconds rather than flooded.
+
+Three smaller things, each a decision rather than a fault.
+
+ARREARS. The civic bill can only reach cash, so a mayor holding wealth in stocks or a fund paid nothing on a shortfall and coasted to the four week lapse, which wrote the debt off. They still can. They cannot also buy seats, develop, commission works or take frontage while doing it. Settle the district or lose it.
+
+CONTESTED WORLDS. cityFullData has reported a contested flag since cities shipped and nothing ever enforced it, so charters changed hands freely on a world with a live conquest timer. Commerce carries on under fire; the charter does not.
+
+OCCUPATION. Leasing and buying were closed during an occupation and renaming and closing were not, so a storefront could be shut down in a city that was supposedly trading with nobody. Consistent now.
+
+And one latent hazard closed on the way past: updateDistrict built its SET clause by concatenating the keys of whatever object it was handed. No call site passes an untrusted key, which is the kind of thing that stays true right up until it does not. It takes a column allowlist.
+
+CHECKS. tools/city-check.mjs, new, 29 checks. It boots the real persistence layer against an in-memory database and drives the real economy functions, no mocks of anything under test. It asserts a restart settles nothing, that half an hour settles half an hour, that a long outage caps and carries and that walking the carry forward converges exactly on the elapsed time without overshooting; that manipulating the rate and the zoning moves live income and does not move the quote by a single credit, and it measures what the old pricing would have allowed so the number in this entry is generated rather than asserted; that settlement scales linearly with the slice it is given; that the buckets cap, refill, spend across both tiers and never touch a keepalive; and that updateDistrict drops a key it does not recognise instead of concatenating it into the SET.
+
+Verified on a real boot: first start initialises the clock and pays nothing, an immediate restart settles nothing, and a database backdated three hours settles three hours and advances the clock by exactly that.
+
+Changed files: server/server.js, server/city.js, server/db_city.js, server/ratelimit.js (new), client/assets/city.js, client/assets/core.js, client/version.json, tools/city-check.mjs (new), docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.6.0.5 (2026-07-25) - The deep-scan stops at the border (CLIENT)
+
+Client only. Hard refresh.
+
+Flesh Station cannot read Circuit freight. Clicking any hull flying a Circuit lane now returns a refusal instead of a transit log: Circuit registry, nothing filed outside the passage. The manifest still exists, the cargo is still real, the prices still move at both ends of the run. The station simply has no copy of it on this side.
+
+Jurisdiction, not stealth. The Circuit files with the Circuit. That reads as a border rather than as a trick, which is the difference between the player learning a rule and the player learning a list.
+
+KEYED OFF THE LANE, NOT THE HULL. Anything in Circuit space refuses, including a scoundrel that wandered in. Nothing in Coalition space refuses on account of what it looks like. Same rule as the sector tag from 1.6.0.4, and for the same reason: a player should learn one border, not nine silhouettes.
+
+THIS REVERSES SOMETHING I ARGUED FOR. In 1.6.0.2 I said Circuit hulls should open the transit log like anything else, on the grounds that two identical looking ships must not behave differently on click. That objection does not survive contact with this rule and it cost me nothing to drop, because the rule is not per hull. Changzheng hulls only ever fly Circuit lanes, so no two identical silhouettes diverge; what diverges is which side of the passage you are looking at. The concern was real and this design does not trip it.
+
+Text goes through tf() with {id} and {cls} tokens, English and Chinese, new key galx.scanCircuit. The refusal names the vessel and the class, so a click still tells you what you are looking at, just not what it carries.
+
+NOT GATED ON WORMHOLE_OPEN, deliberately, because that was not asked for. If the passage opening is supposed to hand the station scan rights along with everything else it unseals, that is one condition on the branch and worth a decision rather than an assumption.
+
+CHECKS. tools/fleet-check.mjs 52 to 55, and one existing check inverted: the Circuit end to end block asserted that clicking a Circuit freighter opens the log, which is now exactly the wrong behaviour. It now asserts the click is refused, that the refusal names the Circuit rather than an unregistered hull, that it names the hull actually being drawn, and that the panel stays shut. The harness also got a real tf() that interpolates rather than a passthrough that returns the raw fallback, because the passthrough would have let a string ship with {id} and {cls} still in it and passed every check that only greps for a keyword. It caught exactly that on the first run.
+
+Changed files: client/assets/galaxy.js, client/assets/core.js, client/version.json, tools/fleet-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.6.0.4 (2026-07-25) - One ship layer, two sectors (CLIENT)
+
+Client only. Hard refresh.
+
+The map draws both sectors into the SAME coordinate space and swaps between them. Yujing is at (500,300); so is a patch of Coalition space. Every ship in the game, both sectors' worth, is rendered into one gShips layer. swapGalaxy handled that with a single line: hide the whole layer whenever the Circuit is on screen.
+
+That line was correct for exactly as long as no ship on the map belonged to the Circuit. The moment Circuit freight existed it did both halves of the wrong thing at once. In Circuit view it hid every hull, including the Circuit's own, which is why the Circuit looked like it had no traffic even after 1.6.0.3 put freighters on those lanes. In Coalition view it showed everything, including Circuit freighters, whose coordinates land squarely on top of Coalition space. Same line, both complaints.
+
+Hulls now carry the sector they fly in and only the active sector's traffic is displayed. The layer itself is never hidden.
+
+WHAT I HAD WRONG. I said the shipped code could not be doing this and offered 1,200 clean spawns as proof. The spawns were clean. They were also beside the point: the pool logic picks the right hull and always did, and the fault was never in hull selection. I tested the thing I had changed and read the absence of a fault there as the absence of a fault, which is how a whole subsystem stays unexamined. What the console dump settled was not which build was live, it was that the build was live and the ships existed, which is the fact that pointed at rendering.
+
+CHECKS. tools/fleet-check.mjs 43 to 52. Every hull carries a data-gx tag; the tag is derived from the LANE and not from the hull art, so a Coalition hull on a Circuit lane would still be filed under the Circuit; the ship layer is never hidden wholesale in either view; each view shows some traffic; and each view shows nothing from the other sector. window._fmGalaxyView is exported so a harness can swap sectors without clicking the portal.
+
+Changed files: client/assets/galaxy.js, client/version.json, tools/fleet-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.6.0.3 (2026-07-25) - The Circuit had no lanes (SERVER)
+
+Server change. `pm2 restart fleshmarket` required. No migration.
+
+1.6.0.2 painted the Circuit correctly and it changed nothing, because there was no Circuit freight to paint. The 26 Jade Circuit lanes exist in the client LANES array, where they were added in 1.5.0.0, and were never copied into LANES_SERVER. Everything on the server that moves cargo walks LANES_SERVER: npcPickLane, findLane, the findRoute BFS, the shipping contract board, the blockade hooks. With no Circuit edges in that table, the Circuit had sixteen colonies with real colony state, real commodity markets that have been ticking prices for two minor versions, a full city layer, and no way to move a single unit of anything into or out of any of it.
+
+Nothing threw. There was no error to find. npcSpawn simply never drew a Circuit lane because none was in the weighted list; smuggling_start answered "No lane exists" for any Circuit endpoint, which reads like a rule rather than a bug; findRoute could not reach a Circuit world from anywhere, including from another Circuit world; and the contract board never wrote a contract against a Circuit spread because it looks lanes up the same way. Sixteen markets sat there pricing goods nobody could ever carry.
+
+The 26 lanes are copied in verbatim. Verified against the client table: 26 added, 0 lanes on the server side the client does not have, 0 vol or type drift on the 37 that were already shared. Circuit lanes now take 42.5% of npcPickLane's spawn weight, which is what the client geometry always implied and the server never delivered.
+
+WHAT THIS TURNS ON, ALL AT ONCE. NPC freighters fly Circuit lanes under Changzheng hulls with real manifests and real price impact at both ends. Players can run cargo to and from Circuit worlds and be intercepted doing it. Multi-hop routing can path across the Circuit. The contract board can write against Circuit spreads. That is four systems switching on together on a sixteen colony region whose prices have been drifting untouched since 1.5.0.0, so the first hours will be volatile while NPC flow drags them toward equilibrium. Nothing is retroactive and nothing needs a migration; it is just that the arbitrage that has been sitting there is now reachable.
+
+A CORRECTION TO 1.6.0.2. That entry claims 42.5% of server freighter traffic flies Circuit lanes. It did not. It flew none. The figure was computed off the CLIENT lane array and stated as a fact about server behaviour, which is exactly the kind of claim that is supposed to come from the thing being described and not from something that resembles it. The number is right for the table it was measured on and was never true of the server. 1.6.0.2's routing claim of "zero server change" is likewise wrong: the change it described could not work without this one.
+
+tools/lane-check.mjs, new, 13 checks, no dependencies. It parses both lane tables out of the two source files and asserts they are the same table: every client lane exists server side, no server-only lanes, vol and type agree on every shared lane, no lane duplicates itself under either direction. Then it asserts what the drift actually broke: every lane endpoint has a colony row, no Circuit world sits in NO_MARKET_COLONIES (which would kill freight on every lane it touches without erroring), every Circuit world is reachable from Yujing over server lanes, no lane crosses the Circuit border, the Circuit is still its own graph component, and Circuit lanes can win an NPC spawn roll at all. Removing the 26 lanes again fails it three ways.
+
+Changed files: server/server.js, client/version.json, tools/lane-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.6.0.2 (2026-07-25) - The Circuit flies its own hulls (CLIENT)
+
+Client only. Hard refresh.
+
+THE CIRCUIT WAS BEING FLOWN BY COALITION FREIGHTERS. Not routed wrong, painted wrong. There is not, and never was, a single lane with a Circuit world at one end and a Coalition world at the other: 63 lanes, 26 with Circuit worlds at both ends, 37 with none, 0 mixed. The lane graph has always been two separate components. What was actually happening is that 42.5% of server freighter traffic flies Circuit lanes and every one of those ships was drawn out of MERCHANT_POOL, which has no idea factions exist. A Coalition hull over Yujing was a paint job, not a border violation.
+
+THE NINE VERBATTAN DESIGNS ARE NOW THE CHANGZHENG FAMILY. They are built at Changzheng Yards, they are numbered on the yard's marks rather than named per design, and they are freighters. CZ-1 Sanban, CZ-2 Shachuan, CZ-3 Fuchuan, CZ-4 Guangchuan, CZ-5 Caochuan, CZ-6 Xingcha, CZ-7 Louchuan, CZ-8 Changfeng, CZ-9 Baochuan. A Circuit lane draws from these and nothing else; a Coalition lane draws from the old pool and nothing else.
+
+AND THEY TRADE. They are server fleet ships now, not decoration. They carry real manifests, they move real prices at both ends of the run, they can be intercepted, and clicking one opens the transit log the same as clicking anything else. The server contract did not change at all: it still only knows v1, v2 and v3, and the Circuit pool is split into the same three buckets by hull size.
+
+WHAT THIS COSTS. The Circuit no longer has a navy. The ambient patrol is gone, and with it the rare stray sighting over Coalition space and the deep-scan refusal that named the fleet hull. Ambient traffic is scoundrels and only scoundrels. If the Circuit is supposed to keep warships, that is a separate hull set and separate art; it cannot be the same nine designs doing both jobs, because then two identical silhouettes behave differently on click and the player has no way to tell which is which before they try.
+
+A VENTRAL PLUME NOBODY ORDERED. Every Class-3 hauler was drawing a second engine flame that had nothing to do with its hull. The v3 variant def carries thrustBot geometry tuned for the old 36x18 sprite, an 18x14 flame pinned at local (9,14), and defWithHull overwrote the main plume's numbers but never touched those. Fixed values against variable hulls: on the 40x14 Heavy Transport it hung fourteen pixels below the belly, and on the 38x9 Pocket Carrier it started five pixels below the hull entirely and floated there, unattached, under mid ship. Dropped rather than repositioned. There is nothing on the new art for it to come out of.
+
+PLUME LENGTH WAS THE SAME MISTAKE IN THE OTHER DIRECTION. 1.6.0.1 moved plume scaling from hull width to hull height, which put it in the right place and the wrong size. Height alone means a short fat hull gets an enormous flame: the 26x17 Survey Trader wore a plume 54% of its own length and the Scoundrel Corvette wore one at 65%, while the 46x9 Carrier sat at 17%. It is bounded off both dimensions now and the whole fleet lands between 17% and 36%.
+
+A YELLOW SQUARE ON THE POCKET CARRIER. Baked into titans_fist_detail.png, not a render bug: 36 pixels of #DCBE0A forming a dashed 18x18 outline around a raised pod. It is deliberate in the source pack, it traces a real seam in the art, and it is the only sprite in forty that has one. It read as a selection marquee, and gold is the dev and Patreon tone. Cleared to transparent so the pod is outlined by the same seam as its sides. No invented pixels. The map sprite never had it; at nine pixels tall the box is sub-pixel, which is why it only ever showed in the inspection panel.
+
+A HOOK FOR THE NEXT ONE. Every sprite is rotated the same -90 at build time, so if a pack ever ships a hull nose down there is no code fix, only a re-cut. FLEET_HULLS entries now honour a flip flag and the whole group is mirrored, plume included, so a wrong-way hull is a one word change instead of an art job.
+
+CHECKS. tools/fleet-check.mjs 31 to 43. The ones that matter: a Circuit lane must draw only Changzheng hulls and a Coalition lane must draw none, asserted per variant; a Circuit freighter must render from Circuit art, open the transit log rather than refuse, and carry real cargo; nothing may render outside the hull band, which is the assertion that would have caught the ventral plume; and no hull may wear a plume over 40% of its own length. Sprite lookups resolve through the registry's f field now that the class name and the filename have diverged.
+
+Not changed: ship.sh. The divergence guard added after the merge -s ours incident already fetches, classifies and hard-stops before committing, which is stronger than the plain pull that was on the list, and a plain pull would abort anyway because apply.sh leaves the tree dirty by design.
+
+Changed files: client/assets/galaxy.js, client/assets/core.js, client/assets/space/ships/fleet/titans_fist_detail.png, client/version.json, tools/fleet-check.mjs, tools/build-fleet-sprites.py, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.6.0.1 (2026-07-24) - Plumes, clicks, and a toast that never fired (CLIENT)
+
+Client only. Hard refresh.
+
+THE PLUME WAS PLACED OFF THE WRONG DIMENSION. positionShip puts the thrust sprite at an absolute local x, not an offset from the ship's centre, because the group origin is the hull's top left corner and the stern is therefore x=0. The new hull code scaled that offset off hull WIDTH, so a 42 wide hauler put an 8 wide plume at x=-17.6 and it burned four pixels behind the ship in open space. The wider the hull, the further it drifted, which is why it looked fine on the small ones and wrong on everything else. The plume now ends at the stern with a pixel of overlap, and its size scales off hull height instead of sitting at a fixed 8 by 8, which was taller than several of the Verbattan hulls.
+
+CLICKING A SHIP DID NOTHING because galaxy.js is three separate IIFEs and the hull registry is in a different one from the manifest panel. Every reference to it from the panel threw a ReferenceError directly into openShipManifest's try/catch, which logged to console and swallowed it. The registry is now exported through window like the other cross scope handles in that file already are.
+
+ONLY MERCHANTS OPEN THE TRANSIT LOG. Verbattan and scoundrel hulls now refuse the scan instead: a short line saying the deep-scan was refused, naming the hull, and why. No panel, no zoom. This replaces the personnel roster from 1.6.0.0.
+
+AND A THIRD ONE FOUND ON THE WAY. gToast is declared inside this file's first IIFE and was never exported, so nothing outside it could see the identifier. city.js probes `typeof gToast === 'function'` before calling it, which has always evaluated false from a separate file, which means every city notification since City Charters shipped has been silently discarded: seat acquired, storefront opened, policy applied, all of it. Nothing threw, nothing logged, the toast simply never appeared. Exported and routed through the exported handle.
+
+CHECKS. tools/fleet-check.mjs grew from 20 to 31. It now asserts the plume reaches the stern rather than trailing behind it, sits vertically centred, and is scaled to the hull; that clicking a merchant opens the log and names the hull actually being drawn and lists its real cargo; and that Verbattan and scoundrel clicks produce a refusal and leave the panel closed. Two small test entry points are exported from galaxy.js so a harness can build one ship and step it without starting the animation loop.
+
+The refusal text interpolates through tf() with named tokens rather than string concatenation, so it translates; both lines have Chinese.
+
+Changed files: client/assets/galaxy.js, client/assets/city.js, client/assets/core.js, client/version.json, tools/fleet-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.6.0.0 (2026-07-24) - New fleet art, scoundrels, and the Verbattan Defense Fleet (CLIENT)
+
+Client only. Hard refresh. No server restart, no migration, and no change to the server fleet contract.
+
+THE YELLOW HAULERS ARE GONE. Nine merchant hulls replace them: Star Traveller, Aureole, Astral Pioneer, Phoebe, Nomad, Canyonback, Cicada, Titan's Burden and Titan's Fist. The server still only knows the three variants it always knew, v1, v2 and v3, and still decides the fleet. Each variant now paints from a pool of three hulls, chosen from the NPC id so a ship keeps the same silhouette across the eight second fleet reconcile instead of changing shape while you watch it. The inspection panel names the hull it is actually showing rather than a generic class line.
+
+SCOUNDRELS AND THE VERBATTAN DEFENSE FLEET, and both are decoration. They are client side only. They are not in the server fleet, they carry nothing, and they cannot be intercepted, smuggled against or interacted with in any way that touches the economy. They live in their own list precisely so nothing downstream can mistake one for a real hauler.
+
+The Verbattan patrol the Circuit. Roughly nine sightings in ten are on a lane with Circuit worlds at both ends; the rest are outside it, which is the point of the rarity. A Circuit warship over Coalition space should read as an event, not as background, and the panel says so when it happens: OBSERVED OUTSIDE CIRCUIT SPACE rather than ON PATROL. Nine classes fly, from the Envoy corvette up to the Consular carrier.
+
+Scoundrels work anywhere but favour the routes nobody files paperwork on. Just over half of them turn up around The Hollow, Null Point, The Ledger, The Escrow and Dust Basin.
+
+CLICKING A VERBATTAN HULL RETURNS PERSONNEL, NOT CARGO. There is no manifest to extract, so the panel does not show an empty hold and pretend that means something. It lists the complement by post, gunnery, damage control, flight deck, marine detachment and the rest, and states plainly that a fleet hull files no manifest because it moves no freight. Clicking a scoundrel returns less than that: no registry entry, no filed route, hold sealed. An unregistered hull does not hand over a crew list either.
+
+THE ART. The source packs draw every ship nose up. The map orients along atan2(dy,dx), where zero is right, so every hull is rotated ninety degrees at build time rather than at runtime. Two sizes are cut per hull, a tiny map sprite for lane traffic and a larger one for the inspection panel. The build script is committed at tools/build-fleet-sprites.py so the art can be recut if the source pack grows.
+
+CHECKS. tools/fleet-check.mjs verifies every sprite the registry references exists on disk, that declared sizes match the actual files so nothing draws stretched, that no sprite is still portrait after rotation, and then exercises the traffic rules themselves: patrol distribution, scoundrel route weighting, hull determinism and pool coverage, and the separation that matters most, that no ambient ship ever enters the server fleet list or carries an npc payload. 20 checks. Needs jsdom, which is not a project dependency.
+
+ATTRIBUTION: both packs ship their licence alongside the art. The licence permits commercial use and modification and forbids redistributing the pack itself. Neither readme names the artist, so the credit line still needs your input; the Corpo-Cards art is credited in game and this should be too.
+
+Changed files: client/assets/galaxy.js, client/assets/core.js, client/version.json, client/assets/space/ships/fleet/ (new, 40 sprites and two licences), tools/build-fleet-sprites.py (new), tools/fleet-check.mjs (new), docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.5.1.1 (2026-07-24) - The OPEN CITY shortcut was pointed at a tab that does not exist (CLIENT)
+
+Client only. Hard refresh. No server restart, no migration.
+
+THE BUTTON DID NOTHING, and it looked healthy from every angle. cityOpen() checked whether the cities host was off screen and, if it was, clicked [data-tab="cities"] to bring it up. There has never been a [data-tab="cities"] in the markup. The main tab list is galactic, market, casino, mining and so on; cities is not a main tab at all, it is a galaxy SUB tab, [data-gstab="cities"], switching the #gCitiesPane that #citiesTabInner lives inside.
+
+querySelector returned null, nothing was clicked, the pane stayed display:none, and renderCity painted the whole city into a hidden container. Nothing threw. Nothing logged. The city_data_request still went out and the server still answered it correctly, so anyone checking the socket would have concluded the feature worked. The player just saw a button that did nothing.
+
+The shortcut now clicks the sub tab that actually exists, which is also what enters the fullscreen city view and loads the colony, so it lands on the city the card was showing. It also reopens the galaxy tab first if that is closed: #galacticTab is display:none when another tab is selected, and display:none on an ancestor removes the subtree no matter that the city pane is position:fixed.
+
+TWO GUARDS, because this failure mode is silent by construction and I would not have found it by reading.
+
+tools/selector-check.js sweeps every literal [data-tab] and [data-gstab] selector in the client against the markup and fails on any that match nothing. It strips comments first, or the comment explaining this very bug trips it. 24 selectors checked against 26 in the markup, all resolve.
+
+tools/city-shortcut-check.mjs drives the real index.html through jsdom and asserts the pane becomes VISIBLE, not merely that a request went out. That distinction is the whole point: the broken version passes any test that only watches the websocket. Confirmed by running it against the old implementation, where it fails four checks and the two traffic checks still pass. Needs jsdom, which is not a project dependency: npm i jsdom, then run from the repo root. 20 checks.
+
+Everything else re-run unchanged: i18n-check 6 of 6, i18n-scope-check, the offline server suites at 76 and the live WebSocket suite at 30.
+
+Changed files: client/assets/city.js, client/version.json, tools/selector-check.js (new), tools/city-shortcut-check.mjs (new), docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.5.1.0 (2026-07-24) - Chinese for the city, and the Circuit states its bonus (CLIENT)
+
+Client only. Hard refresh. No server restart, no migration.
+
+THE CITY PANEL HAD NO TRANSLATION AT ALL. Not a partial pass, not a stale one: zero keys, so every label, hint, button and toast in City Charters rendered through its English fallback no matter what language was selected. 157 keys now cover it. Every English value in the catalog is byte identical to the fallback still written at the call site, verified mechanically across all 177 call sites, so English output is unchanged to the character.
+
+Six strings were built by concatenation and could never have been translated in that form. They now interpolate through tf() with named tokens, so the Chinese can put the price, the district and the name wherever the sentence needs them rather than wherever English happened to put them.
+
+Three keys were quietly serving two different English strings at different call sites, which meant adopting them into the catalog would have silently changed English text in two places. Caught by the parity check rather than by eye. Split into their own keys.
+
+CONTENT NOUNS TOO, not just chrome. Stage names and their descriptions (VACANT through ARCOLOGY), all twenty landmark names including the two civic works tiers, the four trade labels and the faction labels are mirrored and fall through to English when a key is missing. The Jade Circuit was missing from the faction label table entirely, so a Circuit world printed the raw id in the wrong faction notice and fell through to the default tint on the district map. It now has both a label and a colour.
+
+THE CIRCUIT CARD NOW STATES ITS BONUS. The five percent on export trade was live in the economy but was not written anywhere a player would look before joining. It leads the Circuit summary in both languages.
+
+THE PASSAGE BADGE AND THE JOIN BUTTON WERE DRAWN ON TOP OF EACH OTHER. The OPEN / SEALED badge was positioned absolutely at the top right of the card while the JOIN control sat at the right of the header row, so on the Jade card the two overlapped into an unreadable stack. Both now share one right hand group in the same flex row and the badge label is translated.
+
+Also added the missing Cities sub tab key, which was referenced in the markup and undefined in the catalog since the tab shipped.
+
+VERIFIED: i18n-check passes all six checks (rendered em dashes, undefined keys, missing zh values, unsupplied interpolation tokens, dollar interpolation in single quotes, leading glyph loss), i18n-scope-check passes, English parity is exact across 177 call sites, no key in the catalog is unused, and the localized content tables were exercised in both languages. Server suites re-run unchanged at 76 offline and 30 live.
+
+NOT TOUCHED: the Chinese Jade Circuit faction description itself. That string is still the first pass placeholder and is waiting on your text.
+
+Changed files: client/assets/core.js, client/assets/city.js, client/assets/galaxy.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.5.0.0 (2026-07-24) - The Jade Circuit takes ground, and civic works (SERVER + CLIENT)
+
+Server and client. pm2 restart and hard refresh. One additive column on city_districts, applied automatically.
+
+THE CIRCUIT OWNS SOMETHING NOW. Until this release the sixteen Jade worlds existed only as client map data. The Circuit could be joined as an allegiance, and that was all it was: no ground, no market, no city, and funding it was blocked in the code with a comment saying so honestly. All sixteen are now seeded into colony_state.
+
+Three things fall out of that seed rather than being built. The commodity grid iterates every colony in the state table, so the Circuit came online with 120 goods on each of sixteen worlds the moment they existed, 4,200 colony and commodity prices against 2,280 before. Cities attach to colonies, so all sixteen host one, with districts, established firms, frontage and mayoral seats generated the same way every other world's are. And the seat gate reads the colony's owning faction, so Circuit worlds are Circuit offices: a Coalition trader cannot hold one.
+
+The Circuit reads as its own market rather than a reskin. State directed pricing runs tech and grain cheap and medical near par, and volatility sits at 0.7, between the Guild's efficient 0.4 and the Coalition's 0.6, because a planned economy is calm but not frictionless. Yujing is the Circuit capital at 760 million citizens, Chiyou Marches is a war frontier at 70 million that nobody wants to live on.
+
+Circuit worlds sit OUTSIDE the conquest layer for now, and this is deliberate rather than an oversight. colony_state has control columns for four factions and none for the Circuit, so there is nothing for funding to flip a Circuit world to. Adding that column means touching conquest, blockades and the dividend bonus, and that is its own release with a migration in it, not something to smuggle into a content drop.
+
+DISTRICT NAMES WERE ONE POOL OF FOURTEEN FOR THE WHOLE GALAXY, and districtCount tops out at fourteen, so every city ever generated had a Harbor Gate and a Cinder Rows. There are now two pools drawn by culture, twenty two names each, with a deterministic per colony rotation into them, so two cities of the same culture do not open with the same list in the same order. Circuit districts read as Circuit districts: Cinnabar Gate, Vermilion Quay, Grain Tribute Row, Iron Ox Crossing.
+
+CIVIC WORKS. Development is capped at four levels because past that a level cannot repay, and that cap stays. Civic works is the other instrument and it is uncapped by income logic for the simple reason that it returns no income at all. The first monument in a district costs F2B and each one after multiplies by 1.55, so finishing a district takes F46.8B. What it buys is unrest down, prosperity up, local supply, and a skyline.
+
+It also buys defence, which is the part that matters. Every point of faction control on a colony is already priced at a base rate plus warRate of the city book. Works count into that book, so a monumented capital costs several times more per control point to take. Works are NOT lootable: salvage and stripping both read development only, so an occupier dismantles what was built for profit and leaves the monuments standing. Dear to take, worth nothing to loot. Measured on Xuanwu Bastion: nine districts at full development cost F68.1M a control point, the same city with three works in every district costs F912.8M.
+
+THE SKYLINE RESPONDS TO IT. Every visual property of a district keyed off one number, development, which saturates at 14 and is mostly set by population. A mayor's entire contribution to the look of a city cost F344M and then the button greyed out. Development still fills the ground; works go up. Massing lifts with works and the tall structures lift most, staging counts works at half weight so a monumented district decks out where population alone would leave it low rise, and two landmark tiers exist above anything development can reach: the fourth at three works and the fifth at five. The Oracle Spire, The Ten Thousand Docks, The Waking Mind. Nothing a merely large population can do reaches them. Tower headroom raised from 46 to 78 world units to fit the result.
+
+THE CIRCUIT EXPORT BONUS IS LOCAL, AND THAT IS THE DESIGN. Circuit members take five percent more on export trade in Circuit cities. It does not travel. The version that would have travelled, a global bonus unlocked by owning any storefront anywhere in Jade space, was a checkbox: a frontage lease costs single digit millions, so a permanent galaxy wide buff would have gone for the price of one cheap shop, with no ongoing decision and no way for anyone to contest it. Both existing faction perks in the game, the Syndicate smuggling payout and the dividend sector bonus, are conditional on territory that can be lost. This one is conditional on being somewhere, which is the reason the sector exists.
+
+A ROUNDING BUG IN LEVEL COUNTING, found while testing works and present in development the whole time. Level counts are derived by logarithm, and a district that has paid exactly for level two reads as 1.99926. It floors to one, so the next level is quoted at a token amount and the district is charged repeatedly for a level it already owns. Both level counters now snap to the integer when within a rounding error of it.
+
+TESTS. 76 offline checks across structure, economics, governance, simulation, and a new Circuit and works suite, plus 30 live checks over a real WebSocket against a booted server. 106 of 106. The live suite confirms Circuit worlds serve city data with Circuit names and trading frontage, that a non member is refused office on Circuit ground, that works advance exactly one level per commission and quote a strictly rising price, and that a non mayor cannot commission them.
+
+Performance with the galaxy at 35 worlds and 26,271 storefronts: income tick 169ms, simulation tick 73ms, both far inside the two second budget.
+
+KNOWN AND NOT ADDRESSED: the city panel still has no Chinese keys and renders through English fallbacks, which now matters more because Circuit cities are the first cities a Chinese reading player will open.
+
+Changed files: server/city.js, server/db_city.js, server/db.js, server/server.js, client/assets/city.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.4.4.0 (2026-07-24) - One city per mayor, and five things that did not work (SERVER + CLIENT, TEST BUILD)
+
+Server and client. pm2 restart and hard refresh. No migration; a one time boot pass reconciles seats and refunds at cost.
+
+This release is a test-and-remove pass rather than a feature. Every claim in the last three releases was re-measured against a rebuilt harness, and most of them held. Five did not, and one of them was quietly fatal.
+
+ONE CITY PER MAYOR. A player may hold as many district seats as they can afford inside a single city, and none anywhere else. Office is residency: you govern where you live. Without it the map is a portfolio for whoever has the most cash, and local politics cannot exist because the same handful of names sit on every world. Anyone already holding seats on more than one world keeps the city where they have the most capital committed and is refunded, at face value, the seat price and the development of every outside seat, so the rule costs nobody anything on the day it lands. The panel now names the city that is blocking a purchase rather than only refusing it.
+
+THE GALAXY DECAYED WITHOUT ANYONE TOUCHING IT. This is the one that mattered. The NPC administration floor sat at 18 on every lever, and 18 is a failed state: solved for its own fixed point it lands on crime 95, prosperity 5, output 5. Every district is stepped every tick whether or not it has a mayor, so within twelve weeks all 148 districts on all 19 worlds sat at prosperity 5, output 7, unrest 72, and city commerce fell from F5.7B to F265M. Ninety five percent of the city economy disappeared with no player ever logging in, and every payback figure quoted in 1.4.1.0 through 1.4.3.0 was measured on freshly seeded scalars that do not survive the first quarter. The floor is now 50, which is the lowest value whose equilibrium is a working, dull city: crime 45, unrest 45, prosperity 44, output 60. Colonial administration is competent and boring. A governed district still clears it by roughly three times on commerce, which is the entire reason to buy the seat.
+
+THE SHOP CEILING DESTROYED TRADE INSTEAD OF CAPPING IT. Each storefront's gross was clamped independently against a flat per shop ceiling and the excess was simply dropped. Measured: 22 percent of all commerce in the galaxy, and 60 percent in a well governed capital, where 117 firms could physically absorb F47M of a F97M pool. It got worse the better a district was governed, which is the exact opposite of the intent. Overflow now spills to the shops still under the cap, and the cap itself is a share of the trade the shop sits in, 35 percent, with the old flat number kept as a floor so a thin frontier district still has headroom. A capital district now absorbs its full pool.
+
+DEVELOPMENT PAST THE FOURTH LEVEL WAS A TRAP. A level costs 2.4 times the last one while the commercial return per level is roughly flat, so level five repaid in 256 weeks and level six in 782. The absolute ceiling of 14 advertised up to ten purchasable levels on a frontier district, six of which could never repay. A mayor may now build four levels above the district's population baseline and no more. Every purchasable level repays inside three years, the last one at 121 weeks.
+
+CIVIC SUBSIDY WAS NOT WIRED TO ANYTHING. It was stored, persisted, shipped on every city payload and rendered as a slider the player could move. No part of the simulation, the civic bill or the commerce model ever read it. Removed from the writer, the payload and the panel. The column stays in the schema so no migration is needed.
+
+CIVIC ARREARS CLEARED THEMSELVES FOR FREE. A mayor in debt was paid their full weekly surplus AND had the debt reduced by that same surplus, so running a district into arrears and then governing it well for one week wiped the balance at no cost. Repayment now comes out of the surplus first and only the remainder reaches the player.
+
+NPC COMMERCE WAS SEEDED BEFORE THE V3 MIGRATION RAN. The migration counted the 13,517 firms it had just created as v2 tenancies and wiped all of them on the one boot where it fires, so a fresh deployment and any world upgrading from v2 both came up with bare cities until the next hourly tick refilled them. No money was ever printed by this, since npc: ids never resolve to a player. The seeder now runs after the migration.
+
+EFFECT ON THE ECONOMY. Best case payback, measured under real policy at a tuned rate: Frontier Outpost 66 weeks, Eyejog 59, New Anchor 110. The capital stays the slowest to repay and runs roughly fifty times the absolute throughput, F12.0M a week against F0.25M, so starting small is correct and working up is worth doing. A seat left on default policy still does not repay anywhere, which is the intended shape: the return exists only if you govern.
+
+ALSO REMOVED. mySeats and myShops were computed and shipped on every city_data and read by nothing. Three query helpers in db_city.js had no callers. getMayorDistricts was imported and never used.
+
+WHAT HELD UP, RE-VERIFIED. Geometry and seeding: all 19 colonies seed districts matching their geometry, layouts are deterministic, out of range and unknown ids are refused, native trade spans three or more trades per city, NPC top up is idempotent and never exceeds frontage. Economics: gross splits into tax and net with no leakage, no district pays out more than its pool, an ousted mayor never recovers more than they invested at any level, the commerce rate has a real interior optimum that differs by district (18 percent on New Anchor, 20 on Frontier Outpost). Handlers: malformed indices are refused across the set, unknown colony ids are refused, the rate stays inside its band under hostile values. Simulation: a mayor is never driven negative, an unpayable seat lapses, capture locks the city and vacates every seat and pays nobody, liberation reopens it. Performance: income tick 97ms, simulation tick 53ms, both well inside the two second budget.
+
+TESTS. 55 offline checks across structure, economics, governance and simulation, plus 17 live checks driven over a real WebSocket against a booted server with registered accounts. 72 of 72.
+
+KNOWN AND NOT ADDRESSED: the city panel has no Chinese keys at all and renders through English fallbacks, which is the largest untranslated surface left in the client.
+
+Changed files: server/city.js, server/db_city.js, server/server.js, client/assets/city.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.4.3.0 (2026-07-24) - Adversarial pass: a fake lever and a coercion hole (SERVER + CLIENT, TEST BUILD)
+
+Server and client. pm2 restart and hard refresh. No migration.
+
+This release is the result of deliberately attacking the city system rather than adding to it. Two real faults came out of it, one economic and one input handling. Everything else held.
+
+THE COMMERCE RATE WAS A FAKE CHOICE. A mayor sets their share of storefront trade anywhere from five to twenty five percent. Testing whether the take was monotone in the rate showed that it was: the maximum was always correct, so there was nothing to decide, and the description promising that undercutting a neighbour would pull their tenants across was a promise the code did not keep.
+
+The cause was that the consumer pool was a fixed pie. Taxing hard drove firms out, but the survivors simply took larger slices, so total trade barely moved and the mayor's cut of it rose with the rate every time. Two changes fix it. Businesses now respond to what a district charges them, so a district at the maximum rate supports about sixty percent fewer firms than one at the minimum, and the shift happens over ticks rather than instantly. And trade now scales with how much of the frontage is actually open, so driving firms out costs the district real commerce rather than redistributing it.
+
+The result is a genuine curve with an interior maximum that differs by district: about fifteen percent on New Anchor, about twenty on Frontier Outpost. Setting the rate is now a decision with a wrong answer at both ends.
+
+INDEX COERCION. Every district-scoped handler parsed its index with Number(), which converts null, an empty string, an empty array, true and the string zero all to zero, and rounds a fractional value to the nearest whole one. Sixty one malformed messages were accepted across the handler set, each acting on a real district. Nothing could be obtained for free, but a crafted or simply buggy message could buy a seat or lease frontage in a district the player never selected, and seats cost billions. Indices now arrive as integers or are refused. Negative zero is normalised rather than rejected, since it is a valid zero.
+
+WHAT HELD UP. Storefronts never collectively out-earn their district's pool. Gross splits into tax and net with no leakage or creation. An ousted mayor is always paid less than they put in, at every investment level tested. A business bought during a blockade is only four percent cheaper than in an open city, so there is no siege arbitrage. Five simultaneous buyouts of the same business grant exactly once and charge once. The commerce rate stays inside its band under hostile values, no unknown or injected colony id is accepted, and no malformed message goes unanswered.
+
+Removed the hint line under the map.
+
+Changed files: server/city.js, server/server.js, client/assets/city.js, client/version.json.
+
+---
+
+## v1.4.2.0 (2026-07-24) - District colour, and a full screen city (SERVER + CLIENT, TEST BUILD)
+
+Server and client. pm2 restart and hard refresh. No migration; existing NPC firms are re-dealt on the next tick.
+
+WHY EVERY CITY WAS GREEN. The architectural vocabulary shipped in 1.4.0.0 colours a district by what it trades, and in the look harness that produced amber, green, cyan and violet quarters side by side. In the game it produced one colour everywhere, and the cause was the release after it. Establishing NPC firms drew their trade from the city-wide demand split, which weights food at 0.40, so food became the most common trade in all 148 districts on all 19 worlds. The vocabulary was working exactly as designed and being fed a uniform input.
+
+Districts now have a NATIVE TRADE: the thing that quarter has always mostly done. It is dealt from a bag proportional to the colony's demand and shuffled deterministically, so a twelve district capital comes out with roughly three freight quarters, five agricultural, two medical and two data, rather than twelve identical ones. NPC firms are then seeded predominantly in their district's native trade. New Anchor now reads as export, food, med and tech quarters in four distinct colours, and Eyejog likewise at its smaller scale.
+
+FULL SCREEN. Selecting Cities from the galaxy sub navigation now takes the whole viewport rather than sharing the centre panel. The map was the smallest thing on screen in a layout that also had to hold a colony rail, a detail column and the rest of the galaxy chrome; giving it the window solves the clutter and the scale problem together. There is an EXIT control beside the colony switcher, and leaving the sub tab restores the normal layout.
+
+This is done with position fixed rather than by moving anything in the document, so no element is reparented and the page structure is identical to stock. That is deliberate: markup surgery on this page has broken the layout twice, and the structural guard still passes unchanged.
+
+VERIFIED: a new harness asserts districts span at least three trades, that no single trade dominates all of them, and that the canvas actually paints at least three colour families in a frame, which is the thing that was silently wrong. Plus fullscreen enters without reparenting, uses fixed positioning, and exits cleanly. 9 of 9.
+
+The CSS scope guard was tightened rather than relaxed. It previously required every selector to contain the scope class, which the new fullscreen rule legitimately does not. It now encodes the real invariant, that no rule may target a bare host id, and was checked against the original leak to confirm it still catches it.
+
+Changed files: server/city.js, client/assets/city.js, client/assets/galaxy.js, client/version.json.
+
+---
+
+## v1.4.1.0 (2026-07-24) - Established commerce, and a tick that does not stall (SERVER + CLIENT, TEST BUILD)
+
+Server and client. pm2 restart and hard refresh. No migration; NPC firms are seeded on first boot.
+
+CITIES ARE NO LONGER EMPTY. Every district now arrives with independent businesses already trading, roughly seventeen thousand across the colonies. Numbers are set by the economy of the world: New Anchor runs about 152 firms per district against Frontier Outpost's 33, driven by citizens served, capital status and development. This fixes a real hole rather than adding decoration. Before it, a player could buy a mayoral seat and earn nothing at all until other players happened to open shops there, which made every seat payback figure in the previous release theoretical. A seat now returns from the day it is bought.
+
+BUYING A GOING CONCERN. Independent firms can be bought outright and renamed on purchase. The price is the frontage lease plus twenty weeks of what the business currently earns, so a firm in a thriving district costs more than the same frontage in a dead one.
+
+What makes that worth doing is a new ramp: a newly leased storefront opens on eighteen percent of full trade and climbs to full over twelve weeks. An established firm is already at full trade and stays there when it changes hands, because the buyout deliberately does not reset its clock. On New Anchor that is 5.6 times the income today for 1.3 times the price. Leasing an empty frontage remains cheaper and is still available everywhere, since even the capital keeps a third of its frontage vacant. The choice is capital against patience.
+
+A TICK THAT TOOK FOURTEEN SECONDS. Paying every storefront wrote one row per shop per tick. With seventeen thousand businesses that was 14.7 seconds of blocking work every hour, which would have frozen the entire game on each city tick. Independent firms keep their own takings and are never written to; only their tax reaches the mayor. The remaining writes are batched into a single transaction. Measured on a fully populated world the tick went from 14,722ms to 56ms. A performance guard now asserts the whole tick budget stays under two seconds, so this cannot come back quietly.
+
+Worth being precise about how this was found: the lapse test began timing out, which looked like a test problem. It was the symptom.
+
+A DEVELOPED DISTRICT CAN NOW PAY ITS OWN WAY. A consequence worth knowing: with established commerce present, a district that has been developed generates enough to cover its civic bill, so it will not lapse to arrears simply because its mayor is broke. Losing a seat to unpaid debt now requires actually running an undeveloped district into the ground on a low commerce rate.
+
+COPY. Panel descriptions rewritten as plain statements of what a control does and what a number means, in place of the previous prose.
+
+MAP. Removed a faint disc that sat in the sky. It was meant to read as a moon and read as an unexplained empty circle.
+
+VERIFIED: 17 checks on established commerce and the buyout path, including that a seat earns with no player shops present, that a bought firm out-earns a fresh lease, that player-owned businesses are not for sale, and that buyout names are filtered. Performance guard 5 of 5. All existing suites unchanged.
+
+Changed files: server/city.js, server/db_city.js, server/server.js, client/assets/city.js, client/version.json.
+
+---
+
+## v1.4.0.0 (2026-07-23) - Cities get an architecture (CLIENT, TEST BUILD)
+
+Client only. Hard refresh. No server change, no migration.
+
+WHAT WAS WRONG. Every building in a district was the same building at a different height. That reads as texture, not architecture, and no amount of extra detail fixes it because the problem is vocabulary rather than fidelity.
+
+WHAT A DISTRICT BUILDS IN. Trade now decides FORM. Freight districts build a working plant: tank farms on shared pads, sawtooth foundries lit from inside so the molten glow bleeds through the roof lights, waisted cooling towers, flare stacks that burn at the tip, and pipe runs on trestles threaded between the blocks so it reads as one works rather than unrelated buildings standing near each other. Food builds stepped growing terraces with lit planting decks, faceted glasshouses and banded drums. Med builds sealed pale towers and blocks with a lit cross on the face. Tech goes for scale rather than detail, because that is the actual mechanism: near black tiered masses with horizontal light bands, one structure per district spanning well past its own footprint at nearly triple height with everything around it existing to make it look big, vast lit advertising panels down a tower face, and spinner lanes strung between the tall structures with craft moving along them.
+
+Each district builds mostly in its own trade with a minority of the others mixed in, the way a real quarter does.
+
+LANDMARKS. Investment raises one structure at the district centre at development 6, 10 and 13, and its form comes from the trade: a Cathedral of Grain is a stepped dome, a Cathedral Array is a pyramid that dwarfs its district, a Grand Terminus is a sawtooth hall with a rank of flare stacks and a gantry over the top. The landmark clears its own ground so it is never buried, and the district panel names both the trade and the landmark so the skyline is readable rather than decorative.
+
+WHERE THE TRADE COMES FROM, which is the part that makes this a readout rather than a decoration. Three sources in priority order: the mayor's nominated favoured trade, the explicit political choice; failing that, whatever the district's storefronts actually trade in most; failing that, a stable per district default so a city under colonial administration still reads as a varied place on day one. So a district arrives with a character, and then visibly changes shape as players specialise it.
+
+HOW IT WAS SIGNED OFF. Built first in a standalone harness rendering real server geometry, with six directions and live dials, because the one thing that cannot be verified in a headless test is whether something looks good. The direction was chosen there and ported here at the settings it was approved at.
+
+VERIFIED: every colony at every development level with every trade forced, plus the shop derived path and the no data path, 6 of 6. The paint volume is asserted, not just the absence of throws, which is what caught the port initially drawing almost nothing: the forms call a two ended box primitive the game did not have, so they were failing silently inside a catch. Ops went from 87 thousand to 3.8 million once fixed. All existing suites unchanged: structure 12, layout 14, css scope 7, frame 11, render 14, ui 18, server 28.
+
+Changed files: client/assets/city.js, client/version.json.
+
+---
+
+## v1.3.3.1 (2026-07-23) - Repair the page layout (CLIENT, TEST BUILD)
+
+Client only. Hard refresh. No server change, no migration.
+
+WHAT BROKE. The chat column left the three column grid and became a full width block across the bottom of the page, dragging the whole shell out of shape. Nothing about the layout was intentionally changed; the markup was simply invalid. Moving the Cities pane between builds removed the old container by searching forward for the next closing div tag, which matched the INNER div's closer rather than the outer one, leaving the outer closer orphaned. That happened twice, in the 1.3.1.2 move and again in the 1.3.3.0 move, so the document carried two extra closing tags. Each one closes an ancestor early, and the browser's error recovery then reparents everything that follows. The centre panel closed before it should have, so the chat panel that belongs in the grid's third column ended up as a sibling of the grid instead.
+
+FIXED. Both orphans removed. The document balances at 724 open and 724 close, matching stock, and the grid shell is byte identical in shape to the untouched build.
+
+GUARDED, and this is the check that should have existed from the first markup edit. A new test parses the current index.html and the pristine one side by side and asserts the div tags balance, the layout grid still has the same number of columns, and that the chat panel and every tab pane sit at the same nesting depth they do in stock. Verified by reintroducing one orphan: it reports the grid growing from three columns to six and the chat panel dropping a level, which is exactly the symptom on screen.
+
+NOTHING ELSE CHANGED. The Cities sub tab, the map sizing and the collapsible panels from 1.3.3.0 are untouched and still pass their own suites.
+
+Changed files: client/index.html, client/version.json.
+
+---
+
+## v1.3.3.0 (2026-07-23) - Cities becomes a Galaxy sub tab, and the map gets the room (CLIENT, TEST BUILD)
+
+Client only. Hard refresh. No server change, no migration.
+
+WHERE IT LIVES. Cities is no longer a top level tab in the main row. It is a sub tab inside Galaxy, beside Factions, rendering as a proper pane alongside Sector Map, Markets, Smuggling and Contracts. The previous build had it in both places at once, which was the wrong answer twice: a duplicate entry point, and the duplicate sitting in the row reserved for whole sections of the game rather than for views of the galaxy. Cities are a galaxy concern and they now sit with the rest of the galaxy.
+
+THE MAP IS THE LARGEST THING. It was the smallest. A permanent 210 pixel colony rail on the left and a 320 pixel detail column on the right left the map with about a third of the width, and the canvas was locked to a fixed 1180 by 720 frame that then had to be letterboxed into that column, so the city was drawn small inside a small box. Three changes. The colony rail now collapses to zero width and is opened on demand by a SWITCH COLONY control in the header, so by default the map has the rail's space; picking a colony closes it again automatically. The detail column is trimmed to 300 pixels. And the canvas now fills its container in both dimensions, with the isometric projection solved at fit time to place the world plate and its building headroom inside whatever box it is given.
+
+That last part is the one that matters most. Previously the scale, origin and height factor were four hard coded constants tuned for one canvas size. They are now derived: the projection measures the plate's extent in projection space, works out the largest scale that fits both axes with room for the tallest towers, and centres it. Measured across four box shapes the plate now spans 81 to 96 percent of the available width and covers over half the total canvas area, against roughly 74 percent of a canvas that was itself a third of the screen before.
+
+VERIFIED: a new frame harness drives the fit routine at four container shapes against live server geometry and asserts the plate stays inside the canvas and fills most of it at each. A new layout harness asserts Cities is absent from the top row, present in the sub tab row, that its pane is a sibling of the other sub panes, and that the grid gives the rail zero width by default. 11 and 14 checks. Existing suites: UI 18 of 18, css scope 7 of 7, server 28 of 28.
+
+Changed files: client/index.html, client/assets/city.js, client/assets/galaxy.js, client/assets/core.js, client/version.json.
+
+---
+
+## v1.3.2.0 (2026-07-23) - Zoom, scroll and collapse on the Cities tab (CLIENT, TEST BUILD)
+
+Client only. Hard refresh. No server change, no migration.
+
+ZOOM AND PAN. The city map now behaves like the galaxy map, because that is the interaction already in the game and there is no reason for a second one. The wheel zooms toward the cursor rather than the centre, dragging pans, and one finger pans with two to pinch on touch. There are also plus, minus and reset buttons for anyone not using a wheel. Zoom is clamped between roughly half and six times. The star backdrop is deliberately left out of the transform so it reads as sky rather than sliding around with the plate, and a drag that moves more than a couple of pixels no longer also counts as a click, so panning across a district does not select it.
+
+SCROLLING. The tab pane sits inside a grid whose ancestors are height 100vh with overflow hidden, so anything taller than the column was simply clipped at the fold with no way to reach it. The pane now has its own scroll region, and the colony rail and the detail column each scroll independently, so a twelve district capital with a long detail column no longer runs off the bottom of the page.
+
+COLLAPSIBLE PANELS. Every panel in the detail column now folds, using the same chevron, the same markup and the same class names as Wire Credits and Leaderboard in the right sidebar. Folded state persists in localStorage and, importantly, survives a panel rebuild: the detail column is regenerated on every selection change and data update, so the global initialiser in index.html never sees these elements and the state is driven from the city module instead. Fold everything you are not using and the map gets the space.
+
+VERIFIED: 17 checks covering all three, including that the fold survives a rebuild, that zoom actually changes the canvas transform, that it clamps at the ceiling, and that reset returns exactly to the base scale. Existing suites unchanged: render 14 of 14, css scope 7 of 7, placement 8 of 8, server 28 of 28.
+
+Changed files: client/assets/city.js, client/index.html, client/version.json.
+
+---
+
+## v1.3.1.2 (2026-07-23) - The Cities tab rendered a blank page (CLIENT, TEST BUILD)
+
+Client only. Hard refresh. No server change, no migration.
+
+WHAT HAPPENED. Selecting the Cities tab showed an empty panel. The module was fine and the renderer was fine; the container was in the wrong place in the document. When the pane was added in 1.3.1.0 the insert was anchored on the end of a script block, which put it at body level near the god panel rather than inside the centre column that holds marketTab, galacticTab, miningTab and the rest. Clicking the tab therefore did exactly what it was told: it hid every other pane, leaving the centre column empty, and displayed the Cities pane at the bottom of the document outside the layout. The city was rendering the whole time, below everything, off screen.
+
+WHY IT SHIPPED. It was verified with a grep for the container id and a jsdom render that injected its own markup. Both passed. Neither one looked at where the element actually sat in the real page, which is the only thing that was wrong.
+
+FIXED. The pane is now a sibling of miningTab inside the centre column, at the same nesting depth as every other tab pane.
+
+GUARDED. A new test parses the real index.html, finds the existing tab panes, asserts they share a single parent, and asserts the Cities pane shares it too, is not a direct child of body, and sits at the same depth. Verified both ways: it fails on the layout that shipped and passes on the fix. Structural placement is now checked rather than assumed from the presence of an id.
+
+Changed files: client/index.html, client/version.json.
+
+---
+
+## v1.3.1.1 (2026-07-23) - The line across the page (CLIENT, TEST BUILD)
+
+Client only. Hard refresh. No server change, no migration.
+
+WHAT HAPPENED. Opening a city drew a thin green line across the whole page instead of a city. The cause is a CSS scoping mistake with a sharp edge. The city stylesheet was written with a SCOPE token substituted at injection time, and because the UI had two homes, the tab and the planet card overlay, the token expanded to a selector list: '#cityOverlay, #citiesTab'. A rule written as 'SCOPE .obar' therefore became '#cityOverlay, #citiesTab .obar'. Selector lists do not distribute a prefix, so that parses as two separate selectors: '#cityOverlay' on its own, and '#citiesTab .obar'. Every one of roughly fifty rules was applying its declarations directly to the overlay element. One of them was the owner share bar, height 3px. The overlay is position fixed with inset 0, so a 3px height collapsed it into a full width bar across the viewport. That was the line.
+
+THE FIX, AND THE SIMPLIFICATION. Scoping now uses a single class, .fmcity, carried by the host, which has nothing to distribute and cannot mis-parse. More to the point, the second home is gone. The modal overlay is deleted: the Cities tab is the only place the city UI lives, OPEN CITY on a planet card switches to that tab and selects the colony rather than throwing a modal over the galaxy map, and the stylesheet is injected into head once rather than into a container. Two chromes sharing one renderer is what created the need for a two host selector in the first place.
+
+NAVIGATION. A Cities entry now sits beside Factions in the Galaxy sub navigation. It is a jump-off rather than a pane, since cities have their own top level tab, but it is where somebody looking at colonies reaches for it.
+
+GUARDED. A new test parses the generated stylesheet and asserts that every selector is scoped to .fmcity and that no rule targets a host element on its own, which is the specific shape of this bug. It also asserts the overlay element is never created. Seven checks, and it would have caught this before it shipped. The full tab render remains 14 of 14.
+
+Changed files: client/assets/city.js, client/index.html, client/version.json.
+
+---
+
+## v1.3.1.0 (2026-07-23) - Cities get their own tab, a navigable UI, and a real skyline (CLIENT + SERVER, TEST BUILD)
+
+TEST BUILD, continuing on 1.3.0.0. Server and client, pm2 restart and hard refresh. No migration.
+
+ITS OWN TAB. Cities no longer live only behind a planet card. There is a Cities tab beside Galaxy, and it is now the primary way in. The overlay from the planet detail card still works and shares every renderer, so the two are the same screen in different chrome rather than two implementations.
+
+NAVIGATION. The nineteen colony buttons that ate two rows and could not be scanned are gone, replaced by a colony rail down the left: sorted by population, each row carrying the class, how many seats are still open, and how many storefronts trade there. Open seats are the number a player is actually shopping for, so it is the one called out in gold. Districts moved from a scrolling column into a chip strip under the map, which puts a twelve district capital on one line. The right column now holds only what pertains to the selected district, and every panel is conditional: a section with nothing to say is not rendered at all, which fixes the empty bordered box that used to sit in the middle of the column whenever you were looking at a district you did not govern.
+
+THE FRONTAGE. The storefront view stopped being a canvas grid and became a list, because the whole point of letting players name their shops is reading the names. Sorted by earnings, each entry showing the trade, the owner and the weekly net, with the description on hover.
+
+A REAL SKYLINE. Buildings were flat boxes. Now every structure steps back as it rises, in one, two or three setbacks depending on height, which is most of what makes a skyline read as a skyline. Tall towers carry a lit mast; mid rise buildings get roof tanks. Windows light on a proper grid up the two visible faces instead of scattering at random, and the lit fraction tracks how many storefronts are actually trading in that district, so a busy quarter glows and an empty one is dark. Each building casts a contact shadow so it sits on the ground rather than floating. The gaps between blocks are drawn as streets. One block per district is promoted to a landmark at nearly double height, so districts have a focal point instead of an even carpet. All of it derives from a deterministic per block seed, so a district looks identical every frame and on every client.
+
+FIXES. Five of the nineteen colonies carry faction 'contested', which is a state rather than a party. The seat handler compared it as if it were a faction, so those five worlds had permanently unbuyable offices and reported "Only contested members may hold office on this world." Contested worlds are now open to anyone, which makes them the natural ground for unaligned or outnumbered players. Stale copy describing lots and tier thresholds, left over from the model two rebuilds ago, is gone.
+
+VERIFIED: the tab renders in a real DOM against live server payloads, 14 of 14, checking that the rail lists all nineteen colonies, the strip matches the district count, no panel renders blank, and no stale or undefined text reaches the screen. Server suites unchanged at 28 of 28, 7 of 7 and 10 of 10.
+
+Changed files: client/index.html, client/assets/core.js, client/assets/city.js, server/server.js, client/version.json.
+
+---
+
+## v1.3.0.0 (2026-07-23) - Cities are permanent, office is what players buy (SERVER + CLIENT, TEST BUILD)
+
+TEST BUILD. Server and client, pm2 restart and hard refresh. ONE-WAY MIGRATION on first boot.
+
+ALSO IN THIS BUILD, three things caught during the rebuild and fixed before you touch it. CONTENT FILTERING now gates every piece of player authored text: shop names and descriptions, district names, fund names and descriptions, and player names at registration and rename. It runs three passes because each alone had a hole. The banned word list matches substrings but not digit substitution; containsSlur in chat filter handles digits and separators but anchors on word boundaries, so padding a slur with a suffix walked straight past both. Normalising leet and re-running the substring list closes it. A companion tool, server/audit_names.mjs, walks every authored field already in the database and REPORTS what fails, deliberately renaming nothing, because false positives on real names are common and silently renaming somebody's fund would be worse than the problem. It exits non zero when anything is flagged, so it can gate a deploy.
+
+THE LIMIT ORDER ERROR ON EVERY BOOT is gone, and the diagnosis was wrong. A duplicate restore block sat above the declarations of limitOrders and ORDER_EXPIRY_MS and threw a temporal dead zone ReferenceError every single start. The throw was caught and swallowed, and the real restore ran correctly a few hundred lines further down. Open orders were never being lost; the only symptom was an alarming log line. Verified by seeding an order, restarting, and watching it come back. Dead block removed.
+
+SHIP.SH gains a server side guard. The local divergence check was already there and already better than a plain pull, since apply.sh leaves the tree dirty. What was missing was the other end: a file edited on the VPS aborts the pull halfway and leaves a confusing failure. The deploy line now checks for local modifications first, reports them with the fix, and uses ff only so production can never grow a merge commit.
+
+WHAT WAS WRONG. Two releases sold ground: 1.2.6.0 let players claim lots, 1.2.7.0 let them lease floor space inside those lots. Both inherited the same defect, which is that a planet has a fixed number of parcels. Four thousand seven hundred and eighty eight lots existed across the whole galaxy against a concurrency target of eight thousand, so the mechanic sold out permanently rather than getting expensive, and every fix piled another layer on a foundation that could not hold weight. Worse, player owned ground could be razed into rubble that nobody could ever use again, which meant a busy war would silt a planet up with dead parcels.
+
+WHAT REPLACES IT. Cities are permanent world objects and they arrive already built. Every colony carries between three and fourteen DISTRICTS depending on how many citizens it has, so New Anchor reads as a twelve district metropolis and Frontier Outpost as a five district settlement, and each of those districts is developed on arrival to a level its population justifies. One hundred and forty eight districts exist galaxy wide and none of them are empty, because the citizens built the place long before any player drew a wage there. What players buy is the MAYORAL SEAT, the way the Presidency is bought rather than homesteaded. Nothing about a city depends on a player existing.
+
+THE LADDER. A seat is priced exponentially against the district's population development, which is the whole progression: Frontier Outpost costs F16.6M and pays back in about twenty one weeks, Dust Basin F39.8M, Vein Cluster F229M, and a New Anchor borough F1.32B against a two hundred week hold at baseline. You start somewhere cheap, you govern it well, you work up. Opting straight into a built out metropolis costs eighty times what the frontier costs, and that gap is the point.
+
+CONTESTED, BUT NOT SEIZED. Any seat can be taken, which is the President mechanic and it carries over. Three things had to break from that model, all for the same reason: the Presidency is one office nobody has invested in, and a district is one hundred and forty eight offices someone has been building for months. Flat pricing is gone, since a seat costs what it governs. Uncompensated ousting is gone, because being able to take a district somebody developed for a flat fee would mean nobody ever develops anything; the buyer pays the full price and the sitting mayor recovers a share of what they INVESTED, never of the base price, so an ousted mayor can never walk away with more than they spent. An earlier pass priced the seat off total development instead, which meant a F2.2B investment on a high baseline district pushed the seat past a trillion and paid out compensation to match. That was a money printer and the harness caught it before the client existed. And ousting is not the only turnover: a mayor who cannot pay their civic bill accrues arrears, and four weeks of them vacates the seat back to colonial administration. That is the valve that keeps the political map moving on planets no war ever reaches.
+
+NOTHING TURNS TO RUBBLE. A lapsed or conquered district reverts to NPC administration and drifts back toward its population baseline. Occupation salvage now strips only what mayors built; the citizens and their baseline city are not strippable, because they did not evaporate. A sacked city is poor, not erased, and there is always something left to govern.
+
+MAYORAL PERKS. Policy levers are per district now rather than per colony, so twelve mayors on one planet can pull in twelve directions and a well governed borough visibly diverges from the neglected one beside it. A mayor also sets their COMMERCE RATE inside a five to twenty five percent band, which makes districts compete: undercut your neighbour to pull their tenants across, or tax hard and live off fewer, wealthier shops. They nominate a FAVOURED TRADE that earns thirty five percent more in their district while everything else takes twelve percent less, which turns a quarter that organically filled with grocers into a deliberate market quarter. And they can RENAME the district.
+
+STOREFRONTS. Uncapped per player, opened by anyone in anyone's district, and now PLAYER NAMED with a description alongside the category the economy actually reads. A Turkish player opens a Kebab Shop, classifies it as food, and the name is what everyone else sees on the frontage strip. Category is mechanical, name is flavour, so nobody names their way into an advantage. Each further storefront one player holds in a district earns less than the last, so a handful is the natural holding and a newcomer's first always out earns a veteran's twelfth.
+
+DEVELOPMENT ACTUALLY PAYS NOW. A first pass had development add storefront capacity without adding customers, so building only diluted the tenants already there and F2.2B of investment moved the commercial pool by F2.9M a week. The pool now scales against the district's baseline rather than by a flat per level bonus, so a district developed well past its natural size genuinely is a bigger market. On New Anchor a single development level costs F15M and pays back in seven weeks; five levels cost F842M and pay back in seventy four.
+
+VERIFIED: 28 of 28 over live WebSocket on seats, perks, development, named storefronts and bounds checking, plus 10 of 10 on the ouster and lapse paths including confirmation that compensation is always less than what was invested and that a lapsed district keeps its buildings.
+
+NOT INCLUDED: landmarks. Mayor authored district notices. Storefront specialisation.
+
+Changed files: server/server.js, server/city.js, server/db_city.js, client/assets/city.js, client/version.json.
+
+---
+
+## v1.2.7.0 (2026-07-23) - Storefronts: the city stops being a closed system (SERVER + CLIENT)
+
+Server and client. Requires a pm2 restart and a hard refresh. Additive schema (city_shops), no migration.
+
+THE PROBLEM THIS SOLVES. There are 4,788 lots in the entire game, 253 of them in New Anchor, against a concurrency target of 8,000. One holding per player per city meant the mechanic sold out permanently: the 254th person who wanted the capital was not priced out, they were locked out, and no amount of money would ever change that. Cities were a closed system with a fixed number of seats.
+
+GROUND IS FINITE, FLOOR SPACE IS NOT. Every built holding now rents STOREFRONTS. Slots scale with tier (one at T1, nine at T5, twenty five at T11), so a developed New Anchor exposes over two thousand of them where it had 253 lots. Anyone can lease space in any building, including one they do not own and including their own. Leasing transfers no title, so the one-lot cap and the community-arcology principle both survive intact: a whale can fund every storefront in a sector and still not own an inch of it.
+
+THE NPC MARKET IS ALWAYS A BUYER. There is no counterparty risk and no timing game. You never open a shop and find nobody selling, and you never lose because you picked the wrong week. What is scarce is the city's APPETITE. Total consumer spend is a fraction of the city's built value modulated by prosperity and output, so developing the city expands the pie rather than splitting a fixed one, and the mayor's levers now set the size of every tenant's market. Demand splits across the four trades and tilts toward whatever the city is short of, which makes "city needs over time" literal: it moves over weeks, readable as a trend, never as a tick to time.
+
+WHY IT DOES NOT RUN AWAY. Three forces, all verified in the harness. A per-shop ceiling scaled by the host building's tier stops an empty city handing one shopkeeper the entire consumer economy: without it the first storefronts paid back in three weeks, which would have been the best investment in FleshMarket by a factor of fifty. Above roughly 200 storefronts the pool binds instead and per-shop income falls with occupancy, so the market finds its own equilibrium around 400 to 800 in a developed capital. And each additional storefront one player holds in one city earns less than the last, implemented as a weight inside the pool rather than a multiplier after it, so the pool always conserves. In a city at 400 storefronts a player's first earns F269k a week and their twelfth earns F47k, which means a newcomer's first storefront out-earns a veteran's twelfth by nearly six to one. Nobody needs a rule to stop hoarding; the curve does it, and it leaves the tail open for whoever arrives next.
+
+LANDLORDS AND TENANTS. A quarter of every storefront's gross goes to whoever owns the building. A fully let tier 5 holding earns roughly F800k a week in rent on top of its own F1.37M yield, which is the first mechanic that pays a builder for building TALL rather than merely building. Landlords want tenants, tenants want a well run city, and both now depend on the mayor. Rent on an unowned or seized holding is simply not paid.
+
+SIEGE. Blockade does not remove the buyer, it starves them. Verified over a six week full blockade of a developed capital: consumer spend collapses from F149M to F23.5M a week, general retail falls 93 percent, and grocers fall 81 percent because scarcity tilts demand toward the trade the city is desperate for. Everyone loses, essentials lose least, and the NPC market stays open the whole way down. Shops die with the floors they sit in when an occupier strips a building, and the entire commercial layer is cleared when a city is sacked.
+
+NOT INCLUDED: landlord-set rent rates, which want a real tenancy market to be interesting and would arrive with vacancy competition; shop specialisation or upgrades, so a storefront is currently a flat instrument; storefronts rendered on the sector plan view; a city index fund, which is the passive-exposure version of this and can reuse the Capital House NAV machinery including its shared-pool anti-rug structure.
+
+FLAGGED: this is a new money faucet. A developed city prints up to F139M a week in consumer spend that did not exist before, roughly 67 percent on top of its landlord layer. Cities will not all develop at once, but the aggregate wants watching against mining and trading income before many cities mature.
+
+Changed files: server/server.js, server/city.js, server/db_city.js, client/assets/city.js, client/version.json.
+
+---
+
+## v1.2.6.0 (2026-07-23) - Cities rebuilt on polygonal sectors (SERVER + CLIENT)
+
+Server and client. Requires a pm2 restart and a hard refresh. ONE-WAY MIGRATION on first boot, see the last section.
+
+WHY A MINOR BUMP. The 1.2.5.25 city was a 14x10 grid of squares. Rectangles read as machine output; the model the design work actually settled on was districts. Every colony now generates eleven VORONOI SECTORS by half-plane clipping, and the layout is no longer a box packing but a question of where the seeds sit, so cell shapes differ structurally between worlds. Six seed distributions (radial, spine, grid, archipelago, terraced, organic) across six terrains (orbital tether, station deck, ice channel, rift, ore veins, dust basin). New Anchor runs radial on a tether, Frontier Outpost is an archipelago on ice, The Hollow is terraced over a rift. Lots sit on a grid rotated per sector, which kills the last of the squareness, and ice worlds refuse to build in the melt channel. Verified: all 19 colonies produce exactly 11 sectors, 158 to 276 lots each, median 21 lots per sector.
+
+THE STAGE LADDER. A sector is no longer a container, it is a thing that grows. Five stages above vacant: SETTLEMENT (scattered low structures), DISTRICT (blocks fill, towers rise), PLATFORM (the sector is decked and the towers share one raised podium), CONURBATION (footprints swell and fuse, a central mass takes over), ARCOLOGY (one sealed superstructure, stepped to a spire, every owner holding a floor band). Stage is DERIVED from the lots, and the gates are fractions rather than averages: PLATFORM needs 60 percent of the sector's lots at tier 5 or above, ARCOLOGY needs 80 percent at tier 9. One whale maxing a single lot cannot move the stage. Combined with the cap below, this means no individual ever builds an arcology: the superstructure is a monument to a community.
+
+ONE HOLDING PER PLAYER PER CITY. A sector holds twenty to fifty lots and reaches its top stage only when a dozen owners develop in parallel, which gives the sector a natural political unit, the people who own inside it. Consequence worth stating plainly: there is no lot resale or transfer yet, so a badly chosen lot is a stuck position until the tier ladder or a war moves it. That is a real gap, not an oversight.
+
+COSTS AND INCOME. The build curve runs F1.8M x 2.4^tier, so tier 1 is cheap enough to enter on a first payday and a maxed tier 11 holding is F19.6B cumulative before the colony multiplier. Income is now a straight fraction of built value, about 0.1 percent per day in a well run city, which is deliberately slow and is the number the whole salvage economy below is balanced against. Payback is roughly flat across tiers at 172 weeks at output 84, so tier choice is a question of how much capital you want working rather than a rate arbitrage.
+
+WAR MATH, CORRECTED. The prototype stripped 10 percent of book, and the harness showed that was profitable vandalism: above roughly F193B of book a raider could take a city, strip it, and walk away ahead, having destroyed several times that in other players' work. Salvage is now 1/20, gated behind a SEVEN day hold rather than fourteen, still one tier per day. Taking a colony that carries a city now also costs a WAR FUNDING SURCHARGE of 4.42 x book^0.75 per control point on top of the flat rate, so the price of conquest scales with what is standing. Verified across the range: a F25B city costs F4.2B to take and yields F1.3B stripped, a F1.84T hive costs F104.7B and yields F92B. Raider net is negative at every book value tested. Occupiers who hold and operate still profit, raiders who raze do not, which is the fork the design wanted.
+
+RENDERED FROM SERVER TRUTH. The old client mirrored the layout generator verbatim, the solitaire pattern. That is now retired for cities: the server generates the geometry once per colony, caches it, and SENDS the polygons in city_data (about 17KB). The client draws what it is given and never regenerates, so there is no cross-engine float divergence to keep in sync. Lots are addressed (sector, lot index) and stored in the existing city_lots q and r columns, so no schema change. The client draws an isometric prism city with per-zone arcology forms, owner colour bands up the superstructure, skyways between close sectors, faction tint and contested dashes, plus an interior view: a plan of individual holdings below PLATFORM, and at CONURBATION and above a vertical section showing the same owners stacked as floor bands. Nothing is merged in the data, only in the render.
+
+MIGRATION, ONE WAY. Grid coordinates have no meaning on the new map, so on first boot every lot claimed under the old layout is REFUNDED AT FULL INVESTED VALUE to whoever built it and the table is cleared. Charters are colony-level and survive untouched. The refund is generous on purpose: nobody loses money on a change they did not choose. It is flagged in a new city_kv table so it cannot run twice, verified idempotent across two boots, and it credits the original builder even for lots that had been seized. This cannot be rolled back by reverting the build.
+
+NOT INCLUDED: Jade colonies (still outside colony_state); a conqueror-side path to buy a seized charter instead of stripping it; lot resale or transfer, which the one-holding cap makes more pressing than it was; NPC street gangs and emergent political events. Sector zones (commercial, residential, industrial) currently drive the arcology's shape and nothing economic; coupling them to lot use is the obvious next pass. The supply constant was retuned for the new book scale and is a first pass: a blockaded unfarmed city loses 59 percent of output in three weeks, a farmed and subsidised one 15 percent.
+
+Changed files: server/server.js, server/city.js, server/db_city.js, client/assets/city.js, client/version.json.
+
+---
+
+## v1.2.5.25 (2026-07-23) - City Charters prototype: player-owned cities on colony planets (SERVER + CLIENT)
+
+Server and client. Requires a pm2 restart and a hard refresh. Additive schema (city_state, city_lots), no migration against existing tables.
+
+THE LOOP. Every seeded colony except Flesh Station and Abaddon carries a city. One player holds the CHARTER (the mayor): they set five policy levers, collect 12 percent of export GDP, and pay the civic bill, which scales with population. Anyone can CLAIM lots on the district map and upgrade them tier by tier at exponential cost, roughly a billion Social Credits cumulative to tier 10 on a mid-size world. Lots run one of four uses: Export pays the owner, Agri, Medical and Tech feed the city itself. Switching use costs 48 hours of downtime, which is deliberate: when a blockade lands, farms cannot appear overnight, and that lag is the crisis window.
+
+THE MODEL. Six coupled scalars (crime, unrest, corruption, prosperity, legitimacy, output) relax toward targets driven by the levers, with an NPC administration floor so an untended city degrades rather than zeroing. The coefficient set was solved against three verified endpoints from the design harness: a police state crushes crime to about 10 but drives unrest past 90 and stalls output near 40; total neglect lets crime hit the 90s and collapses output to single digits; heavy services runs unrest around 20, output in the mid 80s, prosperity above 90 and pays the mayor the most. Every lever helps one thing and hurts another. Supply is population-scaled demand for food, med and tech; imports cover the local shortfall unless the colony's lanes are blockaded, in which case an unfarmed city loses roughly two thirds of its output inside three weeks while a properly farmed and subsidised one barely moves. The subsidy lever is the mayor's answer: it raises what civic lots are paid, at the mayor's expense.
+
+MONEY. All flows are weekly figures paid in hourly slices by the city tick. A mayor is never driven negative: they pay what they have and the unfunded remainder degrades the city instead, floored so one bad cycle cannot zero a four year build. Charter and lot purchases are pure money sinks, priced off population (a frontier charter runs about F130M, the New Anchor capital past F500M), and investment raises population over time, which raises every subsequent cost and the standing civic bill. This is the end-game sink from the original design brief: cash buys the buildings, only attention produces the exports that pay for them.
+
+WAR. Conquest is upheaval. When a colony flips faction, the city is seized unless the charter owner belongs to the conquering side: lots lose their owners, the charter suspends, and a 14 day clock starts. Retake the colony before it matures and everything restores to the original builders. Fail, and occupation forces strip one tier off every lot per day, paying 10 percent of the demolished book into the colony war chest until the city is levelled and the charter reopens. A city in sustained revolt (unrest above 70) also nudges colony tension upward a few times a day, so a badly run city literally invites the war that destroys it.
+
+SERVER-AUTHORITATIVE THROUGHOUT. Same trust model as casino_play: the server owns every price, validates every claim against the deterministic district layout, and the client only sends intent. The layout generator (seeded mulberry32 per colony, the solitaire pattern) lives in server/city.js and is mirrored verbatim in client/assets/city.js between MIRROR markers; cross-checked identical across all 19 colonies. Wrong-faction charter purchase, double-claims, non-owner upgrades and non-mayor lever changes all verified rejected over a live WebSocket.
+
+BALANCE IS A FIRST PASS, by design. Known open knobs, all constants in CITY_TUNE: heavy services currently pays the mayor the most, so the whale reflex partly survives (the civic cost curve should bite harder at the top); tier 5 lots pay back in roughly 16 weeks against 66 at tier 10, so wide beats tall until a city's finite 60 to 93 lots run out; and nothing caps one player buying an entire district, on the theory that capture risk is the counterweight. Retune from the live ledger.
+
+NOT INCLUDED: Jade colonies (still outside colony_state, per the 1.2.5.24 note, cities attach to colonies); a conqueror-side mechanism to buy a seized charter instead of stripping it; NPC street gangs and emergent political events from the original brief; city visuals beyond the district grid (the parallax city art remains a separate pass).
+
+Changed files: server/server.js, server/db.js, client/index.html, client/assets/galaxy.js. New files: server/city.js, server/db_city.js, client/assets/city.js.
+
+---
+
+## v1.2.5.24 (2026-07-22) - God Panel world gates: Jade passage and commodity trading (SERVER + CLIENT)
+
+Server and client. Requires a pm2 restart, not just a hard-refresh.
+
+WORLD GATES, in the Control tab. Control is the world-state tab (market freeze, volatility, transfer tax), so the two new switches sit with the rest of the GM levers rather than in News, which is headline authoring.
+
+JADE PASSAGE. The endpoint already existed at /api/dev/wormhole and had simply never been given a control, so sealing the passage was a curl command. It now has a button. Sealing delists the Jade tickers from the tape for every connected player and blocks Jade trades; open positions are left intact rather than liquidated, so a seal is a market closure, not a confiscation. The seal is behind a confirm because it fires at every connected client at once.
+
+COMMODITY TRADING HALT, new. COMMODITIES_OPEN gates the buy and sell endpoints, which reject with 423 while halted.
+
+Two deliberate limits on its scope. It does NOT touch cargo in transit or runs already launched: halting those mid-flight would destroy player cargo, which is not what a market halt means. And the flag is in-memory, so it resets to open on restart. A halt is a live GM intervention; the world should not silently boot into a halted market after a crash at 3am. If it ever needs to survive a restart it belongs in a settings table, not a module-level let.
+
+The panel reads both switch positions from a new /api/dev/gates on tab open rather than tracking what it last clicked, because the server is authoritative and a second dev, or a restart, can move them underneath the panel.
+
+PLAYER-FACING: a halted buy or sell previously surfaced as a generic Buy failed, which reads as a bug rather than a closure. It now says trading is halted, in both languages.
+
+Also fixed while in that code: the sell error chain still had a raw English no_ship string that an earlier localization pass missed. It was only reachable when selling without a ship, which is why no screenshot caught it.
+
+NOT INCLUDED, and it is the prerequisite for cities on Jade planets: the Jade colonies are still client-side map data. They are not in colony_state, there is no control_jade column, and the passive-income colony bonus iterates the four seeded factions. Cities attach to colonies, so seeding them is the first move of the city pass rather than something to tack onto a UI release, since it is a schema migration against a live database with player data.
+
+Changed files: server/server.js, client/index.html, client/assets/god-panel.js, client/assets/core.js, client/assets/galaxy.js.
+
+---
+
+## v1.2.5.23 (2026-07-22) - Jade Circuit: faction rewrite, joinable, colony and exchange copy (SERVER + CLIENT)
+
+Server and client. Hard-refresh after deploy.
+
+FACTION DESCRIPTION replaced with the authored text. The old bonusSummary promised that Jade Exchange listings and Circuit allegiance activate when the wormhole is unsealed, which was never true of the code, and is now gone. It reads as what the Circuit actually holds: the Exchange listings and the passage.
+
+One correction to the supplied text: "the houses runs directly" is now "the houses run directly".
+
+THE CIRCUIT IS JOINABLE. The Jade card had no join control and the server allowlist did not include jade, so the faction was scenery. Both fixed.
+
+Read this before shipping it, because joinable is not the same as competitive. The Jade colonies are client-side map data. They are NOT seeded into colony_state, there is no control_jade column, and the passive-income colony bonus iterates the four seeded factions. So a Jade member earns base passive income and no colony bonus, because the Circuit holds no colonies the server knows about. Allegiance works. Territory does not. Jade was deliberately NOT added to the faction-funding allowlist for the same reason: funding the Circuit would take the money and change nothing, which is worse than not offering it.
+
+That gap is coherent with the lore while the passage is sealed, but it does mean Jade is currently a flat choice rather than a competitive one. Making it real is four pieces of server work: seed the 16 colonies into colony_state, add a control_jade column with a migration, include jade in the leading-faction reduce and the colony-count bonus, then add jade to the funding allowlist. That is its own release.
+
+COLONY LORE, all 16, English and Chinese. The previous entries mentioned hereditary lineage in every single one: hereditary accounts, ancestral accounts, family registers, cadet branches, family shrines, portraits along the assembly floor, billing to the bloodline, berth priority by lineage. Repeated sixteen times it stops reading as a culture and starts reading as a tic. Lineage now appears only where it carries weight: the faction description and Yujing, the capital. Everything else is what the place is, what it produces, and the trade-relevant control fact, which is the register the Coalition colonies already use.
+
+JADE EXCHANGE COMPANY DESCRIPTIONS, all 20, English and Chinese. Same problem and same fix. The Coalition entries are direct and formal, a line of operational fact with a dry close. The Jade entries were prose-heavy and lineage-obsessed. Rewritten to match the Coalition register.
+
+Audited rather than eyeballed: no lineage vocabulary remains in any non-capital Jade colony entry in either language, and every rewritten Chinese string was checked to contain Chinese rather than a silently untranslated fallback.
+
+Changed files: server/server.js, client/assets/galaxy.js, client/assets/core.js.
+
+---
+
+## v1.2.5.22 (2026-07-22) - Language selection on login, and switching now reloads (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+LOGIN MODAL LOCALIZED. The Flesh Market and Create Account titles and the Name and Password field labels. The buttons were already wired in 1.2.5.18, which is why they read Chinese while everything above them did not.
+
+LANGUAGE SELECTOR ON THE LOGIN MODAL. An English / 中文 pair above the title, showing which is currently active. Both labels stay in their own language rather than being translated, because someone who cannot read the current interface still has to be able to find the one they want. This modal is the only place where switching is free: nothing has rendered and there is no session to lose, so it switches without asking.
+
+SWITCHING LANGUAGE NOW RELOADS. The old toggle patched the live page: applyI18n over data-i18n elements, plus whatever re-render hooks existed. That was always going to be partial. Any panel already built by a lazily loaded module keeps the strings it was built with until something rebuilds it, so the result was a screen that was half translated in a way that depended on which tabs the player happened to have opened first. Reloading makes language a boot-time fact rather than a runtime patch, and index.html already reads the stored value before first paint, so the new language is in place before anything renders.
+
+The cost is real and is not hidden. A reload drops in-flight client state. Unbanked mining cargo is client-held, so setLanguage checks _fmRunInProgress first (mining fullscreen host visible, or an active smuggling or shipping run) and asks before reloading. Declining aborts cleanly: nothing is written to storage and no reload happens, so there is no half-applied state. The login-modal path passes skipConfirm, since there is nothing to lose there.
+
+The old live-patch path is still available as setLanguage(lang, {noReload:true}) for anything that needs it later.
+
+Runtime-tested rather than assumed: with no run in progress the call stores fm_jade_theme and reloads; with a run in progress it prompts, and declining leaves storage untouched and does not reload; with skipConfirm it reloads directly.
+
+Verifier state: all seven checks zero.
+
+Changed files: client/assets/core.js, client/assets/fm-auth.js.
+
+---
+
+## v1.2.5.21 (2026-07-22) - Localization: company detail, market upgrades, cycle history, chat badge (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Company detail card (market-tools.js). Company name now routes through CO_NAME_ZH, the sector badge through sectorNameZh, the HQ label and colony, the dividend-eligible and no-base-dividend tags, and the Position and Short labels.
+
+The HQ field needed a new hop. It carries the colony DISPLAY name, not the colony id, so colonyNameZh could not resolve it. Added COLONY_ID_BY_NAME, a name-to-id map generated from COLONY_META covering all 37 colonies, and colonyNameByEn on top of it. Generated from the source data rather than hand-typed, so it cannot drift from COLONY_META.
+
+Market upgrades (market-upgrades.js). Panel title, the three upgrade names and descriptions, the Auto-Accumulate sub-panel heading, the OWNED tag and the loading state. The catalogue lives on the SERVER in db.js, so the client keys translations by upgrade id, which is the identity used by market_upgrade_buy. Only name and desc are display strings; nothing that crosses the wire changed.
+
+Cycle price history modal (cycle-history.js). Title and subtitle, the Range label, From and To, the search placeholder, the select-a-ticker empty state, and company names in the ticker list through CO_NAME_ZH.
+
+Chat channel badge (index.html). Both the initial render and the per-channel update, with channel names keyed so global, trade, faction and dunce all translate rather than only the word room.
+
+Day-trade counter (trade-limit.js) and the no-open-orders state (sound.js).
+
+DEV LOGS SUBTITLE, and the reason it survived the last pass: 1.2.5.19 wired the JS that sets that text when a sub-tab is clicked, but the static markup carried the English with no data-i18n attribute. So it translated only after the player interacted with the tab, and read English on first paint. Both the subtitle and the Open channel link now carry data-i18n. Worth noting as a pattern: text that is both present in markup AND assigned from JS needs wiring in both places, and testing it means looking at first paint, not at the state after a click.
+
+Verifier state: all seven checks zero.
+
+Remaining: codec-data.js, the Corpo-Cards rules encyclopedia, the standalone drone-mining game, and the dev-only god-panel.js and dev-comms.js. Company names outside CO_NAME_ZH's coverage will still read English wherever that map has no entry.
+
+First-pass CN throughout. Native review advised.
+
+Changed files: client/index.html, client/assets/core.js, client/assets/market-tools.js, client/assets/market-upgrades.js, client/assets/cycle-history.js, client/assets/trade-limit.js, client/assets/sound.js.
+
+---
+
+## v1.2.5.20 (2026-07-22) - Localization: mining help, price alerts, market controls, faction names (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Second round of gaps found by playing rather than grepping.
+
+Drone mining help panel (index.html). The How Mining Works heading, the leaderboard caption, and all twelve rows: Movement, Mining, Combat, Heat, Factions, Scrap, Depth, Docking, Dying, Refineries, Escorts and Ships, label and body. Mining and Heat already had labels wired from an earlier pass, which is why those two read Chinese while the rest did not.
+
+Price alerts (market-tools.js). Panel heading, the Symbol and Price inputs, the Above and Below conditions, the Set button and the empty state.
+
+Market panel controls. Watchlist (market-tools.js), History and its tooltip (cycle-history.js), and Index Funds with its tooltip, subtitle and empty state (index-browser.js).
+
+FACTION NAMES, which were the largest visible gap. Faction display strings were still English in four places: the system-view control bars, the colony-panel control bars, the Fund a Faction buttons and the funding toast. All now route through a single facZ resolver reading FACTION_ZH, and short names were added to that map. One resolver rather than four call-site fixes, so the galaxy map, the system view, the funding panel and the TCG cannot drift apart on what a faction is called.
+
+Blockade panel empty state.
+
+Passive-income chat line. The server assembles that sentence in English, but the same payload also carries base, bonus and total as numbers. Rather than translate the sentence or parse it, the client rebuilds it from the numbers when the language is Chinese. A server-side wording change cannot leave stale Chinese behind. Relative chat timestamps now translate too.
+
+TWO PROCESS FAILURES THIS PASS, both mine, both worth recording:
+
+A build script aborted on one bad anchor and wrote nothing, discarding the facZ resolver, while a later script successfully wrote three call sites that depended on it. facZ ended up called seven times and declared zero times. This is the second occurrence of that exact pattern, after renderFactionList in 1.2.5.16. The rule going forward: an aborted batch means re-run the whole batch, never the remainder.
+
+The scope checker did not catch it, because facZ was not on its hand-maintained alias list. Widening that list to auto-discover helpers made the checker WORSE: with the fault present it reported four problems, with the fault removed it reported one. A checker that reports fewer faults after a fault is introduced is worse than no checker, so the brace-walking scope resolution was abandoned rather than patched further. It has been replaced with a coarser check that is correct: an identifier called but not declared anywhere in that file. It cannot catch a helper declared in the wrong function, which would need a real parser, and the file says so. Both false-positive rate and negative test are now clean: zero on the current tree, and deleting facZ names exactly that call site while node --check still passes the file.
+
+Verifier state: six checks in i18n-check plus the rewritten scope check, all zero.
+
+Remaining: codec-data.js, the Corpo-Cards rules encyclopedia, the standalone drone-mining game under client/assets/drone-mining/, and the dev-only god-panel.js and dev-comms.js.
+
+First-pass CN throughout. Native review advised.
+
+Changed files: client/index.html, client/assets/core.js, client/assets/galaxy.js, client/assets/market-tools.js, client/assets/cycle-history.js, client/assets/index-browser.js, tools/i18n-scope-check.js.
+
+---
+
+## v1.2.5.19 (2026-07-22) - Localization: mining splash, Fleshbook, Corpo-Cards, dev logs, header, heatmap (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Seven surfaces that were still rendering English under the Jade toggle, found by playing the game rather than by grepping it.
+
+Drone mining splash (index.html). The eyebrow line, title, tagline, both lore paragraphs, the four stat labels, the drone-refund line, the three faction names, the launch button and the footer note.
+
+Fleshbook (fleshbook.js). Header and PUBLIC FEED label, the LIVE indicator, compose placeholder and BROADCAST button, the character-count hint, the NEW and TOP sort tabs, the empty state, PINNED and FLESH CORP tags, the boost tooltip, the reply placeholder, and the cooldown, failed and broadcast-failed messages.
+
+Corpo-Cards (tcg/tcg-app.js). The Arena subtitle, all six tabs, the play-picker intro, starter deck names, the faction and card-count sub-line, the prebuilt tag and the Play button. Faction labels resolve through the existing FACTION_ZH map rather than a second table, so the TCG and the galaxy map cannot drift apart on a faction's name.
+
+Dev Logs tab (index.html). Header, the subtitle and channel link (both set from JS, so wired at the assignment), and the Videos and Live on Kick sub-tabs.
+
+Header buttons (index.html). Patreon, Discord, Bugs, Jade and Tutorial. Logout was already wired.
+
+Heatmap sector lore (sound.js). All eight sector names and their sub-lines. Rebuilt per read through a HEAT_LORE accessor rather than translated in place, so the language toggle takes effect without a reload.
+
+Contracts board (galaxy.js). Commodity names on the offer table now route through COMMODITY_ZH, and _colonyName routes through colonyNameZh, which also fixes the Route column on the lane shares table below it.
+
+TWO DEFECTS FOUND AND FIXED IN THIS PASS, both mine:
+
+A ${} interpolation was written into single-quoted strings in three places while wiring Fleshbook and the funds panel. node --check caught them because the injected text contained quotes.
+
+More subtle: applyI18n overwrites textContent wholesale. English restores from the original captured out of the DOM and keeps any leading icon glyph, but Chinese renders the zh value verbatim. Seven keys (Patreon, Discord, Bugs, Jade, DEV LOGS, Videos, Live on Kick) were authored without their glyph, so every one of those icons would have vanished the moment a player hit the toggle, and only in Chinese. Fixed, and added as check 6 in tools/i18n-check.js: it compares the leading glyph in the markup against the zh value for every data-i18n element. Negative-tested by stripping the Jade glyph and confirming it names that key.
+
+Verifier state: 966 catalog entries, 830 literal keys in use, and zero on all six checks.
+
+Note: the drone mining game itself (client/assets/drone-mining/index.html) is a separate self-contained app and is NOT covered here. It is its own pass.
+
+Remaining: codec-data.js, the Corpo-Cards rules encyclopedia, and the dev-only god-panel.js and dev-comms.js.
+
+First-pass CN throughout. Native review advised.
+
+Changed files: client/index.html, client/assets/core.js, client/assets/galaxy.js, client/assets/sound.js, client/assets/fleshbook.js, client/assets/tcg/tcg-app.js, tools/i18n-check.js.
+
+---
+
+## v1.2.5.18 (2026-07-22) - Localization: title store, Capital Houses, P&L, market tools, auth (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+The remaining player-facing modules. After this the only untranslated surfaces are the codec dialogue data and the two dev-only panels.
+
+Title store (market-state.js). All 27 purchasable and Patreon titles, name and blurb, plus the President of The Coalition card with its holder line, seize and claim controls and perk strip. Store buttons: Equip, Equipped, Unequip, Buy, Locked, In Office.
+
+IMPORTANT, and the reason titles are done as a map rather than a catalog: the English title name is the SERVER identity. It is what buy_title and set_title send and what the owned list is matched against. Only the rendered label is swapped; every lookup key stays English. Same rule already used for commodity and cargo names. Translating the stored name would have desynced ownership.
+
+Capital Houses (funds.js). Empty-house canvas label, holdings and positions empty states, Join Fund and its hint, the Patreon join path and description, Fund Trade titles including the owner-override variant, governance labels, Veto (Golden) and Force Call, golden-share tag, and every prompt and hint on withdraw, member payout, invite, trade, golden transfer, officer assignment, account linking, fund rename, description edit and the delete confirmation.
+
+P&L panel (pnl-panel.js). Ticker filter and minimum-position inputs, Export CSV, Close Winners, Close Losers, Close Green, the Unrealized P&L and Daily Income tiles, the Equity and Cash chart title and its footnote, Trade History with its empty and unavailable states, Sell All, and the failure alerts.
+
+Market tools (market-tools.js). Watchlist star tooltips in both states, the watchlist-only filter, the news filter placeholder and its watchlist-only toggle, and the headquarters-colony tooltip.
+
+Auth (fm-auth.js). Mode switch and submit buttons, and all eleven login and registration hints including the server error map.
+
+NEW CHECK: tools/i18n-check.js now also flags a ${} interpolation sitting inside a single- or double-quoted string rather than a backtick template. Wiring a translator call into HTML built with single quotes yields '<span title="${window.t(...)}">'. When the injected text contains a quote, node --check catches it, and it did twice during this pass. When it does not, the file is syntactically valid and the player sees the literal characters on screen. Template state is tracked with a stack rather than a backtick count, because nested templates inside expressions flip a counter twice on one line and would report whole blocks as broken. Negative-tested against an injected fault, with zero false positives on the current tree.
+
+Note on the currency glyph: this codebase uses BOTH U+0191 and U+0192 for it. The President perk strip and the Abaddon cluster bonus use U+0191, most other code uses U+0192. Keys match whichever the source uses. Worth normalising eventually, but that is an English-visible change and belongs in its own release.
+
+Verifier state: 877 catalog entries, 804 literal keys in use, 0 undefined, 0 missing zh, 0 unsupplied tokens, 0 bad interpolations, 0 em dashes in rendered text, 0 unresolved aliases.
+
+Remaining: codec-data.js (codec dialogue, a lore-authoring job rather than a wiring job) and the dev-only god-panel.js and dev-comms.js.
+
+First-pass CN throughout. Native review advised.
+
+Changed files: client/assets/core.js, client/assets/market-state.js, client/assets/funds.js, client/assets/pnl-panel.js, client/assets/market-tools.js, client/assets/fm-auth.js, tools/i18n-check.js.
+
+---
+
+## v1.2.5.17 (2026-07-22) - Localization: Galaxy colony and planet data (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+The colony data layer, which the previous five Galaxy passes deliberately deferred. This is what the map detail pages and planet cards actually read.
+
+Colony names and lore. All 37 colonies. The 16 Jade colonies already had names and lore in JADE_I18N, so the new COLONY_ZH map covers the 21 non-Jade colonies only and the resolver checks JADE_I18N first. No duplication, and the Jade side is untouched. Applied to the detail-panel header and lore block, the faction-list system chips, lane and route labels, and shipping destination names.
+
+Planet names. All 66, in PLANET_NAME_ZH, keyed by the English name as it appears in COLONY_META.
+
+Planet bonus and contested lines are GENERATED, not stored. There are 135 of them and they are templated (Coalition: +1.2% Finance dividends / Contested: +0.6%). A table of 135 hand-translated strings would go stale silently the next time the economy is retuned, and the Chinese would keep showing old percentages with nothing to flag it. bonusZh and contestZh parse the English and rebuild it in Chinese, so the numbers are correct by construction. Nine strings that do not fit the pattern (the Abaddon cluster requirement, the Guild fee exemption, the dev multiplier, the S'weet monopoly, the Greed sovereignty line and the cannot-be-contested variants) are whole-string overrides. Verified at runtime against every string in COLONY_META: 67 bonus, 68 contested, 66 planet names, 37 colony names, 37 lore, zero falling through to English.
+
+Sector display names on planet cards (16 values including Gray Bazaar, Iron Foundries, Flesh and Gene, Neural Networks, Power Cartels) now translate. These are distinct from the eight numeric sector keys, which cover the market side.
+
+Commodity names on the markets board: cargo hold rows, arbitrage board rows and the commodity chips now render through COMMODITY_ZH. Sorting, filtering and the name-to-id maps still key off the English name, so only the visible label changes.
+
+JADE FACTION CARD FIXED. The Jade card renders through jadeFactionCard, a separate path from the other five faction cards, so the FACTION_ZH wiring added in 1.2.5.16 never reached it and the card stayed English under the Jade toggle. Now wired for name, description and bonus summary.
+
+Note on the Jade description specifically: the Chinese currently shown is first-pass and is a placeholder. Jacob is writing that one by hand. The socket is wired, so replacing it is a one-line data edit to FACTION_ZH.jade.desc in core.js with no code change. It is left populated rather than blank because falling back to English on the Chinese-native faction is the worse of the two failure modes.
+
+One data correction: the Abaddon cluster bonus uses U+0191 for the currency glyph where the rest of the codebase uses U+0192. The override key matches the source exactly rather than normalising it, since changing the source glyph is an English-visible change and belongs in its own release if wanted.
+
+Still untranslated, in rough priority order: market-state.js, funds.js, market-tools.js, pnl-panel.js, fm-auth.js, codec-data.js (large, lore content), and the dev-only god-panel.js and dev-comms.js.
+
+First-pass CN throughout. Native review advised.
+
+Changed files: client/assets/core.js, client/assets/galaxy.js.
+
+---
+
+## v1.2.5.16 (2026-07-22) - Localization: Galaxy tab pass 5, factions and remaining toasts (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Fifth and final Galaxy pass over interactive surfaces. Everything the changelog for 1.2.5.14 and 1.2.5.15 listed as pending is now covered except the colony data layer.
+
+Factions list (renderFactionList):
+- All six cards. Faction names, one-line descriptions and bonus summaries resolve through a new FACTION_ZH map keyed by faction id, because those strings live in the FACTIONS data object rather than in the catalog. English data remains the fallback.
+- DEV ONLY and PATREON corner banners, ALIGNED, JOIN, CONVERT, JOIN ON PATREON and LOCKED controls.
+- ACTIVE BONUSES panel, the SYSTEMS, CONTESTED and WAR CHEST stat cells, the STATUS and PERMANENT CONTROL pair on the Flesh Station card, and the planets-in-systems line.
+- The Void Collective permanent conversion warning, split into body, irreversibility and exit-route strings so the red emphasis span survives translation, plus the CYBORG AUGMENTS ACTIVE line for aligned players.
+
+Faction join (gJoinFaction): the login prompt, the full confirm dialog including its bullet list, the aligned toast with the translated faction name, the conversion-complete suffix, and the generic error and network-error toasts. The colony_conquered broadcast toast now names the faction in Chinese.
+
+Faction funding: both call sites, spDoFund on the system-view HUD and the colony-panel handler. Minimum amount, login prompt, the funded message with its control-gained, to-next-percent and banked variants, fund-failed and connection-error.
+
+Commodity board (gMktBuy, gMktSell): login prompt, both quantity prompts, the hold-none guard, the bought and sold hint lines, and the no-ship, insufficient-funds, no-cargo-here, buy-failed and sell-failed error paths. Cargo delivered and cargo insured toasts route commodity names through the existing COMMODITY_ZH map. Ship commissioning toast.
+
+Map run tooltip: the SHIPPING and SMUGGLING labels, stake, time-left and insured lines, with cargo names through SMUG_CARGO_ZH.
+
+Also swept: 11 login-first toasts, 4 minimum-amount toasts and 2 minimum-stake toasts across the lane share and blockade actions, plus the share-error toast.
+
+Verifier state after this pass: 794 catalog entries, 701 literal keys in use, 0 undefined, 0 missing zh, 0 unsupplied tokens, 0 em dashes in rendered text.
+
+Still untranslated on the Galaxy tab, and deliberately so: COLONY_META colony names, lore paragraphs and per-planet bonus lines. That is a data pass rather than a wiring pass and it is sized differently from these five. The three dynamic namespaces the verifier reports as INFO (lane.*, sector.*, casino.bacc.*) resolve at runtime; lane.* is confirmed complete across all 63 lanes, the other two still want a manual check.
+
+NEW: tools/i18n-scope-check.js. Run with node tools/i18n-scope-check.js. The translation aliases in this codebase are declared per function (var T = function(k,fb){...}), so a call site can ship without its declaration and produce a ReferenceError the moment that function runs. Nothing already in the toolchain catches that: node --check only validates syntax, and i18n-check.js only validates that the key exists in the catalog, not that the function calling it exists in scope. That exact combination broke renderFactionList during this pass, when a build script aborted before writing and rolled back the alias declarations while a later run wrote three call sites that depended on them. Syntax checking passed and the catalog check passed; the factions tab would have thrown on open. The new checker walks outward from every alias call to the enclosing function, accepts a declaration in any enclosing scope or at module level, and fails otherwise. It was negative-tested by deleting the FZ declaration and confirming it flags exactly the two dependent call sites while node --check still reports the file as valid.
+
+First-pass CN throughout. Native review advised before any of it is treated as final.
+
+Changed files: client/assets/core.js, client/assets/galaxy.js, tools/i18n-scope-check.js.
+
+---
+
+## v1.2.5.15 (2026-07-22) - Localization: Galaxy tab pass 4, Smuggling subtab (CLIENT + TOOLING)
+
+Client and build tooling. Hard-refresh after deploy.
+
+Fourth Galaxy pass, completing the Smuggling subtab (window.renderShippingTab), the last render surface listed as pending in 1.2.5.14.
+
+Smuggling console (renderShippingTab):
+- Header and the stake-and-guards explainer.
+- Active run card: RUN IN PROGRESS, the origin to destination line, the stake and guard-fee line, and the EN ROUTE countdown.
+- Select Route (lane type now routes through the existing lane.* keys), Contraband (cargo names plus the risk suffix), Stake and its placeholder.
+- Guard Escort: the label, the risk-and-fee note, and all four tiers with names, descriptions, risk cut and fee.
+- Syndicate turf notice, Estimated Risk, the risk-detail breakdown, and the four payout cells (Potential Payout, Guard Fee, Total At Risk, EV / Run).
+- Launch button, the How Factions Affect Smuggling panel (six faction lines), and Run History with its CLEARED and SEIZED states and empty state.
+
+Live strings and toasts:
+- _smugTick countdown, both the timer and the status line.
+- _gSmugCalcRisk risk-detail labels (bet-size, tension, faction, synd turf, guards) and the blockade and guard-cut suffixes.
+- _gStartShipping and _gStartSmuggling2 login and minimum-stake errors.
+- smuggling_result, smuggling_started and smuggling_error toasts, the delivered and intercepted status lines, and the three shipping_result toasts.
+
+Cargo and guard names arrive from the server as English names rather than ids, so they resolve through two name-keyed maps, SMUG_CARGO_ZH and SMUG_GUARD_ZH. Guard descriptions come from the map rather than the server payload, so a server-side rewrite cannot strand a stale Chinese line.
+
+FIXED, not localization: the Private Army button in the blockade sub-panel was hardcoded English while the identical button in the colony panel was correctly wired to galx.privateArmy. The key existed; that call site was never connected. It is now.
+
+EM DASHES. The no-em-dash rule was being checked with a grep for the raw U+2014 byte. That grep cannot see the escape form, and 33 player-facing strings in galaxy.js were written as \u2014, which renders identically on screen. All 33 rewritten, plus two literal stragglers outside galaxy.js: the ticker-tape separator in core.js renderTicker (now a middle dot) and the round-history header in god-panel.js (now a comma). The client is now at zero em dashes in rendered text. Code comments are untouched and exempt; they never reach a player.
+
+NEW: tools/i18n-check.js. Run from the repo root with node tools/i18n-check.js. It checks four things against what actually renders rather than against file encoding: em dashes in string literals including the escape form, keys passed to a translator call site with no catalog entry, catalog entries with no zh value, and {token} placeholders present in a string but not supplied by the tf() call site, which would render literal braces to the player. The token check extracts the vars object by brace matching rather than by pattern, because nested calls such as {cargo:_cz(d.cargo)} defeat a plain regex, and it was negative-tested against a deliberately broken key before this build was cut. The middle check is the one that matters most, because a typo'd key is invisible in English (the inline fallback renders) and silently English in Chinese. Current state: 734 catalog entries, 686 literal keys in use, 0 undefined, 0 missing zh, 0 unsupplied tokens, 0 rendered em dashes. Add --strict to gate on em dashes. Dynamic namespace lookups (lane.*, sector.*, casino.bacc.*) are reported as INFO and still need a manual check that every runtime value has a key.
+
+SHIP.SH: added a divergence guard. It fetches origin/main and hard-stops before committing if local history is behind or diverged, printing the exact log commands and the merge -s ours recovery line. The previously noted fix was a plain git pull --ff-only before committing, which would abort every time, because apply.sh mirrors the zip over the whole tree and leaves it dirty by design. Classifying against merge-base works on a dirty tree and stops on the actual dangerous cases: committing on a stale base, or shipping a build that silently reverts commits already on origin.
+
+Still pending on the Galaxy tab: the factions list (renderFactionList) and the commodity action toasts. Colony names, lore and planet bonus text remain untranslated data and are their own pass. First-pass CN throughout; native review advised before any of it is treated as final.
+
+Changed files: client/assets/core.js, client/assets/galaxy.js, client/assets/god-panel.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt, ship.sh, tools/i18n-check.js.
+
+---
+
+## v1.2.5.14 (2026-07-21) - Localization: Galaxy tab pass 3, Contracts subtab (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Third Galaxy pass, completing the Contracts subtab. The filter dropdowns above the tables shipped in pass 1; this is everything below them.
+
+Lane shares table (renderContractsTable):
+- YOUR POSITION card: the header, the SELL button, the PAID / VALUE / GAIN / DIVIDENDS labels and the total return line.
+- Column headers Route, Type, Slots, Div and Price.
+- Row controls: BUY, SELL, SWAP and the FULL state, plus the sell-price sub-label.
+
+Shipping contracts board (renderShippingContracts):
+- The board title and its explanatory subtitle.
+- Your open contracts section, including the strike and now labels and the EXERCISE button.
+- Available contracts header with the reshuffle note, the offer table headers (Commodity, Lane, Strike, Premium, Expiry), the BUY button, the empty state and the unavailable state.
+
+Contract actions (gBuyContract, gExerciseContract):
+- Login prompt, insufficient-funds amount, the reshuffled-offer message, buy-failed hints, the contract-bought toast, the exercised toast, the closed-out-of-the-money toast and exercise-failed.
+
+ENGLISH-VISIBLE CHANGE, not a pure localization: the lane Type column previously printed the raw lowercase enum (corporate, grey, dark, contested). It now routes through the existing lane.* keys, so in English it reads Corporate, Grey Market, Dark Net, Contested, matching the filter dropdown directly above it and the map legend. This was a deliberate consistency fix. Revert by restoring the raw r.type value in that cell if the lowercase form was intentional.
+
+Three em dashes in this region were rewritten out of the English text. galaxy.js remains at zero non-comment U+2014.
+
+All 4 lane types in the LANES table (grey, corporate, dark, contested, 63 lanes) have lane.* keys, verified, so the dynamic lookup cannot fall through to English. Edits were scoped to the renderContractsTable-to-_gBuyShare slice; the jade panel is verified free of galx references.
+
+Still pending on the Galaxy tab: the Smuggling subtab (window.renderShippingTab), the factions list, and the commodity action toasts. Colony names, lore and planet bonus text remain untranslated data. First-pass CN; native review advised.
+
+Changed files: client/assets/core.js, client/assets/galaxy.js.
+
+---
+
+## v1.2.5.13 (2026-07-21) - Localization: Galaxy tab pass 2, colony detail panel (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Second Galaxy pass. This is the colony detail panel that opens in the right sidebar when a colony is clicked on the sector map, which is the coalition-planet surface. All UI chrome in renderDetail, plus the two sub-panels appended underneath it.
+
+Colony panel:
+- SYSTEM button, MEGASTRUCTURE label, the CONTESTED faction-war banner and the Flesh Station banner.
+- POPULATION and TENSION labels.
+- Planets grid header (both the Station Modules variant and the Planets count variant, the count stays live), and the ENTER affordance on each planet card.
+- Faction bonus callout, including the per-sector dividend lines.
+- WAR CHEST, Faction Control, Key Operators and the plus-N-more overflow line.
+- Fund a Faction buttons, where the faction name and control percentage stay live.
+- Core Systems list on Flesh Station.
+
+Blockade sub-panel: the BLOCKADES header, the ACTIVE and FUNDING lane tags, the fund amount placeholder, FUND, COUNTER, the PRIVATE ARMY button and the activation note.
+
+Lane shares sub-panel: the LANE SHARES header and the click-a-lane hint.
+
+Two em dashes in this region (PRIVATE ARMY and the lane hint) were rewritten out of the English text, so galaxy.js now has zero non-comment U+2014.
+
+Implementation note: every edit was scoped to the renderDetail function body rather than applied file-wide. renderJadeDetail mirrors several of these labels but binds T to the three-argument jadeT helper, so a file-wide replace would have silently produced untranslated output there. The jade panel is untouched and verified to contain no galx references.
+
+Not covered, still English: colony names, colony lore, planet names and planet bonus text. Those live in the COLONY_META data table and have no zh entries for coalition colonies (JADE_I18N only covers the jade galaxy). That is a data-layer translation job of its own. Also still pending: commodity action toasts, the factions list, the contracts tables, and the smuggling and blockade action handlers. First-pass CN; native review advised.
+
+Changed files: client/assets/core.js, client/assets/galaxy.js.
+
+---
+
+## v1.2.5.12 (2026-07-21) - Localization: Galaxy tab pass 1, shell + commodity market (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+First pass over the Galaxy tab. galaxy.js is 5451 lines, so this is deliberately one slice of several: the static tab shell and the whole Markets (commodity arbitrage) subtab. Colony names, lore and commodity names were already localized at the data layer in earlier work, so this pass is UI chrome only.
+
+Static shell (index.html):
+- SELECT A COLONY placeholder in the map sidebar, and the contested-colony note in the lane legend.
+- Factions pane: the allegiance line and the full How Faction Wars Work paragraph, split around the inline 75% figure so the number stays live.
+- Contracts pane: the Lane Shares header, the dividend note, all three filter dropdowns (type, status, sort) and the full How Lane Shares Work paragraph. The type dropdown reuses the existing lane.* keys rather than duplicating them.
+
+Markets subtab (galaxy.js renderMarketsTab):
+- Cargo hold summary, the empty state, and the average-cost note.
+- In-transit shipment tracker and its empty state.
+- Shipping console: the panel title and description, every field label (Commodity, From, To, Qty, Escort, Insurance), the search placeholder, all four escort options, the half-cover checkbox, the SHIP button and the route preview line.
+- Arbitrage board: the title and subtitle, the ALL/TECH/MED/AGRI class filters, the name filter placeholder, all five table headers, the BUY/SELL/SHIP row buttons and the explanatory note underneath.
+- Shipyard: the title and subtitle, ACTIVE badge, Capacity and Risk labels, the baseline value, In service, Commission and Starter ship.
+- Loading, unavailable and load-failed states.
+
+Where a string carried an em dash, the English text was rewritten without one (comma or middot), so the rule now holds on the rendered output of this subtab as well as in source.
+
+Still to come on the Galaxy tab, each its own pass: the commodity action toasts (gMktBuy, gMktSell, gShipQuote, gShipConsoleGo), the colony detail panel (selectColony and renderDetail), the factions list, the contracts tables, and the smuggling and blockade panels. First-pass CN; native review advised.
+
+Changed files: client/assets/core.js, client/index.html, client/assets/galaxy.js.
+
+---
+
+## v1.2.5.11 (2026-07-21) - Localization: core trading UI (sell/short/margin) + em-dash fix (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Gap-cleanup pass over high-traffic trading surfaces that were still English. The main market tab chrome (Buy/Sell/Short, limit orders) was already localized in earlier work; this fills in the modals and always-visible bits around it.
+
+- Sell-confirm modal: the title and every row label (Symbol, Owned, Avg Cost, Last Price, Qty to sell / max, Sale Value, Fee, Net proceeds, Unrealized P&L) plus the Cancel / Confirm Sell buttons.
+- Short-sell modal (both Open and Cover modes): the header, the two mode tabs, all field labels (Symbol, Current Price, Qty, Collateral Locked, Liquidation, Borrow Fee, Short Position, Avg Entry, Cover Cost, Estimated P&L), the inline notes (held-not-cash, entry-multiple, per-30-min), the YOUR SHORT POSITIONS header, and the Cancel / Confirm Short / Cover Position actions.
+- Margin-call banner: the Margin Call title, the full description, and the COVER NOW button.
+- XP bar (core.js renderPositions): the level / XP readout, with and without a title, via tf().
+
+Em-dash fix: the margin-call banner contained two player-facing U+2014 (the Margin Call separator and an em dash in the description) - both violated the game-facing no-em-dash rule and were cleared while localizing that block. index.html now has zero player-facing U+2014 (the six remaining are all HTML/JS comments).
+
+Dynamic bits rendered by market-orders.js and shorts.js (live values, warning boxes, the short-position list) remain for their own pass, as does the sell-modal title if it proves to be JS-set. First-pass CN; native review advised.
+
+Changed files: client/assets/core.js, client/index.html.
+
+---
+
+## v1.2.5.10 (2026-07-21) - Localization: P&L tab + sector names (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+The P&L tab now renders in Chinese when jade mode is on. The live P&L view is rendered by core.js (liveUpdatePnL); the tab's static shell lives in index.html.
+
+- KPI bar: Net Worth, Equity, Cash, Unrealized P&L, Daily Income.
+- Faction line: the "Faction:" label, the four faction names (Coalition/Syndicate/Void Collective/Flesh Station), and "colony bonuses active".
+- Position table: the column headers (Symbol, Position, Last, Value, Unr. P&L, Gain%) and the three empty-state messages (no match / none in sector / no open positions), including the canvas bar-chart empty label.
+- Sort/filter dropdown (static, index.html): "All positions", "Grouped by sector", and the eight sector names.
+
+Sector names (Finance, Biotech, Insurance, Manufacturing, Energy, Logistics, Tech, Misc) are now centralized under a sector.* namespace: _sectorName() resolves through it, and every sector option across the app (the P&L sort, the Capital Houses holdings sort, and the god-panel sector picker) now carries the matching data-i18n, so sector names localize consistently everywhere. The Capital Houses holdings sort's "All holdings" option was localized at the same time (start of the guild.* namespace); the rest of the Capital Houses panel remains for its own pass.
+
+Note: pnl-panel.js (window.initPnLPanel) was found to be unmounted dead code - it is not the live P&L renderer - and was deliberately left untouched. First-pass CN; native review advised.
+
+Changed files: client/assets/core.js, client/index.html.
+
+---
+
+## v1.2.5.9 (2026-07-21) - Localization: Store tab + inventory (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+The Store tab now renders in Chinese when jade mode is on. The Store tab is a single inline panel in index.html with four sub-tabs (Titles, Inventory, Ƒbay, Slots), and the item/market rendering is driven by inventory.js.
+
+Static panel (index.html, ~62 labels via data-i18n): the Patreon membership block (tier descriptions, email placeholder, Link Account, hint text), the four sub-tab buttons, all six title-tier headers (Common through Legendary and Patreon Exclusive), the inventory equip/bag headers, the Ƒbay filter dropdowns (all slot, rarity, and sort options), the list-item form, and the slot-machine labels and rarity-odds chips.
+
+Dynamic (inventory.js, ~39 edits via t()/tf()): item rarity names and equipment slot names (resolved through invRarityName / invSlotName helpers that reuse the store.rar* and store.slot* keys), the equip/unequip/scrap flows with their confirms and toasts, the empty-bag and no-items messages, the Ƒbay market rows (Buy/Cancel buttons, seller labels, rarity tags), the buy/list/cancel toasts, the slot-machine spin states and result reveal, and the WebSocket spin-grant and guaranteed-drop toasts.
+
+Item and title names themselves stay data-driven (server catalog) and are unchanged; the Ƒbay brand name is kept as-is. All remaining U+2014 in inventory.js are code comments. First-pass CN; native review advised.
+
+Changed files: client/assets/core.js, client/index.html, client/assets/inventory.js.
+
+---
+
+## v1.2.5.8 (2026-07-21) - Localization: casino Roulette; casino complete (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Roulette (European, single-zero) now renders in Chinese when jade mode is on, completing casino localization. Roulette lives in a large block inside core.js rather than its own casino-*.js file, so this was a single-file pass.
+
+- The bet-type dropdown: all 13 wagers with their odds (Red/Black/Odd/Even/Low/High at 1:1, the three dozens and three columns at 2:1, Straight Up at 35:1).
+- Bet-amount label and the Min/Max quick chips, the + Add Bet / Spin / Clear action buttons, and the Balance / Bets Total / Active Bets info labels.
+- Runtime: the active-bets slip uses localized short labels per wager (betLabel rebuilt to resolve through t()); the result banner (win/lose with number, colour, and payout), the spin log lines, the Last-number readout, and the place-bet / insufficient-funds / spinning status messages. Colour names (red/black/green) resolve through a small rlColorName helper and are upper-cased for the banner exactly as before.
+
+Wheel-face numbers (canvas) and the straight-bet number grid stay numeric - unchanged, and CJK on the canvas would not render cleanly anyway. A player-facing em dash in the spin bet-rejected notice was cleared via the shared casino.common.stale key; all remaining U+2014 in the block are code comments. First-pass CN; native review advised.
+
+With roulette done, every casino game (Roulette, Blackjack, Poker, Horse Races, Baccarat, Sic Bo, Chess, Sudoku, Math Quiz, Minesweeper, Solitaire) plus the game-selector tabs now localize.
+
+Changed files: client/assets/core.js.
+
+---
+
+## v1.2.5.7 (2026-07-21) - Localization: casino puzzle games + game tabs (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Five more casino games now render in Chinese when jade mode is on: Chess, Solitaire (Klondike), Sudoku, Minesweeper, and Math Quiz. Each follows the established pattern - static template labels via data-i18n, all runtime strings through t()/tf(), and applyI18n(pane) after the pane is built:
+
+- Chess: AI ELO / Start / Surrender / Payouts labels, entry-fee and payout lines, turn indicators (your move / AI thinking), and every result status (checkmate win, checkmated, draw refund, surrender, timeout, insufficient funds). ELO ratings kept as numbers.
+- Solitaire: New Game / Cash Out / Auto / Balance controls, the Klondike idle briefing and buy-in instructions, the foundations/cash-out status line, and the win/push/lose cash-out banners.
+- Sudoku: title, the five difficulty buttons, numpad Clear, New Puzzle / Submit / Hint controls, cooldown/cells-remaining/board-complete status, hint penalty notes, and correct/incorrect results.
+- Minesweeper: title, the three mode buttons, left/right-click controls, the mines/timer HUD unit, and boom/cleared/earned messages.
+- Math Quiz: MATH TEST header, score/earned row, the five difficulty names in the reward badge, cooldown timer, per-question payout preview, correct/wrong/time-up feedback, and the final-score line.
+
+The casino game-selector subtabs (Roulette, Blackjack, Poker, Horse Races, Baccarat, Sic Bo, Chess, Sudoku, Math Quiz, Minesweeper, Solitaire) are now localized via data-i18n.
+
+Difficulty and mode names resolve through small per-game helper maps (mqLvlName, msModeName, sdkDiffName). A player-facing em dash in chess's entry-rejected notice was cleared via the shared casino.common.stale key; all remaining U+2014 in these files are code comments. First-pass CN; native review advised.
+
+This completes casino localization except for roulette, which lives in a large block inside core.js and gets its own focused pass next.
+
+Changed files: client/assets/core.js, client/assets/casino-chess.js, client/assets/casino-solitaire.js, client/assets/casino-sudoku.js, client/assets/casino-minesweeper.js, client/assets/casino-mathgame.js, client/index.html.
+
+---
+
+## v1.2.5.6 (2026-07-21) - Localization: casino Poker / Texas Hold'em (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Poker (Texas Hold'em, 6-max vs 5 AI) now renders in Chinese when jade mode is on. The inline table template (Stack/Blind/Pot, OPPONENTS, Community, Your Hand) and the Deal/Fold/Check/Call/Bet-Raise/All-in controls are wired via data-i18n; all runtime strings go through t()/tf(): the ten hand rankings (Royal Flush through High Card), the street names and street headers (flop/turn/river/showdown), every AI and player action line (folds/checks/calls/raises, blinds, hand headers), the seat status/bet chips, and the win/lose/push/split result banners.
+
+AI opponent names (Vega, Oracle, Dread, Silk, Baron) are kept as proper nouns in both languages, consistent with the horse names. A player-facing em dash in the bet-rejected notice was cleared via the shared casino.common.stale key. Poker terminology follows standard Chinese usage.
+
+The static template lives in index.html and is localized by the document-level applyI18n; the dynamic strings are localized at their render points in casino-poker.js. First-pass CN; native review advised.
+
+Changed files: client/assets/core.js, client/assets/casino-poker.js, client/index.html.
+
+---
+
+## v1.2.5.5 (2026-07-21) - Localization: casino Baccarat + Sic Bo (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Baccarat and Sic Bo now render in Chinese when jade mode is on. Baccarat: the felt (Balance, On table, Player/Banker hands), all five bet spots (Player, Banker, Tie, Player Pair, Banker Pair), the Deal/Clear/chip controls, the result banner (win/push/lose, natural, pair tags), the bead-road dots, and the log. Sic Bo: the dice board in full - Small/Big/Odd/Even, single numbers, specific doubles, triples, total-sum, and two-dice combos - plus Roll/Clear controls, the rolling/total status line, and the win/lose banner and log.
+
+Shared casino chrome (Balance, On table, CHIP, Max, Clear, insufficient-funds, place-a-bet, net-not-ready, rejected, and the win/lose banner formats) was promoted to casino.common.* keys reused by both games. Static labels use data-i18n + applyI18n(pane); runtime strings use t()/tf().
+
+Terminology follows standard Macau/Chinese usage. First-pass CN; native review advised. Neither file had em-dash issues (both used hyphens).
+
+Changed files: client/assets/core.js, client/assets/casino-baccarat.js, client/assets/casino-sicbo.js.
+
+---
+
+## v1.2.5.4 (2026-07-21) - Localization: casino Blackjack + Horse Races (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Blackjack and Horse Races (both live in casino-blackjack.js) now render in Chinese when jade mode is on: table labels (Dealer, Your hand, Stack, Bet), the Deal / Hit / Stand / Double and RACE controls, the rules and payout lines, shoe status, and every runtime result and log line - win, lose, push, bust, blackjack, payouts, insufficient-funds and stale-refresh notices, and bet-rejected errors. Static labels use data-i18n + applyI18n(pane); runtime strings use t()/tf().
+
+New: window.tf(key, fallback, vars) in core.js - t() with {token} interpolation, reused by casino result strings that embed amounts, counts, and horse names.
+
+Horse names (Comet, Nebula, Phantom, Vortex, Ember, Quicksilver) are kept as proper nouns in both languages to avoid canvas CJK rendering issues. Pre-existing em dashes in the affected player-facing strings (horse dropdown separators, race status) were cleared in both languages.
+
+First-pass CN on casino terms; native review advised. Remaining casino games (baccarat, sic bo, poker, chess, solitaire, sudoku, minesweeper, mathgame, roulette) to follow using the same pattern.
+
+Changed files: client/assets/core.js, client/assets/casino-blackjack.js.
+
+---
+
+## v1.2.5.3 (2026-07-21) - Localization: tutorial (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+The full onboarding tutorial (UNIT-7) now renders in Chinese when jade mode is on: all 17 slides (headings, body prose, callouts), the speaker title, and the Skip / Prev / Next / Begin Trading controls. Inline markup, game terms, and Ƒ figures are preserved. English falls back per field if a zh entry is missing.
+
+First-pass CN on dense onboarding prose (dividends, shorting, factions, smuggling, index funds, the Flesh Revenue Service); native review advised.
+
+Changed files: client/assets/tutorial.js.
+
+---
+
+## v1.2.5.2 (2026-07-20) - Localization: shipping headlines (news engine complete) (SERVER + CLIENT)
+
+Server and client. Restart required. Hard-refresh after deploy.
+
+Translates the 5 remaining headline-variable shipping headlines: smuggling run intercepted and cleared, and shipping insured, lost, and delivered, with translated commodity, colony, and lane-type names.
+
+**The news engine is now complete for normal play.** Every headline the feed generates or an event fires, the six genHeadline pools plus 33 event headline types, renders in Chinese, with English fallback where a value cannot resolve. Intentionally still English: the dev and god events and the rare presidency and conquest lines.
+
+**Changed files.**
+- server/server.js 5 shipping pushHeadline sites now carry event meta.
+- client/assets/core.js the lane-type helper and the 5 shipping event templates.
+
+---
+
+## v1.2.5.1 (2026-07-20) - Localization: galaxy sub-tabs + commodities + cargo headlines (SERVER + CLIENT)
+
+Server and client. Restart required. Hard-refresh after deploy.
+
+**Galaxy sub-tabs** now switch to Chinese: Sector Map, Markets, Smuggling, Contracts, Factions.
+
+**Commodities:** all 120 commodity names now have Chinese translations (the COMMODITY_ZH map). Wired into the cargo and contract news headlines this pass; the commodity display in the smuggling and inventory UIs follows with those subsystems.
+
+**Cargo and contract headlines:** the 4 direct cargo and contract event headlines (cargo insured, seized, delivered, and contract exercised) now render in Chinese with translated commodity and colony names. The 5 headline-variable shipping headlines (smuggling run intercepted and cleared, shipping insured, lost, and delivered) are the next news bit.
+
+**Changed files.**
+- server/server.js 4 cargo and contract pushHeadline sites now carry event meta.
+- client/assets/core.js galaxy sub-tab catalog keys, the 120-entry COMMODITY_ZH map, and the cargo event templates.
+- client/index.html data-i18n on the 5 galaxy sub-tabs.
+
+---
+
+## v1.2.5.0 (2026-07-20) - Localization: chat panel chrome (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Starts on the rest of the game. Translates the chat panel's static chrome: the channel tabs (Global, Premium, Merchants Guild, Unmod, Dunce), the Wire Credits panel (header, Recipient name, Wire, the transfer-tax note), and the Leaderboard header (Leaderboard and NET WORTH). The chat input placeholder now stays translated when you switch channels; chat-ui.js had been overwriting it back to English.
+
+**Deferred (the remaining sequence):** the galaxy sub-tabs (SECTOR MAP / MARKETS / and so on) are rendered somewhere non-obvious in galaxy.js and need a focused pass to locate; the dynamic chat internals (room labels, guild-only notices, the Sound toggle, system messages across the 8000-line chat-ui.js); commodities (120 names); the tutorial; and the subsystem interiors (Casino, Mining, Capital Houses, Store, Fleshbook, Corpo-Cards, Inventory, Funds).
+
+**Changed files.** client/assets/core.js, client/index.html, client/assets/chat-ui.js.
+
+---
+
+## v1.2.4.4 (2026-07-20) - Localization: news world-event headlines (blockade / lane / tension / ship) (SERVER + CLIENT)
+
+Server and client. Restart required. Hard-refresh after deploy.
+
+Translates 9 world-event headlines: tension alerts, blockade active, expired, counter, and private-army, lane-share acquire, sell, and swap, and ship commission. Colony names use the Chinese colony map; the tension bands (Critical, High, Elevated) translate; player names pass through unchanged.
+
+**Deferred, not skipped:** the cargo and shipping headlines interpolate commodity names, of which there are 120, and those belong with the smuggling and cargo subsystem translation, to be done alongside the commodity map. **Left in English for now (edge or admin, to revisit later):** the dev and god events, and the rare presidency and conquest lines.
+
+With this, the normal-play news feed, both the scrolling genHeadline pools and the common event headlines, renders in Chinese.
+
+**Changed files.**
+- server/server.js 9 world-event pushHeadline sites now carry event meta.
+- client/assets/core.js 9 world-event templates plus colony and band helpers in the news renderer.
+
+---
+
+## v1.2.4.3 (2026-07-20) - Localization: news finance/fund/guild event headlines (SERVER + CLIENT)
+
+Server and client. Restart required. Hard-refresh after deploy.
+
+Translates 15 finance event headlines, the ones players see most: earnings, fund buy/sell/vote/propose/execute, fund launch/disband/list/delist, guild acquire/sell/propose/rejected, and the Market rotation line. The server tags each with its type and parameters; the client rebuilds the headline in Chinese, resolving company names by symbol and translating buy/sell, while player and fund names (user strings) pass through unchanged. Earnings keeps its clickable ticker.
+
+**Remaining news:** the world-event headlines, blockade, cargo, lane-share, contract, ship commission, presidency, conquest, and the dev/god events, roughly 25 sites that interpolate colony and player names. That is the last news batch. Some of them (dev/god events, the rare presidency and conquest lines) may be fine to leave in English given they are edge or admin cases; your call.
+
+**Changed files.**
+- server/server.js 15 finance, fund, and guild pushHeadline sites now carry event meta.
+- client/assets/core.js the event branch of the news renderer, with 15 headline templates.
+
+---
+
+## v1.2.4.2 (2026-07-20) - Localization: news faction/flesh/void pools + colony-flavored (SERVER + CLIENT)
+
+Server and client. Restart required. Hard-refresh after deploy.
+
+Translates the remaining genHeadline pools: faction (16), Mr. Flesh and house flavor (12), void and rare (14), and the 15 colony-flavored templates. Colony names get a 21-entry Chinese map, substituted into the colony templates by id. With this, the entire genHeadline feed - void, faction, flesh, market-wide, colony, and company/sector - now renders in Chinese under the Jade button.
+
+**Remaining:** only the roughly 47 event headlines that fire on market events (earnings, fund buy/sell/vote, blockade, cargo, and so on) still render in English. Those are the final news batch.
+
+**Changed files.**
+- server/server.js the void, faction, flesh, and colony genHeadline branches now tag the headline meta (pool and index, or colony template index and colony id).
+- client/assets/core.js the void, faction, flesh, and colony zh pools, the colony-name map, and the colony branch of the news renderer.
+
+---
+
+## v1.2.4.1 (2026-07-20) - Localization: news company/sector headlines + panel-title fix (SERVER + CLIENT)
+
+Server and client. Restart required. Hard-refresh after deploy.
+
+**Company/sector headlines translated,** the roughly 57% of the feed carrying a ticker. The server now tags each company headline with which fragment pool it drew from (sector or generic) and the index; the client mirrors all 166 fragments (8 sectors of good/bad/weird plus the 30-item generic pool) in Chinese and rebuilds the headline as the zh company name, the ticker in parentheses, then the zh fragment. The company's Chinese name is resolved by symbol from CO_NAME_ZH, or from the Jade map for Jade tickers. The parenthesised ticker stays halfwidth so the clickable-ticker link still fires; if a name or fragment cannot resolve, the line falls back to English.
+
+**Panel-title fix.** The market panel title (Companies / Jade Exchange) now reflects the persisted language on a fresh load, not only after a theme-toggle or a view-switch.
+
+**Still English in the feed:** the colony-flavored headlines, the faction/flesh/rare pools, and the roughly 47 event headlines (earnings, fund trades, blockade, cargo, and so on). Those are the remaining news passes.
+
+**Changed files.**
+- server/server.js the company headline path tags sector or generic fragment identity in the headline meta.
+- client/assets/core.js the sector and generic zh mirrors, a symbol-to-zh-name resolver, the company branch of the news renderer, and the panel-title-on-load fix.
+
+---
+
+## v1.2.4.0 (2026-07-20) - Localization Slice 4: news engine pipeline + market-wide; rotateHotStocks fix (SERVER + CLIENT)
+
+Server and client. Restart required. Hard-refresh after deploy.
+
+**News localization pipeline.** The news feed is server-generated and broadcast to every player, so one headline cannot be two languages at once. Headlines now carry a compact structured meta identifying the source pool and index; the client re-renders the headline in Chinese from a matching zh mirror when the Jade button is on, and falls back to the English text otherwise. pushHeadline gained an optional meta argument and the headline item gained an optional meta field (broadcast and persisted).
+
+**First category translated:** the market-wide headline pool (34 headlines, no ticker, no price impact). The company/sector headlines, colony-flavored headlines, and the roughly 47 event headlines land in following passes; until then they render in English.
+
+**Limitation:** the client keeps no news store, so toggling language mid-session translates only new headlines as they arrive; the initial feed on load renders in the current language. Re-render-on-toggle can be added later.
+
+**Also fixed (pre-existing, unrelated to localization).** rotateHotStocks crashed whenever a fund (id 20000 and up) or Jade (id 30000 and up) ticker was selected for the hot-stocks rotation, because the symbol lookup indexed the companies array by company id. The hot-stocks bias was already applied before the crash, so this was purely a broken Market rotation headline and log line; the lookup now finds the company by id. Zero market-sim behavior change. Funds and Jade tickers can still be selected into the rotation as before and now appear in the Market rotation headline; whether they should be excluded is a separate decision.
+
+**Changed files.**
+- server/server.js pushHeadline meta argument and item.meta; the market-wide headline tagged with meta; rotateHotStocks symbol lookup fixed.
+- client/assets/core.js the NEWS_ZH market pool, newsZhText, and renderNews rendering zh from meta.
+
+---
+
+## v1.2.2.3 (2026-07-20) - Localization: Coalition descriptions complete (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Final batch of Coalition ticker descriptions: the last 61 (Pixel Software through Zenith Media). All 181 Coalition descriptions are now translated, verified at 100% coverage against the company list. Combined with the names (1.2.2.0) and the Jade Exchange, the entire market ticker list now renders in Chinese under the Jade button: symbols stay, names and descriptions switch.
+
+First-pass CN throughout; native review advised before final, especially the satirical descriptions.
+
+**Remaining for the market:** the ticker detail panel (the selected company's name plus the Finance / HQ / Dividend eligible labels), JS-rendered in market-tools.js, is next and closes the list-versus-detail gap. Then the news engine.
+
+**Changed files.** client/assets/core.js.
+
+---
+
+## v1.2.2.2 (2026-07-20) - Localization: Coalition descriptions batch 2 of 3 (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Second batch of Coalition ticker descriptions: 60 more (Global Enterprises through Pixel Dynamics), for 120 of 181 total. First-pass CN with cross-references consistent with the ticker list. The remaining roughly 61 descriptions are the final batch; the ticker detail panel wiring and the news engine follow. Native review advised for the prose.
+
+**Changed files.** client/assets/core.js.
+
+---
+
+## v1.2.2.1 (2026-07-20) - Localization: Coalition descriptions batch 1 of 3 (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+First batch of the 181 Coalition ticker descriptions: 60 translated (Anchor Biotech through GhostFoundry). First-pass CN authored by the model; cross-referenced company names reuse the same translations as the ticker list (North Biotech, WraithEnergy, Cascade Minerals, and so on) so references stay consistent. This is nuanced satirical prose and wants a native review before it is treated as final.
+
+The remaining roughly 121 descriptions land in the next batches; the ticker detail panel wiring (name + Finance/HQ/Dividend labels) and the news engine follow.
+
+**Changed files.** client/assets/core.js.
+
+---
+
+## v1.2.2.0 (2026-07-20) - Localization Slice 2, part 1: Coalition ticker names + Jade descriptions (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+**Coalition ticker names.** All 181 Coalition company names now render in Chinese in the market list when the Jade button is on. Names are composed from a prefix/suffix map (e.g. Vertex Aerospace becomes the fixed pairing of the Vertex and Aerospace terms, Anchor Retail the Anchor and Retail terms) with the roughly forty single-word syndicate houses translated individually; every name was verified to resolve to a translation. Ticker symbols and the underlying company data are unchanged; only the displayed name switches.
+
+**Jade descriptions.** The 20 Jade Exchange ticker descriptions are now translated (the names were already done in the Jade release). The Jade Exchange list is now fully Chinese, names and descriptions both.
+
+**Deferred (stays English until its pass):** the 181 Coalition ticker descriptions (unique prose, the native-review batch) come next; the ticker detail panel name and its labels (Finance / HQ / Dividend eligible) are JS-rendered in market-tools.js and land with the descriptions; the news ticker (Slice 4, server-side) is last.
+
+**Changed files.** client/assets/core.js.
+
+---
+
+## v1.2.1.2 (2026-07-20) - Localization: trading order form (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Continues Slice 1. Translates the market order-entry form, the most-used interactive surface.
+
+**Translated.** The order row (Symbol placeholder, Buy, Sell, Short) and the Limit Orders panel (its header, the BUY/SELL side selector, the Symbol/Qty/Limit placeholders, Place), plus the Live Trades header. Only display text switches; order values, symbols, and the selector's underlying values are unchanged.
+
+**Still deferred (untranslated stays English):** the Price Alerts panel, the Watchlist / History / Index Funds tabs, and the ticker detail (Finance / HQ / Dividend eligible / Position) are JS-rendered in market-tools.js (a later pass); plus the wire/chat panel, galaxy sub-tabs, and Coalition tickers (Slice 2).
+
+**Changed files.** client/assets/core.js, client/index.html.
+
+---
+
+## v1.2.1.1 (2026-07-20) - Localization: main-screen chrome pass 2 (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Continues Slice 1. Extends Chinese coverage to the persistent left/center chrome that 1.2.1.0 did not reach.
+
+**Translated.** The market panel title (Companies / Jade Exchange, refreshed on the language switch), the live-feed header (LIVE NEWSFEED / REALTIME MARKET WIRE, and the BREAKING banner label), and the static section labels: Sector Exposure, Market Heatmap, Capital Houses, Mining, Heat, and the Shipping Lanes legend (Corporate, Grey Market, Dark Net, Contested). The legend colour swatches survive the switch.
+
+**Mechanism.** JS render points (panel title, news header) route through t(); the news header re-translates itself on every feed update via applyI18n scoped to its own element. Static labels use data-i18n; each legend lane's text was wrapped in its own span so the swatch is not clobbered.
+
+**Still deferred (untranslated stays English):** galaxy sub-tabs and the chat panel (each its own subsystem), every subsystem interior, Coalition ticker names/descriptions (Slice 2), the tutorial (Slice 3), and news feed content (Slice 4).
+
+**Changed files.** client/assets/core.js, client/index.html.
+
+---
+
+## v1.2.1.0 (2026-07-20) - Localization framework + UI chrome (CLIENT)
+
+Client only. Hard-refresh after deploy.
+
+Slice 1 of the whole-game Chinese localization. Adds a general i18n layer so the Jade button switches the interface language, not only the Jade galaxy's content.
+
+**Framework.** One language flag (window._lang, driven by the Jade theme button; absorbs the former _jadeLang) plus a string catalog (window.I18N) holding English and Chinese per key. Static markup carries data-i18n / data-i18n-ph attributes applied by applyI18n(), which captures each element's original English from the DOM once so the English restore is byte-identical. JS render points use t(key, fallback). The existing Jade content layer (jadeT / JADE_I18N) now reads the same flag.
+
+**Chrome translated.** Main navigation tabs (Market, Heat, P&L, Casino, Capital Houses, Store, Galaxy, Mining, Fleshbook, Corpo-Cards, Dev Logs, Bugs), the Coalition / Jade Exchange market-view tabs, the ticker search and chat input placeholders, the chat Send button, and the Contacts control. The Fleshbook unread badge is preserved through the switch.
+
+**Removed.** The separate 文/EN button; the Jade theme button drives language now.
+
+**Deferred to later slices / passes (untranslated strings stay English):** JS-rendered chrome (news header, galaxy sub-tabs, chat room labels, market panel title), the subsystem interiors (Casino, Mining, Capital Houses, Store, Fleshbook, Corpo-Cards), Coalition ticker names and descriptions (Slice 2), the tutorial (Slice 3), and the news feed (Slice 4, server-side).
+
+**Changed files.**
+- client/assets/core.js Unified the language flag on _lang, removed the dead toggleJadeLang, added the I18N catalog, t(), and applyI18n(); wired applyI18n into the theme toggle and initial paint.
+- client/index.html Head loader reads _lang; data-i18n / data-i18n-ph attributes on the primary chrome; Fleshbook label wrapped so its badge survives.
+
+---
+
+## v1.2.0.0 (2026-07-20) - Jade Circuit: second galaxy with its own exchange (SERVER + CLIENT)
+
+Server and client. Restart required. Hard-refresh after deploy.
+
+**New galaxy.** Added the Jade Circuit, a fifth joinable faction and the central power of a breakaway cluster reached through an FTL wormhole. The cluster has sixteen colonies (Yujing, Tiangong, Shennong Reach, Houji Fields, Mozi Array, Wukong Deep, Zheng He Anchorage, Haisi Waystation, Houtu Foundry, Changzheng Yards, Xuanwu Bastion, Lingtai Reach, Fuxi Observatory, Quanzhou Docks, Zhurong Foundry, Chiyou Marches) and four non-joinable sub-houses (Shennong, Mozi, Zheng He, Houtu), each with lore in a cold dynastic-capitalist register. Colonies carry a galaxy tag; render code filters colonies and lanes by the active galaxy so the two maps never bleed together.
+
+**Portal and map swap.** A rotating spiral galaxy renders as a distant object on the right edge of each map: on the Coalition map it leads to the Jade cluster, on the Jade map it leads back. Clicking it swaps the active galaxy, the background, and ship visibility and re-renders. Viewing the far galaxy is free.
+
+**Full colony parity.** Jade colonies use the same detail panel and system view as the main map: a SYSTEM button and per-planet ENTER open the real system view (a central star, orbiting animated planets, zone cards) and the surface HUD, and each colony shows a landscape banner. Nothing is stubbed. Planets use the game's own animated sprites for uniform sizing, with a Dyson sphere at Tiangong and a quasar at Wukong Deep as exotics.
+
+**Jade Exchange.** The twenty Jade tickers (JCH, YJT, TGB, YHA, SNB, BCP, LZL, HJA, MZQ, ZGO, TWD, WKD, ZHL, BCH, HSL, SILU, HTE, CZH, XTM, EMB) are real securities on a self-contained board: a separate id range (30000+) keeps their history from splicing with base tickers or funds, they are Social Credit denominated, and they price and step through the same market engine as every other stock. All twenty symbols were checked against the existing tickers for collisions.
+
+**Sealed passage.** A server flag WORMHOLE_OPEN gates the exchange: while sealed the tickers are withheld from the tape and any order on a Jade symbol is rejected, and the colony panels and system-view HUD show a sealed notice. A dev-only endpoint (POST /api/dev/wormhole with a dev token and {open:true|false}) opens or seals the passage live; opening broadcasts the tickers onto the tape and flips the sealed UI to open. The client reads the flag from the server. Currently defaults open for testing.
+
+**Exchange interface.** The market panel has a Coalition / Jade Exchange tab; Jade tickers show only under the Jade Exchange tab and are hidden from the Coalition list. Each Jade ticker has a company description in the house voice. A Jade theme toggle recolors the whole UI from the default phosphor green to a porcelain/celadon palette and swaps the FLESH MARKET wordmark to Chinese characters; the choice persists across reloads.
+
+**Chinese translation layer.** A 文/EN toggle beside the Jade theme button switches the Jade galaxy's content to Chinese, scoped to the Jade galaxy only; the Coalition side stays English. Translated: the sixteen colony names and lore, the twenty exchange ticker names, the faction name, and the colony-panel labels and sealed notice. Deferred to a later pass with graceful English fallback: ticker descriptions, planet names and bonus lines, map node labels, and system-view titles. The choice persists across reloads. Colony lore is a first-pass translation and warrants a native review before it is treated as final.
+
+**Distinct art.** The Jade cluster uses a jade nebula background and a white/porcelain faction glow so it reads as a different place. The Coalition map is unchanged.
+
+**Changed files.**
+- server/server.js Added the 20 Jade companies to the pricing engine, the WORMHOLE_OPEN flag, the sealed-trade gate, the init filter and wormholeOpen state, and the dev toggle endpoint.
+- client/assets/galaxy.js Added the Jade faction, the sixteen Jade colonies with lore, planets, banners, suns, and lanes, active-galaxy filtering, the portal and map swap, the full-parity Jade detail panel, and the gated system-view HUD; wired WORMHOLE_OPEN to the server; translated the Jade detail panel (names, lore, labels, house names, sealed notice) via jadeT with a re-render hook on language toggle.
+- client/assets/core.js Reads wormholeOpen from init and handles the 'wormhole' broadcast; added the market-view filter, the Coalition/Jade view and theme toggles, the twenty Jade ticker descriptions, and the JADE_I18N translation map with the jadeT helper and 文/EN toggle (translates Jade ticker names in the tape).
+- client/style.css Jade theme palette override, market-view tab styles, and the logo-swap rules.
+- client/index.html Added the porcelain glow filter to the galaxy SVG defs; added the 文/EN language toggle button and the head loader that restores the persisted language before paint.
+- client/style.css Added the portal spin animation.
+- client/assets/space/planets/jade/* Jade exotics (Dyson sphere, quasar) and the galaxy portal sprite.
+- client/assets/space/backgrounds/jade_green.png Jade nebula background.
+- client/version.json 1.1.9.13 -> 1.2.0.0.
+
+---
+
 ## v1.1.9.13 (2026-07-19) - Solitaire drag and drop + tutorial game list (CLIENT)
 
 Client only. Hard-refresh after deploy. No server or DB change.

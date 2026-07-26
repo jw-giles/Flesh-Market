@@ -14,6 +14,7 @@ import { pbkdf2Sync, randomBytes } from 'crypto';
 import path from 'path';
 import url  from 'url';
 import { initTcg } from './tcg/tcg-db.js';
+import { initCityDb } from './db_city.js';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const DB_PATH   = process.env.DB_PATH || path.join(__dirname, 'fleshmarket.db');
@@ -418,6 +419,7 @@ export function initDB() {
   console.log('[DB] Title rename migration applied');
 
   initTcg(db); // FleshMarket TCG: collection + deck tables
+  initCityDb(db); // City Charters: city_state + city_lots tables
 
   console.log(`[DB] SQLite ready: ${DB_PATH}`);
   return db;
@@ -2043,6 +2045,35 @@ const COLONY_DEFAULTS = [
   { id:'scrub_yard',       faction:'syndicate',    control_coalition:14, control_syndicate:68, control_void:18, control_guild:0,  tension:48, contested:0 },
   { id:'the_escrow',       faction:'void',         control_coalition:20, control_syndicate:25, control_void:55, control_guild:0,  tension:50, contested:0 },
   { id:'margin_call',      faction:'syndicate',    control_coalition:12, control_syndicate:66, control_void:22, control_guild:0,  tension:52, contested:0 },
+  // ── Jade Circuit (1.5.0.0) ─────────────────────────────────────────────────
+  // The sixteen Circuit worlds, seeded server side at last. Until this release
+  // they existed only as client map data, which is why the Circuit could be
+  // joined as an allegiance but owned no ground, ran no commodity market and
+  // could not host a city.
+  //
+  // There is no control_jade column, so the four control values here are the
+  // OUTSIDE powers' footholds on Circuit ground and they deliberately sum low.
+  // colonyLeadingFaction() short circuits on faction==='jade' rather than
+  // reading them. Consequence, stated plainly: Circuit worlds are outside the
+  // conquest layer for now. Funding cannot flip them because there is nothing
+  // to flip them TO. That is the honest state until control_jade exists, and
+  // it is a separate release with a schema migration in it.
+  { id:'yujing',            faction:'jade', control_coalition:2,  control_syndicate:1,  control_void:1,  control_guild:4,  tension:12, contested:0 },
+  { id:'tiangong',          faction:'jade', control_coalition:1,  control_syndicate:2,  control_void:1,  control_guild:3,  tension:16, contested:0 },
+  { id:'xuanwu_bastion',    faction:'jade', control_coalition:1,  control_syndicate:1,  control_void:1,  control_guild:2,  tension:20, contested:0 },
+  { id:'quanzhou_docks',    faction:'jade', control_coalition:3,  control_syndicate:2,  control_void:1,  control_guild:8,  tension:26, contested:0 },
+  { id:'zhenghe_anchorage', faction:'jade', control_coalition:2,  control_syndicate:2,  control_void:1,  control_guild:7,  tension:24, contested:0 },
+  { id:'shennong_reach',    faction:'jade', control_coalition:2,  control_syndicate:1,  control_void:1,  control_guild:3,  tension:18, contested:0 },
+  { id:'changzheng_yards',  faction:'jade', control_coalition:1,  control_syndicate:3,  control_void:2,  control_guild:3,  tension:30, contested:0 },
+  { id:'houtu_foundry',     faction:'jade', control_coalition:1,  control_syndicate:4,  control_void:2,  control_guild:2,  tension:34, contested:0 },
+  { id:'mozi_array',        faction:'jade', control_coalition:3,  control_syndicate:1,  control_void:3,  control_guild:2,  tension:22, contested:0 },
+  { id:'zhurong_foundry',   faction:'jade', control_coalition:1,  control_syndicate:4,  control_void:2,  control_guild:2,  tension:36, contested:0 },
+  { id:'houji_fields',      faction:'jade', control_coalition:2,  control_syndicate:1,  control_void:1,  control_guild:2,  tension:15, contested:0 },
+  { id:'haisi_waystation',  faction:'jade', control_coalition:2,  control_syndicate:3,  control_void:2,  control_guild:6,  tension:32, contested:0 },
+  { id:'lingtai_reach',     faction:'jade', control_coalition:2,  control_syndicate:1,  control_void:3,  control_guild:1,  tension:21, contested:0 },
+  { id:'fuxi_observatory',  faction:'jade', control_coalition:2,  control_syndicate:1,  control_void:4,  control_guild:1,  tension:19, contested:0 },
+  { id:'wukong_deep',       faction:'jade', control_coalition:1,  control_syndicate:3,  control_void:5,  control_guild:1,  tension:40, contested:0 },
+  { id:'chiyou_marches',    faction:'jade', control_coalition:1,  control_syndicate:5,  control_void:5,  control_guild:1,  tension:52, contested:0 },
 ];
 
 export function seedColoniesIfEmpty() {

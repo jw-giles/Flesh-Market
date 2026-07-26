@@ -19,7 +19,7 @@ import url  from 'url';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
-import { filterChat } from './chat-filter.js';
+import { filterChat, containsSlur, normalizeLeet } from './chat-filter.js';
 
 import {
   initDB, setupTransactions,
@@ -132,6 +132,39 @@ import {
   getAllOpenCasinoRounds, getCasinoActivity,
 } from './db.js';
 import { replay as solitaireReplay } from './solitaire.js';
+import { newBuckets, checkRate } from './ratelimit.js';
+
+// City Charters (1.2.5.25): player-owned cities on colony planets
+import {
+  seedColonyMeta, getCityState, ensureCityState, updateCityState,
+  seedDistrict, getDistrict, getDistricts, getAllDistricts, updateDistrict,
+  setDistrictLevers, vacateDistrict, mayorColonies,
+  colonyInvested, colonyWorks, addDistrictWorks,
+  getCityShops, getDistrictShops, countDistrictShops,
+  leaseShop, closeShop, getShop, renameShop,
+  isNpcShop, adoptShop, deleteShop, countNpcShops,
+  getCityKV, setCityKV, listAllCityLots, wipeAllCityLots, wipeAllShops,
+  pushCityHistory, getCityHistory, getColonyHistory,
+  lastPetition, recordPetition, setCharterOwner,
+} from './db_city.js';
+import {
+  CITY_TUNE, CITY_COLONIES, COLONY_VISUAL, isCityColony, seedAllCityStates,
+  seedDistrictsFor, cityGeometry, geometryPayload, validDistrict,
+  districtCount, baselineDev, districtDev, devCost, devFromInvested, nextLevelCost,
+  popPerDistrict, seatBasePrice, seatPrice, seatCompensation, seatTakeable,
+  commercialPool, commercialSplit, shopCapacity, shopLeaseCost, shopCeiling,
+  resolveDistrictShops, civicBill, mayoralTake, mayoralNet, supplyOf,
+  stepDistrict, stepColonyPopulation, classifyCity, creditCityIncome,
+  cityBook, warRate, warTriggerCost, warFundTrigger,
+  onColonyCaptured, onColonyReverted, maybeStripOccupied, canStrip, stripYield,
+  districtSummary, citySummary, npcOccupancy, ensureNpcShops, ensureNpcShopsFor,
+  shopBuyoutCost, devComplete, isJadeColony, setFactionResolver,
+  worksLevel, worksComplete, nextWorksCost,
+  cityTickAdvance, quoteShopBuyout, civicCommodityNudge, civicPressure,
+  seatLegitimacyMult, civicBillBase, billSkim,
+  stockOf, stockWeekUnits, colonyWeekUnits, stockCapacity, stockCost, drawStock, STOCK_COL,
+  churnNpcShops,
+} from './city.js';
 
 // FleshMarket TCG — collection/deck persistence + server-authoritative pack economy
 import {
@@ -153,6 +186,130 @@ initItemTables();
 initQuestTables();
 initMarketUpgradeTables();
 initFRSTables();
+seedAllCityStates(seedColonyMeta);
+// The city commerce model needs to know who is in the Circuit to apply the
+// Jade export bonus. Installed once rather than threaded through every caller.
+setFactionResolver(getPlayerFaction);
+
+// City layout v2 migration (1.2.6.0): the district model moved from a 14x10
+// grid to Voronoi sectors, so lots claimed under grid addressing have no
+// meaning on the new map. One-time: refund every claimed lot's full invested
+// value to its builder and clear the table. Charters are colony-level and
+// survive untouched. Flagged in city_kv so it can never run twice.
+// Districts arrive already built out to a scale their planet's population
+// justifies, under NPC administration until somebody buys the seat.
+for (const cid of Object.keys(CITY_COLONIES)) {
+  try { ensureCityState(cid); seedDistrictsFor(cid); } catch(e) { console.error('[City] seed', cid, e); }
+}
+// City model v3 migration. v2 sold ground: players claimed lots and leased
+// floor space inside them. v3 sells office: districts are permanent and
+// players buy the mayoral seat. Lot addresses and shop tenancies have no
+// meaning under the new model, so every F invested under v2 is refunded at
+// full value and the tables are cleared. Flagged so it can never run twice.
+(function migrateCityModelV3() {
+  try {
+    if (getCityKV('city_model') === '3') return;
+    const lots = listAllCityLots();
+    const perPlayer = {};
+    for (const l of lots) {
+      const pid = l.built_by || l.owner;
+      if (!pid || !(l.invested > 0)) continue;
+      perPlayer[pid] = (perPlayer[pid] || 0) + l.invested;
+    }
+    let shopRefund = 0, shopCount = 0;
+    try {
+      for (const cid of Object.keys(CITY_COLONIES)) {
+        for (const sh of getCityShops(cid)) {
+          shopCount++;
+          // v2 leases were a flat cost per storefront; refund the base.
+          perPlayer[sh.owner] = (perPlayer[sh.owner] || 0) + 12_000_000;
+          shopRefund += 12_000_000;
+        }
+      }
+    } catch(_) {}
+    let refunded = 0, players = 0;
+    for (const [pid, amt] of Object.entries(perPlayer)) {
+      const p = getPlayer(pid);
+      if (!p) continue;
+      safeAddCash(p, amt); savePlayer(p);
+      refunded += amt; players++;
+      console.log(`[City] v3 refund: ${p.name} +F${Math.round(amt).toLocaleString()}`);
+    }
+    if (lots.length) wipeAllCityLots();
+    if (shopCount) wipeAllShops();
+    setCityKV('city_model', '3');
+    setCityKV('layout_ver', '3');
+    if (lots.length || shopCount) {
+      console.log(`[City] v3 migration: ${lots.length} lots and ${shopCount} storefronts cleared, F${Math.round(refunded).toLocaleString()} refunded to ${players} players`);
+      try { pushHeadline('Colonial authority dissolves private title across every city, holdings bought back at full value as districts pass to mayoral charter', 'neutral', '\uD83C\uDFDB'); } catch(_) {}
+    }
+  } catch (e) { console.error('[City] v3 migration error:', e); }
+})();
+
+// NPC commerce is seeded AFTER the v3 migration, not before. Seeding first meant
+// the migration counted the firms it had just created as v2 tenancies and wiped
+// all 13,517 of them on the one boot where it runs, so a fresh deployment and
+// any world upgrading from v2 both came up with empty cities until the next
+// hourly tick refilled them. No money was ever printed by this, since npc: ids
+// never resolve to a player, but the cities were bare for an hour.
+// Established NPC firms already trading in every district, in numbers set by
+// the economy of the world. Without these a city's frontage reads as empty and
+// a newly bought seat earns nothing until players happen to arrive.
+(function seedNpcCommerce(){
+  let total = 0;
+  for (const cid of Object.keys(CITY_COLONIES)) {
+    try { total += ensureNpcShopsFor(cid); } catch(e) { console.error('[City] npc seed', cid, e); }
+  }
+  if (total > 0) console.log(`[City] ${total} established businesses trading across the colonies`);
+})();
+
+
+// One city per mayor (1.4.4.0). A player may hold any number of district seats
+// inside a single city and none anywhere else. Anyone already sitting on more
+// than one world keeps the city where they have the most capital committed and
+// is refunded what they paid for every other seat, at face value, so the rule
+// costs nobody anything on the day it lands.
+(function reconcileOneCityPerMayor() {
+  try {
+    if (getCityKV('seat_rule') === '1city') return;
+    const byPlayer = {};
+    for (const d of getAllDistricts()) {
+      if (!d.mayor) continue;
+      (byPlayer[d.mayor] = byPlayer[d.mayor] || []).push(d);
+    }
+    let moved = 0, refundTotal = 0;
+    for (const [pid, seats] of Object.entries(byPlayer)) {
+      const colonies = [...new Set(seats.map(d => d.colony_id))];
+      if (colonies.length < 2) continue;
+      const weight = {};
+      for (const d of seats) {
+        weight[d.colony_id] = (weight[d.colony_id] || 0) + (d.invested || 0) + (d.seat_paid || 0);
+      }
+      const keep = colonies.sort((a, b) => (weight[b] || 0) - (weight[a] || 0))[0];
+      let refund = 0;
+      for (const d of seats) {
+        if (d.colony_id === keep) continue;
+        refund += (d.seat_paid || 0) + (d.invested || 0);
+        vacateDistrict(d.colony_id, d.idx);
+        moved++;
+      }
+      const p = getPlayer(pid);
+      if (p && refund > 0) {
+        safeAddCash(p, refund); savePlayer(p);
+        refundTotal += refund;
+        try {
+          broadcastToPlayer(pid, { type:'city_ousted', data:{ colonyId: keep, district: -1,
+            name: 'a mayor governs one city', by: 'Colonial Authority', compensation: refund } });
+        } catch(_) {}
+      }
+    }
+    setCityKV('seat_rule', '1city');
+    if (moved) {
+      console.log(`[City] one city per mayor: ${moved} outside seats returned, F${Math.round(refundTotal).toLocaleString()} refunded`);
+      try { pushHeadline('Colonial authority rules that no charter holder may sit in two cities, absentee mayors bought out at cost', 'neutral', '\uD83C\uDFDB'); } catch(_) {}
+    }
+  } catch (e) { console.error('[City] seat rule error:', e); }
+})();
 
 function savePlayer(p) { try { savePlayerFn(p); } catch(e) { console.error('savePlayer:', e); } }
 function recordNetWorth(id, net, cash, equity) { try { recordNetWorthFn(id, net, cash, equity); } catch(e) {} }
@@ -415,7 +572,7 @@ function executeFundTrade(fundId, side, sym, qty, actorId) {
     setFundPortfolioBuy(fundId, sym, q, fillPrice);
     applyTapeMove(c, slip);
     logFundActivity(fundId,'trade_buy',actorId,sym,q,fillPrice,cost,`Buy ${q}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`);
-    pushHeadline(`${fund.name}: bought ${q}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`, 'good', sym);
+    pushHeadline(`${fund.name}: bought ${q}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`, 'good', sym, null, {k:'evt',t:'fbuy',fn:fund.name,q,sym,px:fillPrice.toFixed(2)});
   } else if (side === 'sell') {
     const sellQty = Math.min(q, haveQty);
     if (sellQty <= 0) return { ok:false, error:'no_holdings' };
@@ -426,7 +583,7 @@ function executeFundTrade(fundId, side, sym, qty, actorId) {
     setFundPortfolioQty(fundId, sym, haveQty - sellQty);
     applyTapeMove(c, -slip);
     logFundActivity(fundId,'trade_sell',actorId,sym,sellQty,fillPrice,proceeds,`Sell ${sellQty}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`);
-    pushHeadline(`${fund.name}: sold ${sellQty}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`, 'neutral', sym);
+    pushHeadline(`${fund.name}: sold ${sellQty}× ${sym} @ Ƒ${fillPrice.toFixed(2)}`, 'neutral', sym, null, {k:'evt',t:'fsell',fn:fund.name,q:sellQty,sym,px:fillPrice.toFixed(2)});
   } else {
     return { ok:false, error:'invalid_side' };
   }
@@ -493,7 +650,7 @@ function resolveHouseProposalDecision(fund, p) {
     if (wouldPass) {
       const r = executeFundTrade(fund.id, p.side, p.symbol, p.qty, p.proposer_id);
       resolveHouseProposal(p.id, r.ok ? 'passed' : 'failed_exec', r.ok);
-      pushHeadline(`${fund.name}: vote ${r.ok?'passed':'failed'}, ${p.side} ${p.qty}× ${p.symbol}`, r.ok?'good':'bad', p.symbol);
+      pushHeadline(`${fund.name}: vote ${r.ok?'passed':'failed'}, ${p.side} ${p.qty}× ${p.symbol}`, r.ok?'good':'bad', p.symbol, null, {k:'evt',t:'fvote',fn:fund.name,ok:r.ok,side:p.side,q:p.qty,sym:p.symbol});
     } else {
       resolveHouseProposal(p.id, totalCast > 0 ? 'rejected' : 'expired', false);
     }
@@ -1013,9 +1170,9 @@ function rotateHotStocks() {
     _hotBias[id] = i < 5 ? 1 : -1; // first 5 bull, last 5 bear
   });
   // Announce hot stocks via headline
-  const bulls = picked.slice(0, 5).map(id => companies[id].symbol);
-  const bears = picked.slice(5).map(id => companies[id].symbol);
-  pushHeadline(`Market rotation: ${bulls.join(', ')} showing strength, ${bears.join(', ')} under pressure`, 'neutral', null);
+  const bulls = picked.slice(0, 5).map(id => { const c = companies.find(x => x.id === id); return c ? c.symbol : null; }).filter(Boolean);
+  const bears = picked.slice(5).map(id => { const c = companies.find(x => x.id === id); return c ? c.symbol : null; }).filter(Boolean);
+  pushHeadline(`Market rotation: ${bulls.join(', ')} showing strength, ${bears.join(', ')} under pressure`, 'neutral', null, null, {k:'evt',t:'rot',bulls,bears});
   console.log(`[Hot Stocks] Bulls: ${bulls.join(',')} | Bears: ${bears.join(',')}`);
 }
 // Initial rotation on boot
@@ -1098,7 +1255,7 @@ function fireTensionEvent(colonyId, band, tension) {
     c.price = Math.max(0.5, Math.exp(c.lnP));
   }
   const headline = `⚠ TENSION ${bandLabel} [${tension}%] at ${cName}, ${targets.length} companies affected, supply chains under strain`;
-  pushHeadline(headline, 'bad', '⚠');
+  pushHeadline(headline, 'bad', '⚠', null, {k:'evt',t:'tension',col:colonyId,band:bandLabel,tn:tension,n:targets.length});
   broadcast({ type: 'tension_event', data: { colonyId, band, tension, bandLabel, affected: targets.length } });
 }
 
@@ -1303,9 +1460,10 @@ const COMMODITY_FACTION_MOD = {
   void:      { tech:0.80, med:1.05, agri:1.35 }, // cheap tech, can't farm
   guild:     { tech:0.98, med:0.98, agri:0.98 }, // narrow, efficient
   contested: { tech:1.10, med:1.20, agri:1.15 }, // scarcity premium when no one leads
+  jade:      { tech:0.86, med:1.02, agri:0.88 }, // state directed: cheap tech and grain
   fleshstation:{ tech:1.0, med:1.0, agri:1.0 },
 };
-const COMMODITY_FACTION_VOL = { coalition:0.6, syndicate:1.5, void:1.3, guild:0.4, contested:1.4, fleshstation:1.0 };
+const COMMODITY_FACTION_VOL = { coalition:0.6, syndicate:1.5, void:1.3, guild:0.4, contested:1.4, jade:0.7, fleshstation:1.0 };
 // Colonies that are NOT tradeable commodity markets (not real planets / dev-only).
 // Abaddon is the cluster's anchor, not a settled market — excluding it stops it
 // dominating the arbitrage board as an artificial high-tension price sink.
@@ -1447,6 +1605,46 @@ const LANES_SERVER = [
   {from:'margin_call',to:'signal_run',vol:'low',type:'grey'},
   {from:'signal_run',to:'aurora_prime',vol:'medium',type:'grey'},
   {from:'signal_run',to:'vein_cluster',vol:'low',type:'grey'},
+  // ── Jade Circuit (1.6.0.3) ─────────────────────────────────────────────────
+  // These 26 lanes existed in the client LANES array from 1.5.0.0 and were never
+  // copied here. Everything on the server that moves cargo walks LANES_SERVER:
+  // npcPickLane, findLane, the findRoute BFS, the shipping contract board and
+  // the blockade hooks. With no Circuit edges in this table the whole Circuit
+  // was economically stranded. It had colony state, it had commodity markets,
+  // and there was no way to move a single unit into or out of it: NPC freighters
+  // could not be routed there, smuggling_start answered 'No lane exists' for any
+  // Circuit endpoint, multi hop routing could not reach it, and no contract was
+  // ever written against a Circuit spread.
+  //
+  // Copied verbatim from client LANES. Verified against it: 26 added, 0 lanes on
+  // this side that the client does not have, 0 vol or type drift on the 37 that
+  // were already shared. tools/lane-check.mjs asserts that from now on.
+  {from:'yujing',to:'tiangong',vol:'high',type:'corporate'},
+  {from:'yujing',to:'shennong_reach',vol:'medium',type:'corporate'},
+  {from:'yujing',to:'mozi_array',vol:'medium',type:'corporate'},
+  {from:'yujing',to:'zhenghe_anchorage',vol:'high',type:'corporate'},
+  {from:'yujing',to:'houtu_foundry',vol:'medium',type:'corporate'},
+  {from:'shennong_reach',to:'houji_fields',vol:'medium',type:'grey'},
+  {from:'mozi_array',to:'wukong_deep',vol:'low',type:'dark'},
+  {from:'zhenghe_anchorage',to:'haisi_waystation',vol:'medium',type:'grey'},
+  {from:'houtu_foundry',to:'changzheng_yards',vol:'high',type:'grey'},
+  {from:'shennong_reach',to:'mozi_array',vol:'low',type:'grey'},
+  {from:'mozi_array',to:'zhenghe_anchorage',vol:'low',type:'grey'},
+  {from:'zhenghe_anchorage',to:'houtu_foundry',vol:'low',type:'grey'},
+  {from:'houtu_foundry',to:'shennong_reach',vol:'low',type:'grey'},
+  {from:'xuanwu_bastion',to:'yujing',vol:'high',type:'corporate'},
+  {from:'xuanwu_bastion',to:'tiangong',vol:'medium',type:'corporate'},
+  {from:'lingtai_reach',to:'shennong_reach',vol:'medium',type:'grey'},
+  {from:'lingtai_reach',to:'houji_fields',vol:'low',type:'grey'},
+  {from:'fuxi_observatory',to:'mozi_array',vol:'medium',type:'grey'},
+  {from:'fuxi_observatory',to:'wukong_deep',vol:'low',type:'dark'},
+  {from:'quanzhou_docks',to:'zhenghe_anchorage',vol:'high',type:'corporate'},
+  {from:'quanzhou_docks',to:'haisi_waystation',vol:'medium',type:'grey'},
+  {from:'zhurong_foundry',to:'houtu_foundry',vol:'high',type:'grey'},
+  {from:'zhurong_foundry',to:'changzheng_yards',vol:'low',type:'grey'},
+  {from:'chiyou_marches',to:'houtu_foundry',vol:'low',type:'dark'},
+  {from:'chiyou_marches',to:'quanzhou_docks',vol:'medium',type:'dark'},
+  {from:'chiyou_marches',to:'houji_fields',vol:'low',type:'contested'},
 ];
 
 function findLane(from, to) {
@@ -1638,7 +1836,7 @@ function resolveSmuggling(playerId) {
   const sockets = playerSockets.get(playerId);
   if (intercepted) {
     const headline = `Smuggling run intercepted: ${cargo.name} cargo seized on ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')} lane`;
-    pushHeadline(headline, 'bad', '🚨');
+    pushHeadline(headline, 'bad', '🚨', null, {k:'evt',t:'smug_int',com:cargo.name,from:run.from,to:run.to});
 
     // Void raiding kickback: online Void players split 2% of the intercepted cargo
     try {
@@ -1687,7 +1885,7 @@ function resolveSmuggling(playerId) {
     try { distributeLaneKickback(laneKey, payout - run.stake, 0.01, playerId); } catch(_){}
 
     const headline = `Smuggling run cleared: ${cargo.name} delivered via ${run.laneType} lane`;
-    pushHeadline(headline, 'good', '📦');
+    pushHeadline(headline, 'good', '📦', null, {k:'evt',t:'smug_clr',com:cargo.name,lane:run.laneType});
     if (sockets) {
       const msg = JSON.stringify({ type:'smuggling_result', data:{
         success:true, stake:run.stake, payout, cargo:cargo.name,
@@ -1752,7 +1950,7 @@ function resolveShipping(playerId) {
       safeAddCash(p, run.stake); // refund stake
       savePlayer(p);
       const headline = `Shipping loss insured: ${cargo.name} cargo on ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')}, claim paid`;
-      pushHeadline(headline, 'neutral', '🛡');
+      pushHeadline(headline, 'neutral', '🛡', null, {k:'evt',t:'ship_ins',com:cargo.name,from:run.from,to:run.to});
       if (sockets) {
         const msg = JSON.stringify({ type:'shipping_result', data:{
           success:false, insured:true, stake:run.stake, insurancePaid:run.insurancePaid,
@@ -1765,7 +1963,7 @@ function resolveShipping(playerId) {
     } else {
       // Total loss — no insurance
       const headline = `Shipping cargo lost: ${cargo.name} seized on ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')} lane, no insurance`;
-      pushHeadline(headline, 'bad', '📦');
+      pushHeadline(headline, 'bad', '📦', null, {k:'evt',t:'ship_lost',com:cargo.name,from:run.from,to:run.to});
 
       // Void raiding kickback: online Void players split 2% of intercepted shipping cargo
       try {
@@ -1818,7 +2016,7 @@ function resolveShipping(playerId) {
     try { distributeLaneKickback(laneKey, payout - run.stake, 0.02, playerId); } catch(_){}
 
     const headline = `Shipping delivered: ${cargo.name} via ${run.from.replace(/_/g,' ')} → ${run.to.replace(/_/g,' ')}`;
-    pushHeadline(headline, 'good', '🚢');
+    pushHeadline(headline, 'good', '🚢', null, {k:'evt',t:'ship_del',com:cargo.name,from:run.from,to:run.to});
     if (sockets) {
       const msg = JSON.stringify({ type:'shipping_result', data:{
         success:true, stake:run.stake, payout, cargo:cargo.name,
@@ -1883,7 +2081,7 @@ function activateBlockade(laneKey) {
   }
 
   const headline = `⛔ BLOCKADE ACTIVE: ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} shipping lane locked down, supply chains disrupted`;
-  pushHeadline(headline, 'bad', '⛔');
+  pushHeadline(headline, 'bad', '⛔', null, {k:'evt',t:'blk_act',colA,colB});
   broadcast({ type:'blockade_update', data:{ laneKey, active:true, expiresAt:blk.expiresAt, faction:blk.faction, pool:blk.pool, threshold:BLOCKADE_THRESHOLD } });
 
   blk.timer = setTimeout(() => { expireBlockade(laneKey); }, BLOCKADE_DURATION_MS);
@@ -1895,7 +2093,7 @@ function expireBlockade(laneKey) {
   if (blk.timer) clearTimeout(blk.timer);
   activeBlockades.delete(laneKey);
   const [colA, colB] = laneKey.split('|');
-  pushHeadline(`Blockade on ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} lane expires, trade flow restored`, 'good', '✅');
+  pushHeadline(`Blockade on ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} lane expires, trade flow restored`, 'good', '✅', null, {k:'evt',t:'blk_exp',colA,colB});
   broadcast({ type:'blockade_update', data:{ laneKey, active:false } });
 }
 
@@ -1907,7 +2105,7 @@ function fundCounterBlockade(laneKey, amount) {
     if (blk.timer) clearTimeout(blk.timer);
     activeBlockades.delete(laneKey);
     const [colA, colB] = laneKey.split('|');
-    pushHeadline(`Counter-blockade breaks the ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} lockdown, trade resumes`, 'good', '💥');
+    pushHeadline(`Counter-blockade breaks the ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} lockdown, trade resumes`, 'good', '💥', null, {k:'evt',t:'blk_ctr',colA,colB});
     broadcast({ type:'blockade_update', data:{ laneKey, active:false, broken:true } });
     return true;
   }
@@ -1966,11 +2164,11 @@ function applyCargoInterception(s) {
     // Premium and any escort fee are already gone, so an insured loss still stings.
     const refund = Math.round(s.buy_cost * 0.5 * 100) / 100;
     safeAddCash(p, refund); savePlayer(p);
-    pushHeadline(`Cargo insured: ${com?com.name:s.commodity_id} lost on ${s.from_colony.replace(/_/g,' ')} → ${s.to_colony.replace(/_/g,' ')}, half claim paid`, 'neutral', '🛡');
+    pushHeadline(`Cargo insured: ${com?com.name:s.commodity_id} lost on ${s.from_colony.replace(/_/g,' ')} → ${s.to_colony.replace(/_/g,' ')}, half claim paid`, 'neutral', '🛡', null, {k:'evt',t:'cargo_ins',com:(com?com.name:s.commodity_id),from:s.from_colony,to:s.to_colony});
     send('cargo_ship_result', { success:false, insured:true, id:s.id, commodity:com?com.name:s.commodity_id,
       qty:s.qty, from:s.from_colony, to:s.to_colony, refund, cash:p?p.cash:0 });
   } else {
-    pushHeadline(`Cargo seized: ${s.qty}× ${com?com.name:s.commodity_id} lost on ${s.from_colony.replace(/_/g,' ')} → ${s.to_colony.replace(/_/g,' ')}`, 'bad', '📦');
+    pushHeadline(`Cargo seized: ${s.qty}× ${com?com.name:s.commodity_id} lost on ${s.from_colony.replace(/_/g,' ')} → ${s.to_colony.replace(/_/g,' ')}`, 'bad', '📦', null, {k:'evt',t:'cargo_seiz',qty:s.qty,com:(com?com.name:s.commodity_id),from:s.from_colony,to:s.to_colony});
     try {
       const cut = Math.round(s.buy_cost * 0.02 * 100) / 100;
       if (cut > 0) {
@@ -1994,7 +2192,7 @@ function deliverCargoShipment(s) {
   const com = COMMODITY_BY_ID[s.commodity_id];
   addCargo(s.player_id, s.commodity_id, s.qty, Math.round((s.buy_cost / s.qty) * 100) / 100, s.to_colony);
   setCargoShipmentStatus(s.id, 'delivered');
-  pushHeadline(`Cargo delivered: ${s.qty}× ${com?com.name:s.commodity_id} reached ${s.to_colony.replace(/_/g,' ')}`, 'good', '📦');
+  pushHeadline(`Cargo delivered: ${s.qty}× ${com?com.name:s.commodity_id} reached ${s.to_colony.replace(/_/g,' ')}`, 'good', '📦', null, {k:'evt',t:'cargo_del',qty:s.qty,com:(com?com.name:s.commodity_id),to:s.to_colony});
   const sockets = playerSockets.get(s.player_id);
   if (sockets) {
     const msg = JSON.stringify({ type:'cargo_ship_result', data:{ success:true, id:s.id, commodity:com?com.name:s.commodity_id,
@@ -2232,6 +2430,63 @@ const BRNC_COMPANY = {
 };
 companies.push(BRNC_COMPANY);
 
+// ─── Jade Circuit Exchange (self-contained board; ids 30000+, sealed until passage opens) ───
+// Separate id range keeps Jade history isolated from base tickers and funds. Priced/stepped
+// through the normal GBM loop (not _special). Trades are gated by WORMHOLE_OPEN so players
+// cannot touch the board until the Circuit opens the passage. Ƒ-denominated, no cross-listing.
+let WORMHOLE_OPEN = true; // default OPEN for testing; set false to seal the passage by default
+
+// Global gate on commodity buying and selling. GM switch, same shape as the
+// passage. In-memory only and therefore resets to open on restart: a halt is a
+// deliberate live intervention, not a state the world should silently boot into
+// after a crash at 3am. If it ever needs to survive a restart it belongs in a
+// settings table, not here.
+// SCOPE: this gates the buy and sell endpoints only. Cargo already in transit
+// still lands, and shipping and smuggling runs already launched still resolve.
+// Halting mid-flight would destroy player cargo, which is not what a market
+// halt means.
+let COMMODITIES_OPEN = true;
+const JADE_SEED = [
+  {sym:'JCH', name:'Jade Circuit Holdings', price:500, sector:0},
+  {sym:'YJT', name:'Yujing Trust',          price:85,  sector:0},
+  {sym:'TGB', name:'Tiangong Bureau',       price:60,  sector:0},
+  {sym:'YHA', name:'Yuhua Assurance',       price:45,  sector:2},
+  {sym:'SNB', name:'Shennong Biotech',      price:70,  sector:1},
+  {sym:'BCP', name:'Bencao Pharma',         price:55,  sector:1},
+  {sym:'LZL', name:'Lingzhi Labs',          price:40,  sector:1},
+  {sym:'HJA', name:'Houji Agri',            price:30,  sector:3},
+  {sym:'MZQ', name:'Mozi Quantum',          price:90,  sector:6},
+  {sym:'ZGO', name:'Zhiguang Optics',       price:50,  sector:6},
+  {sym:'TWD', name:'Tianwen Data',          price:65,  sector:6},
+  {sym:'WKD', name:'Wukong Deepscan',       price:35,  sector:4},
+  {sym:'ZHL', name:'Zheng He Lines',        price:75,  sector:5},
+  {sym:'BCH', name:'Baochuan Ports',        price:48,  sector:5},
+  {sym:'HSL', name:'Haisi Logistics',       price:38,  sector:5},
+  {sym:'SILU',name:'Silu Transit',          price:28,  sector:5},
+  {sym:'HTE', name:'Houtu Energy',          price:68,  sector:4},
+  {sym:'CZH', name:'Changzheng Heavy',      price:52,  sector:3},
+  {sym:'XTM', name:'Xuantie Metals',        price:44,  sector:3},
+  {sym:'EMB', name:'Ember Crucible',        price:33,  sector:4},
+];
+const JADE_COMPANIES = JADE_SEED.map((j,i)=>{
+  const lnP = Math.log(j.price);
+  return {
+    id: 30000 + i, name: j.name, symbol: j.sym, price: j.price, ohlc: [],
+    lnP, _spawnLnP: lnP, ownTargetLnP: lnP,
+    sigma: 0.00016 + seededRand()*0.00012,
+    mu: -0.000005 + seededRand()*0.00001,
+    kappa: 0.0008 + seededRand()*0.0012,
+    beta: Math.max(0.1, Math.min(2.5, Math.exp((seededRand()-0.5)*1.0))),
+    ownKappa: 0.000005 + seededRand()*0.000005,
+    targetDriftSigma: 0.00012 + seededRand()*0.00012,
+    sector: j.sector, offset: 0, _jade: true,
+  };
+});
+JADE_COMPANIES.forEach(c => companies.push(c));
+const JADE_SYMBOLS = new Set(JADE_COMPANIES.map(c => c.symbol));
+console.log('[Jade] '+JADE_COMPANIES.length+' Jade Exchange tickers registered (WORMHOLE_OPEN='+WORMHOLE_OPEN+')');
+
+
 // SWT anchored mean-reversion init — BRNC uses default beta model from main loop
 SWT_COMPANY.beta             = Math.max(0.1, Math.min(2.5, Math.exp(randn() * 0.5)));
 SWT_COMPANY.ownTargetLnP     = SWT_COMPANY.lnP;
@@ -2273,27 +2528,13 @@ function updateFLSHPrice() {
   }
 }
 
-// ─── Limit order restore from DB ──────────────────────────────────────────────
-try {
-  const persisted = dbGetAllLimitOrders();
-  const now = Date.now();
-  for (const row of persisted) {
-    // Expire immediately if past ORDER_EXPIRY_MS
-    if (now - row.ts > ORDER_EXPIRY_MS) {
-      dbDeleteLimitOrder(row.id);
-      continue;
-    }
-    const orders = getPlayerOrders(row.player_id);
-    orders.push({
-      id: row.id, playerId: row.player_id,
-      side: row.side, symbol: row.symbol,
-      qty: row.qty, limitPrice: row.limit_price,
-      reservedCash: row.reserved_cash, ts: row.ts
-    });
-  }
-  const total = [...limitOrders.values()].reduce((s,a)=>s+a.length,0);
-  if (total) console.log(`[LimitOrders] Restored ${total} open orders from DB`);
-} catch(e) { console.error('[LimitOrders] Restore error:', e); }
+// NOTE: limit orders are restored further down, immediately after limitOrders
+// and ORDER_EXPIRY_MS are declared. A duplicate restore block used to sit here,
+// above those declarations, so it threw a temporal dead zone ReferenceError on
+// every single boot. The throw was caught and swallowed, the real restore ran
+// correctly a few hundred lines later, and the only symptom was an alarming
+// "[LimitOrders] Restore error" line in the log that made it look like open
+// orders were being lost on restart. They were not. Removed in 1.3.0.0.
 
 // ─── Market state restore ─────────────────────────────────────────────────────
 
@@ -2572,7 +2813,7 @@ function runEarningsEvent() {
   // Broadcast global headline
   const dir = beat ? '▲' : '▼';
   const tone = beat ? 'good' : 'bad';
-  pushHeadline(`EARNINGS: ${c.name} (${c.symbol}) ${beat ? 'beats' : 'misses'}, ${dir}${(magnitude*100).toFixed(1)}% @ Ƒ${newPrice.toFixed(2)}`, tone, c.symbol);
+  pushHeadline(`EARNINGS: ${c.name} (${c.symbol}) ${beat ? 'beats' : 'misses'}, ${dir}${(magnitude*100).toFixed(1)}% @ Ƒ${newPrice.toFixed(2)}`, tone, c.symbol, null, {k:'evt',t:'earn',sym:c.symbol,beat,dir,pct:(magnitude*100).toFixed(1),px:newPrice.toFixed(2)});
 
   // Notify holders specifically
   for (const [playerId, sockets] of playerSockets) {
@@ -2991,6 +3232,55 @@ const wss=new WebSocketServer({server});
 
 app.use('/api/patreon/webhook', express.raw({type:'application/json'}));
 app.use(express.json());
+
+// Dev-only toggle for the passage. Opening broadcasts the Jade tickers to connected
+// clients (they appear on the tape); closing delists them. Also flips the client
+// sealed UI via the 'wormhole' broadcast.
+app.post('/api/dev/wormhole', (req, res) => {
+  try {
+    const tok = (req.body && req.body.token) || null;
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    if (!isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
+    const open = !!(req.body && req.body.open);
+    WORMHOLE_OPEN = open;
+    const jadeCos = companies.filter(c => c._jade);
+    if (open) {
+      for (const c of jadeCos) broadcast({ type:'company_added', data:{ id:c.id, name:c.name, symbol:c.symbol, price:c.price, sector:c.sector, hq:null, jade:true } });
+    } else {
+      for (const c of jadeCos) broadcast({ type:'index_delisted', data:{ symbol:c.symbol } });
+    }
+    broadcast({ type:'wormhole', data:{ open:WORMHOLE_OPEN } });
+    console.log('[Jade] passage '+(open?'OPENED':'SEALED')+' by '+actor.name);
+    res.json({ ok:true, open:WORMHOLE_OPEN, tickers:jadeCos.length });
+  } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
+});
+// Dev-only halt/resume for commodity trading. Buy and sell reject with 423 while
+// halted; in-flight cargo is untouched by design (see COMMODITIES_OPEN above).
+app.post('/api/dev/commodities', (req, res) => {
+  try {
+    const tok = (req.body && req.body.token) || null;
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    if (!isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
+    COMMODITIES_OPEN = !!(req.body && req.body.open);
+    broadcast({ type:'commodities_gate', data:{ open:COMMODITIES_OPEN } });
+    console.log('[Commodities] trading '+(COMMODITIES_OPEN?'RESUMED':'HALTED')+' by '+actor.name);
+    res.json({ ok:true, open:COMMODITIES_OPEN });
+  } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
+});
+
+// Current world-gate state, so the God Panel can render the real switch positions
+// instead of guessing from whatever it last clicked.
+app.get('/api/dev/gates', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor || !isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
+    res.json({ ok:true, wormhole:WORMHOLE_OPEN, commodities:COMMODITIES_OPEN });
+  } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
+});
+
 app.use('/',express.static(path.join(__dirname,'..','client'),{
   etag:true,
   setHeaders:function(res,filePath){
@@ -3053,6 +3343,26 @@ function isNameClean(name) {
   }
   return true;
 }
+// Single gate for every piece of player-authored text that other players will
+// see: player names, fund names and blurbs, storefront names, district names.
+// Runs BOTH filters deliberately. isNameClean carries a plain banned-word list;
+// containsSlur in chat-filter.js adds leet normalisation and pattern matching
+// that the name path never had. Chat was better defended than the permanent,
+// map-visible labels, which was backwards.
+function isTextClean(text) {
+  const t = String(text == null ? '' : text);
+  if (!t.trim()) return true;
+  // Three passes, because each alone has a hole. The banned-word list matches
+  // substrings but not digit substitution. containsSlur handles digits and
+  // separators but anchors on word boundaries, so padding a slur with a suffix
+  // walks straight past it ("n1gg3rking" defeated both until this was added).
+  // Normalising leet first and re-running the substring list closes that.
+  if (!isNameClean(t)) return false;
+  try { if (!isNameClean(normalizeLeet(t.toLowerCase()))) return false; } catch(_) {}
+  try { if (containsSlur(t)) return false; } catch(_) {}
+  return true;
+}
+
 function isNameValid(name) {
   // Only allow letters, numbers, spaces, underscores, hyphens
   if (!/^[A-Za-z0-9 _-]+$/.test(name)) return false;
@@ -3067,7 +3377,7 @@ app.post('/api/register',(req,res)=>{
     if(!password||password.length<4) return res.status(400).json({ok:false,error:'password_too_short'});
     const trimmed=name.trim().slice(0,32);
     if(!isNameValid(trimmed)) return res.status(400).json({ok:false,error:'name_invalid',message:'Names can only contain letters, numbers, spaces, underscores, and hyphens. No emojis or special characters.'});
-    if(!isNameClean(trimmed)) return res.status(400).json({ok:false,error:'name_inappropriate',message:'That name contains inappropriate language.'});
+    if(!isTextClean(trimmed)) return res.status(400).json({ok:false,error:'name_inappropriate',message:'That name contains inappropriate language.'});
     if(!isNameAvailable(trimmed)) return res.status(409).json({ok:false,error:'name_taken'});
     const id=uuidv4();
     const player=createPlayerSync(id,trimmed,password);
@@ -3108,7 +3418,7 @@ app.post('/api/rename',(req,res)=>{
     const name=String(req.body?.name||req.query.name||'').trim().slice(0,32);
     if(!name) return res.status(400).json({ok:false,error:'invalid_name'});
     if(!isNameValid(name)) return res.status(400).json({ok:false,error:'name_invalid',message:'Names can only contain letters, numbers, spaces, underscores, and hyphens.'});
-    if(!isNameClean(name)) return res.status(400).json({ok:false,error:'name_inappropriate',message:'That name contains inappropriate language.'});
+    if(!isTextClean(name)) return res.status(400).json({ok:false,error:'name_inappropriate',message:'That name contains inappropriate language.'});
     if(!isNameAvailable(name)) return res.status(409).json({ok:false,error:'name_taken'});
     renamePlayer(p.id,name);
     res.json({ok:true,name});
@@ -3310,7 +3620,7 @@ function processFundProposals() {
           // Execution blocked: a fund (here the legacy guild) may not trade a listed fund
           // ticker with pool cash (circular / cross-pumpable). The vote still resolved as
           // passed above; the fill is simply skipped, same as an insufficient-cash pass.
-          try { pushHeadline(`GUILD: ${prop.symbol} trade not executed (Index tickers can't be traded with guild cash)`, 'bad', null); } catch(_) {}
+          try { pushHeadline(`GUILD: ${prop.symbol} trade not executed (Index tickers can't be traded with guild cash)`, 'bad', null, null, {k:'evt',t:'gnx',sym:prop.symbol}); } catch(_) {}
           continue;
         }
         if (c) {
@@ -3329,7 +3639,7 @@ function processFundProposals() {
               setFundHolding(prop.symbol, haveQty + prop.qty);
               applyTapeMove(c, slip);
               logFundTrade(prop.symbol, 'buy', prop.qty, fillPrice, `Vote passed ${prop.votes_yes}-${prop.votes_no}`);
-              pushHeadline(`GUILD: Acquired ${prop.qty}x ${prop.symbol} @ Ƒ${fillPrice.toFixed(2)}`,'good', prop.symbol);
+              pushHeadline(`GUILD: Acquired ${prop.qty}x ${prop.symbol} @ Ƒ${fillPrice.toFixed(2)}`,'good', prop.symbol, null, {k:'evt',t:'gacq',q:prop.qty,sym:prop.symbol,px:fillPrice.toFixed(2)});
             }
           } else if (prop.side === 'sell') {
             const qty = Math.min(prop.qty, haveQty);
@@ -3341,7 +3651,7 @@ function processFundProposals() {
               setFundHolding(prop.symbol, haveQty - qty);
               applyTapeMove(c, -slip);
               logFundTrade(prop.symbol, 'sell', qty, fillPrice, `Vote passed ${prop.votes_yes}-${prop.votes_no}`);
-              pushHeadline(`GUILD: Sold ${qty}x ${prop.symbol} @ Ƒ${fillPrice.toFixed(2)}`,'neutral', prop.symbol);
+              pushHeadline(`GUILD: Sold ${qty}x ${prop.symbol} @ Ƒ${fillPrice.toFixed(2)}`,'neutral', prop.symbol, null, {k:'evt',t:'gsold',q:qty,sym:prop.symbol,px:fillPrice.toFixed(2)});
             }
           }
         }
@@ -3423,7 +3733,7 @@ app.post('/api/fund/propose', (req, res) => {
     const q = Math.max(1, Math.min(100000, Math.floor(Number(qty)||0)));
     const id = createProposal(p.id, side, sym, q, String(reason||'').slice(0, 200));
     broadcastFundUpdate();
-    pushHeadline(`GUILD: ${p.name} proposes to ${side} ${q}× ${sym}`, 'neutral', sym);
+    pushHeadline(`GUILD: ${p.name} proposes to ${side} ${q}× ${sym}`, 'neutral', sym, null, {k:'evt',t:'gprop',pn:p.name,side,q,sym});
     res.json({ ok: true, proposalId: id });
   } catch(e) { res.status(400).json({ ok: false, error: String(e) }); }
 });
@@ -3652,12 +3962,15 @@ app.post('/api/funds/create', (req, res) => {
     if (!name || name.length < 3) return res.status(400).json({ ok:false, error:'name_too_short' });
     if (getFundByName(name)) return res.status(409).json({ ok:false, error:'name_taken' });
     const desc  = String(req.body?.description||'').slice(0,200);
+    if (!isTextClean(name) || !isTextClean(desc)) {
+      return res.status(400).json({ ok:false, error:'inappropriate', message:'That name or description contains inappropriate language.' });
+    }
     const id    = 'F_' + Math.random().toString(36).slice(2,10).toUpperCase();
     { const p = getPlayer(actor.id); p.cash -= FUND_CREATE_COST; savePlayerFn(p); }
     createFund(id, name, actor.id, desc, FUND_BASE_SLOTS);
     addFundCash(id, FUND_CREATE_COST * 0.1);
     logFundActivity(id,'create',actor.id,null,null,null,FUND_CREATE_COST,`Fund created by ${actor.name}`);
-    pushHeadline(`${actor.name} launched hedge fund "${name}"`, 'good', null);
+    pushHeadline(`${actor.name} launched hedge fund "${name}"`, 'good', null, null, {k:'evt',t:'flaunch',an:actor.name,fn:name});
     res.json({ ok:true, fundId: id });
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
@@ -4069,7 +4382,7 @@ app.post('/api/funds/:id/propose', (req, res) => {
     const id  = createHouseProposal(fund.id, actor.id, side, sym, q, reason, fund.vote_duration_ms || 21600000);
     // Proposer's own vote is auto-cast yes.
     castHouseVote(id, actor.id, 'yes', houseVoteWeight(fund, actor.id));
-    pushHeadline(`${fund.name}: ${actor.name} proposes ${side} ${q}× ${sym}`, 'neutral', sym);
+    pushHeadline(`${fund.name}: ${actor.name} proposes ${side} ${q}× ${sym}`, 'neutral', sym, null, {k:'evt',t:'fprop',fn:fund.name,an:actor.name,side,q,sym});
     maybeResolveEarly(fund, id); // e.g. solo-owner house resolves immediately
     broadcastHouseUpdate(fund.id);
     res.json({ ok:true, proposalId:id });
@@ -4116,7 +4429,7 @@ app.post('/api/funds/:id/proposal/:pid/resolve', (req, res) => {
       const r = executeFundTrade(fund.id, prop.side, prop.symbol, prop.qty, prop.proposer_id);
       resolveHouseProposal(prop.id, r.ok ? 'passed' : 'failed_exec', r.ok);
       if (!r.ok) { broadcastHouseUpdate(fund.id); return res.status(400).json(r); }
-      pushHeadline(`${fund.name}: owner executed ${prop.side} ${prop.qty}× ${prop.symbol}`, 'good', prop.symbol);
+      pushHeadline(`${fund.name}: owner executed ${prop.side} ${prop.qty}× ${prop.symbol}`, 'good', prop.symbol, null, {k:'evt',t:'fexec',fn:fund.name,side:prop.side,q:prop.qty,sym:prop.symbol});
     } else if (action === 'veto') {
       resolveHouseProposal(prop.id, 'vetoed', false);
     } else {
@@ -4205,7 +4518,7 @@ app.post('/api/funds/:id/delete', (req, res) => {
 
     // Delete fund
     deleteFund(fund.id);
-    pushHeadline(`${actor.name} disbanded hedge fund "${fund.name}"`, 'bad', null);
+    pushHeadline(`${actor.name} disbanded hedge fund "${fund.name}"`, 'bad', null, null, {k:'evt',t:'fdisband',an:actor.name,fn:fund.name});
     broadcast({ type:'fund_deleted', data:{ fundId: fund.id, name: fund.name }});
     res.json({ ok:true, refund: DISBAND_REFUND });
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
@@ -4321,7 +4634,7 @@ app.post('/api/funds/:id/list', (req, res) => {
 
     logFundActivity(fund.id, 'list', actor.id, symbol, floatShares, listPrice, INDEX_LIST_FEE,
       `Listed as ${symbol} — ${floatShares.toLocaleString()} float @ Ƒ${listPrice}, fee Ƒ${INDEX_LIST_FEE.toLocaleString()}`);
-    pushHeadline(`${fund.name} lists on the Index as ${symbol} at Ƒ${listPrice}/share`, 'good', null, 'flesh');
+    pushHeadline(`${fund.name} lists on the Index as ${symbol} at Ƒ${listPrice}/share`, 'good', null, 'flesh', {k:'evt',t:'flist',fn:fund.name,sym:symbol,px:listPrice});
     broadcast({ type:'index_listed', data: fundListingWire(getFundListing(fund.id)) });
     // New ticker must reach every client's companies list.
     broadcast({ type:'company_added', data:{ id:companyId, name:fund.name, symbol, price:(ticker?ticker.price:listPrice), sector:7, hq:null, fundTicker:true, desc:(fund.description||'') }});
@@ -4357,7 +4670,7 @@ app.post('/api/funds/:id/delist', (req, res) => {
     snapshotFund(fund.id);
     logFundActivity(fund.id, 'delist', actor.id, listing.symbol, settle.holders, nps, settle.paid,
       `Delisted ${listing.symbol}; bought out ${settle.holders} holder(s) @ Ƒ${nps.toFixed(2)} (Ƒ${settle.paid.toLocaleString()})`);
-    pushHeadline(`${fund.name} delists ${listing.symbol} from the Index`, 'bad', null, 'flesh');
+    pushHeadline(`${fund.name} delists ${listing.symbol} from the Index`, 'bad', null, 'flesh', {k:'evt',t:'fdelist',fn:fund.name,sym:listing.symbol});
     broadcast({ type:'index_delisted', data:{ fundId: fund.id, symbol: listing.symbol, companyId: listing.company_id, navPerShare: nps }});
     res.json({ ok:true, boughtOut: settle.holders, perShare: nps, paid: settle.paid });
   } catch(e) { console.error('[index delist]', e); res.status(500).json({ ok:false, error:String(e) }); }
@@ -4378,6 +4691,9 @@ app.post('/api/funds/:id/edit', (req, res) => {
 
     const newName = String(req.body?.name||'').trim().slice(0,40);
     const newDesc = String(req.body?.description||'').slice(0,200);
+    if (!isTextClean(newName) || !isTextClean(newDesc)) {
+      return res.status(400).json({ ok:false, error:'inappropriate', message:'That name or description contains inappropriate language.' });
+    }
     if (!newName || newName.length < 3) return res.status(400).json({ ok:false, error:'name_too_short' });
 
     // Check name not taken (if changed)
@@ -4412,7 +4728,13 @@ app.post('/api/galaxy/join-faction', (req, res) => {
     const p = token ? getPlayer(token) : null;
     if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
     if (factionId === 'fleshstation') return res.status(403).json({ ok: false, error: 'Flesh Station is dev-only.' });
-    const VALID = ['coalition','syndicate','void','guild'];
+    // 'jade' is joinable as an allegiance. It is deliberately NOT added to the
+    // funding allowlist further down: the Jade colonies are client-side map data,
+    // they are not seeded into colony_state, and there is no control_jade column,
+    // so funding the Circuit would take the money and change nothing. Allegiance
+    // works, territory does not, and that is the honest state until the colonies
+    // are seeded server-side.
+    const VALID = ['coalition','syndicate','void','guild','jade'];
     if (!VALID.includes(factionId)) return res.status(400).json({ ok: false, error: 'invalid_faction' });
     const { faction: current, joinedAt, voidLocked, voidPresidentEscaped } = getPlayerFactionData(p.id);
     if (current === factionId) return res.json({ ok: true, faction: factionId, message: 'Already aligned.' });
@@ -4809,7 +5131,7 @@ function settleContract(c, reason) {
     safeAddCash(p, payout); savePlayer(p);
     // Lane kickback to shareholders from the profit (reuses existing distribution).
     try { distributeLaneKickback(getLaneKey(c.from_colony, c.to_colony), payout, CONTRACT_KICKBACK_RATE, c.player_id); } catch(_){}
-    pushHeadline(`Contract exercised: ${com?com.name:c.commodity_id} ${c.from_colony.replace(/_/g,' ')}→${c.to_colony.replace(/_/g,' ')} pays ${Math.round(payout).toLocaleString()} SC`, 'good', '📈');
+    pushHeadline(`Contract exercised: ${com?com.name:c.commodity_id} ${c.from_colony.replace(/_/g,' ')}→${c.to_colony.replace(/_/g,' ')} pays ${Math.round(payout).toLocaleString()} SC`, 'good', '📈', null, {k:'evt',t:'contract_ex',com:(com?com.name:c.commodity_id),from:c.from_colony,to:c.to_colony,sc:Math.round(payout).toLocaleString()});
   }
   const sockets = playerSockets.get(c.player_id);
   if (sockets) {
@@ -4868,6 +5190,7 @@ function voidOpenCasinoRoundsOnBoot() {
 // ─── COMMODITY MARKET (trade) ─────────────────────────────────────────────────
 app.post('/api/commodities/buy', (req, res) => {
   try {
+    if (!COMMODITIES_OPEN) return res.status(423).json({ ok:false, error:'commodities_halted' });
     const tok = tokenFrom(req);
     const p   = tok ? getPlayer(tok) : null;
     if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
@@ -4910,6 +5233,7 @@ app.post('/api/commodities/buy', (req, res) => {
 
 app.post('/api/commodities/sell', (req, res) => {
   try {
+    if (!COMMODITIES_OPEN) return res.status(423).json({ ok:false, error:'commodities_halted' });
     const tok = tokenFrom(req);
     const p   = tok ? getPlayer(tok) : null;
     if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
@@ -5087,7 +5411,7 @@ app.post('/api/ships/buy', (req, res) => {
     p.cash = Math.round((p.cash - ship.price) * 100) / 100;
     savePlayer(p);
     setPlayerShipClass(p.id, classId);
-    pushHeadline(`${p.name} commissions a ${ship.name} (${ship.capacity.toLocaleString()}u hold)`, 'neutral', '🚀');
+    pushHeadline(`${p.name} commissions a ${ship.name} (${ship.capacity.toLocaleString()}u hold)`, 'neutral', '🚀', null, {k:'evt',t:'ship',pn:p.name,ship:ship.name,cap:ship.capacity.toLocaleString()});
     res.json({ ok:true, owned:classId, capacity:ship.capacity, cash:p.cash });
     try { broadcastToPlayer(p.id, { type:'portfolio', data:snapshotPortfolio(getPlayer(p.id)) }); } catch(_){}
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
@@ -5259,7 +5583,13 @@ app.post('/api/galaxy/fund', (req, res) => {
     // remainder carries forward (persisted), so a Ƒ3M donation isn't wasted — it sits
     // in the pool until later contributions push it over the next 10M line. No per-
     // donation cap: the pool size and the 96% control ceiling are the only limits.
-    const WAR_FUND_PER_PCT = 10_000_000;
+    // Base rate, plus the city war surcharge: a colony with a built city
+    // costs warRate(book) = 4.42 x book^0.75 extra per control point, so the
+    // take cost scales with what stands on the ground. This is the number
+    // that keeps stripping at 1/20 a net loss for a raider at every book.
+    const WAR_FUND_BASE_PER_PCT = 10_000_000;
+    const _cityWarBook = isCityColony(colonyId) ? cityBook(colonyId) : 0;
+    const WAR_FUND_PER_PCT = WAR_FUND_BASE_PER_PCT + Math.round(warRate(_cityWarBook));
     let pending = getWarFundPending(colonyId, factionId) + amt;
     const boost = Math.floor(pending / WAR_FUND_PER_PCT); // whole 1% increments now affordable
     const ctrl = {
@@ -6094,8 +6424,9 @@ function broadcastFundDetail(fundId) {
   } catch(_) {}
 }
 
-function pushHeadline(text,tone,symbol,category){
+function pushHeadline(text,tone,symbol,category,meta){
   const item={id:uuidv4(),t:Date.now(),text,tone,symbol:symbol||null,cat:category||'system'};
+  if(meta) item.meta=meta;
   headlines.push(item); if(headlines.length>200)headlines.shift();
   broadcast({type:'news',data:item});
 }
@@ -6270,16 +6601,16 @@ function genHeadline(){
   const roll = Math.random();
 
   // 3%: rare cosmic-weird drip (no ticker)
-  if (roll < 0.03) { pushHeadline(pick(RARE_WEIRD), 'neutral', null, 'void'); return; }
+  if (roll < 0.03) { const i=Math.floor(Math.random()*RARE_WEIRD.length); pushHeadline(RARE_WEIRD[i], 'neutral', null, 'void', {k:'pool',p:'void',i}); return; }
 
   // 12%: faction political/economic news (no ticker)
-  if (roll < 0.15) { const h = pick(FACTION_NEWS); pushHeadline(h.text, h.tone, null, 'faction'); return; }
+  if (roll < 0.15) { const i=Math.floor(Math.random()*FACTION_NEWS.length); const h=FACTION_NEWS[i]; pushHeadline(h.text, h.tone, null, 'faction', {k:'pool',p:'faction',i}); return; }
 
   // 5%: Mr. Flesh / house flavor (no ticker)
-  if (roll < 0.20) { const h = pick(FLESH_NEWS); pushHeadline(h.text, h.tone, null, 'flesh'); return; }
+  if (roll < 0.20) { const i=Math.floor(Math.random()*FLESH_NEWS.length); const h=FLESH_NEWS[i]; pushHeadline(h.text, h.tone, null, 'flesh', {k:'pool',p:'flesh',i}); return; }
 
   // 13%: market-wide headline (no ticker, no price impact)
-  if (roll < 0.33) { const h = pick(MARKET_WIDE); pushHeadline(h.text, h.tone, null, 'market'); return; }
+  if (roll < 0.33) { const i = Math.floor(Math.random()*MARKET_WIDE.length); const h = MARKET_WIDE[i]; pushHeadline(h.text, h.tone, null, 'market', {k:'pool',p:'market',i}); return; }
 
   // 10%: colony-flavored headline (no specific ticker)
   if (roll < 0.43) {
@@ -6287,8 +6618,9 @@ function genHeadline(){
     if (colonyIds.length) {
       const colId = pick(colonyIds);
       const colName = NEWS_COLONY_NAMES[colId] || colId.replace(/_/g,' ');
-      const template = pick(COLONY_FLAVOR);
-      pushHeadline(template.text(colName), template.tone, null, 'colony');
+      const ti = Math.floor(Math.random()*COLONY_FLAVOR.length);
+      const template = COLONY_FLAVOR[ti];
+      pushHeadline(template.text(colName), template.tone, null, 'colony', {k:'colony', i:ti, col:colId});
       return;
     }
   }
@@ -6296,12 +6628,24 @@ function genHeadline(){
   // ~57%: company-specific headline (sector lore + generic pool merged for variety)
   const c = pick(companies.filter(x => !x._special && x.symbol !== 'SWT' && x.symbol !== 'BRNC'));
   if (!c) return;
-  const sn = SECTOR_NEWS[c.sector || 0] || SECTOR_NEWS[7];
+  const sec = c.sector || 0;
+  const sn = SECTOR_NEWS[sec] || SECTOR_NEWS[7];
   const r2 = Math.random();
   const bucket = r2 < 0.40 ? 'good' : (r2 < 0.80 ? 'bad' : 'weird');
   const tone = bucket === 'good' ? 'good' : (bucket === 'bad' ? 'bad' : 'neutral');
-  const linePool = (sn[bucket] || []).concat(COMPANY_GENERIC[bucket] || []);
-  const line = pick(linePool.length ? linePool : sn.weird);
+  const secPool = sn[bucket] || [];
+  const genPool = COMPANY_GENERIC[bucket] || [];
+  const combined = secPool.concat(genPool);
+  let line, meta = null;
+  if (combined.length) {
+    const li = Math.floor(Math.random() * combined.length);
+    line = combined[li];
+    meta = (li < secPool.length)
+      ? { k:'co', sym:c.symbol, sec, b:bucket, src:'s', i:li }
+      : { k:'co', sym:c.symbol, sec, b:bucket, src:'g', i:(li - secPool.length) };
+  } else {
+    line = pick(sn.weird);
+  }
 
   // News now DRIVES price (v1.1.6). The move splits into an instant gap, applied here
   // so reading the public headline gives no tradeable lead, plus a thin decaying drift
@@ -6318,7 +6662,7 @@ function genHeadline(){
     c.newsBiasTicks = NEWS_DRIFT_TICKS;
   }
 
-  pushHeadline(`${c.name} (${c.symbol}): ${line}`, tone, c.symbol, 'company');
+  pushHeadline(`${c.name} (${c.symbol}): ${line}`, tone, c.symbol, 'company', meta);
 }
 
 
@@ -6707,7 +7051,7 @@ wss.on('connection',(ws,req)=>{
     ws.send(JSON.stringify({type:'welcome',data:{id:null,name:'Guest',cash:START_CASH}}));
   }
 
-  ws.send(JSON.stringify({type:'init',data:{companies:companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector,hq:c.hq||null,fundTicker:c._fundTicker?true:undefined,desc:c._fundTicker?(c._fundDesc||''):undefined})).sort((a,b)=>a.name.localeCompare(b.name)),headlines:headlines.slice(-30),leaderboard:_leaderboardSnapshot||getLeaderboard(companies),breaking:(breakingNews?{active:true,text:breakingNews.text,tone:breakingNews.tone}:{active:false})}}));
+  ws.send(JSON.stringify({type:'init',data:{companies:companies.filter(c=>c._jade?WORMHOLE_OPEN:true).map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector,hq:c.hq||null,jade:c._jade?true:undefined,fundTicker:c._fundTicker?true:undefined,desc:c._fundTicker?(c._fundDesc||''):undefined})).sort((a,b)=>a.name.localeCompare(b.name)),headlines:headlines.slice(-30),leaderboard:_leaderboardSnapshot||getLeaderboard(companies),breaking:(breakingNews?{active:true,text:breakingNews.text,tone:breakingNews.tone}:{active:false}),wormholeOpen:WORMHOLE_OPEN}}));
 
   ws.on('message',(buf)=>{
     let msg; try{msg=JSON.parse(buf.toString());}catch{return;}
@@ -6717,6 +7061,15 @@ wss.on('connection',(ws,req)=>{
     const actor=playerId?getPlayer(playerId):null;
 
     if(msg.type==='ping'){if(actor)touchPlayer(actor.id);return;}
+
+    // Per connection rate limit. See server/ratelimit.js for why two buckets
+    // and why this drops the frame rather than the socket.
+    if(!ws._rl) ws._rl = newBuckets(Date.now());
+    const rl = checkRate(ws._rl, msg.type, Date.now());
+    if(!rl.ok){
+      if(rl.notify){ try{ ws.send(JSON.stringify({type:'rate_limited',data:{retryInMs:1000}})); }catch(_){} }
+      return;
+    }
 
     if(!actor){
       if(msg.type==='chat'){
@@ -6833,6 +7186,7 @@ wss.on('connection',(ws,req)=>{
       const{side,symbol,shares}=msg;
       const s=String(symbol||'').toUpperCase(),qty=Math.max(1,Math.min(Number(shares)||0,MAX_SHARES));
       const c=companies.find(x=>x.symbol===s); if(!c||!qty)return;
+      if(c._jade && !WORMHOLE_OPEN){ ws.send(JSON.stringify({type:'error',data:{msg:'⚠ The Jade passage is sealed. This market opens when the Circuit allows.'}})); return; }
 
       // ── Large-order market impact (only fires above IMPACT_THRESHOLD_C notional) ──
       // _impactSlipFor returns the slip fraction for an executed leg's notional; each
@@ -9079,7 +9433,7 @@ wss.on('connection',(ws,req)=>{
       if (blk.timer) clearTimeout(blk.timer);
       activeBlockades.delete(laneKey);
       const [colA, colB] = laneKey.split('|');
-      pushHeadline(`⚔ Private army breaks the ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} blockade, ${actor.name} deploys mercenaries to restore trade`, 'good', '⚔');
+      pushHeadline(`⚔ Private army breaks the ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} blockade, ${actor.name} deploys mercenaries to restore trade`, 'good', '⚔', null, {k:'evt',t:'blk_army',colA,colB,an:actor.name});
       broadcast({ type:'blockade_update', data:{ laneKey, active:false, broken:true } });
       ws.send(JSON.stringify({ type:'private_army_result', data:{ laneKey, cost, cash:actor.cash } }));
       try { saveGalaxySystems(); } catch(_){}
@@ -9106,7 +9460,7 @@ wss.on('connection',(ws,req)=>{
       savePlayer(actor);
       buyLaneShare(laneKey, supply + 1, actor.id, actor.name, price);
       const newSupply = supply + 1;
-      pushHeadline(`${actor.name} acquires lane share on ${from.replace(/_/g,' ')} ↔ ${to.replace(/_/g,' ')} (slot #${newSupply}, Ƒ${price.toLocaleString()})`, 'good', '📋');
+      pushHeadline(`${actor.name} acquires lane share on ${from.replace(/_/g,' ')} ↔ ${to.replace(/_/g,' ')} (slot #${newSupply}, Ƒ${price.toLocaleString()})`, 'good', '📋', null, {k:'evt',t:'lane_acq',an:actor.name,colA:from,colB:to,slot:newSupply,px:price.toLocaleString()});
       broadcast({ type:'share_update', data:{ laneKey, supply: newSupply, buyPrice: shareBuyPrice(lane.vol, newSupply), sellPrice: shareSellPrice(lane.vol, newSupply) } });
       ws.send(JSON.stringify({ type:'share_bought', data:{ laneKey, slot: newSupply, price, cash: actor.cash, vol: lane.vol } }));
     }
@@ -9123,7 +9477,7 @@ wss.on('connection',(ws,req)=>{
       savePlayer(actor);
       const newSupply = supply - 1;
       const [colA, colB] = existing.lane_key.split('|');
-      pushHeadline(`${actor.name} sells lane share on ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} for Ƒ${sellVal.toLocaleString()}`, 'neutral', '📋');
+      pushHeadline(`${actor.name} sells lane share on ${colA.replace(/_/g,' ')} ↔ ${colB.replace(/_/g,' ')} for Ƒ${sellVal.toLocaleString()}`, 'neutral', '📋', null, {k:'evt',t:'lane_sell',an:actor.name,colA,colB,px:sellVal.toLocaleString()});
       broadcast({ type:'share_update', data:{ laneKey: existing.lane_key, supply: newSupply, buyPrice: shareBuyPrice(vol, newSupply), sellPrice: shareSellPrice(vol, newSupply) } });
       ws.send(JSON.stringify({ type:'share_sold', data:{ laneKey: existing.lane_key, sellPrice: sellVal, purchasePrice: existing.purchase_price, dividendsEarned: existing.dividends_earned, cash: actor.cash } }));
     }
@@ -9163,7 +9517,7 @@ wss.on('connection',(ws,req)=>{
       const [oA, oB] = existing.lane_key.split('|');
       broadcast({ type:'share_update', data:{ laneKey: existing.lane_key, supply: oldNewSupply, buyPrice: shareBuyPrice(oldVol, oldNewSupply), sellPrice: shareSellPrice(oldVol, oldNewSupply) } });
       broadcast({ type:'share_update', data:{ laneKey: newLaneKey, supply: newSupply + 1, buyPrice: shareBuyPrice(lane.vol, newSupply + 1), sellPrice: shareSellPrice(lane.vol, newSupply + 1) } });
-      pushHeadline(`${actor.name} swaps lane share: ${oA.replace(/_/g,' ')} → ${from.replace(/_/g,' ')} ↔ ${to.replace(/_/g,' ')}`, 'neutral', '📋');
+      pushHeadline(`${actor.name} swaps lane share: ${oA.replace(/_/g,' ')} → ${from.replace(/_/g,' ')} ↔ ${to.replace(/_/g,' ')}`, 'neutral', '📋', null, {k:'evt',t:'lane_swap',an:actor.name,oA,colA:from,colB:to});
       ws.send(JSON.stringify({ type:'share_swapped', data:{ oldLane: existing.lane_key, newLane: newLaneKey, soldFor: sellVal, boughtFor: buyVal, cash: actor.cash } }));
     }
 
@@ -9187,6 +9541,540 @@ wss.on('connection',(ws,req)=>{
     }
 
     // ── Galaxy data request: send blockades, shares, tension, HQ map ────────
+    // ── City Charters (1.3.0.0) ─────────────────────────────────────────────
+    // Server-authoritative throughout. Cities are permanent world objects;
+    // players buy the mayoral SEAT of a district, never the ground. Every
+    // price, every rule and the sector geometry live here; the client sends
+    // intent only. Same trust model as casino_play.
+    const CITY_KINDS = ['export','food','med','tech'];
+    function cityErr(m){ ws.send(JSON.stringify({ type:'city_ack', data:{ ok:false, error:m } })); }
+    function cityContested(colonyId) {
+      try { const c = getColonyState(colonyId); return !!(c && c.conquest_timer); } catch(_) { return false; }
+    }
+    // Player-authored text. Content filtering is a separate pass before push;
+    // this is length and shape only.
+    function cleanLabel(v, max) {
+      return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
+    }
+    function cityFullData(colonyId) {
+      const st = ensureCityState(colonyId);
+      const blk = colonyBlockadeLevel(colonyId);
+      const ds = getDistricts(colonyId);
+      const names = {};
+      const nameOf = pid => {
+        if (!pid) return null;
+        if (!names[pid]) { const pp = getPlayer(pid); names[pid] = pp ? pp.name : '?'; }
+        return names[pid];
+      };
+      const shops = [];
+      for (const d of ds) {
+        // Two resolutions per district. The live one is what everybody earns.
+        // The neutral one is the only thing a buyout is quoted from, and the
+        // panel has to show the same number the handler will charge or the
+        // button lies.
+        const live = resolveDistrictShops(colonyId, d, blk);
+        const quote = {};
+        for (const r of resolveDistrictShops(colonyId, d, blk, { neutral:true })) quote[r.id] = r.net;
+        for (const r of live) {
+          const npc = r.owner.indexOf('npc:') === 0;
+          shops.push({ id:r.id, district:d.idx, owner:npc?null:r.owner,
+                       ownerName: npc ? null : nameOf(r.owner),
+                       npc: npc, kind:r.kind, name:r.name, descr:r.descr,
+                       mine: !npc && r.owner === actor.id,
+                       gross:Math.round(r.gross), net:Math.round(r.net),
+                       buyout: npc ? shopBuyoutCost(colonyId, d, quote[r.id] || 0) : 0 });
+        }
+      }
+      const book = colonyInvested(colonyId);
+      const charter = st.charter_owner || null;
+      const blkNow = blk;
+      return {
+        colonyId,
+        charter, charterName: charter ? nameOf(charter) : null,
+        prevCharter: st.prev_charter ? nameOf(st.prev_charter) : null,
+        // What the city is short of, per class, as a signed fraction of its own
+        // demand. Positive means it imports and its prices for that class are
+        // firm; negative means it exports and is the cheap place to buy.
+        civic: {
+          food: Math.round(civicPressure(colonyId, 'food', blkNow) * 100) / 100,
+          med:  Math.round(civicPressure(colonyId, 'med',  blkNow) * 100) / 100,
+          tech: Math.round(civicPressure(colonyId, 'tech', blkNow) * 100) / 100,
+        },
+        stock: (function(){
+          const out = {};
+          for (const cls of Object.keys(STOCK_COL)) {
+            const perDistrict = stockWeekUnits(colonyId, cls);   // sizing and price
+            const perColony   = colonyWeekUnits(colonyId, cls);  // what cover is measured in
+            const held = stockOf(colonyId, cls);
+            out[cls] = { units: Math.round(held),
+                         weeks: perColony > 0 ? Math.round(held / perColony * 10) / 10 : 0,
+                         weekCost: stockCost(perDistrict), maxWeeks: CITY_TUNE.STOCK_MAX_WK };
+          }
+          return out;
+        })(),
+        history: getColonyHistory(colonyId, 24).map(h => {
+          let pr = null;
+          try { pr = h.params ? JSON.parse(h.params) : null; } catch(_) {}
+          return { d: h.district, ts: h.ts, kind: h.kind,
+                   actor: h.actor ? nameOf(h.actor) : null,
+                   detail: h.detail, params: pr };
+        }),
+        summary: citySummary(colonyId, blk),
+        geometry: geometryPayload(colonyId),
+        districts: ds.map(d => {
+          const sum = districtSummary(colonyId, d, blk);
+          sum.mayorName = nameOf(d.mayor);
+          sum.mine = !!(d.mayor && d.mayor === actor.id);
+          sum.nextLevel = Math.round(nextLevelCost(d.invested || 0));
+          return sum;
+        }),
+        shops,
+        war: { book: Math.round(book), rate: Math.round(warRate(book)),
+               trigger: Math.round(warTriggerCost(book)),
+               stripRate: CITY_TUNE.STRIP_RATE,
+               stripYield: Math.round(book * CITY_TUNE.STRIP_RATE),
+               holdDays: Math.round(CITY_TUNE.STRIP_HOLD_MS / 864e5) },
+        tune: { devMax: CITY_TUNE.DEV_MAX, devLevels: CITY_TUNE.DEV_LEVELS_MAX,
+                cutMin: CITY_TUNE.CUT_MIN,
+                cutMax: CITY_TUNE.CUT_MAX, compensation: CITY_TUNE.SEAT_COMPENSATION,
+                holdDays: Math.round(CITY_TUNE.SEAT_MIN_HOLD_MS / 864e5),
+                lapseWeeks: CITY_TUNE.ARREARS_LAPSE_WK,
+                favourBonus: CITY_TUNE.FAVOUR_BONUS, favourPenalty: CITY_TUNE.FAVOUR_PENALTY,
+                worksMax: CITY_TUNE.WORKS_MAX },
+        colonyFaction: (getColonyState(colonyId) || {}).faction || null,
+        factionGated: ['coalition','syndicate','void','guild','jade']
+          .includes(((getColonyState(colonyId) || {}).faction) || ''),
+        jade: isJadeColony(colonyId),
+        jadeBonus: CITY_TUNE.JADE_EXPORT_BONUS,
+        contested: cityContested(colonyId),
+        myFaction: getPlayerFaction(actor.id),
+        // mySeats and myShops were shipped on every city_data and read by
+        // nothing. myCity is read: it is what tells a player why the seat
+        // button is missing.
+        myCity: mayorColonies(actor.id)[0] || null,
+      };
+    }
+    function cityBroadcast(colonyId) {
+      try { broadcast({ type:'city_update', data: citySummary(colonyId, colonyBlockadeLevel(colonyId)) }); } catch(_) {}
+    }
+    function cityOk(colonyId, action) {
+      ws.send(JSON.stringify({ type:'city_ack', data:{ ok:true, action, cash: actor.cash, city: cityFullData(colonyId) } }));
+      cityBroadcast(colonyId);
+      try { broadcastToPlayer(actor.id, { type:'portfolio', data: snapshotPortfolio(actor) }); } catch(_) {}
+    }
+    // Resolves colony + district for every district-scoped message.
+    // Strict numeric parsing. Number() coerces null, '', [], true and '0' all to
+    // zero and rounds 0.5 to one, so a crafted or simply buggy message could act
+    // on a district the player never selected. Seats cost billions; an index
+    // arrives as an integer or it is refused.
+    function cityIndex(v) {
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) return -1;
+      return v === 0 ? 0 : v;   // normalise -0, which is a valid zero, not a hostile value
+    }
+    // A mayor whose district owes the city cannot open the chequebook. The
+    // civic bill can only reach `cash` (creditCityIncome takes min(cash, owed)
+    // and banks the rest as arrears), so a player holding wealth in stocks, a
+    // fund or a Capital House paid nothing on a shortfall and simply coasted
+    // to the four week lapse, which wrote the debt off. They still can, but
+    // not while also buying seats, developing, commissioning works or taking
+    // frontage. Settle the district or lose it.
+    function cityInArrears(pid) {
+      try {
+        for (const cid of mayorColonies(pid)) {
+          for (const d of getDistricts(cid)) {
+            if (d.mayor === pid && (d.arrears || 0) > 0) return { colonyId: cid, name: d.name, owed: d.arrears };
+          }
+        }
+      } catch(_) {}
+      return null;
+    }
+    function blockedByArrears() {
+      const a = cityInArrears(actor.id);
+      if (!a) return false;
+      cityErr('Your district ' + a.name + ' owes the city F' +
+        Math.round(a.owed).toLocaleString() + '. Settle the civic debt before spending again.');
+      return true;
+    }
+    function cityCtx(msg, needMayor) {
+      const colonyId = String(msg.colonyId || '');
+      const idx = cityIndex(msg.district);
+      if (!isCityColony(colonyId)) { cityErr('No city here.'); return null; }
+      if (idx < 0 || !validDistrict(colonyId, idx)) { cityErr('No such district.'); return null; }
+      const st = ensureCityState(colonyId);
+      if (st.locked_faction) { cityErr('This city is under occupation.'); return null; }
+      const d = getDistrict(colonyId, idx);
+      if (!d) { cityErr('District registry error.'); return null; }
+      if (needMayor && d.mayor !== actor.id) { cityErr('Only the sitting mayor can do that.'); return null; }
+      return { colonyId, idx, d, st };
+    }
+
+    if (msg.type === 'city_summaries_request') {
+      const out = [];
+      for (const cid of Object.keys(CITY_COLONIES)) {
+        ensureCityState(cid);
+        const sm = citySummary(cid, colonyBlockadeLevel(cid));
+        if (sm) out.push(sm);
+      }
+      ws.send(JSON.stringify({ type:'city_summaries', data: out }));
+      return;
+    }
+
+    if (msg.type === 'city_data_request') {
+      const colonyId = String(msg.colonyId || '');
+      if (!isCityColony(colonyId)) { cityErr('No city here.'); return; }
+      ws.send(JSON.stringify({ type:'city_data', data: cityFullData(colonyId) }));
+      return;
+    }
+
+    // Buying a seat. Vacant seats are simply bought. Held seats are contested:
+    // the buyer pays the full price and the sitting mayor is COMPENSATED a
+    // share of what they invested, so taking a district someone has built is a
+    // forced sale rather than a mugging, and an ousted mayor can never recover
+    // more than they spent.
+    if (msg.type === 'city_buy_seat') {
+      const ctx = cityCtx(msg, false); if (!ctx) return;
+      const { colonyId, idx, d } = ctx;
+      if (d.mayor === actor.id) { cityErr('You already hold this seat.'); return; }
+      if (blockedByArrears()) return;
+      // The contested flag was computed and shown in cityFullData and enforced
+      // nowhere, so offices changed hands freely on a world with a live
+      // conquest timer. Commerce carries on under fire; the charter does not.
+      if (cityContested(colonyId)) {
+        cityErr('This world is contested. No charter changes hands while the fighting is unresolved.'); return;
+      }
+      // ONE CITY PER MAYOR. A player may hold as many district seats as they
+      // can afford inside a single city, and none anywhere else. Office is
+      // residency: you govern where you live. Without this the whole map is a
+      // portfolio for whoever has the most cash, and no local politics can
+      // ever exist because the same three names sit on every world.
+      const held = mayorColonies(actor.id);
+      if (held.length && held.indexOf(colonyId) === -1) {
+        cityErr('You already hold office on ' + held[0].replace(/_/g,' ') +
+                '. A mayor governs one city. Give up that seat first.');
+        return;
+      }
+      // Faction gate, but only where a faction actually governs. Five of the
+      // nineteen colonies sit at faction 'contested', which is a state rather
+      // than a party: nobody holds the world, so nobody can be excluded from
+      // its offices. Those planets are the open ground where an unaligned or
+      // outnumbered player can still take a seat.
+      const col = getColonyState(colonyId);
+      const REAL_FACTIONS = ['coalition','syndicate','void','guild','jade'];
+      const myFac = getPlayerFaction(actor.id);
+      if (col && REAL_FACTIONS.includes(col.faction) && myFac !== col.faction) {
+        cityErr('Only ' + col.faction + ' members may hold office on this world.'); return;
+      }
+      if (d.mayor && !seatTakeable(d)) {
+        const days = Math.ceil((CITY_TUNE.SEAT_MIN_HOLD_MS - (Date.now() - d.took_office)) / 864e5);
+        cityErr('A new mayor cannot be removed for another ' + days + 'd.'); return;
+      }
+      const price = seatPrice(colonyId, d);
+      if (Number(actor.cash || 0) < price) { cityErr('Insufficient funds.'); return; }
+      const prevId = d.mayor;
+      const comp = prevId ? seatCompensation(colonyId, d) : 0;
+      safeAddCash(actor, -price);
+      savePlayer(actor);
+      if (prevId) {
+        const prev = getPlayer(prevId);
+        if (prev) {
+          if (comp > 0) { safeAddCash(prev, comp); savePlayer(prev); }
+          try {
+            broadcastToPlayer(prevId, { type:'city_ousted', data:{ colonyId, district: idx,
+              name: d.name, by: actor.name, compensation: comp } });
+            broadcastToPlayer(prevId, { type:'portfolio', data: snapshotPortfolio(prev) });
+          } catch(_) {}
+        }
+        try { pushHeadline(`${actor.name} unseats ${(getPlayer(prevId)||{}).name || 'the incumbent'} as mayor of ${d.name}, ${colonyId.replace(/_/g,' ')}`, 'bad', '\uD83C\uDFDB'); } catch(_) {}
+      } else {
+        try { pushHeadline(`${actor.name} takes the mayoral charter of ${d.name}, ${colonyId.replace(/_/g,' ')}`, 'good', '\uD83C\uDFDB'); } catch(_) {}
+      }
+      updateDistrict(colonyId, idx, {
+        mayor: actor.id, seat_paid: price, took_office: Date.now(), arrears: 0,
+      });
+      try {
+        const prevName = prevId ? ((getPlayer(prevId)||{}).name || 'the incumbent') : null;
+        pushCityHistory(colonyId, idx, prevId ? 'ousted' : 'seated', actor.id,
+          prevId ? (actor.name + ' unseats ' + prevName)
+                 : (actor.name + ' takes the seat of ' + d.name),
+          { who: actor.name, prev: prevName, where: d.name });
+      } catch(_) {}
+      console.log(`[City] ${actor.name} bought ${colonyId}/${d.name} for F${price.toLocaleString()}`);
+      cityOk(colonyId, 'seat');
+      return;
+    }
+
+    // Development. Capital raises the district above what its population alone
+    // supports, which grows the commercial pool and the storefront capacity.
+    if (msg.type === 'city_invest') {
+      const ctx = cityCtx(msg, true); if (!ctx) return;
+      const { colonyId, idx, d } = ctx;
+      if (blockedByArrears()) return;
+      if (devComplete(colonyId, d)) { cityErr('This district is fully developed.'); return; }
+      const cost = Math.round(nextLevelCost(d.invested || 0));
+      if (Number(actor.cash || 0) < cost) { cityErr('Insufficient funds.'); return; }
+      safeAddCash(actor, -cost);
+      savePlayer(actor);
+      updateDistrict(colonyId, idx, { invested: (d.invested || 0) + cost });
+      try { pushCityHistory(colonyId, idx, 'invest', actor.id,
+        actor.name + ' develops the district', { who: actor.name, where: d.name }); } catch(_) {}
+      cityOk(colonyId, 'invest');
+      return;
+    }
+
+    // Civic works. Uncapped by income logic because it returns no income: it
+    // buys the skyline, a calmer city, local supply, and weight against an
+    // invader. Only the sitting mayor may commission, but what goes up belongs
+    // to the district and is never refunded to them.
+    if (msg.type === 'city_works') {
+      const ctx = cityCtx(msg, true); if (!ctx) return;
+      const { colonyId, idx, d } = ctx;
+      if (blockedByArrears()) return;
+      if (worksComplete(d)) { cityErr('Every civic work this district can hold is built.'); return; }
+      const cost = Math.round(nextWorksCost(d.works || 0));
+      if (Number(actor.cash || 0) < cost) { cityErr('Insufficient funds.'); return; }
+      safeAddCash(actor, -cost);
+      savePlayer(actor);
+      addDistrictWorks(colonyId, idx, cost);
+      const lv = Math.floor(worksLevel(getDistrict(colonyId, idx)));
+      try { pushCityHistory(colonyId, idx, 'works', actor.id,
+        actor.name + ' commissions civic works, level ' + lv,
+        { who: actor.name, lv: lv }); } catch(_) {}
+      try {
+        pushHeadline(`${actor.name} commissions civic works in ${d.name}, ${colonyId.replace(/_/g,' ')}`,
+          'good', '\uD83C\uDFDB');
+      } catch(_) {}
+      console.log(`[City] ${actor.name} commissioned works ${lv} in ${colonyId}/${d.name} for F${cost.toLocaleString()}`);
+      cityOk(colonyId, 'works');
+      return;
+    }
+
+    if (msg.type === 'city_set_levers') {
+      const ctx = cityCtx(msg, true); if (!ctx) return;
+      setDistrictLevers(ctx.colonyId, ctx.idx, msg.levers || {});
+      cityOk(ctx.colonyId, 'levers');
+      return;
+    }
+
+    // Mayor perks: the commerce cut inside a band, a favoured trade, and the
+    // district's name.
+    // Both of these move live income for every tenant in the district, and a
+    // mayor could move them and move them back inside a second. Once a
+    // settlement period each.
+    function leverCooldown(d, stampField, label) {
+      const last = Number(d[stampField]) || 0;
+      const left = CITY_TUNE.LEVER_COOLDOWN_MS - (Date.now() - last);
+      if (last && left > 0) {
+        cityErr('The ' + label + ' was set recently. It can be changed again in ' +
+          Math.ceil(left / 60000) + ' min.');
+        return true;
+      }
+      return false;
+    }
+
+    if (msg.type === 'city_set_cut') {
+      const ctx = cityCtx(msg, true); if (!ctx) return;
+      const raw = msg.cut;
+      if (typeof raw !== 'number' || !Number.isFinite(raw)) { cityErr('Bad rate.'); return; }
+      const cut = Math.max(CITY_TUNE.CUT_MIN, Math.min(CITY_TUNE.CUT_MAX, raw));
+      // A no-op must not start the clock, or the UI writing the current value
+      // back on open locks the mayor out of their own lever for an hour.
+      if (Math.abs((Number(ctx.d.commerce_cut) || CITY_TUNE.CUT_DEFAULT) - cut) < 1e-9) {
+        cityOk(ctx.colonyId, 'cut'); return;
+      }
+      if (leverCooldown(ctx.d, 'cut_at', 'commerce rate')) return;
+      updateDistrict(ctx.colonyId, ctx.idx, { commerce_cut: cut, cut_at: Date.now() });
+      cityOk(ctx.colonyId, 'cut');
+      return;
+    }
+
+    if (msg.type === 'city_set_favoured') {
+      const ctx = cityCtx(msg, true); if (!ctx) return;
+      const f = msg.favoured == null || msg.favoured === '' ? null : String(msg.favoured);
+      if (f !== null && !CITY_KINDS.includes(f)) { cityErr('Unknown trade.'); return; }
+      if ((ctx.d.favoured || null) === f) { cityOk(ctx.colonyId, 'favoured'); return; }
+      if (leverCooldown(ctx.d, 'fav_at', 'favoured trade')) return;
+      updateDistrict(ctx.colonyId, ctx.idx, { favoured: f, fav_at: Date.now() });
+      cityOk(ctx.colonyId, 'favoured');
+      return;
+    }
+
+    // The tenant side of the legitimacy lever. A shopholder can put their name
+    // to a complaint against the sitting mayor, which pushes legitimacy down,
+    // which makes the seat cheaper to take.
+    //
+    // Three guards, all against the same abuse, which is to lease in, petition,
+    // and buy the seat you just devalued. The shop has to predate the filing by
+    // half a ramp, so it cannot be bought for the purpose. One filing per
+    // player per district per day. And the hit is weighted by how established
+    // the shop is, so a thin new frontage counts for less than a real business.
+    //
+    // The effect is deliberately not permanent: stepDistrict relaxes every
+    // scalar 35% of the way to its target each week, so a single filing washes
+    // out. Sustained discontent moves a district. One angry afternoon does not.
+    if (msg.type === 'city_petition') {
+      const ctx = cityCtx(msg, false); if (!ctx) return;
+      const { colonyId, idx, d } = ctx;
+      if (!d.mayor) { cityErr('This district has no mayor to petition.'); return; }
+      if (d.mayor === actor.id) { cityErr('You cannot petition against yourself.'); return; }
+      const mine = getDistrictShops(colonyId, idx)
+        .filter(sh => sh.owner === actor.id);
+      if (!mine.length) { cityErr('Only a shopholder in this district may petition.'); return; }
+      const now = Date.now();
+      const aged = mine.filter(sh => now - (sh.leased_at || now) >= CITY_TUNE.PETITION_MIN_AGE_MS);
+      if (!aged.length) {
+        cityErr('Your frontage here is too new to carry a petition. It must be established first.');
+        return;
+      }
+      const last = lastPetition(colonyId, idx, actor.id);
+      if (last && now - last < CITY_TUNE.PETITION_COOLDOWN_MS) {
+        const h = Math.ceil((CITY_TUNE.PETITION_COOLDOWN_MS - (now - last)) / 3600000);
+        cityErr('You have already petitioned here. You may file again in ' + h + 'h.'); return;
+      }
+      // Stake weight: how much of the district's player frontage is yours,
+      // so one voice in a busy quarter carries less than one in a thin one.
+      const rows = resolveDistrictShops(colonyId, d, colonyBlockadeLevel(colonyId));
+      const total = rows.reduce((a, r) => a + Math.max(0, r.gross), 0) || 1;
+      const stake = rows.filter(r => r.owner === actor.id)
+        .reduce((a, r) => a + Math.max(0, r.gross), 0) / total;
+      const hit = CITY_TUNE.PETITION_HIT * Math.min(1, 0.35 + stake * 2);
+      const next = Math.max(CITY_TUNE.SCALAR_MIN, (d.s_legitimacy || 50) - hit);
+      updateDistrict(colonyId, idx, { s_legitimacy: next });
+      recordPetition(colonyId, idx, actor.id);
+      try { pushCityHistory(colonyId, idx, 'petition', actor.id,
+        actor.name + ' petitions against the administration of ' + d.name,
+        { who: actor.name, where: d.name }); } catch(_) {}
+      try { broadcastToPlayer(d.mayor, { type:'city_petitioned', data:{
+        colonyId, district: idx, name: d.name, by: actor.name } }); } catch(_) {}
+      cityOk(colonyId, 'petition');
+      return;
+    }
+
+    // Buy cover against a siege. Priced per unit, capped at STOCK_MAX_WK weeks
+    // of this district's share of colony demand, and it rots at STOCK_DECAY_WK
+    // a week so it cannot be bought once and forgotten.
+    if (msg.type === 'city_stock') {
+      const ctx = cityCtx(msg, true); if (!ctx) return;
+      const { colonyId, idx, d } = ctx;
+      if (blockedByArrears()) return;
+      const cls = String(msg.cls || '');
+      const col = STOCK_COL[cls];
+      if (!col) { cityErr('Unknown supply class.'); return; }
+      const weeks = Number(msg.weeks);
+      if (!Number.isFinite(weeks) || weeks <= 0) { cityErr('Bad quantity.'); return; }
+      const perWeek = stockWeekUnits(colonyId, cls);
+      const cap = stockCapacity(colonyId, cls);
+      const have = Math.max(0, Number(d[col]) || 0);
+      const want = Math.min(weeks, CITY_TUNE.STOCK_MAX_WK) * perWeek;
+      const units = Math.max(0, Math.min(want, cap - have));
+      if (units < 1) { cityErr('This district is already holding all the cover it can store.'); return; }
+      const cost = stockCost(units);
+      if (Number(actor.cash || 0) < cost) { cityErr('Insufficient funds.'); return; }
+      safeAddCash(actor, -cost); savePlayer(actor);
+      updateDistrict(colonyId, idx, { [col]: have + units });
+      try { pushCityHistory(colonyId, idx, 'stock', actor.id,
+        actor.name + ' lays in ' + cls + ' stores', { who: actor.name, cls: cls }); } catch(_) {}
+      cityOk(colonyId, 'stock');
+      return;
+    }
+
+    if (msg.type === 'city_rename_district') {
+      const ctx = cityCtx(msg, true); if (!ctx) return;
+      const name = cleanLabel(msg.name, 40);
+      if (name.length < 3) { cityErr('A district name needs at least 3 characters.'); return; }
+      if (!isTextClean(name)) { cityErr('That name contains inappropriate language.'); return; }
+      updateDistrict(ctx.colonyId, ctx.idx, { name });
+      try { pushHeadline(`${actor.name} renames a district of ${ctx.colonyId.replace(/_/g,' ')} to ${name}`, 'neutral', '\uD83C\uDFDB'); } catch(_) {}
+      cityOk(ctx.colonyId, 'rename');
+      return;
+    }
+
+    // Storefronts. Uncapped per player, named by the player, category is the
+    // only field the economy reads.
+    if (msg.type === 'city_lease_shop') {
+      const ctx = cityCtx(msg, false); if (!ctx) return;
+      const { colonyId, idx, d } = ctx;
+      if (blockedByArrears()) return;
+      const kind = String(msg.kind || 'export');
+      if (!CITY_KINDS.includes(kind)) { cityErr('Unknown trade.'); return; }
+      const name = cleanLabel(msg.name, 40);
+      if (name.length < 3) { cityErr('Give the shop a name, at least 3 characters.'); return; }
+      const descr = cleanLabel(msg.descr, 200);
+      if (!isTextClean(name) || !isTextClean(descr)) { cityErr('That name or description contains inappropriate language.'); return; }
+      if (countDistrictShops(colonyId, idx) >= shopCapacity(colonyId, d)) {
+        cityErr('No vacant frontage in this district. Try another, or ask its mayor to develop.'); return;
+      }
+      const cost = shopLeaseCost(colonyId, d);
+      if (Number(actor.cash || 0) < cost) { cityErr('Insufficient funds.'); return; }
+      safeAddCash(actor, -cost);
+      savePlayer(actor);
+      leaseShop(colonyId, idx, actor.id, kind, name, descr);
+      cityOk(colonyId, 'lease');
+      return;
+    }
+
+    // Buying out an established business. This is the way into a district whose
+    // frontage is already taken, and it skips the wait for a new storefront to
+    // matter: the trade, the position and the earnings transfer intact.
+    if (msg.type === 'city_buy_shop') {
+      const colonyId = String(msg.colonyId || '');
+      const shopId = cityIndex(msg.shopId);
+      if (shopId < 0) { cityErr('No such business.'); return; }
+      if (!isCityColony(colonyId)) { cityErr('No city here.'); return; }
+      const st = ensureCityState(colonyId);
+      if (st.locked_faction) { cityErr('This city is under occupation.'); return; }
+      const sh = getShop(shopId);
+      if (!sh || sh.colony_id !== colonyId) { cityErr('No such business.'); return; }
+      if (!isNpcShop(sh)) { cityErr('That business is player owned and not for sale.'); return; }
+      const d = getDistrict(colonyId, sh.district);
+      if (!d) { cityErr('District registry error.'); return; }
+      // Quoted off a NEUTRAL resolution: default rate, no zoning. Pricing off
+      // live income let the sitting mayor mark down their own buyouts by 25%
+      // on an ordinary business and 44% on one in the favoured trade, using two
+      // messages they could reverse immediately after paying.
+      const cost = quoteShopBuyout(colonyId, d, shopId, colonyBlockadeLevel(colonyId));
+      if (Number(actor.cash || 0) < cost) { cityErr('Insufficient funds.'); return; }
+      if (blockedByArrears()) return;
+      const name = cleanLabel(msg.name, 40) || String(sh.name || '').slice(0, 40);
+      if (name.length < 3) { cityErr('A shop name needs at least 3 characters.'); return; }
+      const descr = cleanLabel(msg.descr, 200);
+      if (!isTextClean(name) || !isTextClean(descr)) { cityErr('That name or description contains inappropriate language.'); return; }
+      safeAddCash(actor, -cost);
+      savePlayer(actor);
+      adoptShop(shopId, actor.id, name, descr);
+      cityOk(colonyId, 'buyshop');
+      return;
+    }
+
+    if (msg.type === 'city_rename_shop') {
+      const colonyId = String(msg.colonyId || '');
+      const shopId = cityIndex(msg.shopId);
+      if (shopId < 0) { cityErr('No such business.'); return; }
+      if (!isCityColony(colonyId)) { cityErr('No city here.'); return; }
+      if (ensureCityState(colonyId).locked_faction) { cityErr('This city is under occupation.'); return; }
+      const sh = getShop(shopId);
+      if (!sh || sh.owner !== actor.id || sh.colony_id !== colonyId) { cityErr('Not your shop.'); return; }
+      const name = cleanLabel(msg.name, 40);
+      if (name.length < 3) { cityErr('A shop name needs at least 3 characters.'); return; }
+      const rdescr = cleanLabel(msg.descr, 200);
+      if (!isTextClean(name) || !isTextClean(rdescr)) { cityErr('That name or description contains inappropriate language.'); return; }
+      renameShop(shopId, actor.id, name, rdescr);
+      cityOk(colonyId, 'renameShop');
+      return;
+    }
+
+    if (msg.type === 'city_close_shop') {
+      const colonyId = String(msg.colonyId || '');
+      const shopId = cityIndex(msg.shopId);
+      if (shopId < 0) { cityErr('No such business.'); return; }
+      if (!isCityColony(colonyId)) { cityErr('No city here.'); return; }
+      if (ensureCityState(colonyId).locked_faction) { cityErr('This city is under occupation.'); return; }
+      const sh = getShop(shopId);
+      if (!sh || sh.owner !== actor.id || sh.colony_id !== colonyId) { cityErr('Not your shop.'); return; }
+      closeShop(shopId, actor.id);
+      cityOk(colonyId, 'close');
+      return;
+    }
+
     if (msg.type === 'galaxy_data_request') {
       const blockades = {};
       for (const [k,v] of activeBlockades) blockades[k] = { active:v.active, pool:v.pool, faction:v.faction, expiresAt:v.expiresAt||null };
@@ -9759,6 +10647,10 @@ setInterval(()=>{
 function colonyLeadingFaction(c) {
   if (!c) return 'contested';
   if (c.faction === 'fleshstation') return 'fleshstation';
+  // Circuit worlds have no control_jade column to read, so the four outside
+  // footholds seeded on them are minority presence, not a contest. The Circuit
+  // holds its own ground by definition until that column exists.
+  if (c.faction === 'jade') return 'jade';
   const ctrl = {
     coalition: c.control_coalition || 0,
     syndicate: c.control_syndicate || 0,
@@ -9812,11 +10704,28 @@ function tickCommodityPrices() {
     if (!isMarketColony(c)) continue;
     const leading = colonyLeadingFaction(c);
     const facVol  = COMMODITY_FACTION_VOL[leading] || 1.0;
+    // Civic demand. A colony with a city on it eats, and what its zoned
+    // districts cannot grow it has to buy, which firms its own prices for that
+    // class. A colony running a surplus is the cheap place to buy instead.
+    // Computed once per colony per class rather than per commodity, and
+    // applied HERE rather than on the city tick because this is where the
+    // decay happens: steady state supply is nudge/decay, so applying it on a
+    // different cadence would silently resize it by an order of magnitude.
+    // Sized by tools/city-commodity-sim.mjs.
+    const civic = { agri:0, med:0, tech:0 };
+    if (isCityColony(c.id)) {
+      try {
+        const blk = colonyBlockadeLevel(c.id);
+        civic.agri = civicCommodityNudge(c.id, 'food', blk);
+        civic.med  = civicCommodityNudge(c.id, 'med',  blk);
+        civic.tech = civicCommodityNudge(c.id, 'tech', blk);
+      } catch(_) {}
+    }
     for (const com of COMMODITIES) {
       const key = c.id + '|' + com.id;
       const prev = existing[key];
       let supply = prev ? prev.supply : 0;
-      supply = supply * (1 - COMMODITY_SUPPLY_DECAY); // relax toward equilibrium
+      supply = supply * (1 - COMMODITY_SUPPLY_DECAY) + (civic[com.cls] || 0);
       const target = commodityTargetPrice(com, leading, c.tension, supply, c.id);
       let price;
       if (!prev) {
@@ -9876,6 +10785,27 @@ function runGalaxyTick() {
         console.log(`[Galaxy] Conquest: ${newFaction} takes ${c.id} from ${oldFaction}`);
         // Void all lane shares on lanes connected to this colony
         voidSharesForColony(c.id);
+        // City Charters: conquest upheaval. A standing occupation by another
+        // faction breaks first (lots restore to their builders), then the new
+        // conqueror seizes the city unless the charter owner is one of theirs.
+        try {
+          if (isCityColony(c.id)) {
+            let cst = getCityState(c.id);
+            if (cst && cst.locked_faction && cst.locked_faction !== newFaction) {
+              onColonyReverted(c.id);
+              cst = getCityState(c.id);
+            }
+            const chOwner = cst ? cst.charter_owner : null;
+            const ownerFaction = chOwner ? getPlayerFaction(chOwner) : null;
+            if (!chOwner || ownerFaction !== newFaction) {
+              onColonyCaptured(c.id, newFaction);
+              const seized = getCityState(c.id);
+              if (seized && seized.locked_faction) {
+                broadcast({ type:'city_update', data: citySummary(c.id, colonyBlockadeLevel(c.id)) });
+              }
+            }
+          }
+        } catch(e) { console.error('[City] conquest hook:', e); }
         continue;
       }
 
@@ -9907,6 +10837,155 @@ function runGalaxyTick() {
   } catch(e) { console.error('[Galaxy tick]', e); }
 }
 setInterval(runGalaxyTick, 60 * 60 * 1000); // hourly
+
+// ─── City Charters tick (1.2.5.25) ───────────────────────────────────────────
+// Hourly: relax scalars, pay lot owners and mayors dt-scaled slices, run
+// occupation salvage, and feed sustained unrest into colony tension. The sim
+// itself lives in server/city.js; this loop only wires it to the world.
+
+const CITY_TICK_MS = Number(process.env.CITY_TICK_MS) || 60 * 60 * 1000;
+
+// 0..1: fraction of this colony's lanes currently blockaded. One blockaded
+// lane on a multi-lane colony chokes some imports; all lanes chokes them all.
+function colonyBlockadeLevel(colonyId) {
+  try {
+    let touching = 0, blocked = 0;
+    const now = Date.now();
+    for (const [lk, blk] of activeBlockades) {
+      const [a, b] = lk.split('|');
+      if (a !== colonyId && b !== colonyId) continue;
+      touching++;
+      if (blk.active && (!blk.expiresAt || blk.expiresAt > now)) blocked++;
+    }
+    if (!touching) return 0;
+    return Math.min(1, blocked / touching);
+  } catch(_) { return 0; }
+}
+
+// Who holds the colony's charter: whoever has the most capital standing on it,
+// summed across every district they govern there. Written every tick, which is
+// also the first time this column has ever been written. The conquest path has
+// read it since cities shipped, so the branch that spares a city already held
+// by one of the capturing faction's own has never once been able to fire.
+function recomputeCharter(colonyId) {
+  try {
+    const st = getCityState(colonyId); if (!st) return;
+    const book = {};
+    for (const d of getDistricts(colonyId)) {
+      if (!d.mayor) continue;
+      book[d.mayor] = (book[d.mayor] || 0)
+        + (d.invested || 0) + (d.works || 0) * CITY_TUNE.WORKS_WAR_WEIGHT;
+    }
+    let best = null, bestBook = 0;
+    for (const [pid, b] of Object.entries(book)) if (b > bestBook) { best = pid; bestBook = b; }
+    if (bestBook < CITY_TUNE.CHARTER_MIN_BOOK) best = null;
+    const cur = st.charter_owner || null;
+    if (best === cur) return;
+    setCharterOwner(colonyId, best, cur);
+    const nm = pid => { try { const p = getPlayer(pid); return p ? p.name : '?'; } catch(_) { return '?'; } };
+    const where = colonyId.replace(/_/g,' ');
+    pushCityHistory(colonyId, -1, best ? 'charter' : 'charterVacant', best,
+      best ? (nm(best) + ' takes the charter of ' + where)
+           : ('the charter of ' + where + ' falls vacant'),
+      { who: best ? nm(best) : null, col: colonyId });
+    try {
+      pushHeadline(best
+        ? `${nm(best)} holds the charter of ${where}`
+        : `The charter of ${where} falls vacant`,
+        best ? 'good' : 'neutral', '\uD83C\uDFDB', null,
+        { k:'evt', t: best ? 'charter' : 'charter_vac', who: best ? nm(best) : null, col: colonyId });
+    } catch(_) {}
+  } catch (e) { console.error('[City] charter', e); }
+}
+
+const CITY_CLOCK_KEY = 'tick_at';
+function runCityTick() {
+  try {
+    // Elapsed time off a persisted clock, not the configured interval. The old
+    // dtWeeks was CITY_TICK_MS/WEEK_MS, a constant, and runCityTick() also ran
+    // unconditionally at module load. Every deploy therefore paid a full hour
+    // of city income to every mayor and every tenant in the galaxy regardless
+    // of when the last tick actually ran, and a real six hour outage paid one
+    // hour. Nothing else in the file works this way: cargo shipments and
+    // contracts have always stepped off real timestamps.
+    const now = Date.now();
+    const adv = cityTickAdvance(Number(getCityKV(CITY_CLOCK_KEY)) || 0, now, CITY_TICK_MS);
+    if (adv.reset) {
+      // No clock yet (first boot on this database), or the clock is ahead of
+      // us because system time moved back or an older backup was restored.
+      // Resync without paying anything: a tick that cannot measure its own
+      // elapsed time must not guess.
+      setCityKV(CITY_CLOCK_KEY, now);
+      console.log('[City] tick clock initialised at ' + new Date(now).toISOString());
+      return;
+    }
+    if (adv.skip) return;
+    if (adv.capped) {
+      console.log(`[City] settling ${(CITY_TUNE.TICK_CATCHUP_MAX_MS/3.6e6).toFixed(0)}h of a ` +
+        `${(adv.elapsedMs/3.6e6).toFixed(1)}h backlog, remainder carries to the next tick`);
+    }
+    const dtWeeks = adv.dtWeeks;
+    for (const colonyId of Object.keys(CITY_COLONIES)) {
+      const st = getCityState(colonyId);
+      if (!st) continue;
+      const blk = colonyBlockadeLevel(colonyId);
+
+      // Every district runs its own simulation off its own mayor's levers, so
+      // a well governed borough beside a neglected one visibly diverges.
+      for (const d of getDistricts(colonyId)) {
+        stepDistrict(colonyId, d, dtWeeks, blk);
+        churnNpcShops(colonyId, d, dtWeeks);
+        try { ensureNpcShops(colonyId, d); } catch(_) {}
+      }
+      stepColonyPopulation(colonyId, dtWeeks);
+
+      // Occupation salvage: mayoral development comes down a slice at a time.
+      // Baseline development is never strippable, so a sacked city is poor,
+      // not erased.
+      const salvage = maybeStripOccupied(colonyId);
+      if (salvage > 0) {
+        try {
+          const col = getColonyState(colonyId);
+          if (col) updateColonyState(colonyId, { war_chest: (col.war_chest || 0) + Math.round(salvage) });
+          pushHeadline(`Occupation forces strip ${colonyId.replace(/_/g,' ')} for salvage`, 'bad', '\u26A0');
+        } catch(_) {}
+      }
+
+      // A city in revolt heats the war layer.
+      if (warFundTrigger(colonyId) && Math.random() < 0.15) {
+        try {
+          const col = getColonyState(colonyId);
+          if (col && col.tension < 90) updateColonyState(colonyId, { tension: col.tension + 1 });
+        } catch(_) {}
+      }
+
+      // Colony level, so it runs once rather than once per district.
+      drawStock(colonyId, dtWeeks);
+      recomputeCharter(colonyId);
+      try { broadcast({ type:'city_update', data: citySummary(colonyId, blk) }); } catch(_) {}
+    }
+
+    // Tenants keep their net, mayors take their cut and pay the civic bill.
+    // A mayor who cannot pay accrues arrears; four weeks of them vacates the
+    // seat back to NPC administration, which is the valve that keeps the
+    // political map turning over without needing a war.
+    creditCityIncome(getPlayer, safeAddCash, savePlayer, dtWeeks, colonyBlockadeLevel, (lapsed) => {
+      for (const L of lapsed) {
+        try {
+          const p = getPlayer(L.mayor);
+          if (p) broadcastToPlayer(L.mayor, { type:'city_lapsed', data:{ colonyId:L.colonyId, district:L.idx, name:L.name } });
+          pushHeadline(`${(p||{}).name || 'A mayor'} loses the charter of ${L.name} to unpaid civic debt, the district reverts to colonial administration`, 'bad', '\uD83C\uDFDB');
+        } catch(_) {}
+      }
+    });
+    // Only advance the clock once the settlement above has committed. If it
+    // throws, the slice is unpaid and the next tick re-settles the same window
+    // rather than silently skipping it.
+    setCityKV(CITY_CLOCK_KEY, adv.applyTo);
+  } catch(e) { console.error('[City tick]', e); }
+}
+runCityTick();
+setInterval(runCityTick, CITY_TICK_MS);
 // Commodity price grid: float prices on control every 5 min, and seed once on boot.
 try { const n = tickCommodityPrices(); console.log(`[Commodities] Seeded/updated ${n} colony×commodity prices`); } catch(e) { console.error('[Commodities] seed', e); }
 setInterval(() => { try { tickCommodityPrices(); } catch(e) { console.error('[Commodities]', e); } }, COMMODITY_TICK_MS);

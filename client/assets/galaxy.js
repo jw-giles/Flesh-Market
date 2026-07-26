@@ -5,6 +5,11 @@
 (function(){
 'use strict';
 
+var activeGalaxy = 'coalition';
+var WORMHOLE_OPEN = (typeof window!=='undefined' && window._WORMHOLE_OPEN===true);
+window._jadeRerender = function(){ try{ if(typeof gSelected!=='undefined' && gSelected && typeof selectColony==='function') selectColony(gSelected); }catch(e){} };
+window._setWormhole = function(open){ WORMHOLE_OPEN = !!open; if(typeof gMapActive!=='undefined' && gMapActive){ if(typeof renderPortal==='function') renderPortal(); if(typeof gSelected!=='undefined' && gSelected && typeof selectColony==='function') selectColony(gSelected); } };
+
 // ── Factions ──────────────────────────────────────────────────────────────────
 var FACTIONS = {
   coalition:{
@@ -31,6 +36,11 @@ var FACTIONS = {
     id:'guild', name:'Merchant Guild', short:'M.GUILD', color:'#2ecc71', dim:'#0d3320', bg:'#061a0d', sym:'⬢', devOnly:false,
     desc:'The oldest trade network in the settled systems. The Merchant Guild controls inter-colony commerce through tolls, licenses, and selective enforcement. Colonies hate them. Colonies need them.',
     bonusSummary:'⚡ Patreon Only: Trade fee reductions + passive commerce income across all faction territories',
+  },
+  jade:{
+    id:'jade', name:'The Jade Circuit', short:'JADE CIRCUIT', color:'#e8e4d8', dim:'#4a4842', bg:'#12110d', sym:'❖', devOnly:false,
+    desc:'A confederation of hereditary family houses controlling the central cluster. Ownership and debt pass down a bloodline; contracts are generational obligations, and an unpaid balance transfers to the heir. The Circuit holds the only working FTL passage in the settled systems and uses it as a political weapon. Circuit markets clear in Social Credits on a separate exchange the houses run directly; Mr. Flesh made a deal.',
+    bonusSummary:'+5% on export trade for Circuit storefronts in Circuit cities. Jade Exchange listings and control of the FTL passage. Circuit tickers clear on a separate book.',
   },
 };
 
@@ -282,6 +292,141 @@ var COLONY_META = {
         bonus:'Dev accounts only: ⚡ passive income multiplier', contestBonus:'Cannot be contested' },
     ],
   },
+  // ─── Jade Circuit cluster (central galaxy) ───
+  yujing: {
+    name:'Yujing', x:500, y:300, pop:'9.2B', galaxy:'jade',
+    lore:'Seat of the Jade Circuit and the oldest continuously held ledger in the cluster. Yujing governs by precedent rather than statute; ownership and debt descend through the founding houses, and no claim has been overturned in eleven generations. The FTL passage terminates here under direct capital control. Finance and administration dominate the local market.',
+    companies:['Jade Circuit Holdings','Yujing Trust','Tiangong Bureau','Yuhua Assurance'],
+    planets:[
+      { name:'Tianzhu Spire', sector:0, sectorName:'Finance', icon:'◉', bonus:'Jade Circuit: +1.0% Finance dividends', contestBonus:'Contested: +0.5%' },
+      { name:'Yuhua Ministry', sector:2, sectorName:'Insurance', icon:'◎', bonus:'Jade Circuit: +0.6% Insurance dividends', contestBonus:'Contested: +0.3%' },
+    ],
+  },
+  tiangong: {
+    name:'Tiangong', x:560, y:220, pop:'2.1B', galaxy:'jade',
+    lore:'Orbital command of the Circuit and the megastructure holding the FTL passage open. A Dyson envelope draws a full star to keep the wormhole stable. Crossing schedules and gate licensing are issued from here. Tech and defense dominate the station economy.',
+    companies:['Tiangong Bureau','Zhiguang Optics'],
+    planets:[
+      { name:'Tiangong Ring', sector:6, sectorName:'Tech', icon:'◉', bonus:'Jade Circuit: +0.8% Tech dividends', contestBonus:'Contested: +0.4%' },
+    ],
+  },
+  shennong_reach: {
+    name:'Shennong Reach', x:250, y:180, pop:'5.5B', galaxy:'jade',
+    lore:'Biotech world producing the Circuit pharmaceuticals and surgical grafts. Formulas are held privately and are never licensed outside Jade space. There is no second supplier in the cluster. Biotech dominates the market.',
+    companies:['Shennong Biotech','Bencao Pharma','Lingzhi Labs'],
+    planets:[
+      { name:'Bencao Gardens', sector:1, sectorName:'Biotech', icon:'◉', bonus:'Jade Circuit: +1.2% Biotech dividends', contestBonus:'Contested: +0.6%' },
+      { name:'Lingzhi Vats', sector:1, sectorName:'Biotech', icon:'◎', bonus:'Jade Circuit: +0.4% Biotech dividends', contestBonus:'Contested: +0.2%' },
+    ],
+  },
+  houji_fields: {
+    name:'Houji Fields', x:180, y:300, pop:'3.3B', galaxy:'jade',
+    lore:'Agricultural world supplying processed food across the cluster. Sealed hydroponic estates run year-round against fixed quota. A short quarter is covered from reserve stock rather than by import. Manufacturing dominates the market.',
+    companies:['Houji Agri'],
+    planets:[
+      { name:'Millet Terraces', sector:3, sectorName:'Manufacturing', icon:'◉', bonus:'Jade Circuit: +0.8% Manufacturing dividends', contestBonus:'Contested: +0.4%' },
+    ],
+  },
+  mozi_array: {
+    name:'Mozi Array', x:760, y:200, pop:'1.8B', galaxy:'jade',
+    lore:'Research world holding the Circuit quantum and optics programs, including the theory behind the FTL passage. Nothing produced here is published or licensed. Tech dominates the market.',
+    companies:['Mozi Quantum','Zhiguang Optics','Tianwen Data'],
+    planets:[
+      { name:'Quantum Loom', sector:6, sectorName:'Tech', icon:'◉', bonus:'Jade Circuit: +1.0% Tech dividends', contestBonus:'Contested: +0.5%' },
+      { name:'Optics Vault', sector:6, sectorName:'Tech', icon:'◎', bonus:'Jade Circuit: +0.4% Tech dividends', contestBonus:'Contested: +0.2%' },
+    ],
+  },
+  wukong_deep: {
+    name:'Wukong Deep', x:860, y:320, pop:'640M', galaxy:'jade',
+    lore:'Deep-space outpost siphoning exotic matter from a collapsed star. Output feeds the FTL passage directly and does not reach open market. Energy dominates the station economy.',
+    companies:['Wukong Deepscan'],
+    planets:[
+      { name:'Darkfield Probe', sector:4, sectorName:'Energy', icon:'◉', bonus:'Jade Circuit: +0.9% Energy dividends', contestBonus:'Contested: +0.5%' },
+    ],
+  },
+  zhenghe_anchorage: {
+    name:'Zheng He Anchorage', x:720, y:470, pop:'4.1B', galaxy:'jade',
+    lore:'Trade and refueling hub controlling the cluster primary shipping lanes. Lane access is licensed rather than open, and unlicensed transit is treated as trespass. Logistics dominates the market.',
+    companies:['Zheng He Lines','Baochuan Ports'],
+    planets:[
+      { name:'Treasure Docks', sector:5, sectorName:'Logistics', icon:'◉', bonus:'Jade Circuit: +1.0% Logistics dividends', contestBonus:'Contested: +0.5%' },
+    ],
+  },
+  haisi_waystation: {
+    name:'Haisi Waystation', x:820, y:400, pop:'900M', galaxy:'jade',
+    lore:'Waystation on the cluster outer trade route. Collects tolls on all passing freight and remits a fixed share to Zheng He Anchorage each quarter. Logistics dominates the market.',
+    companies:['Haisi Logistics','Silu Transit'],
+    planets:[
+      { name:'Silk Road Relay', sector:5, sectorName:'Logistics', icon:'◉', bonus:'Jade Circuit: +0.5% Logistics dividends', contestBonus:'Contested: +0.3%' },
+    ],
+  },
+  houtu_foundry: {
+    name:'Houtu Foundry', x:280, y:470, pop:'6.7B', galaxy:'jade',
+    lore:'Industrial world holding the cluster power generation and metal smelting. Runs continuous output against fixed annual targets. Energy and manufacturing dominate the market.',
+    companies:['Houtu Energy','Xuantie Metals','Ember Crucible'],
+    planets:[
+      { name:'Ember Crucible', sector:4, sectorName:'Energy', icon:'◉', bonus:'Jade Circuit: +1.0% Energy dividends', contestBonus:'Contested: +0.5%' },
+    ],
+  },
+  changzheng_yards: {
+    name:'Changzheng Yards', x:200, y:410, pop:'2.4B', galaxy:'jade',
+    lore:'Shipyards building the Circuit hulls. Vessels are inspected against an internal standard that exceeds Guild minimums and is not published. Manufacturing dominates the market.',
+    companies:['Changzheng Heavy'],
+    planets:[
+      { name:'March Shipworks', sector:3, sectorName:'Manufacturing', icon:'◉', bonus:'Jade Circuit: +0.8% Manufacturing dividends', contestBonus:'Contested: +0.4%' },
+    ],
+  },
+  xuanwu_bastion: {
+    name:'Xuanwu Bastion', x:640, y:360, pop:'1.2B', galaxy:'jade',
+    lore:'The Jade Circuit military fortress, positioned to hold the passage. Its garrison is conscripted across the cluster and rotated on a fixed cycle so no single house builds a private army. It has never fired on a Circuit vessel and has never let an unlicensed one through. Insurance and defense dominate the market.',
+    companies:['Xuanwu Garrison','Yuhua Assurance'],
+    planets:[
+      { name:'Tortoise Redoubt', sector:2, sectorName:'Insurance', icon:'◉', bonus:'Jade Circuit: +0.9% Insurance dividends', contestBonus:'Contested: bonus active' },
+      { name:'Watch Platform', sector:6, sectorName:'Tech', icon:'◎', bonus:'Jade Circuit: +0.5% Tech dividends', contestBonus:'Contested: bonus active' },
+    ],
+  },
+  lingtai_reach: {
+    name:'Lingtai Reach', x:110, y:130, pop:'2.9B', galaxy:'jade',
+    lore:'Longevity and neural clinic world. Treatment runs indefinitely and is billed against standing accounts; admission is by waiting list rather than by payment. Biotech dominates the market.',
+    companies:['Lingzhi Labs','Bencao Pharma'],
+    planets:[
+      { name:'Terrace Clinics', sector:1, sectorName:'Biotech', icon:'◉', bonus:'Jade Circuit: +1.1% Biotech dividends', contestBonus:'Contested: bonus active' },
+      { name:'Mind Altar', sector:1, sectorName:'Biotech', icon:'◎', bonus:'Jade Circuit: +0.4% Biotech dividends', contestBonus:'Contested: bonus active' },
+    ],
+  },
+  fuxi_observatory: {
+    name:'Fuxi Observatory', x:910, y:110, pop:'740M', galaxy:'jade',
+    lore:'Deep-field observatory reading the void for navigational and market advantage. Findings are archived internally and are never published. Tech dominates the market.',
+    companies:['Tianwen Data','Mozi Quantum'],
+    planets:[
+      { name:'Trigram Array', sector:6, sectorName:'Tech', icon:'◉', bonus:'Jade Circuit: +1.0% Tech dividends', contestBonus:'Contested: bonus active' },
+    ],
+  },
+  quanzhou_docks: {
+    name:'Quanzhou Docks', x:600, y:580, pop:'7.8B', galaxy:'jade',
+    lore:'The busiest anchorage in the cluster. Every hull trading in Jade space clears customs here, and the manifest is retained without expiry. Berth priority is allocated, not sold. Logistics dominates the market.',
+    companies:['Zheng He Lines','Baochuan Ports'],
+    planets:[
+      { name:'Harbor Prime', sector:5, sectorName:'Logistics', icon:'◉', bonus:'Jade Circuit: +1.1% Logistics dividends', contestBonus:'Contested: bonus active' },
+      { name:'Manifest Hall', sector:0, sectorName:'Finance', icon:'◎', bonus:'Jade Circuit: +0.5% Finance dividends', contestBonus:'Contested: bonus active' },
+    ],
+  },
+  zhurong_foundry: {
+    name:'Zhurong Foundry', x:130, y:560, pop:'4.4B', galaxy:'jade',
+    lore:'Secondary smelting world handling what the Houtu furnaces cannot. The crucibles run without interruption and a cooled furnace is a reportable fault. Energy dominates the market.',
+    companies:['Ember Crucible','Xuantie Metals'],
+    planets:[
+      { name:'Flame Crucible', sector:4, sectorName:'Energy', icon:'◉', bonus:'Jade Circuit: +1.1% Energy dividends', contestBonus:'Contested: bonus active' },
+    ],
+  },
+  chiyou_marches: {
+    name:'Chiyou Marches', x:440, y:610, pop:'1.9B', galaxy:'jade',
+    lore:'The unpoliced edge of Jade space. No house holds formal title and none acknowledges operating here. It is where Circuit business that cannot clear the exchange is settled. The gray market dominates.',
+    companies:['Silu Transit','Wukong Deepscan'],
+    planets:[
+      { name:'Rebel Reach', sector:7, sectorName:'Gray Bazaar', icon:'◉', bonus:'Jade Circuit: +0.9% Gray Bazaar dividends', contestBonus:'Contested: bonus active' },
+    ],
+  },
 };
 window._FM_COLONY_META = COLONY_META;  // exposed for ship manifest system
 window._FM_BLOCKADES = {};             // live blockade state from server
@@ -329,6 +474,34 @@ var LANES=[
   {from:'margin_call',     to:'signal_run',       vol:'low',   type:'grey'},
   {from:'signal_run',      to:'aurora_prime',     vol:'medium',type:'grey'},
   {from:'signal_run',      to:'vein_cluster',     vol:'low',   type:'grey'},
+  // Jade Circuit cluster lanes (central galaxy)
+  {from:'yujing',            to:'tiangong',          vol:'high',  type:'corporate'},
+  {from:'yujing',            to:'shennong_reach',    vol:'medium',type:'corporate'},
+  {from:'yujing',            to:'mozi_array',        vol:'medium',type:'corporate'},
+  {from:'yujing',            to:'zhenghe_anchorage', vol:'high',  type:'corporate'},
+  {from:'yujing',            to:'houtu_foundry',     vol:'medium',type:'corporate'},
+  {from:'shennong_reach',    to:'houji_fields',      vol:'medium',type:'grey'},
+  {from:'mozi_array',        to:'wukong_deep',       vol:'low',   type:'dark'},
+  {from:'zhenghe_anchorage', to:'haisi_waystation',  vol:'medium',type:'grey'},
+  {from:'houtu_foundry',     to:'changzheng_yards',  vol:'high',  type:'grey'},
+  {from:'shennong_reach',    to:'mozi_array',        vol:'low',   type:'grey'},
+  {from:'mozi_array',        to:'zhenghe_anchorage', vol:'low',   type:'grey'},
+  {from:'zhenghe_anchorage', to:'houtu_foundry',     vol:'low',   type:'grey'},
+  {from:'houtu_foundry',     to:'shennong_reach',    vol:'low',   type:'grey'},
+  // Jade Circuit expansion lanes
+  {from:'xuanwu_bastion',    to:'yujing',            vol:'high',  type:'corporate'},
+  {from:'xuanwu_bastion',    to:'tiangong',          vol:'medium',type:'corporate'},
+  {from:'lingtai_reach',     to:'shennong_reach',    vol:'medium',type:'grey'},
+  {from:'lingtai_reach',     to:'houji_fields',      vol:'low',   type:'grey'},
+  {from:'fuxi_observatory',  to:'mozi_array',        vol:'medium',type:'grey'},
+  {from:'fuxi_observatory',  to:'wukong_deep',       vol:'low',   type:'dark'},
+  {from:'quanzhou_docks',    to:'zhenghe_anchorage', vol:'high',  type:'corporate'},
+  {from:'quanzhou_docks',    to:'haisi_waystation',  vol:'medium',type:'grey'},
+  {from:'zhurong_foundry',   to:'houtu_foundry',     vol:'high',  type:'grey'},
+  {from:'zhurong_foundry',   to:'changzheng_yards',  vol:'low',   type:'grey'},
+  {from:'chiyou_marches',    to:'houtu_foundry',     vol:'low',   type:'dark'},
+  {from:'chiyou_marches',    to:'quanzhou_docks',    vol:'medium',type:'dark'},
+  {from:'chiyou_marches',    to:'houji_fields',      vol:'low',   type:'contested'},
 ];
 var LANE_COLOR={corporate:'#4ecdc4',grey:'#c8cdd6',dark:'#9b59b6',contested:'#f39c12'};
 window._FM_LANES = LANES;  // exposed for smuggling/blockade/contract panels
@@ -396,6 +569,23 @@ var COLONY_PLANET = {
   scrub_yard:       {folder:'animated/forest_clouds_2',       frames:120},  // Fog-shrouded shell-company world
   the_escrow:       {folder:'animated/ice',             frames:60},  // Cold deep-ocean data vault world
   margin_call:       {folder:'animated/lava_1',       frames:60},  // Industrial lava smelter world
+  // ── Jade Circuit cluster ──
+  yujing:            {folder:'animated/terran_2',           frames:120},
+  tiangong:          {folder:'jade/dyson',                   frames:7},
+  shennong_reach:    {folder:'animated/ocean_clouds',        frames:120},
+  houji_fields:      {folder:'animated/forest_no_clouds_1',  frames:60},
+  mozi_array:        {folder:'animated/ice',                 frames:60},
+  wukong_deep:       {folder:'jade/quasar',                  frames:1},
+  zhenghe_anchorage: {folder:'animated/gas_giant_1',         frames:60},
+  haisi_waystation:  {folder:'animated/gas_giant_4',         frames:60},
+  houtu_foundry:     {folder:'animated/lava_2',              frames:60},
+  changzheng_yards:  {folder:'animated/barren_2',            frames:60},
+  xuanwu_bastion:    {folder:'animated/barren_1',            frames:60},
+  lingtai_reach:     {folder:'animated/forest_no_clouds_2',  frames:60},
+  fuxi_observatory:  {folder:'animated/tundra_2',            frames:60},
+  quanzhou_docks:    {folder:'animated/terran_no_clouds_2',  frames:60},
+  zhurong_foundry:   {folder:'animated/lava_3',              frames:60},
+  chiyou_marches:    {folder:'animated/barren_3',            frames:60},
 };
 
 var COLONY_BANNER = {
@@ -416,6 +606,15 @@ var COLONY_BANNER = {
   scrub_yard:'tundra_1',        // fog-shrouded shell-company world ✓
   the_escrow:'arctic_1',         // cold deep-ocean vault world ✓
   margin_call:'lava_2',         // industrial lava smelter world ✓
+  // Jade Circuit cluster
+  yujing:'terran_1',            tiangong:'space_station_1',
+  shennong_reach:'ocean_1',     houji_fields:'forest_1',
+  mozi_array:'arctic_1',        wukong_deep:'space_station_2',
+  zhenghe_anchorage:'gas_giant_rings_1', haisi_waystation:'gas_giant_rings_2',
+  houtu_foundry:'lava_2',       changzheng_yards:'barren_2',
+  xuanwu_bastion:'space_station_1', lingtai_reach:'forest_1',
+  fuxi_observatory:'arctic_1',  quanzhou_docks:'terran_1',
+  zhurong_foundry:'lava_1',     chiyou_marches:'barren_3',
 };
 
 // sector id → 16x16 icon filename (no extension)
@@ -515,6 +714,9 @@ var SP_COLONY_SUN = {
   eyejog:5, dust_basin:8, nova_reach:20,
   iron_shelf:18, the_ledger:1, signal_run:3,
   scrub_yard:15, the_escrow:6, margin_call:12,
+  yujing:1, tiangong:6, shennong_reach:3, houji_fields:5, mozi_array:8,
+  wukong_deep:20, zhenghe_anchorage:12, haisi_waystation:15, houtu_foundry:18, changzheng_yards:24,
+  xuanwu_bastion:1, lingtai_reach:3, fuxi_observatory:8, quanzhou_docks:12, zhurong_foundry:18, chiyou_marches:24,
 };
 
 // sector id → city number (for parallax)
@@ -539,7 +741,13 @@ var SP_COLONY_LANDSCAPE = {
   vein_cluster:'barren_3', aurora_prime:'gas_giant_1',
   null_point:'arctic_1', limbosis:'tundra_1',
   lustandia:'forest_1', gluttonis:'lava_2',
-  abaddon:'space_station_1', flesh_station:'space_station_2'
+  abaddon:'space_station_1', flesh_station:'space_station_2',
+  yujing:'terran_1', tiangong:'space_station_1', shennong_reach:'ocean_1',
+  houji_fields:'forest_1', mozi_array:'arctic_1', wukong_deep:'space_station_2',
+  zhenghe_anchorage:'gas_giant_1', haisi_waystation:'gas_giant_1',
+  houtu_foundry:'lava_2', changzheng_yards:'barren_2',
+  xuanwu_bastion:'space_station_1', lingtai_reach:'forest_1', fuxi_observatory:'arctic_1',
+  quanzhou_docks:'terran_1', zhurong_foundry:'lava_2', chiyou_marches:'barren_2'
 };
 
 // sector id → planet type (for surface backdrop on non-city planets)
@@ -1304,6 +1512,7 @@ function spParallax(e){
 function spUpdateHUDPrices(colonyId){
   var m = COLONY_META[colonyId]; if(!m) return;
   var list = document.getElementById('spPriceList'); if(!list) return;
+  if(m.galaxy==='jade' && !WORMHOLE_OPEN){ list.innerHTML='<div style="font-size:.68rem;color:#8a887e;line-height:1.6">'+((m.companies||[]).join(', '))+'</div><div style="font-size:.62rem;color:#4a4842;margin-top:6px;letter-spacing:.08em">JADE EXCHANGE SEALED</div>'; return; }
   var companies = (m.companies||[]).slice(0,6);
   if(!companies.length){ list.innerHTML='<div style="font-size:.68rem;color:#4f8a64">No listed operators</div>'; return; }
   var tickers = window.TICKERS || [];
@@ -1337,12 +1546,13 @@ function spUpdateHUDPrices(colonyId){
 // ── HUD: Control bars ─────────────────────────────────────────────────────────
 function spUpdateHUDControl(colonyId, f, s){
   var el = document.getElementById('spCtrlBars'); if(!el) return;
+  if(COLONY_META[colonyId] && COLONY_META[colonyId].galaxy==='jade'){ el.innerHTML='<div class="sp-ctrl-bar-wrap"><div class="sp-ctrl-label"><span style="color:#e8e4d8">JADE CIRCUIT</span><span style="color:#555">100%</span></div><div class="sp-ctrl-bar"><div class="sp-ctrl-fill" style="background:#e8e4d8;width:100%"></div></div></div>'; return; }
   var ctrl = {coalition:s.control_coalition||0, syndicate:s.control_syndicate||0, void:s.control_void||0, guild:s.control_guild||0};
   var fundFactions = ['coalition','syndicate','void','guild'];
   el.innerHTML = fundFactions.map(function(fid){
     var fc = FACTIONS[fid]; var p = ctrl[fid]||0;
     return '<div class="sp-ctrl-bar-wrap">'
-      +'<div class="sp-ctrl-label"><span style="color:'+fc.color+'">'+fc.short+'</span><span style="color:#555">'+p+'%</span></div>'
+      +'<div class="sp-ctrl-label"><span style="color:'+fc.color+'">'+facZ(fid,'short',fc.short)+'</span><span style="color:#555">'+p+'%</span></div>'
       +'<div class="sp-ctrl-bar"><div class="sp-ctrl-fill" style="background:'+fc.color+';width:'+p+'%"></div></div>'
       +'</div>';
   }).join('');
@@ -1351,13 +1561,14 @@ function spUpdateHUDControl(colonyId, f, s){
 // ── HUD: Fund buttons ─────────────────────────────────────────────────────────
 function spBuildFundButtons(colonyId, f, s){
   var el = document.getElementById('spFundBtns'); if(!el) return;
+  if(COLONY_META[colonyId] && COLONY_META[colonyId].galaxy==='jade'){ el.innerHTML='<div style="font-size:.66rem;color:#8a887e;line-height:1.6">'+(WORMHOLE_OPEN?'Funding active.':'Sealed until the passage opens.')+'</div>'; return; }
   var ctrl = {coalition:s.control_coalition||0, syndicate:s.control_syndicate||0, void:s.control_void||0, guild:s.control_guild||0};
   el.innerHTML = ['coalition','syndicate','void','guild'].map(function(fid){
     var fc = FACTIONS[fid];
     return '<div class="sp-fund-row" id="spFR_'+colonyId+'_'+fid+'">'
       +'<button class="sp-fund-btn" style="border-color:'+fc.dim+';color:'+fc.color
       +'" onclick="spShowFundInput(\''+colonyId+'\',\''+fid+'\')">'
-      +fc.short+' · '+(ctrl[fid]||0)+'%</button></div>';
+      +facZ(fid,'short',fc.short)+' · '+(ctrl[fid]||0)+'%</button></div>';
   }).join('');
 }
 
@@ -1374,18 +1585,20 @@ window.spShowFundInput = function(cid, fid){
 };
 
 window.spDoFund = function(cid, fid){
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
   var inp = document.getElementById('spFA_'+cid+'_'+fid);
   var amt = inp ? Number(inp.value) : 0;
-  if(!amt||amt<1000){ if(typeof gToast==='function') gToast('Minimum: Ƒ 1,000','#e74c3c'); return; }
-  if(!gToken){ if(typeof gToast==='function') gToast('Log in to fund factions','#e74c3c'); return; }
+  if(!amt||amt<1000){ if(typeof gToast==='function') gToast(T('fund.minimum','Minimum: Ƒ 1,000'),'#e74c3c'); return; }
+  if(!gToken){ if(typeof gToast==='function') gToast(T('fund.loginToFund','Log in to fund factions'),'#e74c3c'); return; }
   fetch(apiBase()+'/api/galaxy/fund',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({colonyId:cid,factionId:fid,amount:amt,token:gToken})})
     .then(function(r){return r.json();}).then(function(d){
       if(d.ok){
         if(typeof gToast==='function'){
-          var _m='Funded '+FACTIONS[fid].short;
+          var _m=TF('fund.funded','Funded '+FACTIONS[fid].short,{faction:facZ(fid,'short',FACTIONS[fid].short)});
           if(d.pctGained>0){ _m+=' +'+d.pctGained+'%'; if(d.pctToNext>0) _m+=' (\u0192'+Number(d.pctToNext).toLocaleString()+' to next 1%)'; }
-          else if(typeof d.pctToNext==='number'){ _m+=' \u2014 banked, \u0192'+Number(d.pctToNext).toLocaleString()+' to next 1%'; }
+          else if(typeof d.pctToNext==='number'){ _m+=', banked, \u0192'+Number(d.pctToNext).toLocaleString()+' to next 1%'; }
           gToast(_m,'#4ecdc4');
         }
         galaxyFetch();
@@ -1402,6 +1615,9 @@ window.spDoFund = function(cid, fid){
 };
 
 var gMapActive=false, gAnimRaf=null, gAnimT=0, gStarsSeeded=false;
+// Commodity display name. The board sorts, filters and maps ids by the ENGLISH
+// name, so only the rendered label is swapped; lookup keys stay English.
+var comZ=function(n){ var m=window.COMMODITY_ZH; return (window._lang==='zh'&&m&&m[n])?m[n]:n; };
 var spOrbitRAF=null, spOrbitLastT=null;
 
 function apiBase(){ return location.origin; }
@@ -1483,6 +1699,157 @@ function apiBase(){ return location.origin; }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ── Asset definitions ─────────────────────────────────────────────────────────
+
+// ── Fleet hull registry (1.6.0.0) ─────────────────────────────────────────────
+// Art is drawn nose up in the source packs and pre rotated nose right at build
+// time, because the map orients along atan2(dy,dx) where 0 is right. Two sizes
+// per hull: a tiny _map sprite for the lane traffic and a larger _detail sprite
+// for the inspection panel.
+//
+// role decides behaviour, not just looks:
+//   merchant  server driven, carries a real manifest, interceptable
+//   scoundrel ambient only, client side, no cargo, never intercepted
+//   (Circuit hulls are merchants too: they trade the Circuit lanes the same
+//   way the Coalition hulls trade theirs, and are interceptable the same way)
+var FLEET_DIR = 'assets/space/ships/fleet/';
+var FLEET_HULLS = {
+  star_traveller:{ f:'star_traveller', n:'Star Traveller', h:'Light Merchant Frame', role:'merchant', mw:22, mh:11, dw:150, dh:78 },
+  aureole:{ f:'aureole', n:'Aureole Class', h:'Class-1 Merchant Hull', role:'merchant', mw:24, mh:13, dw:160, dh:85 },
+  astral_pioneer:{ f:'astral_pioneer', n:'Astral Pioneer', h:'Class-1 Survey Trader', role:'merchant', mw:26, mh:17, dw:170, dh:110 },
+  phoebe:{ f:'phoebe', n:'Phoebe Class', h:'Class-2 Merchant Hull', role:'merchant', mw:30, mh:12, dw:185, dh:73 },
+  nomad:{ f:'nomad', n:'Nomad Class', h:'Class-2 Long Hauler', role:'merchant', mw:30, mh:11, dw:185, dh:68 },
+  canyonback:{ f:'canyonback', n:'Canyonback Class', h:'Class-2 Bulk Carrier', role:'merchant', mw:34, mh:15, dw:200, dh:89 },
+  cicada:{ f:'cicada', n:'Cicada Class', h:'Class-3 Heavy Transport', role:'merchant', mw:40, mh:14, dw:215, dh:75 },
+  titans_burden:{ f:'titans_burden', n:'Titan\'s Burden', h:'Class-3 Deep Hauler', role:'merchant', mw:42, mh:17, dw:225, dh:90 },
+  titans_fist:{ f:'titans_fist', n:'Titan\'s Fist', h:'Class-3 Pocket Carrier', role:'merchant', mw:38, mh:9, dw:210, dh:47 },
+  scoundrel:{ f:'scoundrel', n:'Scoundrel Corvette', h:'Unregistered Corvette', role:'scoundrel', mw:20, mh:15, dw:140, dh:103 },
+  scoundrel_ew:{ f:'scoundrel_ew', n:'Scoundrel EW Corvette', h:'Unregistered EW Corvette', role:'scoundrel', mw:22, mh:15, dw:145, dh:102 },
+  // ── Changzheng family, Jade Circuit ─────────────────────────────────────────
+  // The Circuit runs one hull family, built at Changzheng Yards and numbered on
+  // the yard's own marks rather than named per design. These are freighters and
+  // nothing else: they carry real manifests, they are interceptable, and they
+  // fly the Circuit lanes exactly the way the Coalition hulls fly theirs. The
+  // registry KEY is the class; f is the file on disk, which still carries the
+  // art pack's original name.
+  sanban:{ f:'envoy', n:'CZ-1 Sanban', h:'Circuit Light Frame', role:'merchant', faction:'jade', mw:18, mh:10, dw:130, dh:75 },
+  shachuan:{ f:'conciliator', n:'CZ-2 Shachuan', h:'Class-1 Circuit Hull', role:'merchant', faction:'jade', mw:24, mh:10, dw:155, dh:66 },
+  fuchuan:{ f:'intercessor', n:'CZ-3 Fuchuan', h:'Class-1 Circuit Trader', role:'merchant', faction:'jade', mw:24, mh:13, dw:155, dh:85 },
+  guangchuan:{ f:'mediator', n:'CZ-4 Guangchuan', h:'Class-2 Circuit Hull', role:'merchant', faction:'jade', mw:28, mh:7, dw:170, dh:45 },
+  caochuan:{ f:'negotiator', n:'CZ-5 Caochuan', h:'Class-2 Circuit Hauler', role:'merchant', faction:'jade', mw:30, mh:10, dw:175, dh:59 },
+  xingcha:{ f:'herald', n:'CZ-6 Xingcha', h:'Class-2 Circuit Bulk Hull', role:'merchant', faction:'jade', mw:34, mh:7, dw:195, dh:38 },
+  louchuan:{ f:'emissary', n:'CZ-7 Louchuan', h:'Class-3 Circuit Transport', role:'merchant', faction:'jade', mw:34, mh:9, dw:195, dh:50 },
+  changfeng:{ f:'diplomat', n:'CZ-8 Changfeng', h:'Class-3 Circuit Deep Hauler', role:'merchant', faction:'jade', mw:40, mh:8, dw:215, dh:41 },
+  baochuan:{ f:'consular', n:'CZ-9 Baochuan', h:'Class-3 Yard Flagship', role:'merchant', faction:'jade', mw:46, mh:9, dw:235, dh:44 },
+};
+// The registry key is the in fiction class. f is the file on disk. Those two
+// diverged when the Circuit hulls were renamed, so every path resolves through
+// f and the art pack keeps its own filenames.
+function hullSrc(key, kind){
+  var hl = FLEET_HULLS[key];
+  return FLEET_DIR + ((hl && hl.f) || key) + '_' + kind + '.png';
+}
+// The old art was three body frames animating at 8fps. These hulls are single
+// frame and the thrust plume carries the motion, so the same file is repeated
+// rather than special casing every frameIdx read downstream.
+function hullFrames(key){ var f = hullSrc(key,'map'); return [f,f,f]; }
+
+// Which hulls a server ship of each variant may be drawn as. The server still
+// only knows v1/v2/v3; this is purely how that variant is painted.
+var MERCHANT_POOL = {
+  v1: ['star_traveller','aureole','astral_pioneer'],
+  v2: ['phoebe','nomad','canyonback'],
+  v3: ['cicada','titans_burden','titans_fist']
+};
+// Circuit space runs Changzheng hulls and nothing else. Same three variant
+// buckets so the server contract is untouched: the server still only knows
+// v1/v2/v3, this is purely which family gets painted on.
+var JADE_POOL = {
+  v1: ['sanban','shachuan','fuchuan'],
+  v2: ['guangchuan','caochuan','xingcha'],
+  v3: ['louchuan','changfeng','baochuan']
+};
+var SCOUNDREL_POOL = ['scoundrel','scoundrel_ew'];
+
+// A lane with Circuit worlds at both ends is flown by the Circuit. There are no
+// lanes with one Circuit end and one Coalition end, so this is a clean split
+// and not a probability: 26 of 63 lanes are Circuit, 37 are not, 0 are mixed.
+function poolForLane(fromId, toId, variant){
+  var p = (isJadeWorld(fromId) && isJadeWorld(toId)) ? JADE_POOL : MERCHANT_POOL;
+  return p[variant] || p.v1;
+}
+
+// Which sector's view a hull belongs in.
+//
+// The map draws two sectors into ONE coordinate space and swaps between them:
+// Yujing is (500,300) and so is a patch of Coalition space. Every ship, both
+// sectors' worth, is rendered into the single gShips layer. swapGalaxy used to
+// deal with that by hiding the entire layer whenever the Circuit was on screen,
+// which was correct exactly as long as no ship on the map belonged to the
+// Circuit. The moment Circuit freight existed that line did both halves of the
+// wrong thing: it hid Circuit traffic from Circuit space, and it left Circuit
+// traffic drawn over Coalition space, where the coordinates happen to land.
+//
+// So tag each hull with the sector it flies in and show only the active one.
+function shipGalaxy(fromId, toId){
+  return (isJadeWorld(fromId) || isJadeWorld(toId)) ? 'jade' : 'coalition';
+}
+function tagShipGalaxy(grp, fromId, toId){
+  var gx = shipGalaxy(fromId, toId);
+  grp.setAttribute('data-gx', gx);
+  grp.style.display = (gx === activeGalaxy) ? '' : 'none';
+}
+
+// Deterministic hull choice, so a ship keeps the same silhouette across the
+// eight second fleet reconcile instead of changing shape under the player.
+function hullFor(pool, seedStr){
+  var h = 2166136261, str = String(seedStr || '');
+  for (var i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h,16777619); }
+  return pool[(h>>>0) % pool.length];
+}
+
+// Builds a per ship copy of a SHIP_TYPES def with one hull's art and size
+// swapped in. Speed, thrust art, frame timing and traversal flag are untouched.
+function defWithHull(base, hullKey){
+  var hl = FLEET_HULLS[hullKey]; if (!hl) return base;
+  var d = {}; for (var k in base) if (Object.prototype.hasOwnProperty.call(base,k)) d[k] = base[k];
+  d.body = hullFrames(hullKey);
+  d.w = hl.mw; d.h = hl.mh;
+  d.hullKey = hullKey;
+  // Thrust geometry. positionShip places the plume at an ABSOLUTE local x, not
+  // an offset from the ship's centre, because the group origin is the hull's
+  // top left corner. The stern is therefore x=0 and the plume has to END there:
+  // x = -thrustW, plus one pixel of overlap so there is no seam.
+  //
+  // Scaling it off hull WIDTH was the bug. A 42 wide hauler put its plume at
+  // -17.6 while the plume itself is only 8 wide, so it burned in open space
+  // four pixels behind the ship, and the wider the hull the further it drifted.
+  //
+  // 1.6.0.2: height alone was the other half of the same mistake. A 26x17
+  // Survey Trader got a 14 wide plume on a 26 long hull, 54% of the ship, while
+  // a 46x9 Carrier got 17%. Bound it off BOTH dimensions and the whole fleet
+  // lands between 17% and 36%.
+  var tw = Math.max(5, Math.round(Math.min(hl.mh * 0.85, hl.mw * 0.35)));
+  var th = Math.max(4, Math.min(Math.round(hl.mh * 0.72), tw));
+  d.thrustW = tw;
+  d.thrustH = th;
+  d.thrustOffX = -(tw - 1);
+  d.thrustOffY = 0;
+  // Per hull nose correction. Every sprite is rotated the same -90 at build
+  // time, so orientation is a property of the source file, not of this code.
+  // If a pack ships one hull nose down it can be flipped here instead of being
+  // re-cut, and the plume mirrors with it because the whole group is scaled.
+  d.flip = !!hl.flip;
+  // The v3 base carries a VENTRAL plume tuned for the old 36x18 sprite: an
+  // 18x14 flame pinned at local (9,14), which defWithHull never overwrote. None
+  // of the new hulls has a ventral nozzle, and on the 9 tall Pocket Carrier
+  // that rect starts five pixels BELOW the hull, so it drew a detached flame
+  // under mid ship. Dropped rather than repositioned: there is nothing on the
+  // art for it to come out of.
+  delete d.thrustBot; delete d.thrustBotW; delete d.thrustBotH;
+  delete d.thrustBotOffX; delete d.thrustBotOffY;
+  return d;
+}
+
 var SHIP_TYPES = {
   v1: {
     body:   ['assets/space/ships/v1_body_1.png','assets/space/ships/v1_body_2.png','assets/space/ships/v1_body_3.png'],
@@ -1558,7 +1925,9 @@ function spawnShip(lane, typeKey, reversed) {
   var a    = meta[from], b = meta[to];
   if (!a || !b) return;
 
-  var def = SHIP_TYPES[typeKey];
+  var base = SHIP_TYPES[typeKey];
+  var def = defWithHull(base, hullFor(poolForLane(from, to, typeKey),
+    from + to + Math.floor(Math.random() * 9999)));
   var dx = b.x - a.x, dy = b.y - a.y;
   var angle = Math.atan2(dy, dx); // radians, 0 = right
 
@@ -1600,12 +1969,13 @@ function spawnShip(lane, typeKey, reversed) {
   var bodyEl = mkImg(def.body[0], def.w, def.h);
   grp.appendChild(bodyEl);
 
+  tagShipGalaxy(grp, from, to);
   g.appendChild(grp);
 
   var ship = {
     grp: grp, bodyEl: bodyEl, glowEl: glowEl,
     thrustEl: thrustEl, thrustBotEl: thrustBotEl,
-    def: def, typeKey: typeKey,
+    def: def, typeKey: typeKey, hullKey: def.hullKey,
     fromId: from, toId: to,
     ax: a.x, ay: a.y, bx: b.x, by: b.y,
     angle: angle,
@@ -1636,7 +2006,10 @@ function spawnServerShip(npc) {
   var a = meta[npc.from], b = meta[npc.to];
   if (!a || !b) return;
   var typeKey = npc.variant || 'v1';
-  var def = SHIP_TYPES[typeKey]; if (!def) return;
+  var base = SHIP_TYPES[typeKey]; if (!base) return;
+  // Painted as one of the merchant hulls for this variant. Keyed off the npc id
+  // so the silhouette survives the eight second fleet reconcile.
+  var def = defWithHull(base, hullFor(poolForLane(npc.from, npc.to, typeKey), npc.id));
   var dx = b.x - a.x, dy = b.y - a.y;
   var angle = Math.atan2(dy, dx);
 
@@ -1667,11 +2040,12 @@ function spawnServerShip(npc) {
   if (def.thrustBot){ thrustBotEl = mkImg(def.thrustBot[0], def.thrustBotW, def.thrustBotH); grp.appendChild(thrustBotEl); }
   var bodyEl = mkImg(def.body[0], def.w, def.h);
   grp.appendChild(bodyEl);
+  tagShipGalaxy(grp, npc.from, npc.to);
   g.appendChild(grp);
 
   var ship = {
     grp:grp, bodyEl:bodyEl, glowEl:glowEl, thrustEl:thrustEl, thrustBotEl:thrustBotEl,
-    def:def, typeKey:typeKey, fromId:npc.from, toId:npc.to,
+    def:def, typeKey:typeKey, hullKey:def.hullKey, fromId:npc.from, toId:npc.to,
     ax:a.x, ay:a.y, bx:b.x, by:b.y, angle:angle,
     t:Math.max(0,Math.min(1,npc.progress||0)), frameIdx:0, frameTick:0, done:false, opacity:0,
     serverDriven:true, startTs:npc.startTs, arriveTs:npc.arriveTs,
@@ -1700,7 +2074,150 @@ function removeServerShip(npcId) {
 }
 // Expose for the WS message handler (which lives outside this IIFE scope).
 window._spawnServerShip = function(npc){ if(gShipActive) spawnServerShip(npc); };
+// Direct entry point for tools/fleet-check, which needs to build one ship and
+// inspect it without starting the animation loop.
+window._spawnServerShipForce = function(npc){ spawnServerShip(npc); };
+window._fmTickOnce = function(){ gShipList.forEach(function(sh){ positionShip(sh, 16); });
+  gAmbient.forEach(function(sh){ positionShip(sh, 16); }); };
 window._removeServerShip = removeServerShip;
+
+
+// ── Ambient traffic: scoundrels ───────────────────────────────────────────────
+// PURELY VISUAL. These never touch the server fleet, never carry a manifest,
+// and never affect interception, smuggling or anything else. They live in their
+// own list so nothing downstream can mistake one for a real NPC hauler.
+var gAmbient = [];
+var gAmbientTimer = null;
+var AMBIENT_MAX = 7;            // concurrent, across both kinds
+var GREY_WORLDS = ['the_hollow','null_point','the_ledger','the_escrow','dust_basin'];
+
+function isJadeWorld(id){
+  var m = COLONY_META[id];
+  return !!(m && m.galaxy === 'jade');
+}
+function laneIsJade(l){ return isJadeWorld(l.from) && isJadeWorld(l.to); }
+function laneIsGrey(l){
+  return GREY_WORLDS.indexOf(l.from) >= 0 || GREY_WORLDS.indexOf(l.to) >= 0;
+}
+
+// Scoundrels work anywhere but favour the routes nobody files paperwork on.
+function pickScoundrelLane(){
+  var w = [];
+  LANES.forEach(function(l){
+    var n = laneIsGrey(l) ? 5 : (laneIsJade(l) ? 1 : 2);
+    for (var i=0;i<n;i++) w.push(l);
+  });
+  return w[Math.floor(Math.random()*w.length)];
+}
+
+function spawnAmbient(kind){
+  var g = document.getElementById('gShips'); if (!g) return;
+  var lane = pickScoundrelLane();
+  if (!lane) return;
+  var reversed = Math.random() < 0.5;
+  var from = reversed ? lane.to : lane.from, to = reversed ? lane.from : lane.to;
+  var a = COLONY_META[from], b = COLONY_META[to];
+  if (!a || !b) return;
+
+  var hullKey = hullFor(SCOUNDREL_POOL, from + to + Date.now() + Math.random());
+  var hl = FLEET_HULLS[hullKey];
+  var base = SHIP_TYPES.v1;
+  var def = defWithHull(base, hullKey);
+  def.speed = 32;   // scoundrels run
+
+  var angle = Math.atan2(b.y - a.y, b.x - a.x);
+  var grp = document.createElementNS(svgNS, 'g');
+  grp.setAttribute('opacity','0');
+  grp.setAttribute('class','fm-clickable');
+  grp.style.pointerEvents = 'all';
+
+  var pad = 10;
+  var hitEl = document.createElementNS(svgNS,'rect');
+  hitEl.setAttribute('x',String(-pad)); hitEl.setAttribute('y',String(-pad));
+  hitEl.setAttribute('width',String(def.w+pad*2)); hitEl.setAttribute('height',String(def.h+pad*2));
+  hitEl.setAttribute('fill','#000'); hitEl.setAttribute('opacity','0.001');
+  hitEl.style.pointerEvents='all';
+  grp.appendChild(hitEl);
+
+  var glowEl = document.createElementNS(svgNS,'ellipse');
+  glowEl.setAttribute('rx','2'); glowEl.setAttribute('ry','1.2');
+  glowEl.setAttribute('fill', '#e74c3c');
+  glowEl.setAttribute('opacity','0.85');
+  glowEl.setAttribute('cx','0'); glowEl.setAttribute('cy',(def.h/2).toFixed(1));
+  grp.appendChild(glowEl);
+
+  var thrustEl = null;
+  if (def.thrust){ thrustEl = mkImg(def.thrust[0], def.thrustW, def.thrustH); grp.appendChild(thrustEl); }
+  var bodyEl = mkImg(def.body[0], def.w, def.h);
+  grp.appendChild(bodyEl);
+  tagShipGalaxy(grp, from, to);
+  g.appendChild(grp);
+
+  var ship = {
+    grp:grp, bodyEl:bodyEl, glowEl:glowEl, thrustEl:thrustEl, thrustBotEl:null,
+    def:def, typeKey:'v1', hullKey:hullKey,
+    fromId:from, toId:to,
+    ax:a.x, ay:a.y, bx:b.x, by:b.y, angle:angle,
+    t:0, frameIdx:0, frameTick:0, done:false, opacity:0,
+    ambient:true, kind:'scoundrel',
+    ident:ambientIdent(kind, hullKey, from, to)
+  };
+  gAmbient.push(ship);
+  grp.style.cursor = 'pointer';
+  var openFn = function(e){
+    try { e.stopPropagation(); e.preventDefault(); } catch(_){}
+    if (window.openAmbientReadout) window.openAmbientReadout(ship);
+  };
+  grp.addEventListener('pointerdown', openFn);
+  hitEl.addEventListener('pointerdown', openFn);
+  grp.addEventListener('click', openFn);
+}
+
+function ambientIdent(kind, hullKey, from, to){
+  var seed = (from+to+hullKey).split('').reduce(function(a,c){ return (a*31 + c.charCodeAt(0)) >>> 0; }, 7);
+  var n = 100 + (seed % 900);
+  var tags = ['XN-','RK-','??-','ZL-','--'];
+  return tags[seed % tags.length] + n;
+}
+
+function scheduleAmbient(){
+  if (!gShipActive) return;
+  if (gAmbientTimer) clearTimeout(gAmbientTimer);
+  gAmbientTimer = setTimeout(function(){
+    if (gShipActive && gAmbient.length < AMBIENT_MAX){
+      spawnAmbient('scoundrel');
+    }
+    scheduleAmbient();
+  }, 6000 + Math.random()*10000);
+}
+
+function tickAmbient(dt){
+  for (var i = gAmbient.length - 1; i >= 0; i--){
+    var sh = gAmbient[i];
+    positionShip(sh, dt);
+    if (sh.done){
+      if (sh.grp.parentNode) sh.grp.parentNode.removeChild(sh.grp);
+      gAmbient.splice(i,1);
+    }
+  }
+}
+function clearAmbient(){
+  gAmbient.forEach(function(sh){ if (sh.grp && sh.grp.parentNode) sh.grp.parentNode.removeChild(sh.grp); });
+  gAmbient = [];
+  if (gAmbientTimer){ clearTimeout(gAmbientTimer); gAmbientTimer = null; }
+}
+// The manifest panel lives in a different IIFE in this file and cannot see any
+// of the above. Every reference to FLEET_HULLS from over there threw a
+// ReferenceError straight into openShipManifest's try/catch, which is why
+// clicking a ship did nothing at all and logged nothing a player would see.
+window._fmFleet = { HULLS: FLEET_HULLS, src: hullSrc, dir: FLEET_DIR,
+  shipGalaxy: shipGalaxy };
+
+// Exposed for the checks in tools/.
+window._fmAmbient = { list:function(){ return gAmbient; }, spawn:spawnAmbient,
+  clear:clearAmbient, isJadeWorld:isJadeWorld, poolForLane:poolForLane,
+  pickScoundrelLane:pickScoundrelLane, laneIsJade:laneIsJade, hullFor:hullFor,
+  pools:function(){ return { s:SCOUNDREL_POOL, m:MERCHANT_POOL, j:JADE_POOL }; } };
 
 // Pull the current server fleet and render it.
 function syncServerFleet() {
@@ -1751,7 +2268,7 @@ function positionShip(ship, dt) {
   var maxTilt = 28 * Math.PI / 180;
   tiltAngle = Math.max(-maxTilt, Math.min(maxTilt, tiltAngle));
   var tiltDeg = tiltAngle * 180 / Math.PI;
-  var flipX = goingLeft ? -1 : 1;
+  var flipX = (goingLeft ? -1 : 1) * (def.flip ? -1 : 1);
 
   ship.grp.setAttribute('transform',
     'translate(' + cx.toFixed(1) + ',' + cy.toFixed(1) + ') ' +
@@ -1814,6 +2331,8 @@ function shipTick(t) {
     }
   }
 
+  tickAmbient(dt);
+
   gShipRAF = requestAnimationFrame(shipTick);
 }
 
@@ -1870,6 +2389,7 @@ window.gShipTrafficStart = function() {
   syncServerFleet();
   if (window._npcSyncIv) clearInterval(window._npcSyncIv);
   window._npcSyncIv = setInterval(syncServerFleet, 8000); // reconcile fleet periodically
+  scheduleAmbient();
   gShipRAF = requestAnimationFrame(shipTick);
 };
 
@@ -1878,6 +2398,7 @@ window.gShipTrafficStop = function() {
   if (gShipRAF)       { cancelAnimationFrame(gShipRAF); gShipRAF = null; }
   if (gShipSpawnTimer){ clearTimeout(gShipSpawnTimer);   gShipSpawnTimer = null; }
   if (window._npcSyncIv){ clearInterval(window._npcSyncIv); window._npcSyncIv=null; }
+  clearAmbient();
   var g = document.getElementById('gShips');
   if (g) g.innerHTML = '';
   gShipList = [];
@@ -1909,7 +2430,16 @@ function initSubTabs(){
       var sp=document.getElementById('gShippingPane');
       var cp=document.getElementById('gContractsPane');
       var kp=document.getElementById('gMarketsPane');
+      var cyp=document.getElementById('gCitiesPane');
       if(mp) mp.style.display=t==='map'?'flex':'none';
+      // Cities takes the whole viewport: the map is the point of the view and a
+      // 300px column inside a shared centre panel could not do it justice.
+      // position:fixed escapes the layout without moving any element.
+      if(cyp){
+        cyp.style.display = t==='cities' ? 'block' : 'none';
+        cyp.classList.toggle('fmfull', t==='cities');
+      }
+      try { document.body.style.overflow = (t==='cities') ? 'hidden' : ''; } catch(_) {}
       if(fp) fp.style.display=t==='factions'?'block':'none';
       if(sp) sp.style.display=t==='shipping'?'block':'none';
       if(cp) cp.style.display=t==='contracts'?'block':'none';
@@ -1919,6 +2449,8 @@ function initSubTabs(){
       if(t==='contracts') renderContractsTable();
       if(t==='shipping') window.renderShippingTab();
       if(t==='markets') renderMarketsTab();
+      if(t==='cities'){ if(window.cityTabLoad) window.cityTabLoad(); }
+      else if(window.cityLeaveFull) window.cityLeaveFull();
     });
   });
 }
@@ -1939,7 +2471,7 @@ function renderShipmentTracker(s, phaseList, nameOf){
     var c = intercepted ? '#e74c3c' : (done?'#2ecc71':active?'#f39c12':'#333');
     return '<span title="'+(SHIPMENT_PHASE_LABELS[pid]||pid)+'" style="flex:1;height:3px;background:'+c+';border-radius:1px"></span>';
   }).join('<span style="width:2px"></span>');
-  var label = intercepted ? 'CARGO LOST \u2014 ship returning empty' : (SHIPMENT_PHASE_LABELS[s.phase]||s.phase);
+  var label = intercepted ? 'CARGO LOST, ship returning empty' : (SHIPMENT_PHASE_LABELS[s.phase]||s.phase);
   var labelColor = intercepted ? '#ff6b6b' : (s.phase==='transit'?'#f39c12':'#9ab');
   return '<div class="fmShipTrack" data-resolve="'+s.resolveTs+'" style="padding:5px 0;border-bottom:1px solid #111">'
     +'<div style="display:flex;justify-content:space-between;font-size:.72rem;color:#9ab;margin-bottom:3px">'
@@ -1980,10 +2512,12 @@ window._smugTick = function(){
   var ar = window._activeSmugRun;
   if(!ar){ window._stopSmugTicker(); return; }
   var left = Math.max(0, Math.ceil((ar.resolveTs - Date.now())/1000));
+  var _tf=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+  var _t=function(k,fb){return window.t?window.t(k,fb):fb;};
   var ct = document.getElementById('gShipCountdownTimer');
-  if(ct) ct.textContent = left>0 ? ('EN ROUTE \u2014 '+left+'s...') : 'Resolving...';
+  if(ct) ct.textContent = left>0 ? _tf('smug.enRouteSec','EN ROUTE, '+left+'s...',{s:left}) : _t('smug.resolving','Resolving...');
   var ss = document.getElementById('gSmugStatus');
-  if(ss) ss.innerHTML = left>0 ? '<span style="color:#e74c3c">EN ROUTE \u2014 '+left+'s remaining...</span>' : '<span style="color:#555">Resolving...</span>';
+  if(ss) ss.innerHTML = left>0 ? '<span style="color:#e74c3c">'+_tf('smug.enRouteRemain','EN ROUTE, '+left+'s remaining...',{s:left})+'</span>' : '<span style="color:#555">'+_t('smug.resolving','Resolving...')+'</span>';
   if(left<=0){ window._stopSmugTicker(); window._activeSmugRun=null; if(typeof gMapActive!=='undefined' && gMapActive) renderLanes(); }
 };
 window._ensureSmugTicker = function(restart){
@@ -1996,7 +2530,9 @@ window._ensureSmugTicker = function(restart){
 // ── Markets tab: galaxy-wide commodity arbitrage view ─────────────────────────
 function renderMarketsTab(){
   var box = document.getElementById('gMarketsInner'); if(!box) return;
-  box.innerHTML = '<div style="color:#555;font-size:.74rem">Loading market grid\u2026</div>';
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+  box.innerHTML = '<div style="color:#555;font-size:.74rem">'+T('galx.loadingGrid','Loading market grid…')+'</div>';
   var clsCol = {tech:'#4ecdc4', med:'#ff6b6b', agri:'#86ff6a'};
   Promise.all([
     fetch('/api/commodities-grid').then(function(r){return r.json();}),
@@ -2005,30 +2541,30 @@ function renderMarketsTab(){
     fetch('/api/ships'+(gToken?('?token='+encodeURIComponent(gToken)):'')).then(function(r){return r.json();})
   ]).then(function(res){
     var grid=res[0], cg=res[1], tr=res[2], sh=res[3];
-    if(!grid || !grid.ok){ box.innerHTML='<div style="color:#e74c3c">Market grid unavailable</div>'; return; }
-    var nameOf=function(cid){ return (COLONY_META[cid]||{name:cid}).name; };
+    if(!grid || !grid.ok){ box.innerHTML='<div style="color:#e74c3c">'+T('galx.gridUnavailable','Market grid unavailable')+'</div>'; return; }
+    var nameOf=function(cid){ var _n=(COLONY_META[cid]||{name:cid}).name; return window.colonyNameZh?window.colonyNameZh(cid,_n):_n; };
 
     var h='';
     // Cargo hold summary
     h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
     h+='<div style="flex:1;min-width:200px;background:#0a0a14;border:1px solid #1a1a2e;border-radius:4px;padding:10px 12px">'
-      +'<div style="font-size:.78rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Cargo Hold</div>';
+      +'<div style="font-size:.78rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">'+T('galx.cargoHold','Cargo Hold')+'</div>';
     if(cg && cg.ok && cg.cargo && cg.cargo.items.length){
       var _icoMap={}; (grid.commodities||[]).forEach(function(c){ _icoMap[c.id]=c.icon; });
       h+=cg.cargo.items.map(function(it){
         var ico=_icoMap[it.id]?'<img src="assets/'+_icoMap[it.id]+'" style="width:16px;height:16px;vertical-align:middle;margin-right:5px;image-rendering:pixelated" onerror="this.style.display=\'none\'">':'';
         var loc=it.colonyName?(' <span style="color:#3498db">@ '+it.colonyName+'</span>'):'';
-        return '<div style="font-size:.8rem;color:#aaa;padding:2px 0">'+ico+it.qty+'\u00d7 '+it.name+loc+' <span style="color:#666">(avg \u0192'+Math.round(it.avgCost).toLocaleString()+')</span></div>';
+        return '<div style="font-size:.8rem;color:#aaa;padding:2px 0">'+ico+it.qty+'\u00d7 '+comZ(it.name)+loc+' <span style="color:#666">('+T('galx.avg','avg')+' \u0192'+Math.round(it.avgCost).toLocaleString()+')</span></div>';
       }).join('');
-    } else { h+='<div style="font-size:.78rem;color:#4f8a64">Empty \u2014 buy commodities from a colony</div>'; }
+    } else { h+='<div style="font-size:.78rem;color:#4f8a64">'+T('galx.cargoEmpty','Empty, buy commodities from a colony')+'</div>'; }
     h+='</div>';
     // In-transit phase tracker (Domino's style)
     h+='<div style="flex:1;min-width:240px;background:#0a0a14;border:1px solid #1a1a2e;border-radius:4px;padding:10px 12px">'
-      +'<div style="font-size:.78rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">In Transit</div>';
+      +'<div style="font-size:.78rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">'+T('galx.inTransit','In Transit')+'</div>';
     if(tr && tr.ok && tr.shipments && tr.shipments.length){
       var phaseList = (tr.phases||[]).map(function(p){return p.id;});
       h+=tr.shipments.map(function(s){ return renderShipmentTracker(s, phaseList, nameOf); }).join('');
-    } else { h+='<div style="font-size:.78rem;color:#666">No active shipments</div>'; }
+    } else { h+='<div style="font-size:.78rem;color:#666">'+T('galx.noShipments','No active shipments')+'</div>'; }
     h+='</div></div>';
 
     // ── Shipping Console (self-contained; no sector map needed) ──
@@ -2041,30 +2577,30 @@ function renderMarketsTab(){
     window._gShipComIdToName = {};
     _comsSorted.forEach(function(c){ window._gShipComNameToId[c.name.toLowerCase()] = c.id; window._gShipComIdToName[c.id] = c.name; });
     h+='<div id="gShipConsole" style="background:#0a0a14;border:1px solid #1a2a3a;border-radius:4px;padding:12px 14px;margin-bottom:16px">'
-      +'<div style="font-size:.8rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">\uD83D\uDCE6 Ship Cargo</div>'
-      +'<div style="font-size:.66rem;color:#4f8a64;margin-bottom:8px">Buy a commodity at a colony, then ship it to another to sell at the spread. Shipping takes time and can be intercepted.</div>'
+      +'<div style="font-size:.8rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">'+T('galx.shipCargo','📦 Ship Cargo')+'</div>'
+      +'<div style="font-size:.66rem;color:#4f8a64;margin-bottom:8px">'+T('galx.shipCargoDesc','Buy a commodity at a colony, then ship it to another to sell at the spread. Shipping takes time and can be intercepted.')+'</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
-        +'<div style="flex:1;min-width:130px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">Commodity</div>'
-          +'<input id="gShipConCom" list="gShipConComList" placeholder="Type to search\u2026" autocomplete="off" oninput="window.gShipQuote()" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"><datalist id="gShipConComList">'+_comDatalist+'</datalist></div>'
-        +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">From</div>'
+        +'<div style="flex:1;min-width:130px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">'+T('galx.commodity','Commodity')+'</div>'
+          +'<input id="gShipConCom" list="gShipConComList" placeholder="'+T('galx.typeSearch','Type to search…')+'" autocomplete="off" oninput="window.gShipQuote()" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"><datalist id="gShipConComList">'+_comDatalist+'</datalist></div>'
+        +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">'+T('galx.from','From')+'</div>'
           +'<select id="gShipConFrom" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
-        +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">To</div>'
+        +'<div style="flex:1;min-width:110px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">'+T('galx.to','To')+'</div>'
           +'<select id="gShipConTo" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'+_colOpts+'</select></div>'
-        +'<div style="flex:0 0 80px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">Qty</div>'
+        +'<div style="flex:0 0 80px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">'+T('galx.qty','Qty')+'</div>'
           +'<input id="gShipConQty" type="number" min="1" value="10" oninput="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px"></div>'
-        +'<div style="flex:1;min-width:140px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">Escort</div>'
+        +'<div style="flex:1;min-width:140px"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">'+T('galx.escort','Escort')+'</div>'
           +'<select id="gShipConGuard" onchange="window.gShipQuote()" style="width:100%;background:#0a0a14;border:1px solid #2a2a3e;color:#ccc;padding:6px;font-size:.7rem;font-family:inherit;border-radius:2px">'
-            +'<option value="none">No escort \u2014 free</option>'
-            +'<option value="light">Light escort \u2014 ~5% fee, -8% risk</option>'
-            +'<option value="medium">Armed convoy \u2014 ~13% fee, -16% risk</option>'
-            +'<option value="heavy">Private army \u2014 ~29% fee, -26% risk</option>'
+            +'<option value="none">'+T('galx.escortNone','No escort, free')+'</option>'
+            +'<option value="light">'+T('galx.escortLight','Light escort, ~5% fee, -8% risk')+'</option>'
+            +'<option value="medium">'+T('galx.escortMedium','Armed convoy, ~13% fee, -16% risk')+'</option>'
+            +'<option value="heavy">'+T('galx.escortHeavy','Private army, ~29% fee, -26% risk')+'</option>'
           +'</select></div>'
-        +'<div style="flex:0 0 auto;display:flex;flex-direction:column;justify-content:flex-end"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">Insurance</div>'
+        +'<div style="flex:0 0 auto;display:flex;flex-direction:column;justify-content:flex-end"><div style="font-size:.6rem;color:#72e09c;text-transform:uppercase;margin-bottom:3px">'+T('galx.insurance','Insurance')+'</div>'
           +'<label style="display:flex;align-items:center;gap:5px;font-size:.66rem;color:#bbb;cursor:pointer;padding:6px 8px;border:1px solid #2a2a3e;border-radius:2px;background:#0a0a14;white-space:nowrap">'
-            +'<input type="checkbox" id="gShipConInsure" onchange="window.gShipQuote()" style="accent-color:#f39c12"> half cover</label></div>'
-        +'<button onclick="window.gShipConsoleGo()" style="flex:0 0 auto;background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:7px 16px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">SHIP</button>'
+            +'<input type="checkbox" id="gShipConInsure" onchange="window.gShipQuote()" style="accent-color:#f39c12"> '+T('galx.halfCover','half cover')+'</label></div>'
+        +'<button onclick="window.gShipConsoleGo()" style="flex:0 0 auto;background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:7px 16px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">'+T('galx.ship','SHIP')+'</button>'
       +'</div>'
-      +'<div id="gShipConPreview" style="font-size:.68rem;color:#888;margin-top:8px;min-height:15px;padding:6px 8px;background:#070710;border:1px solid #14141f;border-radius:3px">Select a commodity and two colonies to preview the route and risk.</div>'
+      +'<div id="gShipConPreview" style="font-size:.68rem;color:#888;margin-top:8px;min-height:15px;padding:6px 8px;background:#070710;border:1px solid #14141f;border-radius:3px">'+T('galx.shipPreview','Select a commodity and two colonies to preview the route and risk.')+'</div>'
       +'<div id="gShipConHint" style="font-size:.66rem;color:#888;margin-top:6px;min-height:13px"></div>'
       +'</div>';
 
@@ -2084,19 +2620,19 @@ function renderMarketsTab(){
     window._gColNameOf = nameOf;
 
     // Arbitrage board: per commodity, cheapest buy vs dearest sell across colonies
-    h+='<div style="font-size:.82rem;color:#72e09c;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Arbitrage Board <span style="color:#4f8a64;text-transform:none;letter-spacing:0">\u2014 best spread per commodity right now</span></div>';
+    h+='<div style="font-size:.82rem;color:#72e09c;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">'+T('galx.arbBoard','Arbitrage Board')+' <span style="color:#4f8a64;text-transform:none;letter-spacing:0">'+T('galx.arbSub','best spread per commodity right now')+'</span></div>';
     // Class filter (the catalog is large; let players narrow by class).
     var curFilter = window._gMktFilter || 'all';
     var fbtn=function(key,label,c){ var on=curFilter===key; return '<button onclick="window.gMktFilter(\''+key+'\')" style="background:'+(on?c:'#0a0a14')+';border:1px solid '+c+';color:'+(on?'#0a0a14':c)+';padding:3px 12px;cursor:pointer;font-size:.66rem;font-family:inherit;border-radius:2px;margin-right:5px;letter-spacing:.06em">'+label+'</button>'; };
     h+='<div style="margin-bottom:10px">'
-      +fbtn('all','ALL','#9aa')
-      +fbtn('tech','TECH','#4ecdc4')
-      +fbtn('med','MED','#ff6b6b')
-      +fbtn('agri','AGRI','#86ff6a')
-      +'<input id="gMktSearch" placeholder="filter by name..." value="'+(window._gMktSearch||'')+'" oninput="window.gMktSearchInput(this.value)" style="background:#0a0a14;border:1px solid #1a1a2e;color:#bbb;padding:3px 8px;font-size:.66rem;font-family:inherit;border-radius:2px;margin-left:6px;width:140px">'
+      +fbtn('all',T('galx.clsAll','ALL'),'#9aa')
+      +fbtn('tech',T('galx.clsTech','TECH'),'#4ecdc4')
+      +fbtn('med',T('galx.clsMed','MED'),'#ff6b6b')
+      +fbtn('agri',T('galx.clsAgri','AGRI'),'#86ff6a')
+      +'<input id="gMktSearch" placeholder="'+T('galx.filterName','filter by name...')+'" value="'+(window._gMktSearch||'')+'" oninput="window.gMktSearchInput(this.value)" style="background:#0a0a14;border:1px solid #1a1a2e;color:#bbb;padding:3px 8px;font-size:.66rem;font-family:inherit;border-radius:2px;margin-left:6px;width:140px">'
       +'</div>';
     h+='<table style="width:100%;border-collapse:collapse;font-size:.8rem">';
-    h+='<tr style="color:#666;text-align:left"><th style="padding:6px 8px">Commodity</th><th style="padding:6px 8px">Buy cheapest</th><th style="padding:6px 8px">Sell dearest</th><th style="padding:6px 8px;text-align:right">Spread</th><th style="padding:6px 8px;text-align:right">Act</th></tr>';
+    h+='<tr style="color:#666;text-align:left"><th style="padding:6px 8px">'+T('galx.commodity','Commodity')+'</th><th style="padding:6px 8px">'+T('galx.buyCheapest','Buy cheapest')+'</th><th style="padding:6px 8px">'+T('galx.sellDearest','Sell dearest')+'</th><th style="padding:6px 8px;text-align:right">'+T('galx.spread','Spread')+'</th><th style="padding:6px 8px;text-align:right">'+T('galx.act','Act')+'</th></tr>';
     grid.commodities.forEach(function(com){
       // Apply class + name filters.
       if(curFilter!=='all' && com.cls!==curFilter) return;
@@ -2115,14 +2651,14 @@ function renderMarketsTab(){
       var profit=spread>0;
       var held=heldMap[com.id]||0;
       var loc=heldLoc[com.id]||null;
-      var buyBtn='<button onclick="window.gMktBuy(\''+best.col+'\',\''+com.id+'\')" style="background:#0d2818;border:1px solid #2ecc71;color:#2ecc71;padding:2px 7px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px">BUY</button>';
+      var buyBtn='<button onclick="window.gMktBuy(\''+best.col+'\',\''+com.id+'\')" style="background:#0d2818;border:1px solid #2ecc71;color:#2ecc71;padding:2px 7px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px">'+T('galx.buy','BUY')+'</button>';
       var sellBtn = loc
-        ? '<button onclick="window.gMktSell(\''+loc.colonyId+'\',\''+com.id+'\')" title="Sell at '+loc.colonyName+' (where your cargo is)" style="background:#2d1414;border:1px solid #e74c3c;color:#ff6b6b;padding:2px 7px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px;margin-left:3px">SELL</button>'
-        : '<button disabled title="You hold none here \u2014 buy, then ship to sell elsewhere" style="background:#2d1414;border:1px solid #333;color:#444;padding:2px 7px;cursor:default;font-size:.7rem;font-family:inherit;border-radius:2px;margin-left:3px">SELL</button>';
-      var shipBtn='<button onclick="window.gMktShipRow(\''+com.id+'\',\''+(loc?loc.colonyId:best.col)+'\',\''+worst.col+'\')" title="Ship '+com.name+' to '+nameOf(worst.col)+'" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:2px 7px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px;margin-left:3px">SHIP</button>';
+        ? '<button onclick="window.gMktSell(\''+loc.colonyId+'\',\''+com.id+'\')" title="Sell at '+loc.colonyName+' (where your cargo is)" style="background:#2d1414;border:1px solid #e74c3c;color:#ff6b6b;padding:2px 7px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px;margin-left:3px">'+T('galx.sell','SELL')+'</button>'
+        : '<button disabled title="You hold none here. Buy, then ship to sell elsewhere" style="background:#2d1414;border:1px solid #333;color:#444;padding:2px 7px;cursor:default;font-size:.7rem;font-family:inherit;border-radius:2px;margin-left:3px">'+T('galx.sell','SELL')+'</button>';
+      var shipBtn='<button onclick="window.gMktShipRow(\''+com.id+'\',\''+(loc?loc.colonyId:best.col)+'\',\''+worst.col+'\')" title="Ship '+com.name+' to '+nameOf(worst.col)+'" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:2px 7px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px;margin-left:3px">'+T('galx.ship','SHIP')+'</button>';
       var icoHtml = com.icon ? '<img src="assets/'+com.icon+'" style="width:20px;height:20px;vertical-align:middle;margin-right:7px;image-rendering:pixelated" onerror="this.style.display=\'none\'">' : '';
       h+='<tr style="border-top:1px solid #14141f" data-com="'+com.id+'">'
-        +'<td style="padding:6px 8px;color:'+col+'">'+icoHtml+com.name+(held>0?' <span style="color:#777">\u00d7'+held+(loc?' @ '+loc.colonyName:'')+'</span>':'')+'</td>'
+        +'<td style="padding:6px 8px;color:'+col+'">'+icoHtml+comZ(com.name)+(held>0?' <span style="color:#777">\u00d7'+held+(loc?' @ '+loc.colonyName:'')+'</span>':'')+'</td>'
         +'<td style="padding:6px 8px;color:#9bffba" id="mb_'+com.id+'">\u0192'+Math.round(best.buy).toLocaleString()+' <span style="color:#f0b454">@ '+nameOf(best.col)+'</span></td>'
         +'<td style="padding:6px 8px;color:#9bffba" id="ms_'+com.id+'">\u0192'+Math.round(worst.sell).toLocaleString()+' <span style="color:#f0b454">@ '+nameOf(worst.col)+'</span></td>'
         +'<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+(profit?'#2ecc71':'#888')+'" id="mp_'+com.id+'">'+(profit?'+':'')+pct+'%</td>'
@@ -2131,27 +2667,27 @@ function renderMarketsTab(){
     });
     h+='</table>';
     h+='<div id="gMktHint" style="font-size:.72rem;color:#888;margin-top:8px;min-height:14px"></div>';
-    h+='<div style="font-size:.72rem;color:#555;margin-top:4px">BUY purchases at the cheapest colony (cargo stays there). To profit from a spread you must SHIP it to another colony, then SELL where it lands. You can only sell where your cargo physically is.</div>';
+    h+='<div style="font-size:.72rem;color:#555;margin-top:4px">'+T('galx.arbHelp','BUY purchases at the cheapest colony (cargo stays there). To profit from a spread you must SHIP it to another colony, then SELL where it lands. You can only sell where your cargo physically is.')+'</div>';
 
     // Shipyard
     if(sh && sh.ok && sh.classes){
-      h+='<div style="font-size:.82rem;color:#999;letter-spacing:.1em;text-transform:uppercase;margin:16px 0 10px">Shipyard <span style="color:#666;text-transform:none;letter-spacing:0">\u2014 your hauler sets cargo capacity per run</span></div>';
+      h+='<div style="font-size:.82rem;color:#999;letter-spacing:.1em;text-transform:uppercase;margin:16px 0 10px">'+T('galx.shipyard','Shipyard')+' <span style="color:#666;text-transform:none;letter-spacing:0">'+T('galx.shipyardSub','your hauler sets cargo capacity per run')+'</span></div>';
       h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
       h+=sh.classes.map(function(c){
         var owned = c.id===sh.owned;
         var canBuy = !owned && c.price>0;
         return '<div style="flex:1;min-width:180px;background:#0a0a14;border:1px solid '+(owned?'#2ecc71':'#1a1a2e')+';border-radius:4px;padding:10px 12px">'
           +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
-            +'<span style="font-size:.82rem;color:'+(owned?'#2ecc71':'#ccc')+'">'+c.name+'</span>'
-            +(owned?'<span style="font-size:.62rem;color:#2ecc71;letter-spacing:.08em">ACTIVE</span>':'')+'</div>'
+            +'<span style="font-size:.82rem;color:'+(owned?'#2ecc71':'#ccc')+'">'+comZ(c.name)+'</span>'
+            +(owned?'<span style="font-size:.62rem;color:#2ecc71;letter-spacing:.08em">'+T('galx.active','ACTIVE')+'</span>':'')+'</div>'
           +'<div style="font-size:.68rem;color:#72e09c;margin-bottom:6px">'+c.desc+'</div>'
-          +'<div style="font-size:.68rem;color:#9ab;margin-bottom:2px">Capacity: <span style="color:#ccc">'+c.capacity.toLocaleString()+'u</span></div>'
-          +'<div style="font-size:.68rem;color:#9ab;margin-bottom:8px">Risk: <span style="color:#ccc">'+(c.riskMod>0?'+'+Math.round(c.riskMod*100)+'%':'baseline')+'</span></div>'
+          +'<div style="font-size:.68rem;color:#9ab;margin-bottom:2px">'+T('galx.capacity','Capacity:')+' <span style="color:#ccc">'+c.capacity.toLocaleString()+'u</span></div>'
+          +'<div style="font-size:.68rem;color:#9ab;margin-bottom:8px">'+T('galx.risk','Risk:')+' <span style="color:#ccc">'+(c.riskMod>0?'+'+Math.round(c.riskMod*100)+'%':T('galx.baseline','baseline'))+'</span></div>'
           +(owned
-              ? '<div style="font-size:.66rem;color:#4f8a64;text-align:center;padding:4px">In service</div>'
+              ? '<div style="font-size:.66rem;color:#4f8a64;text-align:center;padding:4px">'+T('galx.inService','In service')+'</div>'
               : (canBuy
-                  ? '<button onclick="window.gBuyShip(\''+c.id+'\')" style="width:100%;background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:5px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px">Commission \u2014 \u0192'+c.price.toLocaleString()+'</button>'
-                  : '<div style="font-size:.66rem;color:#4f8a64;text-align:center;padding:4px">Starter ship</div>'))
+                  ? '<button onclick="window.gBuyShip(\''+c.id+'\')" style="width:100%;background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:5px;cursor:pointer;font-size:.7rem;font-family:inherit;border-radius:2px">'+T('galx.commission','Commission')+' \u0192'+c.price.toLocaleString()+'</button>'
+                  : '<div style="font-size:.66rem;color:#4f8a64;text-align:center;padding:4px">'+T('galx.starterShip','Starter ship')+'</div>'))
           +'</div>';
       }).join('');
       h+='</div>';
@@ -2161,7 +2697,7 @@ function renderMarketsTab(){
     box.innerHTML=h;
     try { if (window.FMCalc) window.FMCalc.mount(document.getElementById('gCalc')); } catch(_) {}
     startShipmentTicker();
-  }).catch(function(){ box.innerHTML='<div style="color:#e74c3c">Market load failed</div>'; });
+  }).catch(function(){ box.innerHTML='<div style="color:#e74c3c">'+T('galx.loadFailed','Market load failed')+'</div>'; });
 }
 
 // Buy/commission a ship class, then refresh the Markets tab.
@@ -2172,7 +2708,7 @@ window.gBuyShip = function(classId){
     .then(function(r){return r.json();}).then(function(d){
       var hint=document.getElementById('gShipyardHint');
       if(!d.ok){ if(hint){hint.textContent='\u2717 '+(d.error==='insufficient_funds'?('Need \u0192'+Math.round(d.need).toLocaleString()):(d.error||'Purchase failed'));hint.style.color='#ff6b6b';} return; }
-      gToast('Commissioned \u2014 capacity now '+d.capacity.toLocaleString()+'u','#2ecc71');
+      gToast((window.tf?window.tf('com.commissioned','Commissioned, capacity now '+d.capacity.toLocaleString()+'u',{n:d.capacity.toLocaleString()}):'Commissioned'),'#2ecc71');
       renderMarketsTab();
     }).catch(function(){ var hint=document.getElementById('gShipyardHint'); if(hint){hint.textContent='\u2717 Purchase failed';hint.style.color='#ff6b6b';} });
 };
@@ -2234,34 +2770,38 @@ window.gMktApplyTick = function(colonyId, commodityId, price){
 
 // Board actions: buy at the cheapest colony / sell at the dearest, then refresh board.
 window.gMktBuy = function(colonyId, comId){
-  if(!gToken){ gToast('Log in to trade','#e74c3c'); return; }
-  var v = prompt('Buy how many units? (at cheapest colony)','10');
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var TF=function(k,fb,v2){return window.tf?window.tf(k,fb,v2):fb;};
+  if(!gToken){ gToast(T('com.loginToTrade','Log in to trade'),'#e74c3c'); return; }
+  var v = prompt(T('com.buyPrompt','Buy how many units? (at cheapest colony)'),'10');
   if(v===null) return;
   var qty = Math.max(1, Math.floor(Number(v)||0));
   fetch('/api/commodities/buy',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({token:gToken,colonyId:colonyId,commodityId:comId,qty:qty})})
     .then(function(r){return r.json();}).then(function(d){
       var hint=document.getElementById('gMktHint');
-      if(!d.ok){ if(hint){hint.textContent='\u2717 '+(d.error==='no_ship'?'Commission a ship first (Shipyard below)':d.error==='insufficient_funds'?'Not enough cash':(d.error||'Buy failed'));hint.style.color='#ff6b6b';} return; }
-      if(hint){hint.textContent='\u2713 Bought '+d.bought+' @ \u0192'+Math.round(d.unitPrice).toLocaleString();hint.style.color='#2ecc71';}
+      if(!d.ok){ if(hint){hint.textContent='\u2717 '+(d.error==='commodities_halted'?T('com.halted','Commodity trading is halted by the Market'):d.error==='no_ship'?T('com.needShip','Commission a ship first (Shipyard below)'):d.error==='insufficient_funds'?T('com.notEnoughCash','Not enough cash'):(d.error||T('com.buyFailed','Buy failed')));hint.style.color='#ff6b6b';} return; }
+      if(hint){hint.textContent='\u2713 '+TF('com.bought','Bought '+d.bought+' @ \u0192'+Math.round(d.unitPrice).toLocaleString(),{n:d.bought,price:Math.round(d.unitPrice).toLocaleString()});hint.style.color='#2ecc71';}
       renderMarketsTab();
-    }).catch(function(){ var hint=document.getElementById('gMktHint'); if(hint){hint.textContent='\u2717 Buy failed';hint.style.color='#ff6b6b';} });
+    }).catch(function(){ var hint=document.getElementById('gMktHint'); if(hint){hint.textContent='\u2717 '+T('com.buyFailed','Buy failed');hint.style.color='#ff6b6b';} });
 };
 
 window.gMktSell = function(colonyId, comId){
-  if(!gToken){ gToast('Log in to trade','#e74c3c'); return; }
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var TF=function(k,fb,v2){return window.tf?window.tf(k,fb,v2):fb;};
+  if(!gToken){ gToast(T('com.loginToTrade','Log in to trade'),'#e74c3c'); return; }
   var loc = (window._gCommHeldLoc && window._gCommHeldLoc[comId]) || null;
   var held = loc ? loc.qty : 0;
-  if(held<=0){ gToast('You hold none at a sellable colony','#e74c3c'); return; }
-  var v = prompt('Sell how many? (at '+(loc.colonyName||colonyId)+', holding '+held+' there)', String(held));
+  if(held<=0){ gToast(T('com.holdNoneSellable','You hold none at a sellable colony'),'#e74c3c'); return; }
+  var v = prompt(TF('com.sellPrompt','Sell how many? (at '+(loc.colonyName||colonyId)+', holding '+held+' there)',{colony:(loc.colonyName||colonyId),n:held}), String(held));
   if(v===null) return;
   var qty = Math.min(held, Math.max(1, Math.floor(Number(v)||0)));
   fetch('/api/commodities/sell',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({token:gToken,colonyId:colonyId,commodityId:comId,qty:qty})})
     .then(function(r){return r.json();}).then(function(d){
       var hint=document.getElementById('gMktHint');
-      if(!d.ok){ if(hint){hint.textContent='\u2717 '+(d.error==='no_ship'?'Commission a ship first (Shipyard below)':d.error==='no_cargo_here'?'No cargo at that colony \u2014 ship it there first':(d.error||'Sell failed'));hint.style.color='#ff6b6b';} return; }
-      if(hint){hint.textContent='\u2713 Sold '+d.sold+' @ \u0192'+Math.round(d.unitPrice).toLocaleString()+' (+\u0192'+Math.round(d.proceeds).toLocaleString()+')';hint.style.color='#2ecc71';}
+      if(!d.ok){ if(hint){hint.textContent='\u2717 '+(d.error==='commodities_halted'?T('com.halted','Commodity trading is halted by the Market'):d.error==='no_ship'?T('com.needShip','Commission a ship first (Shipyard below)'):d.error==='no_cargo_here'?T('com.noCargoHere','No cargo at that colony. Ship it there first'):(d.error||T('com.sellFailed','Sell failed')));hint.style.color='#ff6b6b';} return; }
+      if(hint){hint.textContent='\u2713 '+TF('com.sold','Sold '+d.sold+' @ \u0192'+Math.round(d.unitPrice).toLocaleString()+' (+\u0192'+Math.round(d.proceeds).toLocaleString()+')',{n:d.sold,price:Math.round(d.unitPrice).toLocaleString(),proceeds:Math.round(d.proceeds).toLocaleString()});hint.style.color='#2ecc71';}
       renderMarketsTab();
     }).catch(function(){ var hint=document.getElementById('gMktHint'); if(hint){hint.textContent='\u2717 Sell failed';hint.style.color='#ff6b6b';} });
 };
@@ -2306,7 +2846,7 @@ window.gShipQuote = function(){
         +((d.guardFee>0)?'<br><span style="color:#9ab">Escort fee:</span> <span style="color:#72e09c">\u0192'+Number(d.guardFee).toLocaleString()+'</span> <span style="color:#555">(lost if intercepted)</span>':'')
         +((d.insured&&d.insurancePremium>0)?'<br><span style="color:#9ab">Insurance:</span> <span style="color:#f39c12">\u0192'+Number(d.insurancePremium).toLocaleString()+'</span> <span style="color:#555">(refunds half the cargo cost if intercepted)</span>':'')
         +((d.upfrontTotal>0)?'<br><span style="color:#9ab">Upfront (escort + insurance):</span> <span style="color:#e0a040">\u0192'+Number(d.upfrontTotal).toLocaleString()+'</span> <span style="color:#555">off the top</span>':'')
-        +(d.hasShip?'':' <span style="color:#e74c3c">\u2014 no ship yet</span>');
+        +(d.hasShip?'':' <span style="color:#e74c3c">no ship yet</span>');
       prev.innerHTML=html;
     }).catch(function(){ prev.innerHTML='<span style="color:#777">Could not load route preview.</span>'; });
   }, 250);
@@ -2335,8 +2875,8 @@ window.gShipConsoleGo = function(){
     .then(function(r){return r.json();}).then(function(d){
       if(!d.ok){
         var msg=d.error==='no_ship'?'Commission a ship first (Shipyard below)':
-          d.error==='insufficient_cargo'?('You only hold '+(d.have||0)+' \u2014 buy it first'):
-          d.error==='insufficient_cargo_at_origin'?('You only hold '+(d.have||0)+' there \u2014 buy it at the origin first'):
+          d.error==='insufficient_cargo'?('You only hold '+(d.have||0)+'. Buy it first'):
+          d.error==='insufficient_cargo_at_origin'?('You only hold '+(d.have||0)+' there. Buy it at the origin first'):
           d.error==='over_capacity'?('Over capacity: '+d.shipName+' holds '+d.capacity):
           d.error==='no_lane'?'No route between those colonies':
           d.error==='same_colony'?'Pick two different colonies':
@@ -2347,7 +2887,7 @@ window.gShipConsoleGo = function(){
         var nm=window._gColNameOf||function(x){return x;};
         var routeStr=(d.route&&d.route.length)?d.route.map(nm).join(' \u2192 '):'';
         var hopInfo=(d.hops>1)?(' via '+(d.hops-1)+' hop'+(d.hops>2?'s':'')+' ('+routeStr+'), ~'+Math.round(d.durSec/60)+'min, '+d.interceptChance+'% risk'):(' ~'+Math.round(d.durSec/60)+'min, '+d.interceptChance+'% risk');
-        hint.textContent='\u2713 Shipment launched'+hopInfo+' \u2014 track it above';hint.style.color='#2ecc71';
+        hint.textContent='\u2713 Shipment launched'+hopInfo+', track it above';hint.style.color='#2ecc71';
       }
       renderMarketsTab();
     }).catch(function(){ if(hint){hint.textContent='\u2717 Ship failed';hint.style.color='#ff6b6b';} });
@@ -2367,7 +2907,7 @@ window.gMktShipRow = function(comId, fromCol, toCol){
     setTimeout(function(){ con.style.transition='box-shadow 0.8s'; con.style.boxShadow='none'; }, 40);
   }
   var hint=document.getElementById('gShipConHint');
-  if(hint){ hint.textContent='Ready to ship \u2014 set quantity and press SHIP (you must hold the cargo first).'; hint.style.color='#888'; }
+  if(hint){ hint.textContent='Ready to ship. Set quantity and press SHIP (you must hold the cargo first).'; hint.style.color='#888'; }
   try{ window.gShipQuote(); }catch(_){}
 };
 
@@ -2381,6 +2921,181 @@ function hookShowTab(){
   };
 }
 
+// ============================================================
+//  JADE CIRCUIT - second galaxy (Release A: skeleton + portal)
+// ============================================================
+function portalConfig(){
+  if(activeGalaxy==='coalition'){
+    return { x:990, y:150, size:120, target:'jade', label:'JADE CIRCUIT' };
+  }
+  return { x:990, y:250, size:120, target:'coalition', label:'COALITION SPACE' };
+}
+function renderPortal(){
+  var svg=document.getElementById('galaxySVG'); if(!svg) return;
+  var old=document.getElementById('gPortal'); if(old) old.remove();
+  var cfg=portalConfig();
+  var NS='http://www.w3.org/2000/svg';
+  var stroke = cfg.target==='jade' ? '#e8e4d8' : '#4ecdc4';
+  var g=document.createElementNS(NS,'g');
+  g.setAttribute('id','gPortal'); g.setAttribute('cursor','pointer');
+  var halo=document.createElementNS(NS,'circle');
+  halo.setAttribute('cx',cfg.x); halo.setAttribute('cy',cfg.y); halo.setAttribute('r',(cfg.size*0.62).toFixed(1));
+  halo.setAttribute('fill','none'); halo.setAttribute('stroke',stroke); halo.setAttribute('stroke-width','0.8');
+  halo.setAttribute('opacity','0.22'); halo.setAttribute('stroke-dasharray','2 8'); halo.setAttribute('pointer-events','none');
+  g.appendChild(halo);
+  var img=document.createElementNS(NS,'image');
+  img.setAttribute('href','assets/space/planets/jade/galaxy/1.png');
+  img.setAttribute('x',(cfg.x-cfg.size/2).toFixed(1)); img.setAttribute('y',(cfg.y-cfg.size/2).toFixed(1));
+  img.setAttribute('width',cfg.size); img.setAttribute('height',cfg.size);
+  img.setAttribute('opacity','0.82'); img.style.imageRendering='pixelated';
+  img.setAttribute('class','g-portal-spin'); img.setAttribute('pointer-events','none');
+  g.appendChild(img);
+  var t1=document.createElementNS(NS,'text');
+  t1.setAttribute('x',cfg.x); t1.setAttribute('y',(cfg.y+cfg.size*0.62+16).toFixed(1));
+  t1.setAttribute('text-anchor','middle'); t1.setAttribute('fill',stroke);
+  t1.setAttribute('font-size','13'); t1.setAttribute('letter-spacing','2');
+  t1.setAttribute('font-family',"'Courier New',monospace"); t1.setAttribute('pointer-events','none');
+  t1.textContent=cfg.label; g.appendChild(t1);
+  var t2=document.createElementNS(NS,'text');
+  t2.setAttribute('x',cfg.x); t2.setAttribute('y',(cfg.y+cfg.size*0.62+30).toFixed(1));
+  t2.setAttribute('text-anchor','middle'); t2.setAttribute('fill','#666');
+  t2.setAttribute('font-size','9'); t2.setAttribute('letter-spacing','3');
+  t2.setAttribute('font-family',"'Courier New',monospace"); t2.setAttribute('pointer-events','none');
+  t2.textContent = WORMHOLE_OPEN ? 'FTL PASSAGE' : (cfg.target==='jade' ? 'PASSAGE SEALED' : 'RETURN');
+  g.appendChild(t2);
+  var hit=document.createElementNS(NS,'circle');
+  hit.setAttribute('cx',cfg.x); hit.setAttribute('cy',cfg.y); hit.setAttribute('r',(cfg.size*0.6).toFixed(1));
+  hit.setAttribute('fill','transparent'); g.appendChild(hit);
+  g.addEventListener('click',swapGalaxy);
+  svg.appendChild(g);
+  renderSealBanner();
+}
+function renderSealBanner(){
+  var svg=document.getElementById('galaxySVG'); if(!svg) return;
+  var old=document.getElementById('gSealBanner'); if(old) old.remove();
+  if(activeGalaxy!=='jade' || WORMHOLE_OPEN) return;
+  var NS='http://www.w3.org/2000/svg';
+  var g=document.createElementNS(NS,'g'); g.setAttribute('id','gSealBanner'); g.setAttribute('pointer-events','none');
+  var r=document.createElementNS(NS,'rect');
+  r.setAttribute('x','290'); r.setAttribute('y','6'); r.setAttribute('width','420'); r.setAttribute('height','26');
+  r.setAttribute('fill','#12110d'); r.setAttribute('stroke','#4a4842'); r.setAttribute('opacity','0.92'); r.setAttribute('rx','2');
+  g.appendChild(r);
+  var t=document.createElementNS(NS,'text');
+  t.setAttribute('x','500'); t.setAttribute('y','23'); t.setAttribute('text-anchor','middle');
+  t.setAttribute('fill','#e8e4d8'); t.setAttribute('font-size','11'); t.setAttribute('letter-spacing','2');
+  t.setAttribute('font-family',"'Courier New',monospace");
+  t.textContent='PASSAGE SEALED \u00b7 TRADE OPENS WHEN THE CIRCUIT ALLOWS';
+  g.appendChild(t);
+  svg.appendChild(g);
+}
+// Show the hulls that belong to the sector on screen and hide the rest. The
+// layer itself stays visible; hiding it wholesale is what made Circuit space
+// look like it had no traffic at all.
+function applyShipGalaxyFilter(){
+  var layer=document.getElementById('gShips'); if(!layer) return;
+  layer.style.display='';
+  var kids=layer.children;
+  for(var i=0;i<kids.length;i++){
+    var gx=kids[i].getAttribute('data-gx')||'coalition';
+    kids[i].style.display=(gx===activeGalaxy)?'':'none';
+  }
+}
+// Test hook: the checks cannot click the portal.
+window._fmGalaxyView = { get:function(){ return activeGalaxy; },
+  apply:applyShipGalaxyFilter, swap:function(){ swapGalaxy(); } };
+
+function swapGalaxy(){
+  activeGalaxy = (activeGalaxy==='coalition') ? 'jade' : 'coalition';
+  var neb=document.getElementById('gNebula');
+  if(neb) neb.setAttribute('href', activeGalaxy==='jade' ? 'assets/space/backgrounds/jade_green.png' : 'assets/space/backgrounds/blue_purple.png');
+  applyShipGalaxyFilter();
+  if(typeof spClearAllMapAnims==='function') spClearAllMapAnims();
+  gSelected=null;
+  var det=document.getElementById('gColonyDetailInner');
+  if(det) det.innerHTML='<div style="text-align:center;padding:28px 0;opacity:.22"><div style="font-size:1.8rem">\u25c6</div><div style="font-size:.66rem;letter-spacing:.14em;margin-top:6px;font-family:\'Courier New\',monospace">SELECT A COLONY</div></div>';
+  renderLanes(); renderMap(); renderPortal();
+}
+function renderJadeDetail(id,m){
+  var el=document.getElementById('gColonyDetailInner'); if(!el) return;
+  var f=FACTIONS.jade;
+  var pData=COLONY_PLANET[id];
+  var planets=m.planets||[];
+  var T=function(kind,key,fb){ return (window.jadeT?window.jadeT(kind,key,fb):fb); };
+  var nm=T('name',id,m.name);
+  var h='';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px">'
+    +'<span style="font-size:.92rem;letter-spacing:.16em;color:'+f.color+';font-weight:bold">'+nm.toUpperCase()+'</span>'
+    +'<button onclick="spOpenSystem(\''+id+'\');" '
+    +'style="background:transparent;border:1px solid #2a2a3e;color:#8888aa;padding:3px 8px;cursor:pointer;font-size:.65rem;font-family:inherit;letter-spacing:.08em;border-radius:2px;white-space:nowrap;flex-shrink:0" '
+    +'onmouseover="this.style.borderColor=\''+f.color+'\';this.style.color=\''+f.color+'\'" '
+    +'onmouseout="this.style.borderColor=\'#2a2a3e\';this.style.color=\'#8888aa\'">&#x2B22; '+T('ui','SYSTEM','SYSTEM')+'</button>'
+    +'</div>';
+  h+='<div style="font-size:.76rem;color:'+f.dim+';letter-spacing:.14em;margin-bottom:10px">'+T('ui','JADE CIRCUIT','JADE CIRCUIT')+'</div>';
+  var banner=COLONY_BANNER[id];
+  if(banner) h+='<img src="assets/space/landscapes/'+banner+'.png" class="space-banner" alt="">';
+  if(pData) h+='<div class="space-detail-planet"><img id="gDetailPlanetImg" src="assets/space/planets/'+pData.folder+'/1.png" style="width:64px;height:64px;image-rendering:pixelated;filter:drop-shadow(0 0 10px '+f.color+')"></div>';
+  h+='<div style="font-size:.78rem;color:#8a887e;line-height:1.6;margin-bottom:12px;border-left:2px solid '+f.dim+';padding-left:8px">'+T('lore',id,m.lore)+'</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-bottom:12px">'
+    +'<div><div style="font-size:.66rem;color:#8a887e;letter-spacing:.08em">'+T('ui','POPULATION','POPULATION')+'</div><div style="font-size:.84rem;color:#d8d4c8">'+m.pop+'</div></div>'
+    +'<div><div style="font-size:.66rem;color:#8a887e;letter-spacing:.08em">'+T('ui','CONTROL','CONTROL')+'</div><div style="font-size:.84rem;color:'+f.color+'">'+T('ui','Jade Circuit','Jade Circuit')+'</div></div>'
+    +'</div>';
+  h+='<div style="margin-bottom:14px"><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+T('ui','Planets','Planets')+' ('+planets.length+')</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr;gap:5px">';
+  planets.forEach(function(p,pidx){
+    h+='<div onclick="spOpenSystem(\''+id+'\');setTimeout(function(){spOpenSurface(\''+id+'\','+pidx+')},400);" '
+      +'style="background:#0a0a0e;border:1px solid '+f.dim+';border-radius:2px;padding:6px 8px;cursor:pointer;transition:border-color .15s" '
+      +'onmouseover="this.style.borderColor=\''+f.color+'\';this.style.background=\'#0d0d12\'" '
+      +'onmouseout="this.style.borderColor=\''+f.dim+'\';this.style.background=\'#0a0a0e\'">';
+    var pIcon16 = SECTOR_PLANET_ICON[p.sector];
+    var pIconHtml = pIcon16 ? '<img src="assets/space/planets/icons/'+pIcon16+'.png" class="space-picon">' : (p.icon+' ');
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'
+      +'<span style="display:flex;align-items:center;gap:3px;font-size:.76rem;color:'+f.color+';letter-spacing:.06em">'+pIconHtml+T('planet',p.name,p.name)+'</span>'
+      +'<span style="font-size:.68rem;color:'+f.color+';letter-spacing:.06em">'+T('ui','ENTER','ENTER')+' \u203a</span></div>';
+    h+='<div style="font-size:.70rem;color:#888;line-height:1.5">'+(p.bonus?(window.bonusZh?window.bonusZh(p.bonus):p.bonus):(window.sectorNameZh?window.sectorNameZh(p.sectorName):p.sectorName))+'</div>';
+    h+='</div>';
+  });
+  h+='</div></div>';
+  var companies=m.companies||[];
+  if(companies.length){
+    h+='<div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+T('ui','Houses','Houses')+'</div>';
+    h+='<div style="font-size:.7rem;color:#8a887e;line-height:1.7;margin-bottom:12px">'+companies.map(function(cn){return T('ticker',cn,cn);}).join(', ')+'</div>';
+  }
+  h+='<div style="border:1px solid '+f.dim+';background:#12110d;padding:8px 10px;font-size:.7rem;color:'+f.color+';line-height:1.6">'
+    + (WORMHOLE_OPEN ? T('ui','passage_open','The passage is open. Circuit markets and allegiance are active.')
+                     : T('ui','passage_sealed','PASSAGE SEALED. The Jade Exchange and Circuit allegiance open when the wormhole is unsealed.'))
+    + '</div>';
+  el.innerHTML=h;
+  if(pData) setTimeout(function(){ spStartDetailAnim(id); }, 0);
+}
+
+function jadeFactionCard(f){
+  // The Jade card renders on its own path, separate from the other five, so any
+  // wiring done in renderFactionList has to be repeated here.
+  var FZ=function(fld){var m=window.FACTION_ZH;return (window._lang==='zh'&&m&&m.jade&&m.jade[fld]!=null)?m.jade[fld]:null;};
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var isP=(gPlayerFaction==='jade');
+  var h='';
+  h+='<div style="background:#07070e;border:1px solid '+f.dim+';border-radius:2px;padding:14px;margin-bottom:12px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">';
+  h+='<div style="font-size:1.0rem;letter-spacing:.16em;color:'+f.color+';font-weight:bold">'+f.sym+' '+(FZ('name')||f.name.toUpperCase())+'</div>';
+  // Passage state and the join control share one right hand group. The passage
+  // badge used to be position:absolute at top right while the join button sat
+  // in this row, so the two drew on top of each other.
+  h+='<div style="display:flex;align-items:center;gap:8px;flex:0 0 auto">';
+  h+='<span style="font-size:.70rem;color:'+f.color+';border:1px solid '+f.dim+';padding:3px 7px;letter-spacing:.08em;white-space:nowrap">'
+    +(WORMHOLE_OPEN?'\u2756 '+T('fac.passageOpen','OPEN'):'\u2756 '+T('fac.passageSealed','SEALED'))+'</span>';
+  if(isP){
+    h+='<div style="font-size:.72rem;color:'+f.color+';border:1px solid '+f.color+';padding:3px 8px;white-space:nowrap">&#10003; '+T('fac.aligned','ALIGNED')+'</div>';
+  } else {
+    h+='<button onclick="window.gJoinFaction(\'jade\')" style="background:'+f.dim+';border:1px solid '+f.color+';color:'+f.color+';padding:4px 12px;cursor:pointer;font-size:.76rem;letter-spacing:.08em;font-family:inherit;white-space:nowrap">'+T('fac.join','JOIN')+'</button>';
+  }
+  h+='</div></div>';
+  h+='<div style="font-size:.74rem;color:#8a887e;line-height:1.6;margin-bottom:8px">'+(FZ('desc')||f.desc)+'</div>';
+  h+='<div style="font-size:.7rem;color:'+f.color+';border-top:1px solid '+f.dim+';padding-top:8px">'+(FZ('bonus')||f.bonusSummary)+'</div>';
+  h+='</div>';
+  return h;
+}
+
 function onGalaxyOpen(){
   gMapActive=true;
   // Pick up token from core.js — galaxy.js is lazy-loaded so fm:authed may have fired already
@@ -2391,6 +3106,7 @@ function onGalaxyOpen(){
   if(Object.keys(gState).length===0) galaxyFetch();
   else gRenderAll();
   startAnim();
+  renderPortal();
   // Start ship traffic when map opens
   if(window.gShipTrafficStart) setTimeout(window.gShipTrafficStart, 400);
   // Request galaxy systems data (blockades, contracts, HQ map)
@@ -2407,7 +3123,7 @@ function onGalaxyOpen(){
 function gRenderAll(){
   // Ensure eyejog always shows as guild sovereign
   if(!gState['eyejog']) gState['eyejog'] = {id:'eyejog', faction:'guild', control_guild:68, control_coalition:14, control_syndicate:11, control_void:7, contested:false};
-  renderLanes(); renderMap();
+  renderLanes(); renderMap(); renderPortal();
 }
 
 // Stars
@@ -2464,6 +3180,7 @@ function renderLanes(){
   var g=document.getElementById('gLanes'); if(!g) return; g.innerHTML='';
   LANES.forEach(function(l){
     var a=COLONY_META[l.from],b=COLONY_META[l.to]; if(!a||!b) return;
+    if((a.galaxy||'coalition')!==activeGalaxy) return;
     var baseCol=LANE_COLOR[l.type];
 
     // Dynamic faction tint: check who controls the endpoints
@@ -2494,7 +3211,7 @@ function renderLanes(){
     var hit=document.createElementNS('http://www.w3.org/2000/svg','line');
     ['x1','y1','x2','y2'].forEach(function(a2,i){ hit.setAttribute(a2,[a.x,a.y,b.x,b.y][i]); });
     hit.setAttribute('stroke','transparent');hit.setAttribute('stroke-width','14');hit.setAttribute('cursor','pointer');
-    hit.addEventListener('click',(function(f,t){ return function(){ window._gSelectLane(f,t); }; })(l.from,l.to));
+    if((a.galaxy||'coalition')!=='jade') hit.addEventListener('click',(function(f,t){ return function(){ window._gSelectLane(f,t); }; })(l.from,l.to));
     g.appendChild(hit);
     var ln=document.createElementNS('http://www.w3.org/2000/svg','line');
     ['x1','y1','x2','y2'].forEach(function(a2,i){ ln.setAttribute(a2,[a.x,a.y,b.x,b.y][i]); });
@@ -2558,9 +3275,12 @@ function renderLanes(){
         ship.setAttribute('cursor','pointer');
         ship.addEventListener('click',function(){
           var left=Math.max(0,Math.ceil((activeRun.resolveTs-Date.now())/1000));
-          var label=activeRun.type==='shipping'?'SHIPPING':'SMUGGLING';
-          var det=label+': '+activeRun.cargo+'\nStake: \u0192'+Number(activeRun.stake).toLocaleString()+'\nTime left: '+left+'s';
-          if(activeRun.insured) det+='\nInsured';
+          var _rt=function(k,fb){return window.t?window.t(k,fb):fb;};
+          var _rf=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+          var _rc=function(n){var m=window.SMUG_CARGO_ZH;return (window._lang==='zh'&&m&&m[n])?m[n]:n;};
+          var label=activeRun.type==='shipping'?_rt('run.shipping','SHIPPING'):_rt('run.smuggling','SMUGGLING');
+          var det=label+': '+_rc(activeRun.cargo)+'\n'+_rf('run.stakeLine','Stake: \u0192'+Number(activeRun.stake).toLocaleString(),{amt:Number(activeRun.stake).toLocaleString()})+'\n'+_rf('run.timeLeft','Time left: '+left+'s',{s:left});
+          if(activeRun.insured) det+='\n'+_rt('run.insured','Insured');
           gToast(det,runCol);
         });
         g.appendChild(ship);
@@ -2594,7 +3314,8 @@ function renderMap(){
   var g=document.getElementById('gColonies'); if(!g) return; g.innerHTML='';
   Object.keys(COLONY_META).forEach(function(id){
     var m=COLONY_META[id];
-    var _defaultFaction = id==='flesh_station'?'fleshstation':id==='eyejog'?'guild':'coalition';
+    if((m.galaxy||'coalition')!==activeGalaxy) return;
+    var _defaultFaction = m.galaxy==='jade'?'jade':id==='flesh_station'?'fleshstation':id==='eyejog'?'guild':'coalition';
     var s=gState[id]||{faction:_defaultFaction};
     var fac=getLeadingFaction(s);
     var f=FACTIONS[fac]||FACTIONS.coalition;
@@ -2810,6 +3531,9 @@ window.renderDetail=function(id){ renderDetail(id); };
 function renderDetail(id){
   var el=document.getElementById('gColonyDetailInner'); if(!el) return;
   var m=COLONY_META[id]; if(!m) return;
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+  if(m.galaxy==='jade'){ renderJadeDetail(id,m); return; }
   var s=gState[id]||{faction:(id==='flesh_station'?'fleshstation':'coalition')};
   var fac=getLeadingFaction(s);
   var f=FACTIONS[fac]||FACTIONS.coalition;
@@ -2821,16 +3545,16 @@ function renderDetail(id){
 
   var h='';
   h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px">'
-   +'<span style="font-size:.92rem;letter-spacing:.16em;color:'+f.color+';font-weight:bold">'+m.name.toUpperCase()+'</span>'
+   +'<span style="font-size:.92rem;letter-spacing:.16em;color:'+f.color+';font-weight:bold">'+(window.colonyNameZh?window.colonyNameZh(id,m.name.toUpperCase()):m.name.toUpperCase())+'</span>'
    +(isFlesh?'':'<button onclick="spOpenSystem(\''+id+'\');" '
    +'style="background:transparent;border:1px solid #2a2a3e;color:#8888aa;padding:3px 8px;cursor:pointer;font-size:.65rem;font-family:inherit;letter-spacing:.08em;border-radius:2px;white-space:nowrap;flex-shrink:0" '
    +'onmouseover="this.style.borderColor=\'#4ecdc4\';this.style.color=\'#4ecdc4\'" '
-   +'onmouseout="this.style.borderColor=\'#2a2a3e\';this.style.color=\'#8888aa\'">&#x2B22; SYSTEM</button>')
+   +'onmouseout="this.style.borderColor=\'#2a2a3e\';this.style.color=\'#8888aa\'">&#x2B22; '+T('galx.system','SYSTEM')+'</button>')
    +'</div>';
-  h+='<div style="font-size:.76rem;color:#555;letter-spacing:.1em;margin-bottom:10px">'+(isFlesh?'MEGASTRUCTURE':'')+'</div>';
+  h+='<div style="font-size:.76rem;color:#555;letter-spacing:.1em;margin-bottom:10px">'+(isFlesh?T('galx.megastructure','MEGASTRUCTURE'):'')+'</div>';
 
-  if(contested) h+='<div style="border:1px solid #f39c12;color:#f39c12;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9888; CONTESTED, Faction war active</div>';
-  if(isFlesh)   h+='<div style="border:1px solid #ffce4d66;color:#ffce4d;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9889; HOME OF MR. FLESH, Cannot be contested or funded</div>';
+  if(contested) h+='<div style="border:1px solid #f39c12;color:#f39c12;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9888; '+T('galx.contestedWar','CONTESTED, Faction war active')+'</div>';
+  if(isFlesh)   h+='<div style="border:1px solid #ffce4d66;color:#ffce4d;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9889; '+T('galx.homeOfFlesh','HOME OF MR. FLESH, Cannot be contested or funded')+'</div>';
 
   // Space Asset: landscape banner
   var banner = COLONY_BANNER[id];
@@ -2843,15 +3567,15 @@ function renderDetail(id){
     var pColor2 = f.color||'#4ecdc4';
     h+='<div class="space-detail-planet"><img id="gDetailPlanetImg" src="assets/space/planets/'+pData2.folder+'/1.png" style="width:64px;height:64px;image-rendering:pixelated;filter:drop-shadow(0 0 10px '+pColor2+')"></div>';
   }
-  h+='<div style="font-size:.78rem;color:#777;line-height:1.6;margin-bottom:12px;border-left:2px solid '+f.dim+';padding-left:8px">'+m.lore+'</div>';
+  h+='<div style="font-size:.78rem;color:#777;line-height:1.6;margin-bottom:12px;border-left:2px solid '+f.dim+';padding-left:8px">'+(window.colonyLoreZh?window.colonyLoreZh(id,m.lore):m.lore)+'</div>';
 
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-bottom:12px">';
-  h+='<div><div style="font-size:.66rem;color:#4f9a68;letter-spacing:.08em">POPULATION</div><div style="font-size:.84rem;color:#b6ffcf">'+m.pop+'</div></div>';
-  if(!isFlesh) h+='<div><div style="font-size:.66rem;color:#4f9a68;letter-spacing:.08em">TENSION</div><div style="font-size:.84rem;color:'+(tension>40?'#f39c12':'#b6ffcf')+'">'+tension+'%</div></div>';
+  h+='<div><div style="font-size:.66rem;color:#4f9a68;letter-spacing:.08em">'+T('galx.population','POPULATION')+'</div><div style="font-size:.84rem;color:#b6ffcf">'+m.pop+'</div></div>';
+  if(!isFlesh) h+='<div><div style="font-size:.66rem;color:#4f9a68;letter-spacing:.08em">'+T('galx.tension','TENSION')+'</div><div style="font-size:.84rem;color:'+(tension>40?'#f39c12':'#b6ffcf')+'">'+tension+'%</div></div>';
   h+='</div>';
 
   // Planets grid
-  h+='<div style="margin-bottom:14px"><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+(SP_STATION_ORBIT[id]?'Station Modules':'Planets ('+m.planets.length+')')+'</div>';
+  h+='<div style="margin-bottom:14px"><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+(SP_STATION_ORBIT[id]?T('galx.stationModules','Station Modules'):TF('galx.planetsCount','Planets ({n})',{n:m.planets.length}))+'</div>';
   h+='<div style="display:grid;grid-template-columns:1fr;gap:5px">';
   var _isSingleBody = SP_SINGLE_BODY[id];
   m.planets.forEach(function(p, pidx){
@@ -2868,11 +3592,11 @@ function renderDetail(id){
     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">';
     var pIcon16 = (p.isStation || _spIconForZoneName(p.name)) ? 'Tech2' : SECTOR_PLANET_ICON[p.sector];
     var pIconHtml = pIcon16 ? '<img src="assets/space/planets/icons/'+pIcon16+'.png" class="space-picon">' : (p.icon+' ');
-    h+='<span style="display:flex;align-items:center;gap:3px;font-size:.76rem;color:'+pCol+';letter-spacing:.06em">'+pIconHtml+p.name+'</span>';
-    if(!_isSingleBody) h+='<span style="font-size:.68rem;color:#4ecdc4;letter-spacing:.06em">ENTER ›</span>';
+    h+='<span style="display:flex;align-items:center;gap:3px;font-size:.76rem;color:'+pCol+';letter-spacing:.06em">'+pIconHtml+(window.planetNameZh?window.planetNameZh(p.name):p.name)+'</span>';
+    if(!_isSingleBody) h+='<span style="font-size:.68rem;color:#4ecdc4;letter-spacing:.06em">'+T('galx.enter','ENTER ›')+'</span>';
     h+='</div>';
-    h+='<div style="font-size:.70rem;color:#888;line-height:1.5">'+p.bonus+'</div>';
-    if(contested) h+='<div style="font-size:.68rem;color:#f39c12;margin-top:2px">'+p.contestBonus+'</div>';
+    h+='<div style="font-size:.70rem;color:#888;line-height:1.5">'+(window.bonusZh?window.bonusZh(p.bonus):p.bonus)+'</div>';
+    if(contested) h+='<div style="font-size:.68rem;color:#f39c12;margin-top:2px">'+(window.contestZh?window.contestZh(p.contestBonus):p.contestBonus)+'</div>';
     h+='</div>';
   });
   h+='</div></div>';
@@ -2882,10 +3606,10 @@ function renderDetail(id){
     var bonusMap=SECTOR_BONUS_TABLE[id]&&SECTOR_BONUS_TABLE[id][gPlayerFaction];
     if(bonusMap && Object.keys(bonusMap).length){
       h+='<div style="background:'+f.dim+'44;border:1px solid '+f.color+'55;border-radius:2px;padding:6px 10px;margin-bottom:12px">';
-      h+='<div style="font-size:.68rem;color:'+f.color+';letter-spacing:.1em;margin-bottom:4px">&#10003; YOUR FACTION BONUS ACTIVE</div>';
+      h+='<div style="font-size:.68rem;color:'+f.color+';letter-spacing:.1em;margin-bottom:4px">&#10003; '+T('galx.factionBonusActive','YOUR FACTION BONUS ACTIVE')+'</div>';
       Object.entries(bonusMap).forEach(function(entry){
         var secName=SECTOR_NAMES[Number(entry[0])]||'?';
-        h+='<div style="font-size:.72rem;color:#bbb">'+secName+' dividends: <span style="color:'+f.color+'">'+entry[1]+'</span></div>';
+        h+='<div style="font-size:.72rem;color:#bbb">'+TF('galx.sectorDividends','{sector} dividends:',{sector:secName})+' <span style="color:'+f.color+'">'+entry[1]+'</span></div>';
       });
       h+='</div>';
     }
@@ -2893,30 +3617,30 @@ function renderDetail(id){
 
   // Control bars (not for flesh station)
   if(!isFlesh){
-    if(wc>0) h+='<div style="font-size:.68rem;color:#555;letter-spacing:.08em;margin-bottom:2px">WAR CHEST</div><div style="font-size:.82rem;color:#f39c12;margin-bottom:10px">&#401;'+Math.round(wc).toLocaleString()+'</div>';
-    h+='<div style="margin-bottom:12px"><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">Faction Control</div>';
+    if(wc>0) h+='<div style="font-size:.68rem;color:#555;letter-spacing:.08em;margin-bottom:2px">'+T('galx.warChest','WAR CHEST')+'</div><div style="font-size:.82rem;color:#f39c12;margin-bottom:10px">&#401;'+Math.round(wc).toLocaleString()+'</div>';
+    h+='<div style="margin-bottom:12px"><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+T('galx.factionControl','Faction Control')+'</div>';
     var detailFactions=['coalition','syndicate','void','guild'];
     detailFactions.forEach(function(fid){
       var fc=FACTIONS[fid]; var p2=ctrl[fid]||0;
-      h+='<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:.70rem;margin-bottom:2px"><span style="color:'+fc.color+'">'+fc.short+'</span><span style="color:#555">'+p2+'%</span></div>';
+      h+='<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:.70rem;margin-bottom:2px"><span style="color:'+fc.color+'">'+facZ(fid,'short',fc.short)+'</span><span style="color:#555">'+p2+'%</span></div>';
       h+='<div style="background:#111;height:4px;border-radius:1px"><div style="background:'+fc.color+';width:'+p2+'%;height:100%;border-radius:1px;transition:width .4s ease"></div></div></div>';
     });
     h+='</div>';
 
-    h+='<div style="margin-bottom:12px"><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">Key Operators</div>';
+    h+='<div style="margin-bottom:12px"><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+T('galx.keyOperators','Key Operators')+'</div>';
     m.companies.slice(0,4).forEach(function(co){ h+='<div style="font-size:.74rem;color:#666;padding:2px 0;border-bottom:1px solid #111">'+co+'</div>'; });
-    if(m.companies.length>4) h+='<div style="font-size:.68rem;color:#444;padding-top:3px">+'+(m.companies.length-4)+' more</div>';
+    if(m.companies.length>4) h+='<div style="font-size:.68rem;color:#444;padding-top:3px">'+TF('galx.moreCount','+{n} more',{n:(m.companies.length-4)})+'</div>';
     h+='</div>';
 
-    h+='<div><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase">Fund a Faction</div>';
+    h+='<div><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase">'+T('galx.fundFaction','Fund a Faction')+'</div>';
     ['coalition','syndicate','void','guild'].forEach(function(fid){
       var fc=FACTIONS[fid];
-      h+='<div style="margin-bottom:5px" id="gFR_'+id+'_'+fid+'"><button onclick="window.gShowFund(\''+id+'\',\''+fid+'\')" style="width:100%;background:transparent;border:1px solid '+fc.dim+';color:'+fc.color+';padding:5px 8px;cursor:pointer;font-size:.73rem;letter-spacing:.06em;font-family:inherit;text-align:left">'+fc.name+', '+(ctrl[fid]||0)+'% ctrl</button></div>';
+      h+='<div style="margin-bottom:5px" id="gFR_'+id+'_'+fid+'"><button onclick="window.gShowFund(\''+id+'\',\''+fid+'\')" style="width:100%;background:transparent;border:1px solid '+fc.dim+';color:'+fc.color+';padding:5px 8px;cursor:pointer;font-size:.73rem;letter-spacing:.06em;font-family:inherit;text-align:left">'+TF('galx.factionCtrl','{name}, {pct}% ctrl',{name:facZ(fid,'name',fc.name),pct:(ctrl[fid]||0)})+'</button></div>';
     });
     h+='</div>';
   } else {
     // Flesh Station: show companies, no funding
-    h+='<div><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">Core Systems</div>';
+    h+='<div><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+T('galx.coreSystems','Core Systems')+'</div>';
     m.companies.forEach(function(co){ h+='<div style="font-size:.74rem;color:#9dff5a66;padding:2px 0;border-bottom:1px solid #1a1200">'+co+'</div>'; });
     h+='</div>';
   }
@@ -2924,6 +3648,10 @@ function renderDetail(id){
   el.innerHTML=h;
   // Start animated planet in detail panel
   if(COLONY_PLANET[id]) setTimeout(function(){ spStartDetailAnim(id); }, 0);
+
+  // City Charters card (1.2.5.25): assets/city.js owns the section and guards
+  // non-city colonies itself.
+  if(typeof window.renderCityCard==='function'&&!isFlesh) setTimeout(function(){ window.renderCityCard(id); },0);
 
   // ── Append Galaxy Systems panels (smuggling, blockade, contracts) ──
   if (!isFlesh) {
@@ -2939,42 +3667,42 @@ function renderDetail(id){
     var sh = '';
     // ── SHIPPING/SMUGGLING — moved to Shipping tab ──
     sh += '<div style="margin-bottom:14px">';
-    sh += '<div style="font-size:.66rem;color:#e74c3c;padding:8px;border:1px solid #2a1a1a;border-radius:3px;text-align:center;cursor:pointer" onclick="document.querySelector(\'[data-gstab=shipping]\').click()">💀 Open Smuggling Tab →</div>';
+    sh += '<div style="font-size:.66rem;color:#e74c3c;padding:8px;border:1px solid #2a1a1a;border-radius:3px;text-align:center;cursor:pointer" onclick="document.querySelector(\'[data-gstab=shipping]\').click()">'+T('galx.openSmugglingTab','💀 Open Smuggling Tab →')+'</div>';
     sh += '<div id="gSmugStatus" style="font-size:.66rem;color:#555;margin-top:6px"></div>';
     sh += '</div>';
 
     // ── BLOCKADE PANEL ──
     sh += '<div id="gBlkPanel" style="margin-bottom:14px">'
-      +'<div style="font-size:.74rem;color:#f39c12;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\u26D4 BLOCKADES</div>';
+      +'<div style="font-size:.74rem;color:#f39c12;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+T('galx.blockades','⛔ BLOCKADES')+'</div>';
     if (connLanes.length > 0) {
       sh += '<select id="gBlkLane" onchange="window._gRenderBlkStatus&&window._gRenderBlkStatus()" style="width:100%;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px;font-size:.64rem;font-family:inherit;margin-bottom:4px">';
       connLanes.forEach(function(l) {
         var dest = l.from===id ? l.to : l.from;
-        var dn = (COLONY_META[dest]||{name:dest}).name;
+        var dn = (function(){ var _n=(COLONY_META[dest]||{name:dest}).name; return window.colonyNameZh?window.colonyNameZh(dest,_n):_n; })();
         var lk = [l.from,l.to].sort().join('|');
         var _bk=(window._FM_BLOCKADES||{})[lk];
-        var st = _bk && _bk.active ? ' [ACTIVE]' : (_bk && _bk.pool>0 ? ' [FUNDING]' : '');
+        var st = _bk && _bk.active ? T('galx.blkActive',' [ACTIVE]') : (_bk && _bk.pool>0 ? T('galx.blkFunding',' [FUNDING]') : '');
         sh += '<option value="'+l.from+'|'+l.to+'">'+dn+st+'</option>';
       });
       sh += '</select>'
         +'<div style="display:flex;gap:4px;margin-bottom:4px">'
-        +'<input id="gBlkAmt" type="number" placeholder="Fund (\u0192)" style="flex:1;background:#0a0a14;border:1px solid #f39c1244;color:#ccc;padding:4px;font-size:.64rem;font-family:inherit;outline:none">'
-        +'<button onclick="window._gFundBlockade()" style="background:#2d1a00;border:1px solid #f39c12;color:#f39c12;padding:4px 8px;cursor:pointer;font-size:.58rem;font-family:inherit;letter-spacing:.06em">FUND</button>'
-        +'<button onclick="window._gCounterBlk()" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:4px 8px;cursor:pointer;font-size:.56rem;font-family:inherit;letter-spacing:.04em">COUNTER</button>'
+        +'<input id="gBlkAmt" type="number" placeholder="'+T('galx.fundPlaceholder','Fund (Ƒ)')+'" style="flex:1;background:#0a0a14;border:1px solid #f39c1244;color:#ccc;padding:4px;font-size:.64rem;font-family:inherit;outline:none">'
+        +'<button onclick="window._gFundBlockade()" style="background:#2d1a00;border:1px solid #f39c12;color:#f39c12;padding:4px 8px;cursor:pointer;font-size:.58rem;font-family:inherit;letter-spacing:.06em">'+T('galx.fund','FUND')+'</button>'
+        +'<button onclick="window._gCounterBlk()" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:4px 8px;cursor:pointer;font-size:.56rem;font-family:inherit;letter-spacing:.04em">'+T('galx.counter','COUNTER')+'</button>'
         +'</div>'
-        +'<button onclick="window._gPrivateArmy()" style="width:100%;margin-bottom:4px;background:linear-gradient(135deg,#1a0a00,#0d0400);border:1px solid #e74c3c;color:#ff6b6b;padding:5px 8px;cursor:pointer;font-size:.64rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">\u2694 PRIVATE ARMY \u2014 Break Blockade (\u01921,000,000)</button>'
+        +'<button onclick="window._gPrivateArmy()" style="width:100%;margin-bottom:4px;background:linear-gradient(135deg,#1a0a00,#0d0400);border:1px solid #e74c3c;color:#ff6b6b;padding:5px 8px;cursor:pointer;font-size:.64rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">'+T('galx.privateArmy','⚔ PRIVATE ARMY, Break Blockade (Ƒ1,000,000)')+'</button>'
         +'<div id="gBlkStatus" style="font-size:.74rem;color:#999;margin-top:3px;line-height:1.45"></div>'
-        +'<div style="font-size:.68rem;color:#6a6a6a;margin-top:2px">\u01921,000,000 activates a 2-hour blockade</div>';
+        +'<div style="font-size:.68rem;color:#6a6a6a;margin-top:2px">'+T('galx.blockadeNote','Ƒ1,000,000 activates a 2-hour blockade')+'</div>';
     }
     sh += '</div>';
 
     // ── LANE SHARES PANEL ──
     sh += '<div style="margin-bottom:14px">'
-      +'<div style="font-size:.82rem;color:#3498db;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\uD83D\uDCCB LANE SHARES</div>';
+      +'<div style="font-size:.82rem;color:#3498db;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+T('galx.laneShares','📋 LANE SHARES')+'</div>';
     if (connLanes.length > 0) {
       connLanes.forEach(function(l) {
         var dest = l.from===id ? l.to : l.from;
-        var dn = (COLONY_META[dest]||{name:dest}).name;
+        var dn = (function(){ var _n=(COLONY_META[dest]||{name:dest}).name; return window.colonyNameZh?window.colonyNameZh(dest,_n):_n; })();
         var lk = [l.from,l.to].sort().join('|');
         var shd = (window._FM_SHARES||{})[lk] || {supply:0};
         var sup = shd.supply||0;
@@ -2985,7 +3713,7 @@ function renderDetail(id){
           +'<span style="font-size:.62rem;color:'+(sup>50?'#f39c12':'#555')+'">'+sup+'/100'+(isMine?' \u2605':'')+'</span>'
           +'</div>';
       });
-      sh += '<div style="font-size:.58rem;color:#444;margin-top:3px">Click a lane for details \u2014 or use Contracts tab</div>';
+      sh += '<div style="font-size:.58rem;color:#444;margin-top:3px">'+T('galx.laneClickHint','Click a lane for details, or use Contracts tab')+'</div>';
     }
     sh += '</div>';
 
@@ -3007,8 +3735,10 @@ window.gShowFund=function(cid,fid){
 window.gDoFund=function(cid,fid){
   var inp=document.getElementById('gFA_'+cid+'_'+fid);
   var amt=inp?Number(inp.value):0;
-  if(!amt||amt<1000){ gToast('Minimum: \u0192 1,000','#e74c3c'); return; }
-  if(!gToken){ gToast('Log in to fund factions','#e74c3c'); return; }
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+  if(!amt||amt<1000){ gToast(T('fund.minimum','Minimum: \u0192 1,000'),'#e74c3c'); return; }
+  if(!gToken){ gToast(T('fund.loginToFund','Log in to fund factions'),'#e74c3c'); return; }
   fetch(apiBase()+'/api/galaxy/fund',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({token:gToken,colonyId:cid,factionId:fid,amount:amt})
   }).then(function(r){return r.json();}).then(function(d){
@@ -3032,24 +3762,28 @@ window.gDoFund=function(cid,fid){
         gState[cid].control_guild=d.newControl.guild;
         gState[cid].war_chest=(gState[cid].war_chest||0)+amt;
       }
-      var _msg='\u0192'+Number(amt).toLocaleString()+' deployed to '+FACTIONS[fid].name;
-      if(d.pctGained>0){ _msg+=' \u2014 +'+d.pctGained+'% control'; if(d.pctToNext>0) _msg+=' (\u0192'+Number(d.pctToNext).toLocaleString()+' to next 1%)'; }
-      else if(typeof d.pctToNext==='number'){ _msg+=' \u2014 banked, \u0192'+Number(d.pctToNext).toLocaleString()+' to next 1%'; }
+      var _msg='\u0192'+Number(amt).toLocaleString()+' deployed to '+facZ(fid,'name',FACTIONS[fid].name);
+      if(d.pctGained>0){ _msg+=TF('fund.pctGained',', +'+d.pctGained+'% control',{pct:d.pctGained}); if(d.pctToNext>0) _msg+=TF('fund.toNext',' (\u0192'+Number(d.pctToNext).toLocaleString()+' to next 1%)',{amt:Number(d.pctToNext).toLocaleString()}); }
+      else if(typeof d.pctToNext==='number'){ _msg+=TF('fund.banked',', banked, \u0192'+Number(d.pctToNext).toLocaleString()+' to next 1%',{amt:Number(d.pctToNext).toLocaleString()}); }
       gToast(_msg,FACTIONS[fid].color);
       renderDetail(cid); renderMap();
     } else {
-      gToast(d.error||'Error','#e74c3c');
+      gToast(d.error||T('fac.error','Error'),'#e74c3c');
     }
-  }).catch(function(){ gToast('Network error','#e74c3c'); });
+  }).catch(function(){ gToast(T('fac.networkError','Network error'),'#e74c3c'); });
 };
 
 // Factions panel
 function renderFactionList(){
   var el=document.getElementById('gFactionList'); if(!el) return;
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+  var FZ=function(id,f){var m=window.FACTION_ZH;return (window._lang==='zh'&&m&&m[id]&&m[id][f]!=null)?m[id][f]:null;};
   var h='';
   // Main factions first, then fleshstation
-  ['coalition','syndicate','void','guild','fleshstation'].forEach(function(fid){
+  ['coalition','syndicate','void','jade','guild','fleshstation'].forEach(function(fid){
     var f=FACTIONS[fid];
+    if(fid==='jade'){ h+=jadeFactionCard(f); return; }
     var isP=(gPlayerFaction===fid);
     var isFlesh=(fid==='fleshstation');
     var myC=Object.values(gState).filter(function(c){
@@ -3065,61 +3799,61 @@ function renderFactionList(){
     var isGuild=(fid==='guild');
     // Dev-only banner
     if(isFlesh){
-      h+='<div style="position:absolute;top:8px;right:10px;font-size:.70rem;color:#ffce4d;border:1px solid #ffce4d44;padding:2px 7px;letter-spacing:.08em">DEV ONLY</div>';
+      h+='<div style="position:absolute;top:8px;right:10px;font-size:.70rem;color:#ffce4d;border:1px solid #ffce4d44;padding:2px 7px;letter-spacing:.08em">'+T('fac.devOnly','DEV ONLY')+'</div>';
     }
     if(isGuild){
-      h+='<div style="position:absolute;top:8px;right:10px;font-size:.70rem;color:#2ecc71;border:1px solid #2ecc7144;padding:2px 7px;letter-spacing:.08em">⬢ PATREON</div>';
+      h+='<div style="position:absolute;top:8px;right:10px;font-size:.70rem;color:#2ecc71;border:1px solid #2ecc7144;padding:2px 7px;letter-spacing:.08em">⬢ '+T('fac.patreon','PATREON')+'</div>';
     }
 
     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-    h+='<div style="font-size:1.0rem;letter-spacing:.16em;color:'+f.color+';font-weight:bold">'+f.sym+' '+f.name.toUpperCase()+'</div>';
+    h+='<div style="font-size:1.0rem;letter-spacing:.16em;color:'+f.color+';font-weight:bold">'+f.sym+' '+((FZ(fid,'name'))||f.name.toUpperCase())+'</div>';
     if(isP){
-      h+='<div style="font-size:.72rem;color:'+f.color+';border:1px solid '+f.color+';padding:3px 8px">&#10003; ALIGNED</div>';
+      h+='<div style="font-size:.72rem;color:'+f.color+';border:1px solid '+f.color+';padding:3px 8px">&#10003; '+T('fac.aligned','ALIGNED')+'</div>';
     } else if(isGuild){
-      h+='<a href="https://www.patreon.com" target="_blank" style="background:#1a1405;border:1px solid #ffce4d;color:#ffce4d;padding:4px 12px;cursor:pointer;font-size:.76rem;letter-spacing:.08em;font-family:inherit;text-decoration:none">JOIN ON PATREON ›</a>';
+      h+='<a href="https://www.patreon.com" target="_blank" style="background:#1a1405;border:1px solid #ffce4d;color:#ffce4d;padding:4px 12px;cursor:pointer;font-size:.76rem;letter-spacing:.08em;font-family:inherit;text-decoration:none">'+T('fac.joinPatreon','JOIN ON PATREON')+' ›</a>';
     } else if(!isFlesh){
       if(fid==='void'){
-        h+='<button onclick="window.gJoinFaction(\'void\')" style="background:'+f.dim+';border:1px solid '+f.color+';color:'+f.color+';padding:4px 12px;cursor:pointer;font-size:.76rem;letter-spacing:.08em;font-family:inherit">\u26A0 CONVERT</button>';
+        h+='<button onclick="window.gJoinFaction(\'void\')" style="background:'+f.dim+';border:1px solid '+f.color+';color:'+f.color+';padding:4px 12px;cursor:pointer;font-size:.76rem;letter-spacing:.08em;font-family:inherit">\u26A0 '+T('fac.convert','CONVERT')+'</button>';
       } else {
-        h+='<button onclick="window.gJoinFaction(\''+fid+'\')" style="background:'+f.dim+';border:1px solid '+f.color+';color:'+f.color+';padding:4px 12px;cursor:pointer;font-size:.76rem;letter-spacing:.08em;font-family:inherit">JOIN</button>';
+        h+='<button onclick="window.gJoinFaction(\''+fid+'\')" style="background:'+f.dim+';border:1px solid '+f.color+';color:'+f.color+';padding:4px 12px;cursor:pointer;font-size:.76rem;letter-spacing:.08em;font-family:inherit">'+T('fac.join','JOIN')+'</button>';
       }
     } else {
-      h+='<div style="font-size:.70rem;color:#666;border:1px solid #333;padding:3px 8px">LOCKED</div>';
+      h+='<div style="font-size:.70rem;color:#666;border:1px solid #333;padding:3px 8px">'+T('fac.locked','LOCKED')+'</div>';
     }
     h+='</div>';
 
-    h+='<div style="font-size:.82rem;color:#8fd9a8;line-height:1.6;margin-bottom:10px">'+f.desc+'</div>';
+    h+='<div style="font-size:.82rem;color:#8fd9a8;line-height:1.6;margin-bottom:10px">'+(FZ(fid,'desc')||f.desc)+'</div>';
 
     // Void Collective permanent conversion warning
     if(fid==='void' && !isP){
       h+='<div style="background:#2d1a4022;border:1px solid #9b59b644;padding:8px 10px;margin-bottom:10px;border-radius:2px">';
-      h+='<div style="font-size:.72rem;color:#e74c3c;letter-spacing:.08em;margin-bottom:4px">\u26A0 PERMANENT CYBERNETIC CONVERSION</div>';
-      h+='<div style="font-size:.70rem;color:#9b59b6;line-height:1.5">Joining the Void Collective permanently converts your account into a cyborg. You receive a robot badge next to your name and +\u019215 passive income forever. <span style="color:#e74c3c">This cannot be reversed.</span> The only way to leave is through the Merchant Guild (Patreon).</div>';
+      h+='<div style="font-size:.72rem;color:#e74c3c;letter-spacing:.08em;margin-bottom:4px">\u26A0 '+T('fac.voidWarnTitle','PERMANENT CYBERNETIC CONVERSION')+'</div>';
+      h+='<div style="font-size:.70rem;color:#9b59b6;line-height:1.5">'+T('fac.voidWarnBody','Joining the Void Collective permanently converts your account into a cyborg. You receive a robot badge next to your name and +\u019215 passive income forever.')+' <span style="color:#e74c3c">'+T('fac.voidWarnIrreversible','This cannot be reversed.')+'</span> '+T('fac.voidWarnExit','The only way to leave is through the Merchant Guild (Patreon).')+'</div>';
       h+='</div>';
     }
     if(fid==='void' && isP){
       h+='<div style="background:#2d1a4022;border:1px solid #9b59b644;padding:8px 10px;margin-bottom:10px;border-radius:2px">';
-      h+='<div style="font-size:.72rem;color:#9b59b6;letter-spacing:.08em">CYBORG AUGMENTS ACTIVE \u2014 +\u019215/30min permanent</div>';
+      h+='<div style="font-size:.72rem;color:#9b59b6;letter-spacing:.08em">'+T('fac.cyborgActive','CYBORG AUGMENTS ACTIVE, +\u019215/30min permanent')+'</div>';
       h+='</div>';
     }
     h+='<div style="background:#ffffff05;border:1px solid '+f.dim+';padding:6px 10px;margin-bottom:10px">';
-    h+='<div style="font-size:.68rem;color:#666;letter-spacing:.08em;margin-bottom:4px">ACTIVE BONUSES</div>';
-    h+='<div style="font-size:.82rem;color:'+f.color+'">'+f.bonusSummary+'</div></div>';
+    h+='<div style="font-size:.68rem;color:#666;letter-spacing:.08em;margin-bottom:4px">'+T('fac.activeBonuses','ACTIVE BONUSES')+'</div>';
+    h+='<div style="font-size:.82rem;color:'+f.color+'">'+(FZ(fid,'bonus')||f.bonusSummary)+'</div></div>';
 
     h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">';
-    h+='<div style="background:#ffffff04;padding:5px;text-align:center"><div style="font-size:.66rem;color:#666">SYSTEMS</div><div style="font-size:.82rem;color:#bbb">'+myC.length+'</div></div>';
+    h+='<div style="background:#ffffff04;padding:5px;text-align:center"><div style="font-size:.66rem;color:#666">'+T('fac.systems','SYSTEMS')+'</div><div style="font-size:.82rem;color:#bbb">'+myC.length+'</div></div>';
     if(!isFlesh){
-      h+='<div style="background:#ffffff04;padding:5px;text-align:center"><div style="font-size:.66rem;color:#666">CONTESTED</div><div style="font-size:.96rem;color:'+(cont?'#f39c12':'#ccc')+'">'+cont+'</div></div>';
-      h+='<div style="background:#ffffff04;padding:5px;text-align:center"><div style="font-size:.66rem;color:#666">WAR CHEST</div><div style="font-size:.82rem;color:#ccc">&#401;'+Math.round(wc).toLocaleString()+'</div></div>';
+      h+='<div style="background:#ffffff04;padding:5px;text-align:center"><div style="font-size:.66rem;color:#666">'+T('fac.contested','CONTESTED')+'</div><div style="font-size:.96rem;color:'+(cont?'#f39c12':'#ccc')+'">'+cont+'</div></div>';
+      h+='<div style="background:#ffffff04;padding:5px;text-align:center"><div style="font-size:.66rem;color:#666">'+T('fac.warChest','WAR CHEST')+'</div><div style="font-size:.82rem;color:#ccc">&#401;'+Math.round(wc).toLocaleString()+'</div></div>';
     } else {
-      h+='<div style="background:#ffffff04;padding:5px;text-align:center;grid-column:span 2"><div style="font-size:.66rem;color:#666">STATUS</div><div style="font-size:.78rem;color:#9dff5a">PERMANENT CONTROL</div></div>';
+      h+='<div style="background:#ffffff04;padding:5px;text-align:center;grid-column:span 2"><div style="font-size:.66rem;color:#666">'+T('fac.status','STATUS')+'</div><div style="font-size:.78rem;color:#9dff5a">'+T('fac.permanentControl','PERMANENT CONTROL')+'</div></div>';
     }
     h+='</div>';
 
     // Planet count for this faction
     var planetCount=myC.reduce(function(s,c){ var mn=COLONY_META[c.id]; return s+(mn?mn.planets.length:0); },0);
     if(planetCount>0){
-      h+='<div style="font-size:.72rem;color:#666;margin-bottom:5px">'+planetCount+' planet'+(planetCount!==1?'s':'')+' in '+myC.length+' system'+(myC.length!==1?'s':'')+'</div>';
+      h+='<div style="font-size:.72rem;color:#666;margin-bottom:5px">'+TF('fac.planetsInSystems',planetCount+' planet'+(planetCount!==1?'s':'')+' in '+myC.length+' system'+(myC.length!==1?'s':''),{p:planetCount,s:myC.length})+'</div>';
     }
 
     // System chips
@@ -3128,7 +3862,7 @@ function renderFactionList(){
       var mn=COLONY_META[c.id]; if(!mn) return;
       var pCount=mn.planets.length;
       h+='<span style="font-size:.72rem;color:'+(c.contested?'#f39c12':f.color)+';background:#ffffff04;border:1px solid '+(c.contested?'#f39c1230':f.dim)+';padding:2px 6px">';
-      h+=(c.contested?'! ':'')+mn.name+' ('+pCount+'p)</span>';
+      h+=(c.contested?'! ':'')+(window.colonyNameZh?window.colonyNameZh(c.id,mn.name):mn.name)+' ('+pCount+'p)</span>';
     });
     h+='</div></div>';
   });
@@ -3136,9 +3870,12 @@ function renderFactionList(){
 }
 
 window.gJoinFaction=function(fid){
-  if(!gToken){ gToast('Log in to join a faction','#e74c3c'); return; }
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+  var FZN=function(id){var m=window.FACTION_ZH;return (window._lang==='zh'&&m&&m[id]&&m[id].name)?m[id].name:null;};
+  if(!gToken){ gToast(T('fac.loginToJoin','Log in to join a faction'),'#e74c3c'); return; }
   if(fid==='void'){
-    if(!confirm('\u26A0 PERMANENT CYBERNETIC CONVERSION\n\nJoining the Void Collective will:\n\u2022 Permanently lock your account to this faction\n\u2022 Give you a cyborg badge\n\u2022 Grant +\u019215 passive income forever\n\nThe ONLY way to leave is through the Merchant Guild (Patreon).\n\nThis CANNOT be undone. Are you sure?')) return;
+    if(!confirm('\u26A0 '+T('fac.confirmVoid','PERMANENT CYBERNETIC CONVERSION\n\nJoining the Void Collective will:\n- Permanently lock your account to this faction\n- Give you a cyborg badge\n- Grant +\u019215 passive income forever\n\nThe ONLY way to leave is through the Merchant Guild (Patreon).\n\nThis CANNOT be undone. Are you sure?'))) return;
   }
   fetch(apiBase()+'/api/galaxy/join-faction',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({token:gToken,factionId:fid})
@@ -3146,11 +3883,11 @@ window.gJoinFaction=function(fid){
     if(d.ok){
       gPlayerFaction=fid;
       if(d.voidLocked) window._FM_VOID_LOCKED=true;
-      gToast('Aligned with '+FACTIONS[fid].name+(d.voidLocked?' \u2014 Cybernetic conversion complete':''),FACTIONS[fid].color);
+      gToast(TF('fac.alignedWith','Aligned with '+FACTIONS[fid].name,{name:(FZN(fid)||FACTIONS[fid].name)})+(d.voidLocked?T('fac.conversionComplete',', Cybernetic conversion complete'):''),FACTIONS[fid].color);
       renderFactionList();
     }
-    else gToast(d.error||'Error','#e74c3c');
-  }).catch(function(){ gToast('Network error','#e74c3c'); });
+    else gToast(d.error||T('fac.error','Error'),'#e74c3c');
+  }).catch(function(){ gToast(T('fac.networkError','Network error'),'#e74c3c'); });
 };
 
 // WS live updates
@@ -3163,7 +3900,8 @@ document.addEventListener('fm_ws_msg',function(e){
   }
   if(msg.type==='colony_conquered'&&msg.data){
     var fn=FACTIONS[msg.data.newFaction]||{name:'?',color:'#f39c12'};
-    gToast(fn.name+' seizes '+msg.data.colonyName+'!',fn.color);
+    var _fz=window.FACTION_ZH; var _fn=(window._lang==='zh'&&_fz&&_fz[msg.data.newFaction]&&_fz[msg.data.newFaction].name)?_fz[msg.data.newFaction].name:fn.name;
+    gToast((window.tf?window.tf('fac.seizes',fn.name+' seizes '+msg.data.colonyName+'!',{faction:_fn,colony:msg.data.colonyName}):(fn.name+' seizes '+msg.data.colonyName+'!')),fn.color);
     // Auto-inject a news headline for the conquest
     var conquestNews = {
       t: Date.now(),
@@ -3192,12 +3930,15 @@ document.addEventListener('fm_ws_msg',function(e){
   if(msg.type==='smuggling_result'&&msg.data){
     var d=msg.data;
     _gSyncCash(d.cash);
+    var _t=function(k,fb){return window.t?window.t(k,fb):fb;};
+    var _tf=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+    var _cz=function(n){var m=window.SMUG_CARGO_ZH;return (window._lang==='zh'&&m&&m[n])?m[n]:n;};
     if(d.success){
-      gToast('Smuggling cleared! +\u0192'+Number(d.payout).toLocaleString()+' ('+d.cargo+')','#2ecc71');
+      gToast(_tf('smug.clearedToast','Smuggling cleared! +\u0192'+Number(d.payout).toLocaleString()+' ('+_cz(d.cargo)+')',{amt:Number(d.payout).toLocaleString(),cargo:_cz(d.cargo)}),'#2ecc71');
     } else {
-      var lostMsg='INTERCEPTED! Lost \u0192'+Number(d.stake).toLocaleString();
-      if(d.guardsLost && d.guardFee) lostMsg+=' + \u0192'+Number(d.guardFee).toLocaleString()+' guards';
-      gToast(lostMsg+' \u2014 '+d.cargo+' seized','#e74c3c');
+      var lostMsg=_tf('smug.interceptedToast','INTERCEPTED! Lost \u0192'+Number(d.stake).toLocaleString(),{amt:Number(d.stake).toLocaleString()});
+      if(d.guardsLost && d.guardFee) lostMsg+=_tf('smug.plusGuardFee',' + \u0192'+Number(d.guardFee).toLocaleString()+' guards',{amt:Number(d.guardFee).toLocaleString()});
+      gToast(lostMsg+_tf('smug.seizedSuffix',', '+_cz(d.cargo)+' seized',{cargo:_cz(d.cargo)}),'#e74c3c');
     }
     window._activeSmugRun=null;
     window._stopSmugTicker();
@@ -3206,29 +3947,33 @@ document.addEventListener('fm_ws_msg',function(e){
     try{ window.renderShippingTab(); }catch(_){}
     var ss=document.getElementById('gSmugStatus');
     if(ss) ss.innerHTML = d.success
-      ? '<span style="color:#2ecc71">\u2713 Delivered '+d.cargo+', \u0192'+Number(d.payout).toLocaleString()+' earned ('+d.interceptChance+'% risk)</span>'
-      : '<span style="color:#e74c3c">\u2718 Intercepted, \u0192'+Number(d.stake).toLocaleString()+' lost ('+d.interceptChance+'% risk)</span>';
+      ? '<span style="color:#2ecc71">\u2713 '+_tf('smug.deliveredStatus','Delivered '+_cz(d.cargo)+', \u0192'+Number(d.payout).toLocaleString()+' earned ('+d.interceptChance+'% risk)',{cargo:_cz(d.cargo),amt:Number(d.payout).toLocaleString(),risk:d.interceptChance})+'</span>'
+      : '<span style="color:#e74c3c">\u2718 '+_tf('smug.interceptedStatus','Intercepted, \u0192'+Number(d.stake).toLocaleString()+' lost ('+d.interceptChance+'% risk)',{amt:Number(d.stake).toLocaleString(),risk:d.interceptChance})+'</span>';
   }
   if(msg.type==='smuggling_started'&&msg.data){
     var d2=msg.data;
     _gSyncCash(d2.cash);
-    gToast('Smuggling run launched, '+d2.cargo+' via '+d2.laneType+' lane','#e74c3c');
+    var _cz2=function(n){var m=window.SMUG_CARGO_ZH;return (window._lang==='zh'&&m&&m[n])?m[n]:n;};
+    var _lt=function(k,fb){return window.t?window.t(k,fb):fb;};
+    gToast((window.tf?window.tf('smug.launchedToast','Smuggling run launched, '+_cz2(d2.cargo)+' via '+d2.laneType+' lane',{cargo:_cz2(d2.cargo),lane:_lt('lane.'+d2.laneType,d2.laneType)}):('Smuggling run launched, '+d2.cargo)),'#e74c3c');
     window._activeSmugRun={from:d2.from,to:d2.to,cargo:d2.cargo,stake:d2.stake,resolveTs:d2.resolveTs,durSec:d2.durSec,type:'smuggling'};
     if(gMapActive) renderLanes();
     window._ensureSmugTicker(true);
   }
-  if(msg.type==='smuggling_error') gToast(msg.error||'Smuggling error','#e74c3c');
+  if(msg.type==='smuggling_error') gToast(msg.error||(window.t?window.t('smug.errorGeneric','Smuggling error'):'Smuggling error'),'#e74c3c');
 
   // ── Shipping WS handlers ──
   if(msg.type==='shipping_result'&&msg.data){
     var sd=msg.data;
     _gSyncCash(sd.cash);
+    var _sf=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+    var _scz=function(n){var m=window.SMUG_CARGO_ZH;return (window._lang==='zh'&&m&&m[n])?m[n]:n;};
     if(sd.success){
-      gToast('Shipping delivered! +\u0192'+Number(sd.payout).toLocaleString()+' ('+sd.cargo+')','#2ecc71');
+      gToast(_sf('ship.deliveredToast','Shipping delivered! +\u0192'+Number(sd.payout).toLocaleString()+' ('+_scz(sd.cargo)+')',{amt:Number(sd.payout).toLocaleString(),cargo:_scz(sd.cargo)}),'#2ecc71');
     } else if(sd.insured){
-      gToast('Cargo lost but INSURED, only lost \u0192'+Number(sd.insurancePaid||sd.netLoss||0).toLocaleString()+' premium','#f39c12');
+      gToast(_sf('ship.insuredToast','Cargo lost but INSURED, only lost \u0192'+Number(sd.insurancePaid||sd.netLoss||0).toLocaleString()+' premium',{amt:Number(sd.insurancePaid||sd.netLoss||0).toLocaleString()}),'#f39c12');
     } else {
-      gToast('CARGO LOST! \u0192'+Number(sd.stake).toLocaleString()+' gone, no insurance','#e74c3c');
+      gToast(_sf('ship.lostToast','CARGO LOST! \u0192'+Number(sd.stake).toLocaleString()+' gone, no insurance',{amt:Number(sd.stake).toLocaleString()}),'#e74c3c');
     }
     window._activeShipRun=null;
     if(gMapActive) renderLanes();
@@ -3286,8 +4031,10 @@ document.addEventListener('fm_ws_msg',function(e){
   if(msg.type==='cargo_ship_result'&&msg.data){
     var cd=msg.data;
     if(typeof cd.cash==='number') _gSyncCash(cd.cash);
-    if(cd.success){ gToast('Cargo delivered: '+cd.qty+'\u00d7 '+cd.commodity+' at destination','#2ecc71'); }
-    else if(cd.insured){ gToast('Cargo lost but INSURED \u2014 claim paid \u0192'+Number(cd.refund||0).toLocaleString(),'#f39c12'); }
+    var _cf=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+    var _cn=function(n){var m=window.COMMODITY_ZH;return (window._lang==='zh'&&m&&m[n])?m[n]:n;};
+    if(cd.success){ gToast(_cf('com.cargoDelivered','Cargo delivered: '+cd.qty+'\u00d7 '+cd.commodity+' at destination',{n:cd.qty,commodity:_cn(cd.commodity)}),'#2ecc71'); }
+    else if(cd.insured){ gToast(_cf('com.cargoInsured','Cargo lost but INSURED, claim paid \u0192'+Number(cd.refund||0).toLocaleString(),{amt:Number(cd.refund||0).toLocaleString()}),'#f39c12'); }
     else { gToast('CARGO SEIZED: '+cd.qty+'\u00d7 '+cd.commodity+' lost (ship survives)','#e74c3c'); }
     var mkOpen2=document.getElementById('gMarketsPane');
     if(mkOpen2 && mkOpen2.style.display!=='none') renderMarketsTab();
@@ -3380,7 +4127,7 @@ document.addEventListener('fm_ws_msg',function(e){
     window._FM_MY_SHARE=msg.data;
     try{ renderContractsTable(); }catch(_){}
   }
-  if(msg.type==='share_error') gToast(msg.error||'Share error','#e74c3c');
+  if(msg.type==='share_error') gToast(msg.error||(window.t?window.t('lsh.error','Share error'):'Share error'),'#e74c3c');
   if(msg.type==='tension_event'&&msg.data){
     var te=msg.data;
     var cMeta=COLONY_META[te.colonyId];
@@ -3399,13 +4146,21 @@ document.addEventListener('fm_ws_msg',function(e){
 
 // ── Lane Shares Market Table ──────────────────────────────────────────────────
 var LANE_TYPE_COLOR = {corporate:'#4ecdc4',grey:'#c8cdd6',dark:'#9b59b6',contested:'#f39c12'};
+// Faction display strings. One resolver so the galaxy map, the system view, the
+// funding panel and the TCG cannot drift apart on what a faction is called.
+function facZ(fid, field, fallback){
+  var m = window.FACTION_ZH;
+  if (window._lang === 'zh' && m && m[fid] && m[fid][field] != null) return m[fid][field];
+  return fallback;
+}
 var LANE_RISK = {corporate:{intercept:0.15},grey:{intercept:0.28},contested:{intercept:0.40},dark:{intercept:0.55}};
 var VOL_LABEL = {high:'HIGH',medium:'MED',low:'LOW'};
 var SHARE_DIVIDEND_CLIENT = {high:50,medium:20,low:8};
 
 function _colonyName(id){
   var m = COLONY_META[id];
-  return m ? m.name : id.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
+  var n = m ? m.name : id.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
+  return window.colonyNameZh ? window.colonyNameZh(id, n) : n;
 }
 
 function _shareBuyPrice(vol, supply){
@@ -3420,6 +4175,7 @@ function _shareSellPrice(vol, supply){
 }
 
 function renderContractsTable(){
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
   var el = document.getElementById('gContractsTable');
   if(!el || !window._FM_LANES) return;
 
@@ -3477,26 +4233,26 @@ function renderContractsTable(){
     var parts = mLk.split('|');
     h += '<div style="background:#0a0a1a;border:1px solid #3498db44;border-radius:4px;padding:12px;margin-bottom:14px">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-    h += '<div style="font-size:.78rem;color:#3498db;letter-spacing:.1em">\uD83D\uDCCB YOUR POSITION</div>';
-    h += '<button onclick="window._gSellShare()" style="background:#1a0a0a;border:1px solid #e74c3c88;color:#e74c3c;padding:4px 14px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">SELL</button>';
+    h += '<div style="font-size:.78rem;color:#3498db;letter-spacing:.1em">'+T('galx.yourPosition','📋 YOUR POSITION')+'</div>';
+    h += '<button onclick="window._gSellShare()" style="background:#1a0a0a;border:1px solid #e74c3c88;color:#e74c3c;padding:4px 14px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">'+T('galx.sell','SELL')+'</button>';
     h += '</div>';
     h += '<div style="font-size:.82rem;color:#f0b454;margin-bottom:6px">'+_colonyName(parts[0])+' \u2194 '+_colonyName(parts[1])+'</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:.72rem">';
-    h += '<div><div style="color:#9197a3;font-size:.62rem">PAID</div><div style="color:#aaa">\u0192'+Number(myShare.purchasePrice||0).toLocaleString()+'</div></div>';
-    h += '<div><div style="color:#9197a3;font-size:.62rem">VALUE</div><div style="color:#3498db">\u0192'+Number(mSellPrice).toLocaleString()+'</div></div>';
-    h += '<div><div style="color:#9197a3;font-size:.62rem">GAIN</div><div style="color:'+gainCol+'">'+(mGain>=0?'+':'')+'\u0192'+Number(mGain).toLocaleString()+'</div></div>';
-    h += '<div><div style="color:#9197a3;font-size:.62rem">DIVIDENDS</div><div style="color:#2ecc71">\u0192'+Number(mDivs).toLocaleString()+'</div></div>';
+    h += '<div><div style="color:#9197a3;font-size:.62rem">'+T('galx.paid','PAID')+'</div><div style="color:#aaa">\u0192'+Number(myShare.purchasePrice||0).toLocaleString()+'</div></div>';
+    h += '<div><div style="color:#9197a3;font-size:.62rem">'+T('galx.value','VALUE')+'</div><div style="color:#3498db">\u0192'+Number(mSellPrice).toLocaleString()+'</div></div>';
+    h += '<div><div style="color:#9197a3;font-size:.62rem">'+T('galx.gain','GAIN')+'</div><div style="color:'+gainCol+'">'+(mGain>=0?'+':'')+'\u0192'+Number(mGain).toLocaleString()+'</div></div>';
+    h += '<div><div style="color:#9197a3;font-size:.62rem">'+T('galx.dividends','DIVIDENDS')+'</div><div style="color:#2ecc71">\u0192'+Number(mDivs).toLocaleString()+'</div></div>';
     h += '</div>';
-    h += '<div style="margin-top:6px;font-size:.68rem;color:#9197a3">Total return: <span style="color:'+(mTotal>=0?'#2ecc71':'#e74c3c')+'">'+(mTotal>=0?'+':'')+'\u0192'+Number(mTotal).toLocaleString()+'</span></div>';
+    h += '<div style="margin-top:6px;font-size:.68rem;color:#9197a3">'+T('galx.totalReturn','Total return:')+' <span style="color:'+(mTotal>=0?'#2ecc71':'#e74c3c')+'">'+(mTotal>=0?'+':'')+'\u0192'+Number(mTotal).toLocaleString()+'</span></div>';
     h += '</div>';
   }
 
   h += '<div style="display:grid;grid-template-columns:2.5fr 0.8fr 0.7fr 0.8fr 1.2fr 0.6fr;gap:0;font-size:.78rem;letter-spacing:.05em">';
-  h += '<div style="color:#9197a3;padding:7px 8px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Route</div>';
-  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Type</div>';
-  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Slots</div>';
-  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">Div</div>';
-  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem;text-align:right">Price</div>';
+  h += '<div style="color:#9197a3;padding:7px 8px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">'+T('galx.route','Route')+'</div>';
+  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">'+T('galx.type','Type')+'</div>';
+  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">'+T('galx.slots','Slots')+'</div>';
+  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem">'+T('galx.div','Div')+'</div>';
+  h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;text-transform:uppercase;font-size:.68rem;text-align:right">'+T('galx.price','Price')+'</div>';
   h += '<div style="color:#9197a3;padding:7px 6px;border-bottom:1px solid #1a1a2e;font-size:.68rem"></div>';
 
   rows.forEach(function(r){
@@ -3514,7 +4270,7 @@ function renderContractsTable(){
       +(r.blockaded?'<span style="color:#e74c3c"> \u26D4</span>':'')
       +(r.isMine?'<span style="color:#3498db"> \u2605</span>':'')
       +'</div>';
-    h += '<div style="padding:8px 6px;border-bottom:1px solid '+borderCol+';background:'+rowBg+'"><span style="color:'+tc+'">'+r.type+'</span></div>';
+    h += '<div style="padding:8px 6px;border-bottom:1px solid '+borderCol+';background:'+rowBg+'"><span style="color:'+tc+'">'+T('lane.'+r.type,r.type)+'</span></div>';
     h += '<div style="padding:8px 6px;border-bottom:1px solid '+borderCol+';background:'+rowBg+'">'
       +'<div style="color:#aaa;margin-bottom:2px">'+r.supply+'/100</div>'
       +'<div style="background:#111;height:3px;border-radius:1px;width:50px"><div style="background:'+barCol+';width:'+pctFull+'%;height:100%;border-radius:1px"></div></div>'
@@ -3522,17 +4278,17 @@ function renderContractsTable(){
     h += '<div style="padding:8px 6px;border-bottom:1px solid '+borderCol+';background:'+rowBg+';color:#2ecc71">\u0192'+r.dividend+'</div>';
     h += '<div style="padding:8px 6px;border-bottom:1px solid '+borderCol+';background:'+rowBg+';text-align:right">'
       +'<div style="color:#3498db">\u0192'+Number(r.buyPrice).toLocaleString()+'</div>'
-      +'<div style="font-size:.62rem;color:#9197a3">sell: \u0192'+Number(r.sellPrice).toLocaleString()+'</div>'
+      +'<div style="font-size:.62rem;color:#9197a3">'+T('galx.sellLabel','sell:')+' \u0192'+Number(r.sellPrice).toLocaleString()+'</div>'
       +'</div>';
     h += '<div style="padding:7px 4px;border-bottom:1px solid '+borderCol+';background:'+rowBg+';text-align:center">';
     if(r.isMine){
-      h += '<button onclick="event.stopPropagation();window._gSellShare()" style="background:#1a0a0a;border:1px solid #e74c3c88;color:#e74c3c;padding:5px 10px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px">SELL</button>';
+      h += '<button onclick="event.stopPropagation();window._gSellShare()" style="background:#1a0a0a;border:1px solid #e74c3c88;color:#e74c3c;padding:5px 10px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px">'+T('galx.sell','SELL')+'</button>';
     } else if(r.supply>=100){
-      h += '<span style="color:#9197a3;font-size:.68rem">FULL</span>';
+      h += '<span style="color:#9197a3;font-size:.68rem">'+T('galx.full','FULL')+'</span>';
     } else if(hasMyShare){
-      h += '<button onclick="event.stopPropagation();window._gSwapShare(\''+r.from+'\',\''+r.to+'\')" style="background:#0a1020;border:1px solid #f39c1288;color:#f39c12;padding:5px 10px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px">SWAP</button>';
+      h += '<button onclick="event.stopPropagation();window._gSwapShare(\''+r.from+'\',\''+r.to+'\')" style="background:#0a1020;border:1px solid #f39c1288;color:#f39c12;padding:5px 10px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px">'+T('galx.swap','SWAP')+'</button>';
     } else {
-      h += '<button onclick="event.stopPropagation();window._gBuyShare(\''+r.from+'\',\''+r.to+'\')" style="background:#0a1020;border:1px solid #3498db66;color:#3498db;padding:5px 10px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px">BUY</button>';
+      h += '<button onclick="event.stopPropagation();window._gBuyShare(\''+r.from+'\',\''+r.to+'\')" style="background:#0a1020;border:1px solid #3498db66;color:#3498db;padding:5px 10px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px">'+T('galx.buy','BUY')+'</button>';
     }
     h += '</div>';
   });
@@ -3544,6 +4300,7 @@ function renderContractsTable(){
 
 // ── Shipping Contracts (options) board + my positions ─────────────────────────
 function renderShippingContracts(){
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
   var box = document.getElementById('gShipContracts');
   if(!box) return;
   Promise.all([
@@ -3551,81 +4308,85 @@ function renderShippingContracts(){
     gToken ? fetch('/api/contracts/mine?token='+encodeURIComponent(gToken)).then(function(r){return r.json();}) : Promise.resolve({ok:true,open:[]})
   ]).then(function(res){
     var off=res[0], mine=res[1];
-    var nameOf=function(cid){ return (COLONY_META[cid]||{name:cid}).name; };
-    var h='<div style="font-size:.82rem;color:#f39c12;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Shipping Contracts <span style="color:#9ba1ad;text-transform:none;letter-spacing:0">\u2014 buy the right to a lane\u2019s spread. No ship, no cargo. Profit if the spread widens past your strike before expiry.</span></div>';
+    var nameOf=function(cid){ var _n=(COLONY_META[cid]||{name:cid}).name; return window.colonyNameZh?window.colonyNameZh(cid,_n):_n; };
+    var h='<div style="font-size:.82rem;color:#f39c12;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">'+T('galx.shipContracts','Shipping Contracts')+' <span style="color:#9ba1ad;text-transform:none;letter-spacing:0">'+T('galx.shipContractsSub','buy the right to the spread on a lane. No ship, no cargo. Profit if the spread widens past your strike before expiry.')+'</span></div>';
     // My open positions first
     if(mine && mine.ok && mine.open && mine.open.length){
-      h+='<div style="font-size:.8rem;color:#9ab;margin-bottom:5px">Your open contracts</div>';
+      h+='<div style="font-size:.8rem;color:#9ab;margin-bottom:5px">'+T('galx.yourOpenContracts','Your open contracts')+'</div>';
       h+=mine.open.map(function(c){
         var itm=c.inTheMoney;
         return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;margin-bottom:3px;background:#0a0a14;border:1px solid '+(itm?'#2ecc71':'#1a1a2e')+';border-radius:3px;font-size:.8rem">'
           +'<span style="flex:1;color:#9bffba">'+c.size+'u '+c.commodity+' <span style="color:#f0b454">'+nameOf(c.from)+'\u2192'+nameOf(c.to)+'</span></span>'
-          +'<span style="color:#a4aeba">strike \u0192'+Math.round(c.strikeSpread).toLocaleString()+'</span>'
-          +'<span style="color:'+(itm?'#2ecc71':'#888')+'">now \u0192'+Math.round(c.curSpread).toLocaleString()+' ('+(itm?'+':'')+Math.round(c.intrinsic).toLocaleString()+')</span>'
+          +'<span style="color:#a4aeba">'+T('galx.strike','strike')+' \u0192'+Math.round(c.strikeSpread).toLocaleString()+'</span>'
+          +'<span style="color:'+(itm?'#2ecc71':'#888')+'">'+T('galx.now','now')+' \u0192'+Math.round(c.curSpread).toLocaleString()+' ('+(itm?'+':'')+Math.round(c.intrinsic).toLocaleString()+')</span>'
           +'<span style="color:#9ba1ad">'+c.expiresInMin+'m</span>'
-          +'<button onclick="window.gExerciseContract(\''+c.id+'\')" style="background:'+(itm?'#0d2818':'#1a1a1a')+';border:1px solid '+(itm?'#2ecc71':'#444')+';color:'+(itm?'#2ecc71':'#777')+';padding:2px 8px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">EXERCISE</button>'
+          +'<button onclick="window.gExerciseContract(\''+c.id+'\')" style="background:'+(itm?'#0d2818':'#1a1a1a')+';border:1px solid '+(itm?'#2ecc71':'#444')+';color:'+(itm?'#2ecc71':'#777')+';padding:2px 8px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">'+T('galx.exercise','EXERCISE')+'</button>'
           +'</div>';
       }).join('');
       h+='<div style="height:10px"></div>';
     }
     // Offer board
-    h+='<div style="font-size:.8rem;color:#9ab;margin-bottom:5px">Available contracts <span style="color:#9197a3">(reshuffles periodically)</span></div>';
+    h+='<div style="font-size:.8rem;color:#9ab;margin-bottom:5px">'+T('galx.availableContracts','Available contracts')+' <span style="color:#9197a3">'+T('galx.reshuffles','(reshuffles periodically)')+'</span></div>';
     if(off && off.ok && off.offers && off.offers.length){
       h+='<table style="width:100%;border-collapse:collapse;font-size:.82rem">';
-      h+='<tr style="color:#9ba1ad;text-align:left"><th style="padding:4px 6px">Commodity</th><th style="padding:4px 6px">Lane</th><th style="padding:4px 6px;text-align:right">Strike</th><th style="padding:4px 6px;text-align:right">Premium</th><th style="padding:4px 6px;text-align:right">Expiry</th><th></th></tr>';
+      h+='<tr style="color:#9ba1ad;text-align:left"><th style="padding:4px 6px">'+T('galx.commodity','Commodity')+'</th><th style="padding:4px 6px">'+T('galx.lane','Lane')+'</th><th style="padding:4px 6px;text-align:right">'+T('galx.strikeCol','Strike')+'</th><th style="padding:4px 6px;text-align:right">'+T('galx.premium','Premium')+'</th><th style="padding:4px 6px;text-align:right">'+T('galx.expiry','Expiry')+'</th><th></th></tr>';
       h+=off.offers.map(function(o){
         var ico=o.icon?'<img src="assets/'+o.icon+'" style="width:18px;height:18px;vertical-align:middle;margin-right:5px;image-rendering:pixelated" onerror="this.style.display=\'none\'">':'';
         return '<tr style="border-top:1px solid #14141f">'
-          +'<td style="padding:4px 6px;color:#ccc">'+ico+o.size+'u '+o.commodityName+'</td>'
+          +'<td style="padding:4px 6px;color:#ccc">'+ico+o.size+'u '+comZ(o.commodityName)+'</td>'
           +'<td style="padding:4px 6px;color:#f0b454">'+nameOf(o.from)+'\u2192'+nameOf(o.to)+(o.blockaded?' <span style="color:#e74c3c">\u26d4</span>':'')+'</td>'
           +'<td style="padding:4px 6px;text-align:right;color:#aaa">\u0192'+Math.round(o.strikeSpread).toLocaleString()+'</td>'
           +'<td style="padding:4px 6px;text-align:right;color:#f39c12">\u0192'+Math.round(o.premiumTotal).toLocaleString()+'</td>'
           +'<td style="padding:4px 6px;text-align:right;color:#a4aeba">'+o.expiresInMin+'m</td>'
-          +'<td style="padding:4px 6px;text-align:right"><button onclick="window.gBuyContract(\''+o.offerId+'\')" style="background:#1a1408;border:1px solid #f39c12;color:#f39c12;padding:2px 8px;cursor:pointer;font-size:.64rem;font-family:inherit;border-radius:2px">BUY</button></td>'
+          +'<td style="padding:4px 6px;text-align:right"><button onclick="window.gBuyContract(\''+o.offerId+'\')" style="background:#1a1408;border:1px solid #f39c12;color:#f39c12;padding:2px 8px;cursor:pointer;font-size:.64rem;font-family:inherit;border-radius:2px">'+T('galx.buy','BUY')+'</button></td>'
           +'</tr>';
       }).join('');
       h+='</table>';
-    } else { h+='<div style="font-size:.7rem;color:#9ba1ad">No contracts on offer right now</div>'; }
+    } else { h+='<div style="font-size:.7rem;color:#9ba1ad">'+T('galx.noContracts','No contracts on offer right now')+'</div>'; }
     h+='<div id="gContractHint" style="font-size:.68rem;color:#aab0bb;margin-top:6px;min-height:13px"></div>';
     box.innerHTML=h;
-  }).catch(function(){ box.innerHTML='<div style="color:#e74c3c;font-size:.7rem">Contracts unavailable</div>'; });
+  }).catch(function(){ box.innerHTML='<div style="color:#e74c3c;font-size:.7rem">'+T('galx.contractsUnavailable','Contracts unavailable')+'</div>'; });
 }
 
 window.gBuyContract = function(offerId){
-  if(!gToken){ gToast('Log in to trade contracts','#e74c3c'); return; }
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+  if(!gToken){ gToast(T('galx.loginContracts','Log in to trade contracts'),'#e74c3c'); return; }
   fetch('/api/contracts/buy',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({token:gToken,offerId:offerId})})
     .then(function(r){return r.json();}).then(function(d){
       var hint=document.getElementById('gContractHint');
-      if(!d.ok){ if(hint){hint.textContent='\u2717 '+(d.error==='insufficient_funds'?('Need \u0192'+Math.round(d.need).toLocaleString()):d.error==='offer_expired'?'That contract just reshuffled off the board':(d.error||'Buy failed'));hint.style.color='#ff6b6b';} return; }
-      gToast('Contract bought \u2014 premium \u0192'+Math.round(d.premiumPaid).toLocaleString(),'#f39c12');
+      if(!d.ok){ if(hint){hint.textContent='\u2717 '+(d.error==='insufficient_funds'?(TF('galx.needAmount','Need \u0192{amt}',{amt:Math.round(d.need).toLocaleString()})):d.error==='offer_expired'?T('galx.offerExpired','That contract just reshuffled off the board'):(d.error||T('galx.buyFailed','Buy failed')));hint.style.color='#ff6b6b';} return; }
+      gToast(TF('galx.contractBought','Contract bought, premium \u0192{amt}',{amt:Math.round(d.premiumPaid).toLocaleString()}),'#f39c12');
       if(typeof _gSyncCash==='function') _gSyncCash(d.cash);
       renderShippingContracts();
-    }).catch(function(){ var hint=document.getElementById('gContractHint'); if(hint){hint.textContent='\u2717 Buy failed';hint.style.color='#ff6b6b';} });
+    }).catch(function(){ var hint=document.getElementById('gContractHint'); if(hint){hint.textContent='\u2717 '+T('galx.buyFailed','Buy failed');hint.style.color='#ff6b6b';} });
 };
 
 window.gExerciseContract = function(id){
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
   fetch('/api/contracts/exercise',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({token:gToken,id:id})})
     .then(function(r){return r.json();}).then(function(d){
-      if(!d.ok){ gToast(d.error||'Exercise failed','#e74c3c'); return; }
-      if(d.payout>0) gToast('Exercised \u2014 paid \u0192'+Math.round(d.payout).toLocaleString(),'#2ecc71');
-      else gToast('Contract closed \u2014 spread didn\u2019t beat your strike','#888');
+      if(!d.ok){ gToast(d.error||T('galx.exerciseFailed','Exercise failed'),'#e74c3c'); return; }
+      if(d.payout>0) gToast(TF('galx.exercised','Exercised, paid \u0192{amt}',{amt:Math.round(d.payout).toLocaleString()}),'#2ecc71');
+      else gToast(T('galx.contractClosed','Contract closed, spread did not beat your strike'),'#888');
       if(typeof _gSyncCash==='function') _gSyncCash(d.cash);
       renderShippingContracts();
-    }).catch(function(){ gToast('Exercise failed','#e74c3c'); });
+    }).catch(function(){ gToast(T('galx.exerciseFailed','Exercise failed'),'#e74c3c'); });
 };
 
 window._gBuyShare = function(from, to){
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!gToken){ gToast((window.t?window.t('run.loginFirst','Log in first'):'Log in first'),'#e74c3c'); return; }
   _sendWSGalaxy({type:'share_buy',from:from,to:to});
 };
 window._gSellShare = function(){
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!gToken){ gToast((window.t?window.t('run.loginFirst','Log in first'):'Log in first'),'#e74c3c'); return; }
   _sendWSGalaxy({type:'share_sell'});
 };
 window._gSwapShare = function(from, to){
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!gToken){ gToast((window.t?window.t('run.loginFirst','Log in first'):'Log in first'),'#e74c3c'); return; }
   _sendWSGalaxy({type:'share_swap',from:from,to:to});
 };
 
@@ -3674,7 +4435,7 @@ window._gSelectLane = function(from, to){
   h += '<div><div style="font-size:.66rem;color:#555">DIVIDEND</div><div style="font-size:.84rem;color:#2ecc71">\u0192'+div+'/tick</div></div>';
   h += '<div><div style="font-size:.66rem;color:#555">BASE RISK</div><div style="font-size:.84rem;color:#e74c3c">'+Math.round(risk.intercept*100)+'%</div></div>';
   h += '</div>';
-  if(blk && blk.active) h += '<div style="border:1px solid #e74c3c;color:#e74c3c;font-size:.72rem;padding:6px 8px;margin-bottom:10px">\u26D4 BLOCKADE ACTIVE \u2014 shipping blocked, smuggling +10% risk, dividends halved</div>';
+  if(blk && blk.active) h += '<div style="border:1px solid #e74c3c;color:#e74c3c;font-size:.72rem;padding:6px 8px;margin-bottom:10px">\u26D4 BLOCKADE ACTIVE, shipping blocked, smuggling +10% risk, dividends halved</div>';
   h += '<div style="font-size:.82rem;color:#3498db;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">\uD83D\uDCCB LANE SHARES</div>';
   var pctFull = Math.round(supply/100*100);
   var barCol = pctFull>80?'#e74c3c':pctFull>50?'#f39c12':'#2ecc71';
@@ -3688,10 +4449,10 @@ window._gSelectLane = function(from, to){
     var mGain = sellP-(myShare.purchasePrice||0);
     h += '<div style="background:#0a0a22;border:1px solid #3498db33;padding:8px;border-radius:2px;margin-bottom:10px">';
     h += '<div style="font-size:.68rem;color:#3498db;margin-bottom:4px">\u2605 YOU HOLD THIS LANE</div>';
-    h += '<div style="font-size:.72rem;color:#888">Paid: \u0192'+Number(myShare.purchasePrice||0).toLocaleString()+' \u2014 Gain: <span style="color:'+(mGain>=0?'#2ecc71':'#e74c3c')+'">'+(mGain>=0?'+':'')+'\u0192'+Number(mGain).toLocaleString()+'</span></div>';
+    h += '<div style="font-size:.72rem;color:#888">Paid: \u0192'+Number(myShare.purchasePrice||0).toLocaleString()+' \u00b7 Gain: <span style="color:'+(mGain>=0?'#2ecc71':'#e74c3c')+'">'+(mGain>=0?'+':'')+'\u0192'+Number(mGain).toLocaleString()+'</span></div>';
     h += '<button onclick="window._gSellShare()" style="width:100%;margin-top:6px;background:#1a0a0a;border:1px solid #e74c3c88;color:#e74c3c;padding:6px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">SELL SHARE</button></div>';
   } else if(supply>=100){
-    h += '<div style="font-size:.72rem;color:#555;margin-bottom:10px">Lane full \u2014 100/100 slots</div>';
+    h += '<div style="font-size:.72rem;color:#555;margin-bottom:10px">Lane full, 100/100 slots</div>';
   } else if(myShare){
     h += '<button onclick="window._gSwapShare(\''+from+'\',\''+to+'\')" style="width:100%;margin-bottom:10px;background:#0a1020;border:1px solid #f39c12;color:#f39c12;padding:6px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">SWAP HERE (\u0192'+Number(buyP).toLocaleString()+')</button>';
   } else {
@@ -3703,34 +4464,34 @@ window._gSelectLane = function(from, to){
     +'<button onclick="window._gLaneBlkFund(\''+from+'\',\''+to+'\')" style="background:#2d1a00;border:1px solid #f39c12;color:#f39c12;padding:4px 8px;cursor:pointer;font-size:.58rem;font-family:inherit;border-radius:2px">FUND</button>'
     +'<button onclick="window._gLaneBlkCounter(\''+from+'\',\''+to+'\')" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:4px 8px;cursor:pointer;font-size:.56rem;font-family:inherit;border-radius:2px">COUNTER</button></div>';
   // Private Army: instant blockade break
-  h += '<button onclick="window._gLanePrivateArmy(\''+from+'\',\''+to+'\')" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#1a0a00,#0d0400);border:1px solid #e74c3c;color:#ff6b6b;padding:6px 8px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">\u2694 PRIVATE ARMY \u2014 Break Blockade (\u01921,000,000)</button>';
+  h += '<button onclick="window._gLanePrivateArmy(\''+from+'\',\''+to+'\')" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#1a0a00,#0d0400);border:1px solid #e74c3c;color:#ff6b6b;padding:6px 8px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px;letter-spacing:.06em">'+(window.t?window.t('galx.privateArmy','\u2694 PRIVATE ARMY, Break Blockade (\u01921,000,000)'):'\u2694 PRIVATE ARMY, Break Blockade (\u01921,000,000)')+'</button>';
   el.innerHTML = h;
 };
 
 window._gLaneSmugRun = function(from, to){
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!gToken){ gToast((window.t?window.t('run.loginFirst','Log in first'):'Log in first'),'#e74c3c'); return; }
   var cSel = document.getElementById('gLaneSmugCargo');
   var sInp = document.getElementById('gLaneSmugStake');
   var stake = sInp ? Number(sInp.value) : 0;
-  if(!stake || stake < 100){ gToast('Min stake: \u0192100','#e74c3c'); return; }
+  if(!stake || stake < 100){ gToast((window.t?window.t('smug.minStake','Min stake: \u0192100'):'Min stake: \u0192100'),'#e74c3c'); return; }
   _sendWSGalaxy({type:'smuggling_start',from:from,to:to,cargoId:cSel?cSel.value:'synth_organs',stake:stake});
 };
 window._gLaneBlkFund = function(from, to){
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!gToken){ gToast((window.t?window.t('run.loginFirst','Log in first'):'Log in first'),'#e74c3c'); return; }
   var inp = document.getElementById('gLaneBlkAmt');
   var amt = inp ? Number(inp.value) : 0;
-  if(!amt || amt < 100){ gToast('Min: \u0192100','#e74c3c'); return; }
+  if(!amt || amt < 100){ gToast((window.t?window.t('run.min100','Min: \u0192100'):'Min: \u0192100'),'#e74c3c'); return; }
   _sendWSGalaxy({type:'blockade_fund',from:from,to:to,amount:amt});
 };
 window._gLaneBlkCounter = function(from, to){
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!gToken){ gToast((window.t?window.t('run.loginFirst','Log in first'):'Log in first'),'#e74c3c'); return; }
   var inp = document.getElementById('gLaneBlkAmt');
   var amt = inp ? Number(inp.value) : 0;
-  if(!amt || amt < 100){ gToast('Min: \u0192100','#e74c3c'); return; }
+  if(!amt || amt < 100){ gToast((window.t?window.t('run.min100','Min: \u0192100'):'Min: \u0192100'),'#e74c3c'); return; }
   _sendWSGalaxy({type:'counter_blockade',from:from,to:to,amount:amt});
 };
 window._gLanePrivateArmy = function(from, to){
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!gToken){ gToast((window.t?window.t('run.loginFirst','Log in first'):'Log in first'),'#e74c3c'); return; }
   if(!confirm('Deploy a private army to break this blockade? Cost: \u01921,000,000')) return;
   _sendWSGalaxy({type:'private_army',from:from,to:to});
 };
@@ -3759,13 +4520,13 @@ function _sendWSGalaxy(payload){
 }
 
 window._gStartSmuggle = function(){
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!gToken){ gToast((window.t?window.t('run.loginFirst','Log in first'):'Log in first'),'#e74c3c'); return; }
   var lnSel=document.getElementById('gSmugLane'); if(!lnSel) return;
   var parts=lnSel.value.split('|'); // from|to|type
   var cSel=document.getElementById('gSmugCargo');
   var sInp=document.getElementById('gSmugStake');
   var stake=sInp?Number(sInp.value):0;
-  if(!stake||stake<100){ gToast('Min stake: \u0192100','#e74c3c'); return; }
+  if(!stake||stake<100){ gToast((window.t?window.t('smug.minStake','Min stake: \u0192100'):'Min stake: \u0192100'),'#e74c3c'); return; }
   _sendWSGalaxy({type:'smuggling_start',from:parts[0],to:parts[1],cargoId:cSel?cSel.value:'synth_organs',stake:stake});
 };
 
@@ -3779,7 +4540,7 @@ window._gRenderBlkStatus = function(){
   var lk=parts.slice().sort().join('|');
   var blk=(window._FM_BLOCKADES||{})[lk];
   if(!blk||!(blk.pool>0)){
-    el.innerHTML='<span style="color:#7a8a7a">No blockade funding on this lane yet.</span>';
+    el.innerHTML='<span style="color:#7a8a7a">'+(window.t?window.t('galx.noBlockadeFunding','No blockade funding on this lane yet.'):'No blockade funding on this lane yet.')+'</span>';
     return;
   }
   var thr=blk.threshold||1000000;
@@ -3795,9 +4556,9 @@ window._gRenderBlkStatus = function(){
     label='<span style="color:#f39c12">Building blockade</span> '+poolTxt+' / '+thrTxt+' ('+pctTxt+')';
     sub='Fill the bar to lock the lane. Anyone can chip in.';
   } else {
-    label='<span style="color:#e74c3c">ACTIVE \u2014 integrity</span> '+poolTxt+' / '+thrTxt+' ('+pctTxt+')';
+    label='<span style="color:#e74c3c">ACTIVE, integrity</span> '+poolTxt+' / '+thrTxt+' ('+pctTxt+')';
     var mins=blk.expiresAt?Math.max(0,Math.round((blk.expiresAt-Date.now())/60000)):null;
-    sub=(rawPct>1?'Over-funded \u2014 needs '+poolTxt+' of counter-funding to break. ':'Counter-fund drains it to 0 to break. ')+(mins!==null?('Expires in ~'+mins+' min.'):'');
+    sub=(rawPct>1?'Over-funded, needs '+poolTxt+' of counter-funding to break. ':'Counter-fund drains it to 0 to break. ')+(mins!==null?('Expires in ~'+mins+' min.'):'');
   }
   el.innerHTML=label
     +'<div style="height:7px;background:#0d0d16;border:1px solid #222;border-radius:3px;margin:3px 0;overflow:hidden">'
@@ -3806,27 +4567,27 @@ window._gRenderBlkStatus = function(){
 };
 
 window._gFundBlockade = function(){
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!gToken){ gToast((window.t?window.t('run.loginFirst','Log in first'):'Log in first'),'#e74c3c'); return; }
   var lnSel=document.getElementById('gBlkLane'); if(!lnSel) return;
   var parts=lnSel.value.split('|');
   var aInp=document.getElementById('gBlkAmt');
   var amt=aInp?Number(aInp.value):0;
-  if(!amt||amt<100){ gToast('Min: \u0192100','#e74c3c'); return; }
+  if(!amt||amt<100){ gToast((window.t?window.t('run.min100','Min: \u0192100'):'Min: \u0192100'),'#e74c3c'); return; }
   _sendWSGalaxy({type:'blockade_fund',from:parts[0],to:parts[1],amount:amt});
 };
 
 window._gCounterBlk = function(){
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!gToken){ gToast((window.t?window.t('run.loginFirst','Log in first'):'Log in first'),'#e74c3c'); return; }
   var lnSel=document.getElementById('gBlkLane'); if(!lnSel) return;
   var parts=lnSel.value.split('|');
   var aInp=document.getElementById('gBlkAmt');
   var amt=aInp?Number(aInp.value):0;
-  if(!amt||amt<100){ gToast('Min: \u0192100','#e74c3c'); return; }
+  if(!amt||amt<100){ gToast((window.t?window.t('run.min100','Min: \u0192100'):'Min: \u0192100'),'#e74c3c'); return; }
   _sendWSGalaxy({type:'counter_blockade',from:parts[0],to:parts[1],amount:amt});
 };
 
 window._gPrivateArmy = function(){
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  if(!gToken){ gToast((window.t?window.t('run.loginFirst','Log in first'):'Log in first'),'#e74c3c'); return; }
   var lnSel=document.getElementById('gBlkLane'); if(!lnSel) return;
   var parts=lnSel.value.split('|');
   if(!confirm('Deploy a private army to break this blockade? Cost: \u01921,000,000')) return;
@@ -3845,6 +4606,12 @@ function gToast(msg,color){
   t.textContent=msg; document.body.appendChild(t);
   setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); },3000);
 }
+// gToast is declared inside this file's first IIFE, so nothing outside it can
+// see it: not the other two IIFEs in this file, and not city.js, whose
+// toast() probes `typeof gToast === 'function'` and has therefore been
+// silently discarding every city notification since the panel shipped.
+window.gToast = gToast;
+
 
 var gs=document.createElement('style');
 gs.textContent='@keyframes gTI{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}} @keyframes gBlkPulse{0%,100%{opacity:.6}50%{opacity:1}} .g-blk-pulse{animation:gBlkPulse 1.2s ease-in-out infinite} @keyframes gLanePulse{0%,100%{opacity:.2;stroke-width:3}50%{opacity:.7;stroke-width:5}} .g-active-lane-pulse{animation:gLanePulse .8s ease-in-out infinite} @keyframes gShipPing{0%{r:5;opacity:.8}100%{r:16;opacity:0}} .g-ship-trail{animation:gShipPing 1.5s ease-out infinite} .g-ship-dot{filter:drop-shadow(0 0 4px currentColor)}';
@@ -4269,6 +5036,7 @@ function pickCargo(colonyId, direction, seed, count) {
   for (var i = 0; i < count; i++) {
     var idx = Math.floor(seededRand(seed + i * 7.3) * pool.length);
     var item = pool[idx];
+    if (window.cargoLineZh) item = window.cargoLineZh(item);
     // Fill in random numbers
     var n = Math.floor(seededRand(seed + i * 3.1) * 90) + 10;
     var m = Math.floor(seededRand(seed + i * 5.7) * 9) + 1;
@@ -4294,7 +5062,9 @@ function generateManifest(fromId, toId, typeKey, seed) {
   var isGrey = (fromId === 'the_hollow' || toId === 'the_hollow' ||
                 fromId === 'null_point'  || toId === 'null_point'  ||
                 fromId === 'the_ledger'  || toId === 'the_ledger');
-  if (isGrey) allCargo.push('[LINE ITEM ' + (allCargo.length+1) + ': RECORD EXPUNGED]');
+  if (isGrey) allCargo.push(window.tf
+    ? window.tf('smm.expunged', '[LINE ITEM {n}: RECORD EXPUNGED]', { n: allCargo.length + 1 })
+    : '[LINE ITEM ' + (allCargo.length+1) + ': RECORD EXPUNGED]');
 
   var cls = SHIP_CLASS[typeKey] || SHIP_CLASS.v1;
   var crewCount = Math.floor(seededRand(seed + 99) * (cls.crew)) + 2;
@@ -4309,6 +5079,8 @@ function generateManifest(fromId, toId, typeKey, seed) {
     className: cls.name,
     hull: cls.hull,
     crew: crewCount,
+    fromId: fromId,
+    toId: toId,
     fromName: fromMeta.name || fromId,
     toName: toMeta.name || toId,
     cargo: allCargo,
@@ -4429,14 +5201,14 @@ function injectManifestModal() {
         '</div>',
       '</div>',
       '<div id="smm-manifest-pane">',
-        '<button id="smm-close">✕ CLOSE</button>',
+        '<button id="smm-close" data-i18n="smm.close">✕ CLOSE</button>',
         '<div class="smm-terminal-header" id="smm-header"></div>',
         '<div>',
-          '<div class="smm-section-title">Route</div>',
+          '<div class="smm-section-title" data-i18n="smm.route">Route</div>',
           '<div class="smm-route-box" id="smm-route"></div>',
         '</div>',
         '<div>',
-          '<div class="smm-section-title">Cargo Manifest, Intercepted</div>',
+          '<div class="smm-section-title" data-i18n="smm.cargoTitle">Cargo Manifest, Intercepted</div>',
           '<div class="smm-cargo-list" id="smm-cargo"></div>',
         '</div>',
         '<div class="smm-crew-row" id="smm-crew"></div>',
@@ -4444,6 +5216,7 @@ function injectManifestModal() {
     '</div>'
   ].join('');
   document.body.appendChild(modal);
+  if (window.applyI18n) { try { window.applyI18n(modal); } catch (e) {} }
 
   document.getElementById('smm-close').addEventListener('click', closeManifest);
   modal.addEventListener('click', function(e) {
@@ -4490,9 +5263,23 @@ function loadSpriteImages(urls, cb) {
   });
 }
 
-function startShipAnim(canvas, typeKey) {
+// Builds a DETAIL_SPRITES shaped def from a fleet hull. The old v1/v2/v3 defs
+// stay as the fallback for anything that has not been given a hull yet.
+function detailDefForHull(hullKey){
+  var F = window._fmFleet; if (!F) return null;
+  var hl = F.HULLS[hullKey]; if (!hl) return null;
+  var f = F.src(hullKey, 'detail');
+  return {
+    body: [f,f,f],
+    thrust: DETAIL_SPRITES.v2.thrust,
+    w: hl.dw, h: hl.dh, tw: 81, th: 58,
+    thrustX: -Math.round(hl.dw*0.36), thrustY: Math.round(hl.dh/2 - 29),
+    scale: 1
+  };
+}
+function startShipAnim(canvas, typeKey, hullKey) {
   if (_smmRAF) { cancelAnimationFrame(_smmRAF); _smmRAF = null; }
-  var def = DETAIL_SPRITES[typeKey];
+  var def = (hullKey && detailDefForHull(hullKey)) || DETAIL_SPRITES[typeKey];
   if (!def) return;
   _smmDef = def;
   _smmFrameIdx = 0;
@@ -4613,32 +5400,61 @@ function closeManifest() {
 
 window.openShipManifest = function(ship) {
   try {
+    var fromId  = ship.fromId || 'flesh_station';
+    var toId    = ship.toId   || 'new_anchor';
+    var typeKey = ship.typeKey || 'v1';
+
+    // The deep-scan is a Flesh Station capability and it stops at the Circuit
+    // border. Circuit hulls file with the Circuit, not with the station, so on
+    // this side of the passage there is no manifest to read. Jurisdiction, not
+    // stealth.
+    //
+    // Keyed off the LANE, the same way the sector tag is, so the rule is "any
+    // hull in Circuit space refuses" rather than "these nine silhouettes
+    // refuse". That matters: a player learns one border, not a hull list, and
+    // no two identical looking ships ever behave differently on click.
+    var FJ = window._fmFleet;
+    if (FJ && typeof FJ.shipGalaxy === 'function' && FJ.shipGalaxy(fromId, toId) === 'jade') {
+      var seedJ = ((fromId.charCodeAt(0)||65) * 17 + (toId.charCodeAt(0)||65) * 31 + Math.floor((ship.t||0) * 100)) || 42;
+      var identJ = generateManifest(fromId, toId, typeKey, seedJ).ident;
+      var hlJ = (FJ.HULLS && FJ.HULLS[ship.hullKey]) || null;
+      var TFJ = function(k, fb, v){ return window.tf ? window.tf(k, fb, v) : fb; };
+      var msgJ = TFJ('galx.scanCircuit',
+        'FLESH STATION DEEP-SCAN REFUSED // {id}, {cls} // Circuit registry, nothing filed outside the passage',
+        { id: identJ, cls: hlJ ? (window.hullNameZh ? window.hullNameZh(hlJ.n) : hlJ.n) : 'unknown hull' });
+      if (window.gToast) window.gToast(msgJ, '#e8e4d8');
+      return;
+    }
+
     injectManifestModal();
 
     var modal   = document.getElementById('ship-manifest-modal');
     if (!modal) return;
-    var fromId  = ship.fromId || 'flesh_station';
-    var toId    = ship.toId   || 'new_anchor';
-    var typeKey = ship.typeKey || 'v1';
 
     // Seed from route + journey progress so each visible ship is unique
     var seed = ((fromId.charCodeAt(0)||65) * 17 + (toId.charCodeAt(0)||65) * 31 + Math.floor((ship.t||0) * 100)) || 42;
     var manifest = generateManifest(fromId, toId, typeKey, seed);
 
   // Header
-  document.getElementById('smm-header').textContent =
-    'FLESH STATION, INTERNAL TRANSIT LOG, VESSEL ' + manifest.ident + ', INTERCEPTED IN TRANSIT';
+  document.getElementById('smm-header').textContent = window.tf
+    ? window.tf('smm.header', 'FLESH STATION, INTERNAL TRANSIT LOG, VESSEL {id}, INTERCEPTED IN TRANSIT', { id: manifest.ident })
+    : 'FLESH STATION, INTERNAL TRANSIT LOG, VESSEL ' + manifest.ident + ', INTERCEPTED IN TRANSIT';
 
   // Ident panel
   document.getElementById('smm-ident').textContent  = '[ ' + manifest.ident + ' ]';
-  document.getElementById('smm-class').textContent  = manifest.className;
-  document.getElementById('smm-hull').textContent   = manifest.hull;
+  var mh = (window._fmFleet && window._fmFleet.HULLS[ship.hullKey]) || null;
+  var mhName = mh ? mh.n : manifest.className;
+  var mhHull = mh ? mh.h : manifest.hull;
+  document.getElementById('smm-class').textContent  = window.hullNameZh ? window.hullNameZh(mhName) : mhName;
+  document.getElementById('smm-hull').textContent   = window.hullClassZh ? window.hullClassZh(mhHull) : mhHull;
 
   // Route
   var routeBox = document.getElementById('smm-route');
+  var _rT = function(k, fb){ return window.t ? window.t(k, fb) : fb; };
+  var _rC = function(id, fb){ return window.colonyNameZh ? window.colonyNameZh(id, fb) : fb; };
   routeBox.innerHTML = [
-    '<div class="smm-route-row"><span class="smm-route-label">FROM</span><span class="smm-route-val">' + manifest.fromName + '</span></div>',
-    '<div class="smm-route-row"><span class="smm-route-label">TO</span><span class="smm-route-val">' + manifest.toName + '</span></div>',
+    '<div class="smm-route-row"><span class="smm-route-label">' + _rT('smm.from','FROM') + '</span><span class="smm-route-val">' + _rC(manifest.fromId, manifest.fromName) + '</span></div>',
+    '<div class="smm-route-row"><span class="smm-route-label">' + _rT('smm.to','TO') + '</span><span class="smm-route-val">' + _rC(manifest.toId, manifest.toName) + '</span></div>',
   ].join('');
 
   // Cargo
@@ -4648,8 +5464,8 @@ window.openShipManifest = function(ship) {
     var cargo = ship.npc.cargo || [];
     if (!cargo.length && ship.npc.commodityName) cargo = [{commodityName:ship.npc.commodityName, qty:ship.npc.qty}];
     cargoBox.innerHTML = cargo.map(function(line, i){
-      return '<div class="smm-cargo-item"><span class="smm-cargo-idx">'+(i+1).toString().padStart(2,'0')+'</span><span>'+line.qty+'\u00d7 '+line.commodityName+'</span></div>';
-    }).join('') || '<div class="smm-cargo-item"><span class="smm-cargo-idx">--</span><span>Empty hold</span></div>';
+      return '<div class="smm-cargo-item"><span class="smm-cargo-idx">'+(i+1).toString().padStart(2,'0')+'</span><span>'+line.qty+'\u00d7 '+(window.commodityNameZh?window.commodityNameZh(line.commodityName):line.commodityName)+'</span></div>';
+    }).join('') || '<div class="smm-cargo-item"><span class="smm-cargo-idx">--</span><span>'+(window.t?window.t('smm.emptyHold','Empty hold'):'Empty hold')+'</span></div>';
   } else {
     cargoBox.innerHTML = manifest.cargo.map(function(item, i) {
       return '<div class="smm-cargo-item"><span class="smm-cargo-idx">' + (i+1).toString().padStart(2,'0') + '</span><span>' + item + '</span></div>';
@@ -4657,8 +5473,9 @@ window.openShipManifest = function(ship) {
   }
 
   // Crew
-  document.getElementById('smm-crew').textContent =
-    'CREW COMPLEMENT: ' + manifest.crew + ' REGISTERED  //  MANIFEST EXTRACTED VIA FLESH STATION DEEP-SCAN, NOT VISIBLE TO CREW';
+  document.getElementById('smm-crew').textContent = window.tf
+    ? window.tf('smm.crew', 'CREW COMPLEMENT: {n} REGISTERED  //  MANIFEST EXTRACTED VIA FLESH STATION DEEP-SCAN, NOT VISIBLE TO CREW', { n: manifest.crew })
+    : 'CREW COMPLEMENT: ' + manifest.crew + ' REGISTERED  //  MANIFEST EXTRACTED VIA FLESH STATION DEEP-SCAN, NOT VISIBLE TO CREW';
 
   // Stars
   var starCanvas = document.getElementById('smm-stars');
@@ -4667,9 +5484,29 @@ window.openShipManifest = function(ship) {
 
   // Ship animation
   var shipCanvas = document.getElementById('smm-ship-canvas');
-  startShipAnim(shipCanvas, typeKey);
+  startShipAnim(shipCanvas, typeKey, ship.hullKey);
   } catch(err) {
     console.error('[manifest] openShipManifest error:', err);
+  }
+};
+
+
+// ── Ambient hulls refuse the scan ────────────────────────────────────────────
+// Ambient traffic is scoundrels and only scoundrels now. Circuit hulls carry
+// real freight and open the transit log like any other merchant. An
+// unregistered hull gets a short refusal instead: no modal, no zoom, because
+// the deep scan reads filed manifests and there is nothing filed to read.
+window.openAmbientReadout = function(ship){
+  try {
+    // Tokens, not concatenation: a fallback built by + cannot be translated,
+    // because the key lookup returns one static string and the values are lost.
+    var TF = function(k, fb, v){ return window.tf ? window.tf(k, fb, v) : fb; };
+    var msg = TF('galx.scanScoundrel',
+      'FLESH STATION DEEP-SCAN REFUSED // {id} // unregistered hull, no filed route, hold sealed',
+      { id: ship.ident });
+    if (window.gToast) window.gToast(msg, '#e74c3c');
+  } catch(err) {
+    console.error('[fleet] openAmbientReadout error:', err);
   }
 };
 
@@ -4683,6 +5520,10 @@ window._shippingAddLog = function(d){
 window.renderShippingTab = function(){
   var el=document.getElementById('gShippingInner');
   if(!el) return;
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
+  var CZ=function(n){var m=window.SMUG_CARGO_ZH;return (window._lang==='zh'&&m&&m[n])?m[n]:n;};
+  var GZ=function(n,f){var m=window.SMUG_GUARD_ZH;return (window._lang==='zh'&&m&&m[n]&&m[n][f]!=null)?m[n][f]:null;};
 
   if(!window._FM_TRADE_CONFIG){ window._galaxy.send({type:'trade_config_request'}); }
   // Fetch smuggling config (guards + cargo) once.
@@ -4722,8 +5563,8 @@ window.renderShippingTab = function(){
   h += '</style>';
 
   h += '<div id="gShipTab">';
-  h += '<div style="font-size:.9rem;color:#e74c3c;letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px">\u2620 Smuggling Operations</div>';
-  h += '<div style="font-size:.72rem;color:#666;margin-bottom:10px">Stake credits on a contraband run. Hire guards to cut the odds \u2014 but if the run is caught, the guards die with the cargo. No refunds.</div>';
+  h += '<div style="font-size:.9rem;color:#e74c3c;letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px">\u2620 '+T('smug.title','Smuggling Operations')+'</div>';
+  h += '<div style="font-size:.72rem;color:#666;margin-bottom:10px">'+T('smug.subtitle','Stake credits on a contraband run. Hire guards to cut the odds, but if the run is caught, the guards die with the cargo. No refunds.')+'</div>';
 
   // Active smuggling run
   var ar = window._activeSmugRun || null;
@@ -4732,24 +5573,24 @@ window.renderShippingTab = function(){
     var arFrom=(window._galaxy.meta[ar.from]||{name:ar.from}).name;
     var arTo=(window._galaxy.meta[ar.to]||{name:ar.to}).name;
     h += '<div class="ship-section" style="border-color:#e74c3c;text-align:center">';
-    h += '<div style="color:#e74c3c;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">\ud83d\udce6 Run In Progress</div>';
-    h += '<div style="color:#ccc;font-size:.78rem;margin-bottom:4px">'+arFrom+' \u2192 '+arTo+' ('+ar.cargo+')</div>';
-    h += '<div style="color:#aaa;font-size:.76rem">Stake: \u0192'+Number(ar.stake).toLocaleString()+(ar.guardFee?' \u00b7 Guards \u0192'+Number(ar.guardFee).toLocaleString():'')+'</div>';
-    h += '<div id="gShipCountdownTimer" style="color:#e74c3c;font-size:.88rem;font-weight:bold;margin-top:8px">'+(arLeft>0?'EN ROUTE \u2014 '+arLeft+'s...':'Resolving...')+'</div>';
+    h += '<div style="color:#e74c3c;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">\ud83d\udce6 '+T('smug.runInProgress','Run In Progress')+'</div>';
+    h += '<div style="color:#ccc;font-size:.78rem;margin-bottom:4px">'+arFrom+' \u2192 '+arTo+' ('+CZ(ar.cargo)+')</div>';
+    h += '<div style="color:#aaa;font-size:.76rem">'+T('smug.stakeColon','Stake:')+' \u0192'+Number(ar.stake).toLocaleString()+(ar.guardFee?' \u00b7 '+T('smug.guardsWord','Guards')+' \u0192'+Number(ar.guardFee).toLocaleString():'')+'</div>';
+    h += '<div id="gShipCountdownTimer" style="color:#e74c3c;font-size:.88rem;font-weight:bold;margin-top:8px">'+(arLeft>0?TF('smug.enRouteSec','EN ROUTE, {s}s...',{s:arLeft}):T('smug.resolving','Resolving...'))+'</div>';
     h += '</div>';
   }
 
   h += '<div class="ship-section">';
-  h += '<div class="ship-label">Select Route</div>';
+  h += '<div class="ship-label">'+T('smug.selectRoute','Select Route')+'</div>';
   h += '<select class="ship-select" id="gSmugRoute" onchange="window._gSmugCalcRisk()">';
   routes.forEach(function(l){
     var fn=(window._galaxy.meta[l.from]||{name:l.from}).name;
     var tn=(window._galaxy.meta[l.to]||{name:l.to}).name;
-    h += '<option value="'+l.from+'|'+l.to+'|'+l.type+'">'+fn+' \u2192 '+tn+' ('+l.type+')</option>';
+    h += '<option value="'+l.from+'|'+l.to+'|'+l.type+'">'+fn+' \u2192 '+tn+' ('+T('lane.'+l.type,l.type)+')</option>';
   });
   h += '</select>';
 
-  h += '<div class="ship-label">Contraband</div>';
+  h += '<div class="ship-label">'+T('smug.contraband','Contraband')+'</div>';
   h += '<select class="ship-select" id="gSmugCargo2" onchange="window._gSmugCalcRisk()">';
   var cargoList = (smug.cargo&&smug.cargo.length)?smug.cargo:[
     {id:'data_cores',name:'Data Cores',baseMult:1.5,riskMod:0.05},
@@ -4760,15 +5601,15 @@ window.renderShippingTab = function(){
     {id:'sweet_wine',name:"S'weet Wine",baseMult:3.0,riskMod:0.20}
   ];
   cargoList.forEach(function(c){
-    h += '<option value="'+c.id+'">'+c.name+' (\u00d7'+c.baseMult+' / +'+Math.round(c.riskMod*100)+'% risk)</option>';
+    h += '<option value="'+c.id+'">'+CZ(c.name)+' (\u00d7'+c.baseMult+' / +'+Math.round(c.riskMod*100)+'% '+T('smug.riskWord','risk')+')</option>';
   });
   h += '</select>';
 
-  h += '<div class="ship-label">Stake</div>';
-  h += '<input class="ship-input" type="number" id="gSmugStake2" placeholder="\u0192 amount" min="100" onchange="window._gSmugCalcRisk()" oninput="window._gSmugCalcRisk()"/>';
+  h += '<div class="ship-label">'+T('smug.stakeLabel','Stake')+'</div>';
+  h += '<input class="ship-input" type="number" id="gSmugStake2" placeholder="'+T('smug.stakePh','\u0192 amount')+'" min="100" onchange="window._gSmugCalcRisk()" oninput="window._gSmugCalcRisk()"/>';
 
   // ── Guards (escort) selector ──
-  h += '<div class="ship-label">Guard Escort <span style="color:#666;text-transform:none;letter-spacing:0">\u2014 cuts risk, fee lost if caught</span></div>';
+  h += '<div class="ship-label">'+T('smug.guardEscort','Guard Escort')+' <span style="color:#666;text-transform:none;letter-spacing:0">'+T('smug.guardEscortNote','cuts risk, fee lost if caught')+'</span></div>';
   var guards = (smug.guards&&smug.guards.length)?smug.guards:[
     {id:'none',name:'No Escort',feeFrac:0,riskCut:0,desc:'Run it cold.'},
     {id:'light',name:'Light Escort',feeFrac:0.0533,riskCut:0.08,desc:'A couple of hired guns.'},
@@ -4780,48 +5621,48 @@ window.renderShippingTab = function(){
   guards.forEach(function(g){
     var sel=window._gSmugGuard===g.id;
     h += '<div class="guard-opt'+(sel?' sel':'')+'" onclick="window._gSmugSetGuard(\''+g.id+'\')">';
-    h += '<span style="flex:0 0 110px;color:'+(sel?'#72e09c':'#bbb')+'">'+g.name+'</span>';
-    h += '<span style="flex:1;color:#777">'+g.desc+'</span>';
-    h += '<span style="color:#2ecc71">-'+Math.round(g.riskCut*100)+'% risk</span>';
-    h += '<span style="color:#72e09c;flex:0 0 70px;text-align:right">'+(g.feeFrac>0?(Math.round(g.feeFrac*100)+'% fee'):'free')+'</span>';
+    h += '<span style="flex:0 0 110px;color:'+(sel?'#72e09c':'#bbb')+'">'+(GZ(g.name,'name')||g.name)+'</span>';
+    h += '<span style="flex:1;color:#777">'+(GZ(g.name,'desc')||g.desc)+'</span>';
+    h += '<span style="color:#2ecc71">-'+Math.round(g.riskCut*100)+'% '+T('smug.riskWord','risk')+'</span>';
+    h += '<span style="color:#72e09c;flex:0 0 70px;text-align:right">'+(g.feeFrac>0?(Math.round(g.feeFrac*100)+'% '+T('smug.feeWord','fee')):T('smug.free','free'))+'</span>';
     h += '</div>';
   });
   h += '</div>';
 
-  if(isSynd){ h += '<div style="font-size:.74rem;color:#e74c3c;margin:6px 0">\ud83d\udc80 Syndicate: +15% payout \u00b7 +5% risk on own turf</div>'; }
+  if(isSynd){ h += '<div style="font-size:.74rem;color:#e74c3c;margin:6px 0">\ud83d\udc80 '+T('smug.syndTip','Syndicate: +15% payout, +5% risk on own turf')+'</div>'; }
 
-  h += '<div class="ship-label" style="margin-top:8px">Estimated Risk</div>';
+  h += '<div class="ship-label" style="margin-top:8px">'+T('smug.estRisk','Estimated Risk')+'</div>';
   h += '<div class="ship-risk-bar"><div class="ship-risk-fill" id="gSmugRiskFill" style="width:18%;background:#e74c3c"></div></div>';
-  h += '<div style="display:flex;justify-content:space-between;font-size:.76rem"><span style="color:#999" id="gSmugRiskPct">~18%</span><span style="color:#555" id="gSmugRiskDetail">base + cargo</span></div>';
+  h += '<div style="display:flex;justify-content:space-between;font-size:.76rem"><span style="color:#999" id="gSmugRiskPct">~18%</span><span style="color:#555" id="gSmugRiskDetail">'+T('smug.baseCargo','base + cargo')+'</span></div>';
 
   h += '<div class="ship-info-grid">';
-  h += '<div class="ship-info-cell"><div class="lbl">Potential Payout</div><div class="val" id="gSmugPayout">\u2014</div></div>';
-  h += '<div class="ship-info-cell"><div class="lbl">Guard Fee</div><div class="val" id="gSmugGuardFee">\u01920</div></div>';
-  h += '<div class="ship-info-cell"><div class="lbl">Total At Risk</div><div class="val" id="gSmugAtRisk">\u2014</div></div>';
-  h += '<div class="ship-info-cell"><div class="lbl">EV / Run</div><div class="val" id="gSmugEV">\u2014</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">'+T('smug.potentialPayout','Potential Payout')+'</div><div class="val" id="gSmugPayout">\u2014</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">'+T('smug.guardFee','Guard Fee')+'</div><div class="val" id="gSmugGuardFee">\u01920</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">'+T('smug.totalAtRisk','Total At Risk')+'</div><div class="val" id="gSmugAtRisk">\u2014</div></div>';
+  h += '<div class="ship-info-cell"><div class="lbl">'+T('smug.evRun','EV / Run')+'</div><div class="val" id="gSmugEV">\u2014</div></div>';
   h += '</div>';
 
-  h += '<button class="ship-run-btn" id="gSmugRunBtn" style="background:#2d0a0a;border:1px solid #e74c3c;color:#e74c3c" onclick="window._gStartSmuggling2()">\ud83d\udce6 Launch Smuggling Run</button>';
+  h += '<button class="ship-run-btn" id="gSmugRunBtn" style="background:#2d0a0a;border:1px solid #e74c3c;color:#e74c3c" onclick="window._gStartSmuggling2()">\ud83d\udce6 '+T('smug.launch','Launch Smuggling Run')+'</button>';
   h += '</div>';
 
   h += '<div class="ship-faction-tip">';
-  h += '<div style="color:#4ecdc4;margin-bottom:6px;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase">How Factions Affect Smuggling</div>';
-  h += '<div><span style="color:#e74c3c">Syndicate</span> \u2014 +15% payout, but +5% risk on own turf. No free rides.</div>';
-  h += '<div><span style="color:#9b59b6">Void</span> \u2014 Earns 2% of all intercepted cargo as raid income.</div>';
-  h += '<div><span style="color:#f39c12">Tension</span> \u2014 High tension HELPS smugglers (chaos is cover).</div>';
-  h += '<div><span style="color:#e74c3c">Blockades</span> \u2014 Smuggling still runs, +10% risk.</div>';
-  h += '<div><span style="color:#72e09c">Guards</span> \u2014 Cut interception odds, but the fee is gone if you\u2019re caught.</div>';
-  h += '<div><span style="color:#3498db">Lane Shares</span> \u2014 Shareholders earn a cut of your profit.</div>';
+  h += '<div style="color:#4ecdc4;margin-bottom:6px;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase">'+T('smug.howFactions','How Factions Affect Smuggling')+'</div>';
+  h += '<div><span style="color:#e74c3c">'+T('smug.facSyndicate','Syndicate')+'</span>: '+T('smug.tipSynd','+15% payout, but +5% risk on own turf. No free rides.')+'</div>';
+  h += '<div><span style="color:#9b59b6">'+T('smug.facVoid','Void')+'</span>: '+T('smug.tipVoid','Earns 2% of all intercepted cargo as raid income.')+'</div>';
+  h += '<div><span style="color:#f39c12">'+T('smug.facTension','Tension')+'</span>: '+T('smug.tipTension','High tension HELPS smugglers (chaos is cover).')+'</div>';
+  h += '<div><span style="color:#e74c3c">'+T('smug.facBlockades','Blockades')+'</span>: '+T('smug.tipBlockades','Smuggling still runs, +10% risk.')+'</div>';
+  h += '<div><span style="color:#72e09c">'+T('smug.facGuards','Guards')+'</span>: '+T('smug.tipGuards','Cut interception odds, but the fee is gone if you are caught.')+'</div>';
+  h += '<div><span style="color:#3498db">'+T('smug.facLaneShares','Lane Shares')+'</span>: '+T('smug.tipLaneShares','Shareholders earn a cut of your profit.')+'</div>';
   h += '</div>';
 
   h += '<div class="ship-section" style="margin-top:10px">';
-  h += '<div class="ship-label">Run History</div>';
+  h += '<div class="ship-label">'+T('smug.runHistory','Run History')+'</div>';
   h += '<div id="gShipLog" style="max-height:120px;overflow-y:auto">';
-  if(window._shippingLog.length===0){ h += '<div style="font-size:.74rem;color:#444;text-align:center;padding:12px">No runs yet</div>'; }
+  if(window._shippingLog.length===0){ h += '<div style="font-size:.74rem;color:#444;text-align:center;padding:12px">'+T('smug.noRuns','No runs yet')+'</div>'; }
   else { window._shippingLog.forEach(function(entry){
     var col=entry.success?'#2ecc71':'#e74c3c';
-    var label=entry.success?'CLEARED':'SEIZED';
-    h += '<div class="ship-log-entry"><span style="color:'+col+'">'+label+'</span><span style="color:#555">'+entry.cargo+'</span>';
+    var label=entry.success?T('smug.cleared','CLEARED'):T('smug.seized','SEIZED');
+    h += '<div class="ship-log-entry"><span style="color:'+col+'">'+label+'</span><span style="color:#555">'+CZ(entry.cargo)+'</span>';
     h += '<span style="color:#aaa">\u0192'+(entry.success?Number(entry.payout||0).toLocaleString():'-'+Number(entry.stake).toLocaleString())+'</span>';
     h += '<span style="color:#444">'+entry.risk+'%</span></div>';
   }); }
@@ -5036,14 +5877,15 @@ window._gSmugCalcRisk = function(){
     rFill.style.width=Math.min(100,riskPct)+'%';
     rFill.style.background=riskPct>40?'#e74c3c':riskPct>25?'#f39c12':'#2ecc71';
   }
-  if(rPctEl) rPctEl.textContent=riskPct+'%'+(blockadeMod?' +blockade':'')+(guardCut>0?' (\u2212'+Math.round(guardCut*100)+'% guards)':'');
+  if(rPctEl) rPctEl.textContent=riskPct+'%'+(blockadeMod?' '+_t('smug.blockadeShort','+blockade'):'')+(guardCut>0?' (\u2212'+Math.round(guardCut*100)+'% '+_t('smug.dGuards','guards')+')':'');
+  var _t=function(k,fb){return window.t?window.t(k,fb):fb;};
   var details=[];
-  if(betExtra>0) details.push('bet-size +'+Math.round(betExtra*100)+'%');
-  if(tensionMod<-0.005) details.push('tension '+Math.round(tensionMod*100)+'%');
-  if(fMod!==0) details.push('faction '+(fMod>0?'+':'')+Math.round(fMod*100)+'%');
-  if(syndRisk>0) details.push('synd turf +'+Math.round(syndRisk*100)+'%');
-  if(guardCut>0) details.push('guards -'+Math.round(guardCut*100)+'%');
-  if(rDetail) rDetail.textContent=details.length?details.join(', '):'base + cargo';
+  if(betExtra>0) details.push(_t('smug.dBet','bet-size')+' +'+Math.round(betExtra*100)+'%');
+  if(tensionMod<-0.005) details.push(_t('smug.dTension','tension')+' '+Math.round(tensionMod*100)+'%');
+  if(fMod!==0) details.push(_t('smug.dFaction','faction')+' '+(fMod>0?'+':'')+Math.round(fMod*100)+'%');
+  if(syndRisk>0) details.push(_t('smug.dSyndTurf','synd turf')+' +'+Math.round(syndRisk*100)+'%');
+  if(guardCut>0) details.push(_t('smug.dGuards','guards')+' -'+Math.round(guardCut*100)+'%');
+  if(rDetail) rDetail.textContent=details.length?details.join(', '):_t('smug.baseCargo','base + cargo');
 
   var payEl=document.getElementById('gSmugPayout');
   var feeEl=document.getElementById('gSmugGuardFee');
@@ -5063,7 +5905,8 @@ window._gSmugCalcRisk = function(){
 
 // ── Launch shipping ──
 window._gStartShipping = function(){
-  if(!window._galaxy.token){ window._galaxy.toast('Log in first','#e74c3c'); return; }
+  var _t=function(k,fb){return window.t?window.t(k,fb):fb;};
+  if(!window._galaxy.token){ window._galaxy.toast(_t('smug.loginFirst','Log in first'),'#e74c3c'); return; }
   var routeSel=document.getElementById('gShipRoute');
   var cargoSel=document.getElementById('gShipCargo');
   var stakeInp=document.getElementById('gShipStake');
@@ -5071,21 +5914,23 @@ window._gStartShipping = function(){
   if(!routeSel||!stakeInp) return;
   var parts=routeSel.value.split('|');
   var stake=Number(stakeInp.value)||0;
-  if(!stake||stake<100){ window._galaxy.toast('Min stake: \u0192100','#e74c3c'); return; }
+  if(!stake||stake<100){ window._galaxy.toast(_t('smug.minStake','Min stake: \u0192100'),'#e74c3c'); return; }
   window._galaxy.send({type:'shipping_start',from:parts[0],to:parts[1],cargoId:cargoSel?cargoSel.value:'standard_freight',stake:stake,insured:!!(insChk&&insChk.checked)});
 };
 
 // ── Launch smuggling from shipping tab ──
 window._gStartSmuggling2 = function(){
-  if(!window._galaxy.token){ window._galaxy.toast('Log in first','#e74c3c'); return; }
+  var _t=function(k,fb){return window.t?window.t(k,fb):fb;};
+  if(!window._galaxy.token){ window._galaxy.toast(_t('smug.loginFirst','Log in first'),'#e74c3c'); return; }
   var routeSel=document.getElementById('gSmugRoute');
   var cargoSel=document.getElementById('gSmugCargo2');
   var stakeInp=document.getElementById('gSmugStake2');
   if(!routeSel||!stakeInp) return;
   var parts=routeSel.value.split('|');
   var stake=Number(stakeInp.value)||0;
-  if(!stake||stake<100){ window._galaxy.toast('Min stake: \u0192100','#e74c3c'); return; }
+  if(!stake||stake<100){ window._galaxy.toast(_t('smug.minStake','Min stake: \u0192100'),'#e74c3c'); return; }
   window._galaxy.send({type:'smuggling_start',from:parts[0],to:parts[1],cargoId:cargoSel?cargoSel.value:'synth_organs',stake:stake,guardTier:window._gSmugGuard||'none'});
 };
+
 
 })();

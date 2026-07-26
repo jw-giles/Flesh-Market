@@ -15,6 +15,8 @@
   var pane = document.getElementById('casino-solitaire');
   if (!pane || pane.__solInit) return;
   pane.__solInit = true;
+  var _T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  var _TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
 
   // ── Shared engine mirror (must match server/solitaire.js) ───────────────────
   function seedFromId(id){
@@ -369,7 +371,7 @@
 
     var fc = foundationCount(game);
     var potential = fc * game.perCard + (fc === 52 ? game.winBonus : 0);
-    var status = 'Foundations <b>'+fc+' / 52</b> &nbsp; Cash-out value <b>'+fmt(potential)+'</b>';
+    var status = _TF('casino.sol.statusPlaying','Foundations <b>{fc} / 52</b> &nbsp; Cash-out value <b>{val}</b>',{fc:fc,val:fmt(potential)});
 
     pane.querySelector('.sol-top').innerHTML =
       '<div class="sol-piles"><div class="sol-lhs">'+stockHTML+'<div class="sol-waste">'+wasteHTML+'</div></div>' +
@@ -380,9 +382,9 @@
     refreshHeader();
   }
   function renderIdle(){
-    pane.querySelector('.sol-top').innerHTML = '<div class="sol-idle">Klondike - draw 3, one pass through the stock, no redeal.</div>';
+    pane.querySelector('.sol-top').innerHTML = '<div class="sol-idle">'+_T('casino.sol.idle','Klondike - draw 3, one pass through the stock, no redeal.')+'</div>';
     pane.querySelector('.sol-board').innerHTML = '';
-    pane.querySelector('.sol-status').innerHTML = 'Buy-in <b>'+fmt(SOL.buyin)+'</b>. Move cards to the foundations and cash out for <b>'+fmt(SOL.perCard)+'</b> per foundation card. Clearing all 52 pays a <b>'+fmt(SOL.winBonus)+'</b> bonus. The buy-in is committed when you start and forfeited if you leave a game unfinished.';
+    pane.querySelector('.sol-status').innerHTML = _TF('casino.sol.idleStatus','Buy-in <b>{buyin}</b>. Move cards to the foundations and cash out for <b>{perCard}</b> per foundation card. Clearing all 52 pays a <b>{bonus}</b> bonus. The buy-in is committed when you start and forfeited if you leave a game unfinished.',{buyin:fmt(SOL.buyin),perCard:fmt(SOL.perCard),bonus:fmt(SOL.winBonus)});
     refreshHeader();
   }
   function refreshHeader(){
@@ -398,13 +400,13 @@
   async function newGame(){
     if (busy) return;
     if (game && !game.over){
-      if (!window.confirm('Start a new game? Your current game will be forfeited and the buy-in lost.')) return;
+      if (!window.confirm(_T('casino.sol.confirmNew','Start a new game? Your current game will be forfeited and the buy-in lost.'))) return;
     }
     busy = true; setButtons();
-    log('Dealing...', '');
+    log(_T('casino.sol.dealing','Dealing...'), '');
     var r = await req({ type:'solitaire_start' }, 'solitaire_start_ack');
     busy = false;
-    if (!r || !r.ok){ log('Could not start: ' + ((r&&r.error)||'unknown'), 'lose'); setButtons(); return; }
+    if (!r || !r.ok){ log(_TF('casino.sol.couldNotStart','Could not start: {err}',{err:((r&&r.error)||'unknown')}), 'lose'); setButtons(); return; }
     SOL.buyin = r.buyin; SOL.perCard = r.perCard; SOL.winBonus = r.winBonus;
     game = deal(r.roundId);
     game.roundId = r.roundId; game.buyin = r.buyin; game.perCard = r.perCard; game.winBonus = r.winBonus;
@@ -418,13 +420,13 @@
     busy = true; setButtons();
     var r = await req({ type:'solitaire_finish', roundId: game.roundId, moves: game.moves }, 'solitaire_finish_ack');
     busy = false;
-    if (!r || !r.ok){ busy = false; setButtons(); log('Cash-out failed: ' + ((r&&r.error)||'unknown') + ' (try again)', 'lose'); return; }
+    if (!r || !r.ok){ busy = false; setButtons(); log(_TF('casino.sol.cashoutFailed','Cash-out failed: {err} (try again)',{err:((r&&r.error)||'unknown')}), 'lose'); return; }
     game.over = true;
     var net = (typeof r.net === 'number') ? r.net : (r.credited - game.buyin);
-    var head = r.won ? ('SOLVED - all 52 cleared') : (r.foundations + ' of 52 to foundations');
-    if (net > 0) log('W ' + head + '. Won ' + fmt(net) + ' (paid ' + fmt(r.credited) + ')', 'win');
-    else if (net === 0) log(head + '. Broke even (paid ' + fmt(r.credited) + ')', 'push');
-    else log('L ' + head + '. Lost ' + fmt(Math.abs(net)) + ' (paid ' + fmt(r.credited) + ')', 'lose');
+    var head = r.won ? _T('casino.sol.solved','SOLVED - all 52 cleared') : _TF('casino.sol.headFoundations','{n} of 52 to foundations',{n:r.foundations});
+    if (net > 0) log(_TF('casino.sol.bannerWin','W {head}. Won {net} (paid {paid})',{head:head,net:fmt(net),paid:fmt(r.credited)}), 'win');
+    else if (net === 0) log(_TF('casino.sol.bannerPush','{head}. Broke even (paid {paid})',{head:head,paid:fmt(r.credited)}), 'push');
+    else log(_TF('casino.sol.bannerLose','L {head}. Lost {loss} (paid {paid})',{head:head,loss:fmt(Math.abs(net)),paid:fmt(r.credited)}), 'lose');
     setButtons(); render();
   }
   function setButtons(){
@@ -470,15 +472,16 @@
     css();
     pane.innerHTML =
       '<div class="sol-bar">' +
-        '<button id="sol-new">New Game</button>' +
-        '<button id="sol-cashout" disabled>Cash Out</button>' +
-        '<button id="sol-auto" disabled title="Send every available card to the foundations">Auto</button>' +
-        '<span class="sol-balbox">Balance <b class="sol-bal">Ƒ0</b></span>' +
+        '<button id="sol-new" data-i18n="casino.sol.newGame">New Game</button>' +
+        '<button id="sol-cashout" disabled data-i18n="casino.sol.cashOut">Cash Out</button>' +
+        '<button id="sol-auto" disabled title="Send every available card to the foundations" data-i18n="casino.sol.auto">Auto</button>' +
+        '<span class="sol-balbox"><span data-i18n="casino.sol.balance">Balance</span> <b class="sol-bal">Ƒ0</b></span>' +
       '</div>' +
       '<div class="sol-banner"></div>' +
       '<div class="sol-status"></div>' +
       '<div class="sol-top"></div>' +
       '<div class="sol-board"></div>';
+    if(window.applyI18n) window.applyI18n(pane);
     pane.querySelector('#sol-new').onclick = newGame;
     pane.querySelector('#sol-cashout').onclick = function(){ finishGame(false); };
     pane.querySelector('#sol-auto').onclick = autoCollect;

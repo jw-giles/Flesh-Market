@@ -12,14 +12,18 @@
       if (window._ws && window._ws.readyState === 1) window._ws.send(JSON.stringify(obj));
     } catch (_) {}
   }
+  // Everything player-visible in this panel is built in JS, so it goes through
+  // t() rather than data-i18n. window.t is defined in core.js, which loads
+  // first; the fallback keeps the panel readable if that ever stops being true.
+  const T = (k, fb) => (window.t ? window.t(k, fb) : fb);
   function fmtF(n) { return 'Ƒ' + Math.round(Number(n) || 0).toLocaleString(); }
   function fmtPT(ts) {
-    if (!ts) return 'not scheduled';
+    if (!ts) return T('tax.notScheduled', 'not scheduled');
     try {
-      return new Date(ts).toLocaleString('en-US', {
+      return new Date(ts).toLocaleString(window._lang === 'zh' ? 'zh-CN' : 'en-US', {
         timeZone: 'America/Los_Angeles', weekday: 'short', month: 'short',
         day: 'numeric', hour: 'numeric', minute: '2-digit'
-      }) + ' PT';
+      }) + T('tax.ptSuffix', ' PT');
     } catch (_) { return new Date(ts).toLocaleString(); }
   }
 
@@ -37,7 +41,7 @@
     m.innerHTML = `
       <div style="width:min(440px,92vw);max-height:86vh;overflow-y:auto;background:#0c0800;border:1px solid #7a5e1e;border-radius:8px;box-shadow:0 0 40px #00000099,0 0 0 1px #ffce4d11">
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #ffce4d22;background:#140d00">
-          <span style="color:#ffce4d;font-weight:600;letter-spacing:.06em;font-size:.92rem">🏛 FLESH REVENUE SERVICE</span>
+          <span style="color:#ffce4d;font-weight:600;letter-spacing:.06em;font-size:.92rem">${T('tax.title', '🏛 FLESH REVENUE SERVICE')}</span>
           <span onclick="window.closeTaxPanel&&window.closeTaxPanel()" style="cursor:pointer;color:#888;font-size:1.1rem;padding:0 4px">✕</span>
         </div>
         <div id="fm-tax-body" style="padding:16px;font-size:.82rem;color:#cfcabf;line-height:1.55"></div>
@@ -51,10 +55,10 @@
     const body = document.getElementById('fm-tax-body');
     if (!body) return;
     const d = _status;
-    if (!d) { body.innerHTML = '<div style="color:#888">Contacting the FRS...</div>'; return; }
+    if (!d) { body.innerHTML = '<div style="color:#888">' + T('tax.contacting', 'Contacting the FRS...') + '</div>'; return; }
 
     if (!d.enabled) {
-      body.innerHTML = `<div style="color:#9a948a">The FRS is not currently assessing income. There is nothing to pay.</div>`;
+      body.innerHTML = `<div style="color:#9a948a">${T('tax.notAssessing', 'The FRS is not currently assessing income. There is nothing to pay.')}</div>`;
       return;
     }
 
@@ -69,42 +73,42 @@
 
     body.innerHTML = `
       <div style="background:#080500;border:1px solid #ffce4d18;border-radius:6px;padding:10px 12px;margin-bottom:12px">
-        ${row('Next assessment', fmtPT(d.nextDue), '#ffce4d')}
-        ${row('Income tax rate', ((d.rateBps || 0) / 100).toFixed(2) + '%')}
-        ${row('Capital house withdrawal tax', ((d.withdrawTaxBps || 0) / 100).toFixed(2) + '%')}
+        ${row(T('tax.nextAssessment', 'Next assessment'), fmtPT(d.nextDue), '#ffce4d')}
+        ${row(T('tax.incomeRate', 'Income tax rate'), ((d.rateBps || 0) / 100).toFixed(2) + '%')}
+        ${row(T('tax.houseWithdrawRate', 'Capital house withdrawal tax'), ((d.withdrawTaxBps || 0) / 100).toFixed(2) + '%')}
       </div>
 
-      <div style="margin-bottom:6px;color:#8a857b;font-size:.74rem;letter-spacing:.05em">THIS CYCLE</div>
+      <div style="margin-bottom:6px;color:#8a857b;font-size:.74rem;letter-spacing:.05em">${T('tax.thisCycle', 'THIS CYCLE')}</div>
       <div style="background:#080500;border:1px solid #ffce4d18;border-radius:6px;padding:10px 12px;margin-bottom:12px">
-        ${row('Taxable net worth', fmtF(d.taxableNetWorth))}
-        ${row('Gain since last assessment', (gain >= 0 ? '+' : '') + fmtF(gain), gain >= 0 ? '#86ff6a' : '#ff8a8a')}
-        ${row('Estimated tax at next run', fmtF(est), '#ffce4d')}
-        ${lossCredit > 0 ? row('Loss credit carried', fmtF(lossCredit), '#7fc090') : ''}
+        ${row(T('tax.taxableNetWorth', 'Taxable net worth'), fmtF(d.taxableNetWorth))}
+        ${row(T('tax.gainSince', 'Gain since last assessment'), (gain >= 0 ? '+' : '') + fmtF(gain), gain >= 0 ? '#86ff6a' : '#ff8a8a')}
+        ${row(T('tax.estNext', 'Estimated tax at next run'), fmtF(est), '#ffce4d')}
+        ${lossCredit > 0 ? row(T('tax.lossCredit', 'Loss credit carried'), fmtF(lossCredit), '#7fc090') : ''}
       </div>
 
-      <div style="margin-bottom:6px;color:#8a857b;font-size:.74rem;letter-spacing:.05em">BALANCE</div>
+      <div style="margin-bottom:6px;color:#8a857b;font-size:.74rem;letter-spacing:.05em">${T('tax.balance', 'BALANCE')}</div>
       <div style="background:#080500;border:1px solid ${owed > 0 ? '#8a3a3a55' : '#ffce4d18'};border-radius:6px;padding:10px 12px;margin-bottom:10px">
-        ${row('Outstanding balance', fmtF(owed), owed > 0 ? '#ff8a8a' : '#86ff6a')}
-        ${prepaid > 0 ? row('Prepaid credit', fmtF(prepaid), '#7fc090') : ''}
+        ${row(T('tax.outstanding', 'Outstanding balance'), fmtF(owed), owed > 0 ? '#ff8a8a' : '#86ff6a')}
+        ${prepaid > 0 ? row(T('tax.prepaidCredit', 'Prepaid credit'), fmtF(prepaid), '#7fc090') : ''}
       </div>
 
       ${owed > 0 ? `
       <div style="display:flex;gap:6px;margin-bottom:12px">
-        <input id="fm-tax-pay-amt" type="number" min="1" placeholder="Amount to pay" style="flex:1;padding:6px 8px;background:#0a0700;border:1px solid #3a3320;border-radius:4px;color:#fff;font-size:.82rem">
-        <button onclick="window.taxPay&&window.taxPay()" style="padding:6px 14px;border:1px solid #3a8a3a;border-radius:4px;background:#0a1808;color:#86ff6a;cursor:pointer;font-size:.82rem">Pay</button>
-        <button onclick="window.taxPayAll&&window.taxPayAll()" style="padding:6px 10px;border:1px solid #7a5e1e;border-radius:4px;background:#140d00;color:#ffce4d;cursor:pointer;font-size:.78rem">All</button>
+        <input id="fm-tax-pay-amt" type="number" min="1" placeholder="${T('tax.amountToPay', 'Amount to pay')}" style="flex:1;padding:6px 8px;background:#0a0700;border:1px solid #3a3320;border-radius:4px;color:#fff;font-size:.82rem">
+        <button onclick="window.taxPay&&window.taxPay()" style="padding:6px 14px;border:1px solid #3a8a3a;border-radius:4px;background:#0a1808;color:#86ff6a;cursor:pointer;font-size:.82rem">${T('tax.pay', 'Pay')}</button>
+        <button onclick="window.taxPayAll&&window.taxPayAll()" style="padding:6px 10px;border:1px solid #7a5e1e;border-radius:4px;background:#140d00;color:#ffce4d;cursor:pointer;font-size:.78rem">${T('tax.payAll', 'All')}</button>
       </div>` : ''}
 
-      <div style="margin-bottom:6px;color:#8a857b;font-size:.74rem;letter-spacing:.05em">PAY AHEAD</div>
+      <div style="margin-bottom:6px;color:#8a857b;font-size:.74rem;letter-spacing:.05em">${T('tax.payAhead', 'PAY AHEAD')}</div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;padding:9px 12px;margin-bottom:8px;border-radius:6px;border:1px solid #3a8a3a44;background:#06120a">
-        <span style="color:#7fc090;font-size:.74rem;letter-spacing:.03em">FRS prepaid balance</span>
+        <span style="color:#7fc090;font-size:.74rem;letter-spacing:.03em">${T('tax.prepaidBalance', 'FRS prepaid balance')}</span>
         <span style="color:#86ff6a;font-size:1.05rem;font-weight:700;font-family:ui-monospace,monospace">${fmtF(prepaid)}</span>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:8px">
-        <input id="fm-tax-prepay-amt" type="number" min="1" placeholder="Prepay amount" style="flex:1;padding:6px 8px;background:#0a0700;border:1px solid #3a3320;border-radius:4px;color:#fff;font-size:.82rem">
-        <button onclick="window.taxPrepay&&window.taxPrepay()" style="padding:6px 14px;border:1px solid #7a5e1e;border-radius:4px;background:#140d00;color:#ffce4d;cursor:pointer;font-size:.82rem">Prepay</button>
+        <input id="fm-tax-prepay-amt" type="number" min="1" placeholder="${T('tax.prepayAmount', 'Prepay amount')}" style="flex:1;padding:6px 8px;background:#0a0700;border:1px solid #3a3320;border-radius:4px;color:#fff;font-size:.82rem">
+        <button onclick="window.taxPrepay&&window.taxPrepay()" style="padding:6px 14px;border:1px solid #7a5e1e;border-radius:4px;background:#140d00;color:#ffce4d;cursor:pointer;font-size:.82rem">${T('tax.prepay', 'Prepay')}</button>
       </div>
-      <div style="color:#6f6a60;font-size:.72rem">This balance sits with the FRS like a deposit account and is drawn down by future weekly assessments before any of your cash is taken. Money held inside a capital house is taxed only when you withdraw it.</div>
+      <div style="color:#6f6a60;font-size:.72rem">${T('tax.footer', 'This balance sits with the FRS like a deposit account and is drawn down by future weekly assessments before any of your cash is taken. Money held inside a capital house is taxed only when you withdraw it.')}</div>
     `;
   }
 

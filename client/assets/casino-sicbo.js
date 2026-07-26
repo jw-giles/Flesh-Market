@@ -17,6 +17,8 @@
 var pane = document.getElementById('casino-sicbo');
 if (!pane || pane.__sicInit) return;
 pane.__sicInit = true;
+var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+var TF=function(k,fb,v){return window.tf?window.tf(k,fb,v):fb;};
 
 var DICE_FACE = ['', '\u2680','\u2681','\u2682','\u2683','\u2684','\u2685']; // 1..6
 var TOTAL_PAY = {4:60,17:60, 5:30,16:30, 6:18,15:18, 7:12,14:12, 8:8,13:8, 9:6,12:6, 10:6,11:6};
@@ -86,35 +88,36 @@ pane.innerHTML = [
 '<div id="sic-wrap">',
 '  <div id="sic-felt">',
 '    <div class="sic-info">',
-'      <span>Balance: <strong id="sic-bal">-</strong></span>',
-'      <span>On table: <strong id="sic-slip">Ƒ0</strong></span>',
+'      <span><span data-i18n="casino.common.balance">Balance:</span> <strong id="sic-bal">-</strong></span>',
+'      <span><span data-i18n="casino.common.onTable">On table:</span> <strong id="sic-slip">Ƒ0</strong></span>',
 '    </div>',
 '    <div id="sic-dice">',
 '      <div class="sic-die" id="sic-d0">\u2680</div>',
 '      <div class="sic-die" id="sic-d1">\u2683</div>',
 '      <div class="sic-die" id="sic-d2">\u2685</div>',
 '    </div>',
-'    <div id="sic-total">Place your bets</div>',
+'    <div id="sic-total" data-i18n="casino.sicbo.placeBets">Place your bets</div>',
 '    <div id="sic-banner"></div>',
 '    <div id="sic-board"></div>',
 '    <div class="sic-ctrl">',
-'      <span style="font-size:.7rem;color:#8a6a40;letter-spacing:.1em">CHIP</span>',
+'      <span style="font-size:.7rem;color:#8a6a40;letter-spacing:.1em" data-i18n="casino.common.chip">CHIP</span>',
 '      <input id="sic-chip" type="number" min="1" value="50"/>',
 '      <div class="sic-chips">',
 '        <button data-c="10">+10</button><button data-c="50">+50</button>',
 '        <button data-c="100">+100</button><button data-c="500">+500</button>',
-'        <button data-c="max">Max</button>',
+'        <button data-c="max" data-i18n="casino.common.max">Max</button>',
 '      </div>',
 '    </div>',
 '    <div class="sic-actions">',
-'      <button id="sic-roll">Roll</button>',
-'      <button id="sic-clear">Clear</button>',
+'      <button id="sic-roll" data-i18n="casino.sicbo.roll">Roll</button>',
+'      <button id="sic-clear" data-i18n="casino.common.clear">Clear</button>',
 '    </div>',
 '    <div id="sic-hist"></div>',
 '    <div id="sic-log"></div>',
 '  </div>',
 '</div>'
 ].join('');
+if(window.applyI18n) window.applyI18n(pane);
 
 // ── Board definition (spot key -> label/odds). Keys match the server pricing. ──
 function section(title, rowClass, cells){
@@ -135,30 +138,30 @@ function section(title, rowClass, cells){
 (function buildBoard(){
   var board = document.getElementById('sic-board');
   // even-money
-  board.appendChild(section('Even money', 'r4', [
-    { key:'small', label:'Small (4-10)', odds:'1 : 1', big:true },
-    { key:'odd',   label:'Odd',          odds:'1 : 1', big:true },
-    { key:'even',  label:'Even',         odds:'1 : 1', big:true },
-    { key:'big',   label:'Big (11-17)',  odds:'1 : 1', big:true },
+  board.appendChild(section(T('casino.sicbo.secEven','Even money'), 'r4', [
+    { key:'small', label:T('casino.sicbo.small','Small (4-10)'), odds:'1 : 1', big:true },
+    { key:'odd',   label:T('casino.sicbo.odd','Odd'),          odds:'1 : 1', big:true },
+    { key:'even',  label:T('casino.sicbo.even','Even'),         odds:'1 : 1', big:true },
+    { key:'big',   label:T('casino.sicbo.big','Big (11-17)'),  odds:'1 : 1', big:true },
   ]));
   // singles 1-6
-  board.appendChild(section('Single number (pays by count)', 'r6',
+  board.appendChild(section(T('casino.sicbo.secSingle','Single number (pays by count)'), 'r6',
     [1,2,3,4,5,6].map(function(n){ return { key:'s'+n, label:DICE_FACE[n]+' '+n, odds:'1/2/3 : 1' }; })));
   // doubles 1-6
-  board.appendChild(section('Specific double', 'r6',
+  board.appendChild(section(T('casino.sicbo.secDouble','Specific double'), 'r6',
     [1,2,3,4,5,6].map(function(n){ return { key:'d'+n, label:DICE_FACE[n]+DICE_FACE[n], odds:'10 : 1' }; })));
   // triples
-  var trip = [{ key:'anytriple', label:'Any triple', odds:'30 : 1' }];
+  var trip = [{ key:'anytriple', label:T('casino.sicbo.anyTriple','Any triple'), odds:'30 : 1' }];
   [1,2,3,4,5,6].forEach(function(n){ trip.push({ key:'t'+n, label:DICE_FACE[n]+DICE_FACE[n]+DICE_FACE[n], odds:'150 : 1' }); });
-  board.appendChild(section('Triple', 'r7', trip));
+  board.appendChild(section(T('casino.sicbo.secTriple','Triple'), 'r7', trip));
   // totals 4-17
   var tot = [];
   for (var v=4; v<=17; v++) tot.push({ key:'n'+v, label:'= '+v, odds:TOTAL_PAY[v]+' : 1' });
-  board.appendChild(section('Total sum', 'r14', tot));
+  board.appendChild(section(T('casino.sicbo.secTotal','Total sum'), 'r14', tot));
   // two-dice combos
   var comb = [];
   for (var f=1; f<=6; f++) for (var g=f+1; g<=6; g++) comb.push({ key:'c'+f+g, label:f+'\u00b7'+g, odds:'5 : 1' });
-  board.appendChild(section('Two-dice combo', 'combo', comb));
+  board.appendChild(section(T('casino.sicbo.secCombo','Two-dice combo'), 'combo', comb));
 })();
 
 function log(m){
@@ -181,7 +184,7 @@ function renderCell(key){
 function addChip(key){
   if (rolling) return;
   var c = chipVal();
-  if (slipTotal() + c > getBalance()){ log('Insufficient funds.'); return; }
+  if (slipTotal() + c > getBalance()){ log(T('casino.common.insufficient','Insufficient funds.')); return; }
   bets[key] = (bets[key] || 0) + c;
   renderCell(key); refreshBal();
 }
@@ -226,13 +229,13 @@ function pushHistory(total){
 async function roll(){
   if (rolling) return;
   var stake = slipTotal();
-  if (!(stake > 0)){ log('Place a bet first.'); return; }
-  if (window.CasinoNet == null){ log('Casino net not ready - refresh.'); return; }
+  if (!(stake > 0)){ log(T('casino.common.placeBetFirst','Place a bet first.')); return; }
+  if (window.CasinoNet == null){ log(T('casino.common.netNotReady','Casino net not ready - refresh.')); return; }
   rolling = true;
   var rollBtn = document.getElementById('sic-roll'); if(rollBtn) rollBtn.disabled = true;
   var bn = document.getElementById('sic-banner'); if(bn) bn.style.display='none';
   pane.querySelectorAll('.sic-cell.hit').forEach(function(el){ el.classList.remove('hit'); });
-  document.getElementById('sic-total').innerHTML = 'Rolling...';
+  document.getElementById('sic-total').innerHTML = T('casino.sicbo.rolling','Rolling...');
 
   // start the shake
   ['0','1','2'].forEach(function(i){ document.getElementById('sic-d'+i).classList.add('spin'); });
@@ -246,9 +249,9 @@ async function roll(){
   if (!res || !res.ok){
     clearInterval(shuffle);
     ['0','1','2'].forEach(function(i){ document.getElementById('sic-d'+i).classList.remove('spin'); });
-    document.getElementById('sic-total').innerHTML = 'Place your bets';
+    document.getElementById('sic-total').innerHTML = T('casino.sicbo.placeBets','Place your bets');
     rolling = false; if(rollBtn) rollBtn.disabled = false;
-    log(res && res.stale ? 'Casino updated - refresh (Ctrl+Shift+R).' : ('Rejected: ' + ((res&&res.error)||'unknown')));
+    log(res && res.stale ? T('casino.common.stale','Casino updated, refresh (Ctrl+Shift+R).') : TF('casino.common.rejected','Rejected: {err}',{err:((res&&res.error)||'unknown')}));
     return;
   }
   var dice = (res.view && res.view.dice) ? res.view.dice : [1,1,1];
@@ -262,7 +265,7 @@ async function roll(){
     ['0','1','2'].forEach(function(i){ document.getElementById('sic-d'+i).classList.remove('spin'); });
     var total = dice[0]+dice[1]+dice[2];
     var isTrip = (dice[0]===dice[1] && dice[1]===dice[2]);
-    document.getElementById('sic-total').innerHTML = 'Total <strong>' + total + '</strong>' + (isTrip?' (triple)':'');
+    document.getElementById('sic-total').innerHTML = T('casino.sicbo.totalLbl','Total') + ' <strong>' + total + '</strong>' + (isTrip?T('casino.sicbo.tripleTag',' (triple)'):'');
 
     // highlight winning spots that were actually bet
     var w = winningSpots(dice);
@@ -270,9 +273,9 @@ async function roll(){
 
     if (bn){
       bn.style.display='block';
-      var head = 'Roll ' + dice.join(' ') + ' = ' + total + (isTrip?' (triple)':'');
-      if (credited > 0){ bn.className='win';  bn.textContent = 'W ' + head + ', won ' + fmt(net) + ' (paid ' + fmt(credited) + ')'; }
-      else             { bn.className='lose'; bn.textContent = 'L ' + head + ', lost ' + fmt(stake); }
+      var head = TF('casino.sicbo.rollHead','Roll {dice} = {total}',{dice:dice.join(' '),total:total}) + (isTrip?T('casino.sicbo.tripleTag',' (triple)'):'');
+      if (credited > 0){ bn.className='win';  bn.textContent = TF('casino.common.bannerWin','W {head}, won {net} (paid {paid})',{head:head,net:fmt(net),paid:fmt(credited)}); }
+      else             { bn.className='lose'; bn.textContent = TF('casino.common.bannerLose','L {head}, lost {stake}',{head:head,stake:fmt(stake)}); }
     }
     log(dice.join('-') + ' = ' + total + ' | ' + (net>=0?'+':'') + fmt(net));
     pushHistory(total);

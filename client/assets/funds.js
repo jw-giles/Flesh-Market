@@ -125,7 +125,7 @@ function renderFundDonut(f) {
     ctx.strokeStyle='rgba(255,180,50,0.12)'; ctx.lineWidth=2; ctx.stroke();
     ctx.fillStyle='rgba(212,184,122,0.25)'; ctx.font='11px monospace';
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('Empty house', cx, cy);
+    ctx.fillText((window.t?window.t('fnd.emptyHouse','Empty house'):'Empty house'), cx, cy);
     return;
   }
 
@@ -283,13 +283,13 @@ function _renderGuildHoldings(f){
   const hBox = document.getElementById('g-d-holdings');
   if (hBox){
     if (!rowsAll.length){
-      hBox.innerHTML = '<span style="opacity:.4">No positions</span>';
+      hBox.innerHTML = '<span style="opacity:.4">'+(window.t?window.t('fnd.noPositions','No positions'):'No positions')+'</span>';
     } else {
       const rows = _gArrange(rowsAll);
       const bySector = window.__guildHoldSort === 'group';
       const emptyMsg = /^[0-9]+$/.test(String(window.__guildHoldSort))
-        ? ('No holdings in ' + _gSectorName(Number(window.__guildHoldSort)))
-        : 'No holdings match filter';
+        ? ((window.t?window.t('fnd.noHoldings','No holdings in'):'No holdings in') + ' ' + _gSectorName(Number(window.__guildHoldSort)))
+        : (window.t?window.t('fnd.noHoldingsFilter','No holdings match filter'):'No holdings match filter');
       hBox.innerHTML = rows.length
         ? rows.map(h => {
             const hasG = (h.pct != null);
@@ -382,8 +382,8 @@ function _drawGuildBars(rowsIn){
     ctx.fillStyle = 'rgba(212,184,122,0.2)'; ctx.font = '11px monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(
-      window.__guildHoldSearch ? 'No holdings match filter'
-        : (/^[0-9]+$/.test(String(window.__guildHoldSort)) ? ('No holdings in ' + _gSectorName(Number(window.__guildHoldSort))) : 'No positions'),
+      window.__guildHoldSearch ? (window.t?window.t('fnd.noHoldingsFilter','No holdings match filter'):'No holdings match filter')
+        : (/^[0-9]+$/.test(String(window.__guildHoldSort)) ? ((window.t?window.t('fnd.noHoldings','No holdings in'):'No holdings in') + ' ' + _gSectorName(Number(window.__guildHoldSort))) : (window.t?window.t('fnd.noPositions','No positions'):'No positions')),
       W/2, H/2);
     return;
   }
@@ -457,7 +457,7 @@ function _renderFundSectors(f){
     const name = _gSectorName(_gSectorOf(h.symbol));
     byS[name] = (byS[name]||0) + v; equity += v;
   }
-  if (equity <= 0){ bars.innerHTML = '<span style="opacity:.3;font-size:.75rem">No positions</span>'; return; }
+  if (equity <= 0){ bars.innerHTML = '<span style="opacity:.3;font-size:.75rem">'+(window.t?window.t('fnd.noPositions','No positions'):'No positions')+'</span>'; return; }
   bars.innerHTML = '';
   for (const [name,val] of Object.entries(byS).sort((a,b)=>b[1]-a[1])){
     const pct = Math.min(100, (val/equity)*100);
@@ -488,7 +488,7 @@ function renderFundDetail(f) {
     typeEl.style.color  = TYPE_COLOR[f.type] || '#aaa';
     typeEl.style.borderColor = TYPE_COLOR[f.type] || '#aaa';
   }
-  if (descEl) descEl.textContent = f.type === 'patreon' ? 'Patreon tier, Capital House access + member perks. patreon.com/FLSH' : (f.description || '');
+  if (descEl) descEl.textContent = f.type === 'patreon' ? (window.t?window.t('fnd.patreonPerk','Patreon tier, Capital House access + member perks. patreon.com/FLSH'):'Patreon tier, Capital House access + member perks. patreon.com/FLSH') : (f.description || '');
 
   // Stats
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
@@ -516,7 +516,7 @@ function renderFundDetail(f) {
     const own = m.isOwner ? ' 👑' : '';
     const role = _officerByName[m.name];
     const roleTag = role ? ` <span style="font-size:.58rem;color:${_roleBadge[role]||'#aaa'};border:1px solid ${_roleBadge[role]||'#aaa'}55;padding:0 4px;border-radius:3px;text-transform:uppercase;letter-spacing:.05em">${role}</span>` : '';
-    const goldTag = m.isGolden ? ' <span title="Golden share" style="color:#ffce4d">★</span>' : '';
+    const goldTag = m.isGolden ? ' <span title="'+(window.t?window.t('fnd.goldenShare','Golden share'):'Golden share')+'" style="color:#ffce4d">★</span>' : '';
     const kickBtn = (f.isOwner && !m.isOwner && isPlayerFund)
       ? `<button onclick="kickMember('${m.name}')" style="font-size:.65rem;padding:1px 5px;background:#2a0d0d;border:1px solid #4a1a1a;color:#ff8080;border-radius:4px;cursor:pointer;margin-left:4px">kick</button>`
       : '';
@@ -587,13 +587,13 @@ function renderFundDetail(f) {
   const joinBtn = document.getElementById('g-join-btn');
   const joinHint = joinBtn ? joinBtn.nextElementSibling : null;
   if (joinBtn && f.type === 'patreon') {
-    joinBtn.textContent = '★ Become a Patron';
+    joinBtn.textContent = '★ '+(window.t?window.t('fnd.becomePatron','Become a Patron'):'Become a Patron');
     joinBtn.style.borderColor = '#ffce4d';
     joinBtn.style.color = '#ffce4d';
-    if (joinHint) joinHint.textContent = 'Opens patreon.com/FLSH, membership unlocks the Guild';
+    if (joinHint) joinHint.textContent = (window.t?window.t('fnd.patreonOpens','Opens patreon.com/FLSH, membership unlocks the Guild'):'Opens patreon.com/FLSH, membership unlocks the Guild');
   } else if (joinBtn) {
-    joinBtn.textContent = 'Join Fund';
-    if (joinHint) joinHint.textContent = 'Free to join, deposit anytime';
+    joinBtn.textContent = (window.t?window.t('fnd.joinFund','Join Fund'):'Join Fund');
+    if (joinHint) joinHint.textContent = (window.t?window.t('fnd.freeToJoin','Free to join, deposit anytime'):'Free to join, deposit anytime');
   }
   show('g-slots-panel', f.isOwner);
   show('g-owner-panel', f.isOwner && f.type==='player');  // owner controls for player funds
@@ -654,7 +654,7 @@ function renderFundDetail(f) {
     ((gov !== 'vote') && ((isDevFund && __isDev_g) || (isPatreonFund && f.isMember && gov === 'executive')));
   show('g-trade-panel', canDirectTrade);
   const tradePanelTitle = document.querySelector('#g-trade-panel div[style*="opacity:.5"]');
-  if (tradePanelTitle) tradePanelTitle.textContent = gov === 'council' ? 'Fund Trade (Owner Override)' : 'Fund Trade';
+  if (tradePanelTitle) tradePanelTitle.textContent = gov === 'council' ? (window.t?window.t('fnd.fundTradeOwner','Fund Trade (Owner Override)'):'Fund Trade (Owner Override)') : (window.t?window.t('fnd.fundTrade','Fund Trade'):'Fund Trade');
   // Buy cooldown lock + countdown (server-authoritative; 0 for non-player funds).
   try { applyBuyCooldown(f.buyCooldownMs || 0); } catch(_){}
 
@@ -855,7 +855,7 @@ function renderGovernance(f) {
   const weight = f.voteWeight || 'equal';
   const wLabel = weight === 'shares' ? 'share-weighted' : weight === 'tenure' ? 'tenure-weighted' : 'one vote each';
   const badge = document.getElementById('g-gov-mode-badge');
-  const label = gov === 'executive' ? 'Executive, owner trades directly'
+  const label = gov === 'executive' ? (window.t?window.t('fnd.execOwnerTrades','Executive, owner trades directly'):'Executive, owner trades directly')
     : gov === 'vote' ? `Majority Vote, members decide (${wLabel})`
     : `Council, members vote, owner has final say (${wLabel})`;
   if (badge) badge.innerHTML = `<span style="opacity:.5">Mode:</span> <b style="color:#46ff7d">${label}</b>`;
@@ -896,8 +896,8 @@ function renderProposals(f) {
       ? btn('Yes','#2ecc71',`houseVote('${p.id}','yes')`) + btn('No','#e74c3c',`houseVote('${p.id}','no')`) : '';
     const ownerBtns = (f.isOwner && gov==='council' && ['open','advisory_pass','advisory_fail'].includes(p.status))
       ? btn('Execute','#86ff6a',`houseResolve('${p.id}','execute')`) + btn('Veto','#ff6b6b',`houseResolve('${p.id}','veto')`) : '';
-    const goldenBtn = (f.iHoldGolden && open) ? btn('Veto (Golden)','#72e09c',`goldenVeto('${p.id}')`) : '';
-    const whipBtn = ((f.isOwner || f.myRole==='whip') && open && (gov==='vote'||gov==='council')) ? btn('Force Call','#7fc090',`forceVote('${p.id}')`) : '';
+    const goldenBtn = (f.iHoldGolden && open) ? btn((window.t?window.t('fnd.vetoGolden','Veto (Golden)'):'Veto (Golden)'),'#72e09c',`goldenVeto('${p.id}')`) : '';
+    const whipBtn = ((f.isOwner || f.myRole==='whip') && open && (gov==='vote'||gov==='council')) ? btn((window.t?window.t('fnd.forceCall','Force Call'):'Force Call'),'#7fc090',`forceVote('${p.id}')`) : '';
     let closes = '';
     if (open && p.expires_at) {
       const ms = p.expires_at - Date.now();
@@ -998,7 +998,7 @@ function initGuildUI() {
   document.getElementById('g-d-withdraw-btn')?.addEventListener('click', async () => {
     if (!__currentFundId) return;
     const amt = parseFloat(document.getElementById('g-d-amount')?.value);
-    if (!amt || amt < 1) { const h=document.getElementById('g-dw-hint'); if(h) h.textContent='Enter an amount to withdraw'; return; }
+    if (!amt || amt < 1) { const h=document.getElementById('g-dw-hint'); if(h) h.textContent=(window.t?window.t('fnd.enterWithdrawAmt','Enter an amount to withdraw'):'Enter an amount to withdraw'); return; }
     const d = await guildPost(`/api/funds/${__currentFundId}/withdraw`, {amount:amt}, 'g-dw-hint');
     if (d?.ok) { document.getElementById('g-dw-hint').textContent = `✓ Withdrew ${_mfmt(d.cashOut)}`; openFund(__currentFundId); }
   });
@@ -1027,7 +1027,7 @@ function initGuildUI() {
   document.getElementById('g-owner-withdraw-btn')?.addEventListener('click', async () => {
     if (!__currentFundId) return;
     const amt = parseFloat(document.getElementById('g-owner-withdraw-amt')?.value);
-    if (!amt || amt < 1) { const h=document.getElementById('g-owner-hint'); if(h) h.textContent='Enter an amount to withdraw'; return; }
+    if (!amt || amt < 1) { const h=document.getElementById('g-owner-hint'); if(h) h.textContent=(window.t?window.t('fnd.enterWithdrawAmt','Enter an amount to withdraw'):'Enter an amount to withdraw'); return; }
     const d = await guildPost(`/api/funds/${__currentFundId}/withdraw`, {amount:amt}, 'g-owner-hint');
     if (d?.ok) { document.getElementById('g-owner-hint').textContent = `✓ Withdrew ${_mfmt(d.cashOut)}`; openFund(__currentFundId); }
   });
@@ -1037,7 +1037,7 @@ function initGuildUI() {
     if (!__currentFundId) return;
     const targetName = document.getElementById('g-assign-name')?.value?.trim();
     const amount = parseFloat(document.getElementById('g-assign-amt')?.value);
-    if (!targetName || !amount) { const h=document.getElementById('g-owner-hint'); if(h){h.textContent='Enter member name and amount';h.style.color='#ff6b6b';} return; }
+    if (!targetName || !amount) { const h=document.getElementById('g-owner-hint'); if(h){h.textContent=(window.t?window.t('fnd.enterMemberAmt','Enter member name and amount'):'Enter member name and amount');h.style.color='#ff6b6b';} return; }
     const d = await guildPost(`/api/funds/${__currentFundId}/assign`, {targetName,amount}, 'g-owner-hint', `✓ Assigned ${_mfmt(amount)} to ${targetName}`);
     if (d?.ok) { document.getElementById('g-assign-name').value=''; document.getElementById('g-assign-amt').value=''; openFund(__currentFundId); }
   });
@@ -1046,7 +1046,7 @@ function initGuildUI() {
   document.getElementById('g-invite-btn')?.addEventListener('click', async () => {
     if (!__currentFundId) return;
     const targetName = document.getElementById('g-invite-name')?.value?.trim();
-    if (!targetName) { const h=document.getElementById('g-owner-hint'); if(h){h.textContent='Enter player name to invite';h.style.color='#ff6b6b';} return; }
+    if (!targetName) { const h=document.getElementById('g-owner-hint'); if(h){h.textContent=(window.t?window.t('fnd.enterInvite','Enter player name to invite'):'Enter player name to invite');h.style.color='#ff6b6b';} return; }
     const d = await guildPost(`/api/funds/${__currentFundId}/invite`, {targetName}, 'g-owner-hint', `✓ ${targetName} invited`);
     if (d?.ok) { document.getElementById('g-invite-name').value=''; openFund(__currentFundId); }
   });
@@ -1101,7 +1101,7 @@ function initGuildUI() {
     const side   = document.getElementById('g-t-side')?.value;
     const symbol = document.getElementById('g-t-sym')?.value?.toUpperCase().trim();
     const qty    = parseInt(document.getElementById('g-t-qty')?.value);
-    if (!symbol || !qty) { const h=document.getElementById('g-trade-hint'); if(h){h.textContent='Symbol and qty required';h.style.color='#ff6b6b';} return; }
+    if (!symbol || !qty) { const h=document.getElementById('g-trade-hint'); if(h){h.textContent=(window.t?window.t('fnd.symbolQtyRequired','Symbol and qty required'):'Symbol and qty required');h.style.color='#ff6b6b';} return; }
     const d = await guildPost(`/api/funds/${__currentFundId}/trade`, {side,symbol,qty}, 'g-trade-hint',
       `✓ ${side.toUpperCase()} ${qty}× ${symbol} executed`);
     if (d?.ok) openFund(__currentFundId);
@@ -1134,7 +1134,7 @@ function initGuildUI() {
   document.getElementById('g-golden-transfer-btn')?.addEventListener('click', async () => {
     if (!__currentFundId) return;
     const targetName = document.getElementById('g-golden-target')?.value?.trim();
-    if (!targetName) { const h=document.getElementById('g-golden-hint'); if(h){h.textContent='Enter a member name';h.style.color='#ff6b6b';} return; }
+    if (!targetName) { const h=document.getElementById('g-golden-hint'); if(h){h.textContent=(window.t?window.t('fnd.enterMemberName','Enter a member name'):'Enter a member name');h.style.color='#ff6b6b';} return; }
     if (!confirm(`Hand the golden share to ${targetName}? This is permanent, they get full veto power and you lose it.`)) return;
     const d = await guildPost(`/api/funds/${__currentFundId}/golden/transfer`, {targetName}, 'g-golden-hint', '✓ Golden share transferred');
     if (d?.ok) openFund(__currentFundId);
@@ -1145,14 +1145,14 @@ function initGuildUI() {
     if (!__currentFundId) return;
     const targetName = document.getElementById('g-officer-name')?.value?.trim();
     const role = document.getElementById('g-officer-role')?.value;
-    if (!targetName) { const h=document.getElementById('g-officer-hint'); if(h){h.textContent='Enter a member name';h.style.color='#ff6b6b';} return; }
+    if (!targetName) { const h=document.getElementById('g-officer-hint'); if(h){h.textContent=(window.t?window.t('fnd.enterMemberName','Enter a member name'):'Enter a member name');h.style.color='#ff6b6b';} return; }
     const d = await guildPost(`/api/funds/${__currentFundId}/officer/appoint`, {targetName, role}, 'g-officer-hint', `✓ Appointed ${role}`);
     if (d?.ok) openFund(__currentFundId);
   });
   document.getElementById('g-officer-revoke-btn')?.addEventListener('click', async () => {
     if (!__currentFundId) return;
     const targetName = document.getElementById('g-officer-name')?.value?.trim();
-    if (!targetName) { const h=document.getElementById('g-officer-hint'); if(h){h.textContent='Enter a member name';h.style.color='#ff6b6b';} return; }
+    if (!targetName) { const h=document.getElementById('g-officer-hint'); if(h){h.textContent=(window.t?window.t('fnd.enterMemberName','Enter a member name'):'Enter a member name');h.style.color='#ff6b6b';} return; }
     const d = await guildPost(`/api/funds/${__currentFundId}/officer/revoke`, {targetName}, 'g-officer-hint', '✓ Office revoked');
     if (d?.ok) openFund(__currentFundId);
   });
@@ -1164,7 +1164,7 @@ function initGuildUI() {
     const symbol = document.getElementById('g-pr-sym')?.value?.toUpperCase().trim();
     const qty    = parseInt(document.getElementById('g-pr-qty')?.value);
     const reason = document.getElementById('g-pr-reason')?.value?.trim();
-    if (!symbol || !qty) { const h=document.getElementById('g-pr-hint'); if(h){h.textContent='Symbol and qty required';h.style.color='#ff6b6b';} return; }
+    if (!symbol || !qty) { const h=document.getElementById('g-pr-hint'); if(h){h.textContent=(window.t?window.t('fnd.symbolQtyRequired','Symbol and qty required'):'Symbol and qty required');h.style.color='#ff6b6b';} return; }
     const d = await guildPost(`/api/funds/${__currentFundId}/propose`, {side,symbol,qty,reason}, 'g-pr-hint',
       `✓ Proposed ${side.toUpperCase()} ${qty}× ${symbol}`);
     if (d?.ok) { document.getElementById('g-pr-sym').value=''; document.getElementById('g-pr-qty').value=''; document.getElementById('g-pr-reason').value=''; openFund(__currentFundId); }
@@ -1228,7 +1228,7 @@ document.addEventListener('fm:authed', (ev) => {
     window.__IS_DUNCED = true;
     // Slight defer so DOM is fully settled after auth modal closes
     setTimeout(() => {
-      try { applyDunceState('You are in the dunce corner.'); } catch(_) {}
+      try { applyDunceState((window.t?window.t('fnd.dunceCorner','You are in the dunce corner.'):'You are in the dunce corner.')); } catch(_) {}
     }, 150);
   }
 
@@ -1239,8 +1239,8 @@ document.addEventListener('fm:authed', (ev) => {
   if (linkBtn && emailInp && hint) {
     linkBtn.onclick = async () => {
       const email = emailInp.value.trim();
-      if (!email || !email.includes('@')) { hint.textContent='Enter a valid email.'; hint.style.color='#ff6b6b'; return; }
-      if (!window.FM_TOKEN) { hint.textContent='Log in first.'; hint.style.color='#ff6b6b'; return; }
+      if (!email || !email.includes('@')) { hint.textContent=(window.t?window.t('fnd.enterValidEmail','Enter a valid email.'):'Enter a valid email.'); hint.style.color='#ff6b6b'; return; }
+      if (!window.FM_TOKEN) { hint.textContent=(window.t?window.t('fnd.loginFirst','Log in first.'):'Log in first.'); hint.style.color='#ff6b6b'; return; }
       linkBtn.disabled = true;
       linkBtn.textContent = '…';
       try {
@@ -1255,15 +1255,15 @@ document.addEventListener('fm:authed', (ev) => {
           hint.style.color = '#86ff6a';
           emailInp.value = '';
         } else {
-          hint.textContent = d.error || 'Failed to link.';
+          hint.textContent = d.error || (window.t?window.t('fnd.failedToLink','Failed to link.'):'Failed to link.');
           hint.style.color = '#ff6b6b';
         }
       } catch(e) {
-        hint.textContent = 'Server unreachable.';
+        hint.textContent = (window.t?window.t('fnd.serverUnreachable','Server unreachable.'):'Server unreachable.');
         hint.style.color = '#ff6b6b';
       }
       linkBtn.disabled = false;
-      linkBtn.textContent = 'Link Account';
+      linkBtn.textContent = (window.t?window.t('fnd.linkAccount','Link Account'):'Link Account');
     };
     emailInp.addEventListener('keydown', e => { if(e.key==='Enter') linkBtn.click(); });
   }
@@ -1271,9 +1271,9 @@ document.addEventListener('fm:authed', (ev) => {
   // ── Fund edit/delete (global onclick handlers) ─────────────────────────────
   window._fmEditFund = async function() {
     if (!__currentFundId) return;
-    const newName = prompt('New fund name (3-40 chars):');
+    const newName = prompt((window.t?window.t('fnd.newFundName','New fund name (3-40 chars):'):'New fund name (3-40 chars):'));
     if (!newName || newName.trim().length < 3) return;
-    const newDesc = prompt('New description (optional, max 200 chars):') || '';
+    const newDesc = prompt((window.t?window.t('fnd.newDescription','New description (optional, max 200 chars):'):'New description (optional, max 200 chars):')) || '';
     const d = await guildPost(`/api/funds/${__currentFundId}/edit`, {name:newName.trim(),description:newDesc.trim()}, 'g-owner-hint', `✓ Fund renamed to "${newName.trim()}"`);
     if (d?.ok) openFund(__currentFundId);
   };
@@ -1281,7 +1281,7 @@ document.addEventListener('fm:authed', (ev) => {
   window._fmDeleteFund = async function() {
     if (!__currentFundId) return;
     if (!confirm('Disband this fund? All members will be kicked and refunded their deposits. You will receive Ƒ5,000,000.')) return;
-    if (!confirm('Are you sure? This cannot be undone.')) return;
+    if (!confirm((window.t?window.t('fnd.areYouSure','Are you sure? This cannot be undone.'):'Are you sure? This cannot be undone.'))) return;
     const d = await guildPost(`/api/funds/${__currentFundId}/delete`, {}, 'g-owner-hint', '✓ Fund disbanded');
     if (d?.ok) {
       __currentFundId = null;

@@ -125,6 +125,9 @@ window.renderTradeFeed = function(d) {
 
 // Lore names — ordered to match server SECTOR_NAMES indices
 // (0=Finance,1=Biotech,2=Insurance,3=Manufacturing,4=Energy,5=Logistics,6=Tech,7=Misc)
+function _hmT(k,fb){ return window.t ? window.t(k,fb) : fb; }
+// Rebuilt per read so the language toggle takes effect without a reload.
+function HEAT_LORE(i){ return { name:_hmT('hm.sec'+i, HEAT_SECTOR_LORE[i].name), sub:_hmT('hm.sec'+i+'sub', HEAT_SECTOR_LORE[i].sub) }; }
 const HEAT_SECTOR_LORE = [
   { name: 'The Capital Syndicate',    sub: 'Banking, lending & exchange houses'         },
   { name: 'Flesh & Gene Corps',       sub: 'Biomedical, pharma & augmentation firms'    },
@@ -174,7 +177,7 @@ function _makeHeatCell(t) {
   cell.style.color = text;
   cell.innerHTML = `<div class="hs">${t.symbol}</div><div class="hp">${sign}${Math.abs(pct)>=10?pct.toFixed(1):pct.toFixed(2)}%</div><div class="hpr">Ƒ${priceStr}</div>`;
 
-  const lore = HEAT_SECTOR_LORE[t.sector] || {};
+  const lore = HEAT_SECTOR_LORE[t.sector] ? HEAT_LORE(t.sector) : {};
   cell.title = `${t.name || t.symbol}\nƑ${price.toFixed(2)}  ${sign}${pct.toFixed(2)}%\nSector: ${lore.name || ''}\nClick to open chart`;
 
   cell.addEventListener('click', () => {
@@ -228,7 +231,7 @@ window.refreshHeatmap = function() {
     try {
       // Sort stocks: biggest gainers first, biggest losers last
       const stocks = bySector[sid].sort((a, b) => (b.pct || 0) - (a.pct || 0));
-      const lore = HEAT_SECTOR_LORE[sid] || { name: `Sector ${sid}`, sub: '' };
+      const lore = HEAT_SECTOR_LORE[sid] ? HEAT_LORE(sid) : { name: `Sector ${sid}`, sub: '' };
       const _wheelPal = (typeof window!=='undefined' && window.FM_DONUT_PAL) ? window.FM_DONUT_PAL : ['#42ff7e'];
       const _secColor = _wheelPal[sid % _wheelPal.length] || '#42ff7e';
       const isCollapsed = !!_heatCollapsed[sid];
@@ -328,7 +331,7 @@ document.addEventListener('click', function(e) {
 // ── Limit Order Panel ─────────────────────────────────────────────────────────
 window.renderOpenOrders = function(orders) {
   const box = document.getElementById('openOrders'); if (!box) return;
-  if (!orders || !orders.length) { box.innerHTML = '<span style="opacity:.4">No open orders</span>'; return; }
+  if (!orders || !orders.length) { box.innerHTML = '<span style="opacity:.4">'+(window.t?window.t('cd.noOpenOrders','No open orders'):'No open orders')+'</span>'; return; }
   box.innerHTML = '';
   for (const o of orders) {
     const row = document.createElement('div');

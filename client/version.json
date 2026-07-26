@@ -1,7 +1,7 @@
 {
-  "version": "1.1.9.13",
-  "built": "2026-07-19T00:00:00Z",
+  "version": "1.2.0",
+  "built": "2026-07-26T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.1.9.13",
-  "notes": "Solitaire now supports drag and drop as the primary way to move cards, with click-to-move kept as a fallback. Drag is pointer-based so it works with both mouse and touch: press and drag a card (a face-up tableau card carries its run, or the top of the waste) and drop it on a column or a foundation; a valid target highlights while you hover, and an illegal or off-target drop snaps back. A press without movement still counts as a click, so tap-to-select, double-click-to-foundation, click the stock to draw, and the Auto button all still work. Drag and click both go through the same move validation, so the server-authoritative scoring is unchanged and the client and server deals still match byte-for-byte. Also updated the in-game tutorial to list all eleven casino games (it previously listed eight and omitted Baccarat, Sic Bo, and Solitaire). Client only, no server or DB change, but hard-refresh (Ctrl+Shift+R) is required to pick up the new assets. Carries 1.1.9.12 and earlier."
+  "patch": "1.2.0",
+  "notes": "FleshMarket 1.2. Three things that were not in 1.1.9.13: the Jade Circuit, a sealed second galaxy with its own exchange, its own worlds and its own Changzheng hull family; a full Chinese localization of the client, from the trading chrome to the news engine to the casino; and Cities, where players hold mayoral office over districts, develop them, tax the trade, and now feel it in the commodity market. Carries everything from the 1.2.0.0 to 1.6.3.0 development series. SERVER: restart required. Schema changes are additive, rollback is safe."
 }

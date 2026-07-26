@@ -45,8 +45,8 @@ function initWatchlistUI() {
   wrap.innerHTML = `
     <button id="wlToggle" style="background:none;border:1px solid rgba(240,180,84,0.3);border-radius:4px;
       color:#b8893a;font-size:.72rem;padding:3px 10px;cursor:pointer;font-family:inherit;
-      transition:all .15s;white-space:nowrap" title="Show only watchlisted tickers">
-      ★ Watchlist
+      transition:all .15s;white-space:nowrap" title="${(window.t?window.t('mt.onlyWatchlisted','Show only watchlisted tickers'):'Show only watchlisted tickers')}">
+      ★ ${(window.t?window.t('mp.watchlist','Watchlist'):'Watchlist')}
     </button>
     <span id="wlCount" style="font-size:.65rem;color:#6a5a2e;opacity:.8"></span>`;
   searchInput.parentNode.insertBefore(wrap, searchInput);
@@ -101,7 +101,7 @@ function patchRenderTickers() {
       const star = document.createElement('span');
       star.className = 'wl-star';
       star.textContent = wl.includes(sym) ? '★' : '☆';
-      star.title = wl.includes(sym) ? 'Remove from watchlist' : 'Add to watchlist';
+      star.title = wl.includes(sym) ? (window.t?window.t('mt.removeWatch','Remove from watchlist'):'Remove from watchlist') : (window.t?window.t('mt.addWatch','Add to watchlist'):'Add to watchlist');
       star.style.cssText = `cursor:pointer;font-size:.9rem;padding:0 4px;flex-shrink:0;
         color:${wl.includes(sym) ? '#46ff7d' : '#333'};user-select:none;
         transition:color .15s;z-index:2`;
@@ -110,7 +110,7 @@ function patchRenderTickers() {
         const nowWatched = toggleWatch(sym);
         star.textContent = nowWatched ? '★' : '☆';
         star.style.color = nowWatched ? '#46ff7d' : '#333';
-        star.title = nowWatched ? 'Remove from watchlist' : 'Add to watchlist';
+        star.title = nowWatched ? (window.t?window.t('mt.removeWatch','Remove from watchlist'):'Remove from watchlist') : (window.t?window.t('mt.addWatch','Add to watchlist'):'Add to watchlist');
         updateWatchlistCount();
       });
       // Insert before the price element (last direct child of row)
@@ -181,17 +181,17 @@ function initAlertUI() {
   panel.style.cssText = 'margin-top:6px;padding:8px;border:1px solid #0a3315;border-radius:6px;background:#050403';
   panel.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">Price Alerts</div>
+      <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">${(window.t?window.t('pa.title','Price Alerts'):'Price Alerts')}</div>
       <span id="alertCount" style="font-size:.65rem;color:#553333"></span>
     </div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-      <input id="alertSym" class="input" placeholder="Symbol" style="max-width:80px;text-transform:uppercase" maxlength="5"/>
+      <input id="alertSym" class="input" placeholder="${(window.t?window.t('pa.symbolPh','Symbol'):'Symbol')}" style="max-width:80px;text-transform:uppercase" maxlength="5"/>
       <select id="alertCond" class="input" style="max-width:80px">
-        <option value="above">Above</option>
-        <option value="below">Below</option>
+        <option value="above">${(window.t?window.t('pa.above','Above'):'Above')}</option>
+        <option value="below">${(window.t?window.t('pa.below','Below'):'Below')}</option>
       </select>
-      <input id="alertPrice" class="input" type="number" min="0.01" step="0.01" placeholder="Price" style="max-width:90px"/>
-      <button class="btn" id="alertAddBtn" style="font-size:.78rem">🔔 Set</button>
+      <input id="alertPrice" class="input" type="number" min="0.01" step="0.01" placeholder="${(window.t?window.t('pa.pricePh','Price'):'Price')}" style="max-width:90px"/>
+      <button class="btn" id="alertAddBtn" style="font-size:.78rem">🔔 ${(window.t?window.t('pa.set','Set'):'Set')}</button>
     </div>
     <div id="alertList" style="margin-top:6px;font-size:.75rem;max-height:80px;overflow:auto"></div>`;
   limitPanel.after(panel);
@@ -228,7 +228,7 @@ function renderAlertList() {
   if (countEl) countEl.textContent = alerts.length > 0 ? `${alerts.length} active` : '';
 
   if (!alerts.length) {
-    list.innerHTML = '<div style="opacity:.4;font-size:.68rem">No active alerts</div>';
+    list.innerHTML = '<div style="opacity:.4;font-size:.68rem">'+(window.t?window.t('pa.noAlerts','No active alerts'):'No active alerts')+'</div>';
     return;
   }
   list.innerHTML = alerts.map(a => {
@@ -450,13 +450,13 @@ function updateCompanyDetail() {
       <div style="flex:1;min-width:180px">
         <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
           <span style="font-size:1rem;font-weight:700;color:#7fc090">${sym}</span>
-          <span style="font-size:.85rem;color:#888">${t.name || ''}</span>
+          <span style="font-size:.85rem;color:#888">${window.tickerNameZh ? window.tickerNameZh(t.name || '') : (t.name || '')}</span>
         </div>
         ${t.fundTicker ? `<div style="font-size:.72rem;color:#b8893a;font-style:italic;margin-bottom:4px">${t.desc ? String(t.desc).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : 'Player-run Capital House, priced off NAV per share.'}</div>` : ''}
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px">
-          <span style="color:${sectorColor};border:1px solid ${sectorColor}44;padding:1px 6px;border-radius:3px;font-size:.68rem">${sector}</span>
-          <span style="color:#f0b454;font-size:.68rem" title="Headquarters colony">HQ: ${hq}</span>
-          ${isDivSector ? '<span style="color:#86ff6a;font-size:.68rem">💰 Dividend eligible</span>' : '<span style="color:#553333;font-size:.68rem">No base dividend</span>'}
+          <span style="color:${sectorColor};border:1px solid ${sectorColor}44;padding:1px 6px;border-radius:3px;font-size:.68rem">${window.sectorNameZh?window.sectorNameZh(sector):sector}</span>
+          <span style="color:#f0b454;font-size:.68rem" title="${(window.t?window.t('mt.hqColony','Headquarters colony'):'Headquarters colony')}">${(window.t?window.t('cd.hq','HQ:'):'HQ:')} ${window.colonyNameByEn?window.colonyNameByEn(hq):hq}</span>
+          ${isDivSector ? '<span style="color:#86ff6a;font-size:.68rem">💰 '+(window.t?window.t('cd.dividendEligible','Dividend eligible'):'Dividend eligible')+'</span>' : '<span style="color:#553333;font-size:.68rem">'+(window.t?window.t('cd.noBaseDividend','No base dividend'):'No base dividend')+'</span>'}
         </div>
       </div>
       <div style="text-align:right">
@@ -465,8 +465,8 @@ function updateCompanyDetail() {
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin-top:6px;padding-top:6px;border-top:1px solid #1a0a04">
-      <div><span style="opacity:.5">Position:</span> ${holdingInfo}</div>
-      <div><span style="opacity:.5">Short:</span> ${shortInfo}</div>
+      <div><span style="opacity:.5">${(window.t?window.t('cd.position','Position:'):'Position:')}</span> ${holdingInfo}</div>
+      <div><span style="opacity:.5">${(window.t?window.t('cd.short','Short:'):'Short:')}</span> ${shortInfo}</div>
       ${orderInfo ? `<div style="grid-column:1/-1">${orderInfo}</div>` : ''}
     </div>`;
 }
@@ -485,14 +485,14 @@ function initNewsFilter() {
   const filterWrap = document.createElement('div');
   filterWrap.style.cssText = 'display:flex;gap:4px;align-items:center;margin-bottom:4px';
   filterWrap.innerHTML = `
-    <input id="newsFilter" class="input" placeholder="Filter news…" style="flex:1;font-size:.72rem;padding:3px 6px"/>
+    <input id="newsFilter" class="input" placeholder="${(window.t?window.t('mt.filterNews','Filter news…'):'Filter news…')}" style="flex:1;font-size:.72rem;padding:3px 6px"/>
     <select id="newsToneFilter" class="input" style="max-width:70px;font-size:.68rem;padding:3px 4px">
       <option value="">All</option>
       <option value="good">Good</option>
       <option value="bad">Bad</option>
       <option value="neutral">Neutral</option>
     </select>
-    <button id="newsWatchOnly" title="Show only news for your watchlisted tickers" style="background:none;border:1px solid rgba(240,180,84,0.3);border-radius:3px;color:#b8893a;font-size:.68rem;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap">★</button>
+    <button id="newsWatchOnly" title="${(window.t?window.t('mt.onlyWatchlistedNews','Show only news for your watchlisted tickers'):'Show only news for your watchlisted tickers')}" style="background:none;border:1px solid rgba(240,180,84,0.3);border-radius:3px;color:#b8893a;font-size:.68rem;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap">★</button>
     <button id="newsClearFilter" style="background:none;border:1px solid #2a1010;border-radius:3px;
       color:#553333;font-size:.68rem;padding:2px 6px;cursor:pointer;font-family:inherit">✕</button>`;
   newsH2.after(filterWrap);

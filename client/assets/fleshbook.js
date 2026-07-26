@@ -58,7 +58,7 @@
   function authorHtml(p) {
     const fac = FACTION[p.faction] || null;
     const color = p.is_gm ? C.gold : (fac ? fac.color : C.amber);
-    const gm = p.is_gm ? `<span style="color:${C.gold};font-size:.58rem;border:1px solid ${C.gold}66;border-radius:2px;padding:0 4px;margin-left:5px;letter-spacing:.12em">FLESH CORP</span>` : '';
+    const gm = p.is_gm ? `<span style="color:${C.gold};font-size:.58rem;border:1px solid ${C.gold}66;border-radius:2px;padding:0 4px;margin-left:5px;letter-spacing:.12em">${_fbT('fb.fleshCorp','FLESH CORP')}</span>` : '';
     const tag = (!p.is_gm && fac) ? `<span style="color:${fac.color};opacity:.65;font-size:.62rem;margin-left:5px">${fac.label.toUpperCase()}</span>` : '';
     return `<b style="color:${color};letter-spacing:.02em">${esc(p.author_name)}</b>${gm}${tag}`;
   }
@@ -68,7 +68,7 @@
 
   function postActions(p) {
     const acts = [];
-    acts.push(`<span class="fb-act" data-act="vote" data-id="${p.id}" title="Boost this signal" style="cursor:pointer;color:${p.voted ? C.boostOn : C.boostOff}">▲ <span class="fb-votes">${p.upvotes}</span></span>`);
+    acts.push(`<span class="fb-act" data-act="vote" data-id="${p.id}" title="${_fbT('fb.boost','Boost this signal')}" style="cursor:pointer;color:${p.voted ? C.boostOn : C.boostOff}">▲ <span class="fb-votes">${p.upvotes}</span></span>`);
     acts.push(`<span class="fb-act" data-act="toggle" data-id="${p.id}" style="cursor:pointer;color:${C.dim}">↳ <span class="fb-rc">${p.reply_count}</span></span>`);
     if (mine(p) || __isDev) {
       acts.push(`<span class="fb-act" data-act="editpost" data-id="${p.id}" style="cursor:pointer;color:${C.faint};font-size:.7rem">edit</span>`);
@@ -82,7 +82,7 @@
 
   function postCard(p) {
     const accent = p.pinned ? C.gold : ((FACTION[p.faction] && !p.is_gm) ? FACTION[p.faction].color : C.amber);
-    const pin = p.pinned ? `<span style="color:${C.gold};font-size:.6rem;margin-right:5px;letter-spacing:.1em">PINNED</span>` : '';
+    const pin = p.pinned ? `<span style="color:${C.gold};font-size:.6rem;margin-right:5px;letter-spacing:.1em">${_fbT('fb.pinned','PINNED')}</span>` : '';
     return `<div class="fb-post" data-post="${p.id}" data-raw="${encodeURIComponent(p.body)}" style="background:${C.surf};border:1px solid ${C.amberDim};border-left:2px solid ${accent}88;border-radius:4px;padding:11px 13px;margin-bottom:10px">
       <div style="display:flex;align-items:center;gap:6px;font-size:.78rem;margin-bottom:6px">
         ${pin}${authorHtml(p)}
@@ -97,7 +97,7 @@
   function replyHtml(r) {
     const fac = FACTION[r.faction] || null;
     const color = r.is_gm ? C.gold : (fac ? fac.color : C.amber);
-    const gm = r.is_gm ? ` <span style="color:${C.gold};font-size:.54rem">FLESH CORP</span>` : '';
+    const gm = r.is_gm ? ` <span style="color:${C.gold};font-size:.54rem">${_fbT('fb.fleshCorp','FLESH CORP')}</span>` : '';
     let ctrl = '';
     if (mine(r) || __isDev) {
       ctrl = ` <span class="fb-act" data-act="editreply" data-id="${r.id}" style="cursor:pointer;color:${C.faint};font-size:.6rem">edit</span>`
@@ -117,23 +117,23 @@
     tab.innerHTML = `
       <div style="flex:1;overflow-y:auto;padding:0 22px 18px;max-width:760px;width:100%;box-sizing:border-box;margin:0 auto">
         <div style="display:flex;align-items:baseline;gap:10px;padding:14px 0 8px;border-bottom:1px solid ${C.amberDim};position:sticky;top:0;background:#02060a;z-index:2">
-          <span style="color:${C.amber};font-weight:700;letter-spacing:.22em;font-size:.95rem;text-shadow:0 0 6px ${C.amber}55">FLESHBOOK</span>
-          <span style="color:${C.faint};font-size:.66rem;letter-spacing:.18em">PUBLIC FEED</span>
+          <span style="color:${C.amber};font-weight:700;letter-spacing:.22em;font-size:.95rem;text-shadow:0 0 6px ${C.amber}55">${_fbT('fb.title','FLESHBOOK')}</span>
+          <span style="color:${C.faint};font-size:.66rem;letter-spacing:.18em">${_fbT('fb.publicFeed','PUBLIC FEED')}</span>
           <span style="margin-left:auto;display:flex;align-items:center;gap:5px;color:${C.faint};font-size:.62rem;letter-spacing:.12em">
-            <span style="width:6px;height:6px;border-radius:50%;background:${C.boostOn};box-shadow:0 0 5px ${C.boostOn}">&nbsp;</span>LIVE</span>
+            <span style="width:6px;height:6px;border-radius:50%;background:${C.boostOn};box-shadow:0 0 5px ${C.boostOn}">&nbsp;</span>${_fbT('fb.live','LIVE')}</span>
         </div>
         <div style="background:${C.surf};border:1px solid ${C.amberDim};border-radius:4px;padding:11px;margin:14px 0">
-          <textarea id="fb-compose" maxlength="1000" rows="3" placeholder="Broadcast to the public feed"
+          <textarea id="fb-compose" maxlength="1000" rows="3" placeholder="${_fbT('fb.composePh','Broadcast to the public feed')}"
             style="width:100%;box-sizing:border-box;background:#030a06;border:1px solid ${C.amberDim};color:${C.body};padding:8px 10px;font-size:.84rem;font-family:inherit;resize:vertical;border-radius:3px;outline:none;margin-bottom:7px"></textarea>
           <div style="display:flex;gap:10px;align-items:center">
-            <button id="fb-post-btn" style="background:${C.amber}18;border:1px solid ${C.amber};color:${C.amber};padding:6px 18px;font-family:inherit;font-size:.8rem;letter-spacing:.08em;border-radius:3px;cursor:pointer">BROADCAST</button>
+            <button id="fb-post-btn" style="background:${C.amber}18;border:1px solid ${C.amber};color:${C.amber};padding:6px 18px;font-family:inherit;font-size:.8rem;letter-spacing:.08em;border-radius:3px;cursor:pointer">${_fbT('fb.broadcast','BROADCAST')}</button>
             <span id="fb-compose-msg" style="font-size:.72rem;color:${C.dim}"></span>
-            <span style="font-size:.62rem;color:${C.faint};margin-left:auto">enter sends · <span id="fb-count">0/1000</span></span>
+            <span style="font-size:.62rem;color:${C.faint};margin-left:auto">${_fbT('fb.enterSends','enter sends')} · <span id="fb-count">0/1000</span></span>
           </div>
         </div>
         <div style="display:flex;gap:14px;align-items:center;margin-bottom:10px;font-size:.7rem;letter-spacing:.1em;color:${C.faint}">
-          <span class="fb-sort" data-sort="new" style="cursor:pointer;color:${C.amber}">NEW</span>
-          <span class="fb-sort" data-sort="top" style="cursor:pointer;color:${C.faint}">TOP</span>
+          <span class="fb-sort" data-sort="new" style="cursor:pointer;color:${C.amber}">${_fbT('fb.new','NEW')}</span>
+          <span class="fb-sort" data-sort="top" style="cursor:pointer;color:${C.faint}">${_fbT('fb.top','TOP')}</span>
         </div>
         <div id="fb-feed"></div>
       </div>`;
@@ -166,7 +166,7 @@
       .then(r => r.json())
       .then(d => {
         if (!d.ok || !d.posts.length) {
-          feed.innerHTML = `<div class="fb-empty" style="color:${C.faint};font-size:.78rem;padding:10px">No broadcasts yet.</div>`;
+          feed.innerHTML = `<div class="fb-empty" style="color:${C.faint};font-size:.78rem;padding:10px">${_fbT('fb.noBroadcasts','No broadcasts yet.')}</div>`;
           return;
         }
         feed.innerHTML = d.posts.map(postCard).join('');
@@ -174,11 +174,12 @@
       .catch(() => { feed.innerHTML = `<div class="fb-empty" style="color:${C.bad};font-size:.78rem;padding:10px">Feed unavailable.</div>`; });
   }
 
+  function _fbT(k,fb){ return window.t ? window.t(k,fb) : fb; }
   function cooldownMsg(d) {
-    if (d.error === 'cooldown') return 'Slow down. ' + (d.seconds || 1) + 's.';
+    if (d.error === 'cooldown') return (window.tf?window.tf('fb.slowDown','Slow down. '+(d.seconds||1)+'s.',{s:(d.seconds||1)}):('Slow down. '+(d.seconds||1)+'s.'));
     if (d.error === 'muted') return 'You are muted and cannot post.';
     if (d.error === 'dunced') return 'Dunced accounts cannot post.';
-    return 'Failed.';
+    return _fbT('fb.failed','Failed.');
   }
 
   function submitPost() {
@@ -197,7 +198,7 @@
         if (__sort === 'new') feed.insertAdjacentHTML('afterbegin', postCard(d.post));
         else fetchFeed();
       } else { msg.textContent = cooldownMsg(d); msg.style.color = C.bad; }
-    }).catch(() => { msg.textContent = 'Broadcast failed.'; msg.style.color = C.bad; });
+    }).catch(() => { msg.textContent = _fbT('fb.broadcastFailed','Broadcast failed.'); msg.style.color = C.bad; });
   }
 
   function onFeedClick(e) {
@@ -286,7 +287,7 @@
         const list = (d.ok ? d.replies : []).map(replyHtml).join('');
         box.innerHTML = list +
           `<div style="display:flex;gap:8px;margin-top:8px">
-             <input class="fb-reply-input" maxlength="500" placeholder="Reply, @name to tag"
+             <input class="fb-reply-input" maxlength="500" placeholder="${_fbT('fb.replyPh','Reply, @name to tag')}"
                style="flex:1;background:#030a06;border:1px solid ${C.amberDim};color:${C.body};padding:5px 8px;font-size:.78rem;font-family:inherit;border-radius:3px;outline:none">
              <button class="fb-reply-send" data-post="${postId}" style="background:${C.amber}18;border:1px solid ${C.amber};color:${C.amber};padding:4px 12px;font-family:inherit;font-size:.74rem;border-radius:3px;cursor:pointer">Send</button>
            </div>

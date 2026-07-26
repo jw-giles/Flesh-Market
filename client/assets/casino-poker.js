@@ -1,6 +1,10 @@
 
 (function(){
 'use strict';
+const T=(k,fb)=>window.t?window.t(k,fb):fb;
+const TF=(k,fb,v)=>window.tf?window.tf(k,fb,v):fb;
+function pkRankName(n){var m={'Royal Flush':'casino.poker.rankRoyalFlush','Straight Flush':'casino.poker.rankStraightFlush','Four of a Kind':'casino.poker.rankFourKind','Full House':'casino.poker.rankFullHouse','Flush':'casino.poker.rankFlush','Straight':'casino.poker.rankStraight','Three of a Kind':'casino.poker.rankThreeKind','Two Pair':'casino.poker.rankTwoPair','Pair':'casino.poker.rankPair','High Card':'casino.poker.rankHighCard'};return T(m[n]||'',n);}
+function pkStreetLabel(s){var m={preflop:'casino.poker.streetPreflop',flop:'casino.poker.streetFlop',turn:'casino.poker.streetTurn',river:'casino.poker.streetRiver',showdown:'casino.poker.streetShowdown'};return T(m[s]||'',s);}
 
 const RANKS = ['2','3','4','5','6','7','8','9','T','J','Q','K','A'];
 const SUITS = ['♠','♥','♦','♣'];
@@ -74,7 +78,7 @@ function pkUpdateInfo(){
   const bi=document.getElementById('pk-blind-lbl');if(bi)bi.textContent=`Ƒ${bl.sb}/Ƒ${bl.bb}`;
   const pi=document.getElementById('pk-pot');if(pi)pi.textContent=`Ƒ${pkState.pot}`;
   const bx=document.getElementById('pk-balance');if(bx)bx.textContent=`Ƒ${Math.round(pkGetBalance()).toLocaleString()}`;
-  const si=document.getElementById('pk-street-info');if(si)si.textContent=pkState.street!=='idle'?`[${pkState.street.toUpperCase()}]`:'';
+  const si=document.getElementById('pk-street-info');if(si)si.textContent=pkState.street!=='idle'?('['+pkStreetLabel(pkState.street)+']'):'';
 }
 
 function cardEl(card,faceDown=false){
@@ -98,8 +102,8 @@ function renderSeats(){
     seat.className='pk-seat'+(ai.folded?' folded':ai.hand.length>0?' active':'');
     seat.id=`pk-seat-${i}`;
 
-    const statusText=ai.folded?'folded':ai.allin?'ALL-IN':pkState.street==='idle'?'-':'';
-    const betText=ai.bet>0&&!ai.folded?`bet: Ƒ${ai.bet}`:'';
+    const statusText=ai.folded?T('casino.poker.seatFolded','folded'):ai.allin?T('casino.poker.seatAllin','ALL-IN'):pkState.street==='idle'?'-':'';
+    const betText=ai.bet>0&&!ai.folded?TF('casino.poker.seatBet','bet: Ƒ{amt}',{amt:ai.bet}):'';
     let handHtml='';
     if(ai.hand.length===2){
       if(showCards&&!ai.folded){
@@ -133,8 +137,7 @@ function renderCards(){
   pc.innerHTML='';cc.innerHTML='';
   pkState.playerHand.forEach(c=>pc.appendChild(cardEl(c)));
   pkState.community.forEach(c=>cc.appendChild(cardEl(c)));
-  const streetNames={flop:'Flop',turn:'Turn',river:'River',showdown:'Showdown'};
-  if(cl)cl.textContent=streetNames[pkState.street]||'';
+  if(cl)cl.textContent=({flop:1,turn:1,river:1,showdown:1}[pkState.street])?pkStreetLabel(pkState.street):'';
   renderSeats();
 }
 
@@ -148,7 +151,7 @@ function setActionsEnabled(inHand){
     const toCall=Math.max(0,maxBet-pkState.playerBet);
     const callBtn=document.getElementById('pk-btn-call');
     const checkBtn=document.getElementById('pk-btn-check');
-    if(callBtn){callBtn.textContent=toCall>0?`Call Ƒ${toCall}`:'Call';callBtn.disabled=toCall===0;}
+    if(callBtn){callBtn.textContent=toCall>0?TF('casino.poker.callAmt','Call Ƒ{amt}',{amt:toCall}):T('casino.poker.call','Call');callBtn.disabled=toCall===0;}
     if(checkBtn)checkBtn.disabled=toCall>0;
   }
 }
@@ -200,22 +203,22 @@ function runAiRound(afterAi){
     const bl=BLIND_LEVELS[pkState.blindLevel]||BLIND_LEVELS[0];
     if(dec.action==='fold'){
       ai.folded=true;
-      pkLog(`${ai.name} folds.`);
+      pkLog(TF('casino.poker.aiFolds','{name} folds.',{name:ai.name}));
     } else if(dec.action==='raise'&&dec.amount){
       const raise=Math.min(dec.amount,ai.stack);
       const total=ai.bet+raise;
       ai.stack-=raise;pkState.pot+=raise;ai.bet=total;
-      pkLog(`${ai.name} bets/raises Ƒ${raise}. Pot: Ƒ${pkState.pot}`);
+      pkLog(TF('casino.poker.aiBetsRaises','{name} bets/raises Ƒ{amt}. Pot: Ƒ{pot}',{name:ai.name,amt:raise,pot:pkState.pot}));
     } else if(dec.action==='call'){
       const maxBet=Math.max(...pkState.ais.filter(a=>!a.folded).map(a=>a.bet),pkState.playerBet);
       const toCall=Math.max(0,maxBet-ai.bet);
       if(toCall>0){
         const pay=Math.min(toCall,ai.stack);
         ai.stack-=pay;pkState.pot+=pay;ai.bet+=pay;
-        pkLog(`${ai.name} calls Ƒ${pay}.`);
-      } else {pkLog(`${ai.name} checks.`);}
+        pkLog(TF('casino.poker.aiCalls','{name} calls Ƒ{amt}.',{name:ai.name,amt:pay}));
+      } else {pkLog(TF('casino.poker.aiChecks','{name} checks.',{name:ai.name}));}
     } else {
-      pkLog(`${ai.name} checks.`);
+      pkLog(TF('casino.poker.aiChecks','{name} checks.',{name:ai.name}));
     }
     renderCards();pkUpdateInfo();
     setTimeout(next,350);
@@ -232,22 +235,22 @@ function advanceStreet(){
     // Only one left — they win
     if(pkState.ais.filter(a=>!a.folded).length===0){
       // Player is only one
-      endHand('player','All opponents folded! You win!');
+      endHand('player',T('casino.poker.allFoldedWin','All opponents folded! You win!'));
     } else {
       const winner=pkState.ais.find(a=>!a.folded);
-      endHand('ai',`${winner.name} wins, everyone else folded.`);
+      endHand('ai',TF('casino.poker.aiWinsFold','{name} wins, everyone else folded.',{name:winner.name}));
     }
     return;
   }
   if(pkState.street==='preflop'){
     pkState.street='flop';pkState.community=pkState.deck.splice(0,3);
-    pkLog(`--- Flop: ${pkState.community.map(c=>c.r+c.s).join(' ')} ---`);
+    pkLog(TF('casino.poker.flopHead','--- Flop: {cards} ---',{cards:pkState.community.map(c=>c.r+c.s).join(' ')}));
   } else if(pkState.street==='flop'){
     pkState.street='turn';pkState.community.push(pkState.deck.splice(0,1)[0]);
-    pkLog(`--- Turn: ${pkState.community[3].r+pkState.community[3].s} ---`);
+    pkLog(TF('casino.poker.turnHead','--- Turn: {card} ---',{card:pkState.community[3].r+pkState.community[3].s}));
   } else if(pkState.street==='turn'){
     pkState.street='river';pkState.community.push(pkState.deck.splice(0,1)[0]);
-    pkLog(`--- River: ${pkState.community[4].r+pkState.community[4].s} ---`);
+    pkLog(TF('casino.poker.riverHead','--- River: {card} ---',{card:pkState.community[4].r+pkState.community[4].s}));
   } else if(pkState.street==='river'){
     showdown();return;
   }
@@ -271,9 +274,9 @@ function showdown(){
     }
   });
   renderCards();
-  pkLog('--- Showdown ---');
-  contenders.forEach(c=>pkLog(`${c.who==='player'?'You':c.who}: ${c.rank.name}`));
-  if(!contenders.length){endHand('push','No contestants, pot returned.');return;}
+  pkLog(T('casino.poker.showdownHead','--- Showdown ---'));
+  contenders.forEach(c=>pkLog((c.who==='player'?T('casino.poker.you','You'):c.who)+': '+pkRankName(c.rank.name)));
+  if(!contenders.length){endHand('push',T('casino.poker.noContest','No contestants, pot returned.'));return;}
   contenders.sort((a,b)=>b.rank.score-a.rank.score);
   const best=contenders[0];
   const winners=contenders.filter(c=>c.rank.score===best.rank.score);
@@ -282,13 +285,13 @@ function showdown(){
     // AI shares still credit their local stacks; the player's share is settled
     // server-side via endHand (pass it through so there's one settlement point).
     winners.forEach(w=>{if(w.who!=='player'){w.ai.stack+=share;}});
-    const names=winners.map(w=>w.who==='player'?'You':w.who).join(' & ');
+    const names=winners.map(w=>w.who==='player'?T('casino.poker.you','You'):w.who).join(' & ');
     const playerWon=winners.some(w=>w.who==='player');
-    endHand('push',`Split pot! ${names}, ${best.rank.name}, Ƒ${share} each`, playerWon?share:0);
+    endHand('push',TF('casino.poker.splitPot','Split pot! {names}, {rank}, Ƒ{share} each',{names:names,rank:pkRankName(best.rank.name),share:share}), playerWon?share:0);
   } else if(best.who==='player'){
-    endHand('player',`You win with ${best.rank.name}!`);
+    endHand('player',TF('casino.poker.youWinWith','You win with {rank}!',{rank:pkRankName(best.rank.name)}));
   } else {
-    endHand('ai',`${best.who} wins with ${best.rank.name}`);
+    endHand('ai',TF('casino.poker.aiWinsWith','{name} wins with {rank}',{name:best.who,rank:pkRankName(best.rank.name)}));
   }
 }
 
@@ -305,16 +308,16 @@ function endHand(winner,msg,playerSplitShare){
   else if(typeof playerSplitShare==='number'){ playerGross=playerSplitShare; }
   if(pkRoundId){ CasinoNet.result(pkRoundId, playerGross); pkRoundId=null; }
   if(winner==='player'){
-    showResult(`🏆 ${msg} +Ƒ${pot}`,'win');
-    pkLog(`You win Ƒ${pot}.`);
+    showResult(TF('casino.poker.resultWin','🏆 {msg} +Ƒ{pot}',{msg:msg,pot:pot}),'win');
+    pkLog(TF('casino.poker.youWinAmt','You win Ƒ{pot}.',{pot:pot}));
     document.querySelectorAll('.pk-seat').forEach(s=>s.classList.remove('winner'));
   } else if(winner==='ai'){
     const winnerAi=pkState.ais.find(a=>!a.folded);
     if(winnerAi)winnerAi.stack+=pot;
-    showResult(`💀 ${msg} -Ƒ${pot}`,'lose');
+    showResult(TF('casino.poker.resultLose','💀 {msg} -Ƒ{pot}',{msg:msg,pot:pot}),'lose');
     pkLog(msg);
   } else {
-    showResult(`🤝 ${msg}`,'push');
+    showResult(TF('casino.poker.resultPush','🤝 {msg}',{msg:msg}),'push');
     pkLog(msg);
   }
   pkState.pot=0;pkState.playerBet=0;
@@ -327,14 +330,14 @@ window.pkDeal=async function(){
   const bl=BLIND_LEVELS[pkState.blindLevel]||BLIND_LEVELS[0];
   const buyin=bl.bb*5;
   const balance=pkGetBalance();
-  if(balance<buyin){showResult(`Need at least Ƒ${buyin} to play.`,'lose');return;}
+  if(balance<buyin){showResult(TF('casino.poker.needBuyin','Need at least Ƒ{buyin} to play.',{buyin:buyin}),'lose');return;}
   // Settle any prior un-finished hand as a loss of its stake (return 0) so the
   // server's one-open-round-per-game guard doesn't reject this new hand.
   if(pkRoundId){ CasinoNet.result(pkRoundId, 0); pkRoundId=null; }
   // Stake the small blind server-side to open the hand's round; subsequent
   // calls/raises are added on. Winnings settle at endHand.
   const round=await CasinoNet.bet('poker', bl.sb);
-  if(!round.ok){ showResult(round.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Bet rejected: '+(round.error||'unknown')),'lose'); return; }
+  if(!round.ok){ showResult(round.stale?T('casino.common.stale','Casino updated, refresh (Ctrl+Shift+R).'):TF('casino.common.betRejected','Bet rejected: {err}',{err:(round.error||'unknown')}),'lose'); return; }
   pkRoundId=round.roundId;
   pkState.playerStack=balance-bl.sb;
   pkState.deck=shuffle(makeDeck());
@@ -354,11 +357,11 @@ window.pkDeal=async function(){
   pkState.street='preflop';
   pkState.handCount++;
   document.getElementById('pk-result-box').innerHTML='';
-  pkLog(`--- Hand #${pkState.handCount} | Blinds Ƒ${bl.sb}/Ƒ${bl.bb} ---`);
+  pkLog(TF('casino.poker.handHead','--- Hand #{n} | Blinds Ƒ{sb}/Ƒ{bb} ---',{n:pkState.handCount,sb:bl.sb,bb:bl.bb}));
   if(pkState.handCount%5===0&&pkState.blindLevel<BLIND_LEVELS.length-1){
     pkState.blindLevel++;
     const nbl=BLIND_LEVELS[pkState.blindLevel];
-    pkLog(`🔔 Blinds increase to Ƒ${nbl.sb}/Ƒ${nbl.bb}`);
+    pkLog(TF('casino.poker.blindsUp','🔔 Blinds increase to Ƒ{sb}/Ƒ{bb}',{sb:nbl.sb,bb:nbl.bb}));
   }
   renderCards();pkUpdateInfo();
   // Remaining AIs act preflop, then player
@@ -369,9 +372,9 @@ window.pkDeal=async function(){
     const ai=preActors[i++];
     const dec=aiDecideFor(ai);
     const bl2=BLIND_LEVELS[pkState.blindLevel]||BLIND_LEVELS[0];
-    if(dec.action==='fold'){ai.folded=true;pkLog(`${ai.name} folds preflop.`);}
-    else if(dec.action==='raise'&&dec.amount){const r=Math.min(dec.amount,ai.stack);ai.stack-=r;pkState.pot+=r;ai.bet+=r;pkLog(`${ai.name} raises Ƒ${r}.`);}
-    else{const toC=Math.max(0,pkState.ais[0].bet-ai.bet);const pay=Math.min(toC,ai.stack);if(pay>0){ai.stack-=pay;pkState.pot+=pay;ai.bet+=pay;pkLog(`${ai.name} calls Ƒ${pay}.`);}else{pkLog(`${ai.name} checks`);}}
+    if(dec.action==='fold'){ai.folded=true;pkLog(TF('casino.poker.aiFoldsPre','{name} folds preflop.',{name:ai.name}));}
+    else if(dec.action==='raise'&&dec.amount){const r=Math.min(dec.amount,ai.stack);ai.stack-=r;pkState.pot+=r;ai.bet+=r;pkLog(TF('casino.poker.aiRaisesPre','{name} raises Ƒ{amt}.',{name:ai.name,amt:r}));}
+    else{const toC=Math.max(0,pkState.ais[0].bet-ai.bet);const pay=Math.min(toC,ai.stack);if(pay>0){ai.stack-=pay;pkState.pot+=pay;ai.bet+=pay;pkLog(TF('casino.poker.aiCalls','{name} calls Ƒ{amt}.',{name:ai.name,amt:pay}));}else{pkLog(TF('casino.poker.aiChecks','{name} checks.',{name:ai.name}));}}
     renderCards();pkUpdateInfo();
     setTimeout(preflopNext,280);
   }
@@ -381,11 +384,11 @@ window.pkDeal=async function(){
 window.pkFold=function(){
   if(pkState.street==='idle')return;
   pkState.playerFolded=true;
-  pkLog('You fold.');
+  pkLog(T('casino.poker.youFold','You fold.'));
   // Check if only AIs remain
   const remaining=pkState.ais.filter(a=>!a.folded);
-  if(remaining.length===1){endHand('ai',`${remaining[0].name} wins, everyone folded.`);return;}
-  if(remaining.length===0){endHand('push','Everyone folded, pot returned.');return;}
+  if(remaining.length===1){endHand('ai',TF('casino.poker.aiWinsAllFold','{name} wins, everyone folded.',{name:remaining[0].name}));return;}
+  if(remaining.length===0){endHand('push',T('casino.poker.allFoldReturn','Everyone folded, pot returned.'));return;}
   // Continue AI rounds to determine winner
   advanceStreet();
 };
@@ -393,8 +396,8 @@ window.pkFold=function(){
 window.pkCheck=function(){
   if(pkState.street==='idle')return;
   const maxBet=Math.max(...pkState.ais.filter(a=>!a.folded).map(a=>a.bet));
-  if(maxBet>pkState.playerBet){pkLog('Cannot check, call or fold.');return;}
-  pkLog('You check.');setActionsEnabled(false);
+  if(maxBet>pkState.playerBet){pkLog(T('casino.poker.cannotCheck','Cannot check, call or fold.'));return;}
+  pkLog(T('casino.poker.youCheck','You check.'));setActionsEnabled(false);
   advanceStreet();
 };
 
@@ -406,23 +409,23 @@ window.pkCall=function(){
   const pay=Math.min(toCall,pkGetBalance());
   if(pkRoundId){ CasinoNet.addon(pkRoundId, pay); }
   pkState.pot+=pay;pkState.playerBet+=pay;
-  pkLog(`You call Ƒ${pay}.`);setActionsEnabled(false);
+  pkLog(TF('casino.poker.youCall','You call Ƒ{amt}.',{amt:pay}));setActionsEnabled(false);
   advanceStreet();
 };
 
 window.pkRaise=function(){
   if(pkState.street==='idle')return;
   const amt=parseInt(document.getElementById('pk-bet-input').value)||20;
-  if(amt<=0||amt>pkGetBalance()){pkLog('Invalid raise amount.');return;}
+  if(amt<=0||amt>pkGetBalance()){pkLog(T('casino.poker.invalidRaise','Invalid raise amount.'));return;}
   if(pkRoundId){ CasinoNet.addon(pkRoundId, amt); }
   pkState.pot+=amt;pkState.playerBet+=amt;
-  pkLog(`You raise Ƒ${amt}. Pot: Ƒ${pkState.pot}`);
+  pkLog(TF('casino.poker.youRaise','You raise Ƒ{amt}. Pot: Ƒ{pot}',{amt:amt,pot:pkState.pot}));
   setActionsEnabled(false);
   // AIs respond to the raise
   runAiRound(()=>{
     // Check if any AIs still active
     const active=pkState.ais.filter(a=>!a.folded);
-    if(active.length===0){endHand('player','All opponents folded! You win!');}
+    if(active.length===0){endHand('player',T('casino.poker.allFoldedWin','All opponents folded! You win!'));}
     else{advanceStreet();}
   });
 };
@@ -440,7 +443,7 @@ window.pkAllin=function(){
 pkUpdateInfo();
 renderSeats();
 document.getElementById('pk-result-box').innerHTML='';
-pkLog('Welcome to Texas Hold\'em. 6-max vs 5 AI opponents.');
-pkLog('You post small blind. Press Deal to start.');
+pkLog(T('casino.poker.welcome','Welcome to Texas Hold\'em. 6-max vs 5 AI opponents.'));
+pkLog(T('casino.poker.postBlind','You post small blind. Press Deal to start.'));
 
 })();

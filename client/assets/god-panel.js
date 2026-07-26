@@ -22,6 +22,7 @@
     if (tab === 'market') refreshGodTickers();
     if (tab === 'players') godListAll();
     if (tab === 'comms') godCommsRefresh();
+    if (tab === 'control') godGatesRefresh();
   };
 
   function godFeedback(msg, color) {
@@ -390,7 +391,7 @@
       const flagged = rows.filter(r => r.status === 'clamped' || r.status === 'rejected_fast').length;
       const header = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid #ff990022">
-          <span style="color:#fff">${d.name} — last ${rows.length} round${rows.length===1?'':'s'}</span>
+          <span style="color:#fff">${d.name}, last ${rows.length} round${rows.length===1?'':'s'}</span>
           ${flagged ? `<span style="color:#ff5a5a">⚠ ${flagged} flagged</span>` : '<span style="color:#7fc090">clean</span>'}
         </div>`;
       const body = rows.map(r => {
@@ -791,5 +792,65 @@ function escapeHtml(s) {
     }
   });
 
+
+
+
+// ── World gates: Jade passage and commodity trading ──────────────────────────
+// Both are GM switches over server state. The panel reads the real positions
+// from /api/dev/gates on tab open rather than tracking what it last clicked,
+// because the server is authoritative and a second dev, or a restart, can move
+// them underneath this panel.
+function _godTok(){ return window.FM_TOKEN || window.__fmToken || ''; }
+function _godGateHint(msg, ok){
+  const el = document.getElementById('godGateHint');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = ok === false ? '#ff6b6b' : (ok === true ? '#51cf66' : '#888');
+}
+function _godGatePaint(id, open, openWord, shutWord){
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (open === null || open === undefined) { el.textContent = 'unknown'; el.style.color = '#888'; el.style.borderColor = '#444'; return; }
+  el.textContent = open ? openWord : shutWord;
+  el.style.color = open ? '#51cf66' : '#e74c3c';
+  el.style.borderColor = open ? '#51cf6655' : '#e74c3c55';
+}
+window.godGatesRefresh = function(){
+  fetch('/api/dev/gates', { headers: { 'x-auth-token': _godTok() } })
+    .then(r => r.json())
+    .then(d => {
+      if (!d || !d.ok) { _godGateHint('Could not read gate state.', false); return; }
+      _godGatePaint('godGateWormhole', d.wormhole, 'OPEN', 'SEALED');
+      _godGatePaint('godGateCommodities', d.commodities, 'TRADING', 'HALTED');
+      _godGateHint('');
+    })
+    .catch(() => _godGateHint('Could not read gate state.', false));
+};
+window.godSetWormhole = function(open){
+  if (!open && !confirm('Seal the Jade passage?\n\nThis delists the Jade tickers from the tape for every connected player and blocks Jade trades. Open positions are left intact.')) return;
+  _godGateHint('Working...');
+  fetch('/api/dev/wormhole', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-auth-token': _godTok() },
+    body: JSON.stringify({ token: _godTok(), open: !!open })
+  }).then(r => r.json()).then(d => {
+    if (!d || !d.ok) { _godGateHint('Failed: ' + ((d && d.error) || 'unknown'), false); return; }
+    _godGatePaint('godGateWormhole', d.open, 'OPEN', 'SEALED');
+    _godGateHint('Passage ' + (d.open ? 'opened' : 'sealed') + '. ' + (d.tickers || 0) + ' Jade tickers ' + (d.open ? 'listed' : 'delisted') + '.', true);
+  }).catch(() => _godGateHint('Network error.', false));
+};
+window.godSetCommodities = function(open){
+  if (!open && !confirm('Halt commodity trading?\n\nBuy and sell stop for every player. Cargo already in transit still lands and launched runs still resolve.')) return;
+  _godGateHint('Working...');
+  fetch('/api/dev/commodities', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-auth-token': _godTok() },
+    body: JSON.stringify({ token: _godTok(), open: !!open })
+  }).then(r => r.json()).then(d => {
+    if (!d || !d.ok) { _godGateHint('Failed: ' + ((d && d.error) || 'unknown'), false); return; }
+    _godGatePaint('godGateCommodities', d.open, 'TRADING', 'HALTED');
+    _godGateHint('Commodity trading ' + (d.open ? 'resumed' : 'halted') + '.', true);
+  }).catch(() => _godGateHint('Network error.', false));
+};
 
 })();

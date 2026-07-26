@@ -2,19 +2,21 @@
 (function(){
   const pane = document.getElementById('casino-chess');
   if (!pane) return;
+  const T=(k,fb)=>window.t?window.t(k,fb):fb;
+  const TF=(k,fb,v)=>window.tf?window.tf(k,fb,v):fb;
   pane.innerHTML = `
     <div class="row" style="gap:12px;align-items:flex-start;flex-wrap:wrap">
       <div id="chessBoard" style="width:360px;height:360px;border:1px solid rgba(152,255,159,0.35);position:relative;user-select:none"></div>
       <div style="min-width:260px;flex:1">
         <div class="card" style="padding:10px">
           <div class="row" style="align-items:center;gap:8px">
-            <label class="muted">AI ELO</label>
+            <label class="muted" data-i18n="casino.chess.aiElo">AI ELO</label>
             <select id="chessElo" class="input" style="max-width:120px">
               <option>500</option><option>800</option><option>1100</option><option>1400</option>
               <option>1700</option><option>2000</option><option>2300</option><option>2600</option><option selected>3000</option>
             </select>
-            <button id="chessStart" class="btn" style="margin-left:auto">Start</button>
-            <button id="chessSurrender" class="btn" style="margin-left:8px">Surrender</button>
+            <button id="chessStart" class="btn" style="margin-left:auto" data-i18n="casino.chess.start">Start</button>
+            <button id="chessSurrender" class="btn" style="margin-left:8px" data-i18n="casino.chess.surrender">Surrender</button>
 </div>
         
             </div>
@@ -29,12 +31,13 @@
           <div id="chessStatus" class="muted" style="margin-top:6px"></div>
         </div>
         <div class="card" style="padding:10px;margin-top:8px">
-          <div class="muted" style="margin-bottom:6px">Payouts</div>
+          <div class="muted" style="margin-bottom:6px" data-i18n="casino.chess.payouts">Payouts</div>
           <div id="chessPayouts" class="muted" style="font-size:12px;line-height:1.5"></div>
         </div>
       </div>
     </div>
   `;
+  if(window.applyI18n) window.applyI18n(pane);
 
   // helpers from roulette section if present
   function fmtLocal(n){ return 'Ƒ' + (Math.round(n*100)/100).toLocaleString(); }
@@ -62,7 +65,7 @@ try { (window.bus||window.__bus) && typeof (window.bus||window.__bus).emit === '
   var chessRoundId=null; // server round id for the in-flight game
   function refreshChessBalance(){
     const lbl = document.getElementById('chessBalance');
-    if (lbl) lbl.textContent = 'Balance: ' + fmtLocal(getBalance());
+    if (lbl) lbl.textContent = TF('casino.chess.balance','Balance: {v}',{v:fmtLocal(getBalance())});
   }
 
   // Money model: entry fee scales with ELO; win pays 2.5x fee, draw refunds 1x, loss gets 0.
@@ -73,9 +76,9 @@ try { (window.bus||window.__bus) && typeof (window.bus||window.__bus).emit === '
     const win = Math.round(fee * 2.5);
     const draw = fee;
     const el = document.getElementById('chessMoney');
-    el.textContent = `Entry Fee: ${fmtLocal(fee)}  |  Win: ${fmtLocal(win)}  ·  Draw: ${fmtLocal(draw)}  ·  Loss: ${fmtLocal(0)}`;
+    el.textContent = TF('casino.chess.money','Entry Fee: {fee}  |  Win: {win}  ·  Draw: {draw}  ·  Loss: {loss}',{fee:fmtLocal(fee),win:fmtLocal(win),draw:fmtLocal(draw),loss:fmtLocal(0)});
     const p = document.getElementById('chessPayouts');
-    p.textContent = 'Higher ELO ⇒ higher entry fee and payout. Fees are charged on Start. Rewards are paid at game end.';
+    p.textContent = T('casino.chess.payoutInfo','Higher ELO ⇒ higher entry fee and payout. Fees are charged on Start. Rewards are paid at game end.');
   }
 
   // Minimal chess engine (legal movegen + simple eval + variable depth)
@@ -353,7 +356,7 @@ try { (window.bus||window.__bus) && typeof (window.bus||window.__bus).emit === '
   }
 
   function status(text){ document.getElementById('chessStatus').textContent = text; }
-  function turnLabel(t){ document.getElementById('chessTurn').textContent = t==='w'?'Your move (White)':'AI thinking… (Black)'; }
+  function turnLabel(t){ document.getElementById('chessTurn').textContent = t==='w'?T('casino.chess.yourMove','Your move (White)'):T('casino.chess.aiThinking','AI thinking… (Black)'); }
 
   function onSquareClick(x,y){
     if (!playing) return;
@@ -396,16 +399,16 @@ try { (window.bus||window.__bus) && typeof (window.bus||window.__bus).emit === '
   let gross=0;
   if (result==='win'){
     gross = Math.round(fee*2.5);
-    status(timedResult==='time_black' ? 'AI ran out of time! You win ' + fmtLocal(gross) : 'Checkmate! You win ' + fmtLocal(gross));
+    status(timedResult==='time_black' ? TF('casino.chess.aiTimeout','AI ran out of time! You win {amt}',{amt:fmtLocal(gross)}) : TF('casino.chess.checkmateWin','Checkmate! You win {amt}',{amt:fmtLocal(gross)}));
   } else if (result==='loss'){
     gross = 0;
-    status(timedResult==='time_white' ? 'You ran out of time.' : 'Checkmated. Better luck next time.');
+    status(timedResult==='time_white' ? T('casino.chess.youTimeout','You ran out of time.') : T('casino.chess.checkmated','Checkmated. Better luck next time.'));
   } else if (result==='surrender'){
     gross = 0;
-    status('You surrendered.');
+    status(T('casino.chess.surrendered','You surrendered.'));
   } else {
     gross = fee;
-    status('Draw. Refunded ' + fmtLocal(fee));
+    status(TF('casino.chess.draw','Draw. Refunded {amt}',{amt:fmtLocal(fee)}));
   }
   if(chessRoundId){ CasinoNet.result(chessRoundId, gross); chessRoundId=null; }
   refreshChessBalance();
@@ -459,7 +462,7 @@ try { (window.bus||window.__bus) && typeof (window.bus||window.__bus).emit === '
           if (end2==='mate'){ endGame('loss'); return; }
           if (end2==='stalemate'){ endGame('draw'); return; }
           turnLabel('w');
-          status('Your move.');
+          status(T('casino.chess.yourMoveShort','Your move.'));
         });
       }, 250);
     }
@@ -482,26 +485,26 @@ async function startGame(){
     
     const elo = Number(document.getElementById('chessElo').value);
     const fee = feeForElo(elo);
-    if (getBalance() < fee){ status('Insufficient funds for entry fee.'); return; }
+    if (getBalance() < fee){ status(T('casino.chess.insufficient','Insufficient funds for entry fee.')); return; }
     // Settle any prior unfinished game as a loss of its fee so the one-open-round
     // guard doesn't reject this new game.
     if(chessRoundId){ CasinoNet.result(chessRoundId, 0); chessRoundId=null; }
     const round = await CasinoNet.bet('chess', fee);
-    if(!round.ok){ status(round.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Entry rejected: '+(round.error||'unknown'))); return; }
+    if(!round.ok){ status(round.stale?T('casino.common.stale','Casino updated, refresh (Ctrl+Shift+R).'):TF('casino.chess.entryRejected','Entry rejected: {err}',{err:(round.error||'unknown')})); return; }
     chessRoundId=round.roundId;
     refreshChessBalance();
     game = { board: startPosition(), turn:'w' };
     selected=null; moves=[]; playing=true;
     drawBoard(game.board);
     turnLabel('w');
-    status('Game started. You are White.');
+    status(T('casino.chess.gameStarted','Game started. You are White.'));
   }
 
   
   
   
   document.getElementById('chessSurrender').addEventListener('click', ()=>{
-    if (!playing) { status('No game in progress.'); return; }
+    if (!playing) { status(T('casino.chess.noGame','No game in progress.')); return; }
     endGame('loss');
   });
 
@@ -528,6 +531,6 @@ async function startGame(){
   // render initial
   game = { board: startPosition(), turn:'w' };
   drawBoard(game.board);
-  status('Choose difficulty and press Start.');
+  status(T('casino.chess.chooseStart','Choose difficulty and press Start.'));
   turnLabel('w');
 })();

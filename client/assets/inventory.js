@@ -1,5 +1,9 @@
 
 (function(){
+  const T=(k,fb)=>window.t?window.t(k,fb):fb;
+  const TF=(k,fb,v)=>window.tf?window.tf(k,fb,v):fb;
+  function invRarityName(r){var m={common:'store.rarCommon',uncommon:'store.rarUncommon',rare:'store.rarRare',epic:'store.rarEpic',legendary:'store.rarLegendary',phantom:'store.rarPhantom'};return T(m[r]||'',r);}
+  function invSlotName(slot){var m={hat:'store.slotHat',glasses:'store.slotGlasses',upperbody:'store.slotUpperBody',necklace:'store.slotNecklace',watch:'store.slotWatch',pants:'store.slotPants',shoes:'store.slotShoes',vehicle:'store.slotVehicle',property:'store.slotProperty',implant:'store.slotImplant',ring:'store.slotRing',earring:'store.slotEarring',bracelet:'store.slotBracelet'};return T(m[slot]||'',(typeof SLOT_LABELS!=='undefined'&&SLOT_LABELS[slot])||slot);}
 
 // ── Pixel Art Image Data ─────────────────────────────────────────────────────
 const IMG_NEON_BEANIE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA2ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDo0OURERkRCMTBDM0RFRDExOUFBNjk3OTQ2RUU5NkZFNyIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo0NUI0NEI4NjhBQTYxMUVFOTRBREE1MEIyREQ1MTg2NiIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo0NUI0NEI4NThBQTYxMUVFOTRBREE1MEIyREQ1MTg2NiIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M2IChXaW5kb3dzKSI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkExNjREQjYyQTE4QUVFMTE4QTdEOEM3RDI5Mjg5MDgwIiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQ5RERGREIxMEMzREVEMTE5QUE2OTc5NDZFRTk2RkU3Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+QzqrsAAAACFQTFRFzOLh////i6u/LFttN0RuFYloRsZXOAAsIipcAAAAAAAA2amu8wAAAAt0Uk5T/////////////wBKTwHyAAAAvUlEQVR42sTTyQ7DIAwEUBJj8OT/P7h2WGLcRFUv7VznySCWdHxI+jXAmUcA1KyRhTiAnBvIGXcArWvBO4CVY4IuEwFkAdeMC2hZaxWLoQB0gLZcWsyMRSbQmjmlbduM6KQArGbe9z2lNqUGwD1lZgEosZ5iAedOK9EDONsWCgBcrLcjcILhwOi98EAH9H6KscYAEoHwN0A3IVP0XhjLSZIQXUBm766b7KioZ96Ve1HwALh7tC5//Ho3eQkwAMoJIbRLUqjEAAAAAElFTkSuQmCC';
@@ -500,7 +504,7 @@ async function loadInventory(){
 
 function rarityBadge(rarity){
   const c = RARITY_COLORS[rarity]||'#888';
-  return `<span style="font-size:.58rem;color:${c};border:1px solid ${c}44;padding:1px 5px;border-radius:3px;text-transform:uppercase;letter-spacing:.06em">${rarity}</span>`;
+  return `<span style="font-size:.58rem;color:${c};border:1px solid ${c}44;padding:1px 5px;border-radius:3px;text-transform:uppercase;letter-spacing:.06em">${invRarityName(rarity)}</span>`;
 }
 
 function renderInventory(){
@@ -548,11 +552,11 @@ function renderInventory(){
     eHtml += `<div class="equip-slot ${item?'filled':''}" onclick="openEquipMenu('${slot}')" title="Click to change">
       <div style="width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center">${item ? itemIcon(item,'28px') : slotIcon(slot,'28px')}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:.62rem;color:#553333;letter-spacing:.07em;text-transform:uppercase">${label}</div>
+        <div style="font-size:.62rem;color:#553333;letter-spacing:.07em;text-transform:uppercase">${invSlotName(slot)}</div>
         ${item
           ? `<div style="font-size:.72rem;color:${rc};font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
              <div style="font-size:.62rem;color:#553333">+${item.passive} Ƒ/30min</div>`
-          : `<div style="font-size:.68rem;color:#332222;font-style:italic">Empty</div>`
+          : `<div style="font-size:.68rem;color:#332222;font-style:italic">${T('inv.empty','Empty')}</div>`
         }
       </div>
       ${item ? `<span style="font-size:.58rem;color:#553333;cursor:pointer" onclick="event.stopPropagation();unequipSlot('${slot}')">✕</span>` : ''}
@@ -563,7 +567,7 @@ function renderInventory(){
   // Bag (unequipped items)
   const bag = invState.inventory.filter(i=>!equippedInvIds.has(i.invId));
   if(countEl) countEl.textContent = '('+bag.length+')';
-  if(!bag.length){ bagEl.innerHTML='<div style="color:#332222;font-size:.72rem;padding:8px">No items yet. Spin to get some.</div>'; return; }
+  if(!bag.length){ bagEl.innerHTML='<div style="color:#332222;font-size:.72rem;padding:8px">'+T('inv.noItems','No items yet. Spin to get some.')+'</div>'; return; }
   bagEl.innerHTML = bag.map(inv=>{
     const item = ITEM_CATALOG_CLIENT[inv.itemId]||{name:inv.itemId,rarity:'common',passive:0,slot:'?'};
     const rc = RARITY_COLORS[item.rarity]||'#888';
@@ -582,8 +586,8 @@ window.equipFromBag = async function(invId, slot){
   try{
     const r = await fetch('/api/items/equip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,invId,slot})});
     const d = await r.json();
-    if(d.ok){ invState.equipped[slot]=invId; renderInventory(); try{showToast('Equipped!','#1D9E75');}catch(_){} }
-    else{ try{showToast('Could not equip: '+d.error,'#ff4444');}catch(_){} }
+    if(d.ok){ invState.equipped[slot]=invId; renderInventory(); try{showToast(T('inv.equipped','Equipped!'),'#1D9E75');}catch(_){} }
+    else{ try{showToast(TF('inv.couldNotEquip','Could not equip: {err}',{err:d.error}),'#ff4444');}catch(_){} }
   }catch(e){}
 };
 
@@ -591,19 +595,19 @@ window.scrapFromBag = async function(invId){
   const token = getToken(); if(!token) return;
   const inv  = invState.inventory.find(i=>i.invId===invId);
   const item = inv ? (ITEM_CATALOG_CLIENT[inv.itemId]||{}) : {};
-  const name = item.name || 'this item';
-  if(!confirm('Scrap '+name+' for Ƒ500? This permanently destroys the item.')) return;
+  const name = item.name || T('inv.thisItem','this item');
+  if(!confirm(TF('inv.scrapConfirm','Scrap {name} for Ƒ500? This permanently destroys the item.',{name:name}))) return;
   try{
     const r = await fetch('/api/items/scrap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,invId})});
     const d = await r.json();
     if(d.ok){
       invState.inventory = invState.inventory.filter(i=>i.invId!==invId);
       renderInventory();
-      try{showToast('Scrapped for Ƒ500','#1D9E75');}catch(_){}
+      try{showToast(T('inv.scrapped','Scrapped for Ƒ500'),'#1D9E75');}catch(_){}
     } else {
-      const msg = d.error==='item_equipped' ? 'Unequip it first'
-                : d.error==='item_listed'   ? 'Cancel the Ƒbay listing first'
-                : 'Could not scrap: '+d.error;
+      const msg = d.error==='item_equipped' ? T('inv.unequipFirst','Unequip it first')
+                : d.error==='item_listed'   ? T('inv.cancelListingFirst','Cancel the Ƒbay listing first')
+                : TF('inv.couldNotScrap','Could not scrap: {err}',{err:d.error});
       try{showToast(msg,'#ff4444');}catch(_){}
     }
   }catch(e){}
@@ -622,7 +626,7 @@ window.openEquipMenu = function(slot){
     const item = ITEM_CATALOG_CLIENT[i.itemId];
     return item && item.slot===slot && !Object.values(invState.equipped).includes(i.invId);
   });
-  if(!compatible.length){ try{showToast('No '+SLOT_LABELS[slot]+' items in bag','#ff9900');}catch(_){} return; }
+  if(!compatible.length){ try{showToast(TF('inv.noSlotItems','No {slot} items in bag',{slot:invSlotName(slot)}),'#ff9900');}catch(_){} return; }
   // Auto-equip best passive item for that slot
   compatible.sort((a,b)=>(b.passive||0)-(a.passive||0));
   equipFromBag(compatible[0].invId, slot);
@@ -648,11 +652,11 @@ function updateSlotModalCount(){
 
 window.doSlotSpin = async function(){
   const token = getToken();
-  if(!token){ try{showToast('Login required','#ff4444');}catch(_){} return; }
-  if((invState.spins||0) < 1){ try{showToast('No spins remaining, complete 9 day trades to earn one','#ff9900');}catch(_){} return; }
+  if(!token){ try{showToast(T('inv.loginRequired','Login required'),'#ff4444');}catch(_){} return; }
+  if((invState.spins||0) < 1){ try{showToast(T('inv.noSpinsEarn','No spins remaining, complete 9 day trades to earn one'),'#ff9900');}catch(_){} return; }
 
   const btn = document.getElementById('slotModalBtn');
-  if(btn){ btn.disabled=true; btn.textContent='Spinning…'; }
+  if(btn){ btn.disabled=true; btn.textContent=T('inv.spinning','Spinning…'); }
 
   const reelIds = ['slotReel1','slotReel2','slotReel3'];
   reelIds.forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.add('spinning'); });
@@ -688,23 +692,23 @@ window.doSlotSpin = async function(){
           rb.innerHTML = `
             <div style="border:1px solid ${rc}44;border-radius:10px;padding:14px 20px;background:${rc}0d;display:inline-block;min-width:180px">
               <div style="width:64px;height:64px;margin:0 auto 6px;display:flex;align-items:center;justify-content:center">${itemIcon(clientItem,'64px')}</div>
-              <div style="font-size:1.05rem;font-weight:500;color:${rc}">${clientItem?.name||d.item?.name||'Unknown'}</div>
-              <div style="font-size:.68rem;color:${rc}99;letter-spacing:.08em;margin-top:2px">${(clientItem?.rarity||d.item?.rarity||'').toUpperCase()}</div>
-              <div style="font-size:.65rem;color:#553333;margin-top:6px">+${clientItem?.passive||d.item?.passive||0} Ƒ/30min · Added to inventory</div>
+              <div style="font-size:1.05rem;font-weight:500;color:${rc}">${clientItem?.name||d.item?.name||T('inv.unknown','Unknown')}</div>
+              <div style="font-size:.68rem;color:${rc}99;letter-spacing:.08em;margin-top:2px">${invRarityName(clientItem?.rarity||d.item?.rarity||'').toUpperCase()}</div>
+              <div style="font-size:.65rem;color:#553333;margin-top:6px">+${clientItem?.passive||d.item?.passive||0} Ƒ/30min · ${T('inv.addedToInv','Added to inventory')}</div>
             </div>`;
           invState.spins = d.spinsRemaining ?? 0;
           updateSlotModalCount();
           loadInventory();
         } else {
-          rb.innerHTML = `<div style="color:#ff4444;font-size:.82rem">${d.error==='no_spins'?'No spins remaining.':'Spin failed. Try again.'}</div>`;
+          rb.innerHTML = `<div style="color:#ff4444;font-size:.82rem">${d.error==='no_spins'?T('inv.noSpinsLeft','No spins remaining.'):T('inv.spinFailed','Spin failed. Try again.')}</div>`;
         }
       }
-      if(btn){ btn.disabled=false; btn.textContent='Spin'; }
+      if(btn){ btn.disabled=false; btn.textContent=T('store.spin','Spin'); }
     }, 900);
 
   }catch(e){
     reelIds.forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.remove('spinning'); });
-    if(btn){ btn.disabled=false; btn.textContent='Spin'; }
+    if(btn){ btn.disabled=false; btn.textContent=T('store.spin','Spin'); }
   }
 };
 
@@ -714,14 +718,14 @@ const RARITY_ORDER = {common:0,uncommon:1,rare:2,epic:3,legendary:4};
 window.loadMarket = async function(){
   const el = document.getElementById('marketListings'); if(!el) return;
   if(window.TitleMarket && window.TitleMarket.isMode()){ window.TitleMarket.requestData(); window.TitleMarket.render('marketListings'); return; }
-  el.innerHTML = '<div style="color:#443333;font-size:.73rem;padding:8px">Loading…</div>';
+  el.innerHTML = '<div style="color:#443333;font-size:.73rem;padding:8px">'+T('inv.loading','Loading…')+'</div>';
   try{
     const r = await fetch('/api/items/market');
     const d = await r.json();
-    if(!d.ok){ el.innerHTML='<div style="color:#ff4444;font-size:.73rem">Failed to load</div>'; return; }
+    if(!d.ok){ el.innerHTML='<div style="color:#ff4444;font-size:.73rem">'+T('inv.failedLoad','Failed to load')+'</div>'; return; }
     marketState = d.listings || [];
     applyMarketFilters();
-  }catch(e){ el.innerHTML='<div style="color:#ff4444;font-size:.73rem">Error loading market</div>'; }
+  }catch(e){ el.innerHTML='<div style="color:#ff4444;font-size:.73rem">'+T('inv.errLoadMarket','Error loading market')+'</div>'; }
 };
 
 window.applyMarketFilters = function(){
@@ -746,7 +750,7 @@ window.applyMarketFilters = function(){
   });
 
   if(!filtered.length){
-    el.innerHTML='<div style="color:#443333;font-size:.73rem;padding:8px">No items match your filters.</div>';
+    el.innerHTML='<div style="color:#443333;font-size:.73rem;padding:8px">'+T('inv.noMatch','No items match your filters.')+'</div>';
     return;
   }
 
@@ -758,13 +762,13 @@ window.applyMarketFilters = function(){
       <span style="width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center">${itemIcon(item,'32px')}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:.78rem;color:${rc};font-weight:500">${item.name}</div>
-        <div style="font-size:.63rem;color:#553333">${(item.rarity||'').toUpperCase()} · +${item.passive||0} Ƒ/30min · ${l.seller_name||'Unknown'}</div>
+        <div style="font-size:.63rem;color:#553333">${invRarityName(item.rarity||'').toUpperCase()} · +${item.passive||0} Ƒ/30min · ${l.seller_name||T('inv.unknown','Unknown')}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:.85rem;color:#ff9900;font-weight:500">Ƒ${(l.price||0).toLocaleString()}</div>
         ${isOwn
-          ? `<button onclick="cancelListing('${l.id}')" style="font-size:.62rem;background:none;border:1px solid #553333;color:#884444;padding:2px 7px;border-radius:3px;cursor:pointer;font-family:inherit;margin-top:3px">Cancel</button>`
-          : `<button onclick="buyItem('${l.id}',${l.price})" style="font-size:.62rem;background:#0d0505;border:1px solid #ff6a0044;color:#ff9900;padding:2px 7px;border-radius:3px;cursor:pointer;font-family:inherit;margin-top:3px">Buy</button>`
+          ? `<button onclick="cancelListing('${l.id}')" style="font-size:.62rem;background:none;border:1px solid #553333;color:#884444;padding:2px 7px;border-radius:3px;cursor:pointer;font-family:inherit;margin-top:3px">${T('inv.cancel','Cancel')}</button>`
+          : `<button onclick="buyItem('${l.id}',${l.price})" style="font-size:.62rem;background:#0d0505;border:1px solid #ff6a0044;color:#ff9900;padding:2px 7px;border-radius:3px;cursor:pointer;font-family:inherit;margin-top:3px">${T('inv.buy','Buy')}</button>`
         }
       </div>
     </div>`;
@@ -773,12 +777,12 @@ window.applyMarketFilters = function(){
 
 window.buyItem = async function(listingId, price){
   const token = getToken(); if(!token) return;
-  if(!confirm('Buy this item for Ƒ'+price.toLocaleString()+'?')) return;
+  if(!confirm(TF('inv.buyConfirm','Buy this item for Ƒ{price}?',{price:price.toLocaleString()}))) return;
   try{
     const r = await fetch('/api/items/market/buy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,listingId})});
     const d = await r.json();
-    if(d.ok){ try{showToast('Purchased: '+d.item?.name,'#1D9E75');}catch(_){} loadMarket(); loadInventory(); }
-    else{ try{showToast('Purchase failed: '+d.error,'#ff4444');}catch(_){} }
+    if(d.ok){ try{showToast(TF('inv.purchased','Purchased: {name}',{name:d.item?.name}),'#1D9E75');}catch(_){} loadMarket(); loadInventory(); }
+    else{ try{showToast(TF('inv.purchaseFailed','Purchase failed: {err}',{err:d.error}),'#ff4444');}catch(_){} }
   }catch(e){}
 };
 
@@ -787,7 +791,7 @@ window.cancelListing = async function(listingId){
   try{
     const r = await fetch('/api/items/market/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,listingId})});
     const d = await r.json();
-    if(d.ok){ try{showToast('Listing cancelled','#888');}catch(_){} loadMarket(); loadInventory(); }
+    if(d.ok){ try{showToast(T('inv.listingCancelled','Listing cancelled'),'#888');}catch(_){} loadMarket(); loadInventory(); }
   }catch(e){}
 };
 
@@ -802,10 +806,10 @@ function updateListSelect(){
   const sel = document.getElementById('listInvSelect'); if(!sel) return;
   const equippedIds = new Set(Object.values(invState.equipped).filter(Boolean));
   const listable = invState.inventory.filter(i=>!equippedIds.has(i.invId));
-  if(!listable.length){ sel.innerHTML='<option value="">No items available to list</option>'; return; }
+  if(!listable.length){ sel.innerHTML='<option value="">'+T('inv.noListable','No items available to list')+'</option>'; return; }
   sel.innerHTML = listable.map(inv=>{
     const item = ITEM_CATALOG_CLIENT[inv.itemId]||{name:inv.itemId,rarity:'common'};
-    return `<option value="${inv.invId}">[${item.rarity.toUpperCase()}] ${item.name}</option>`;
+    return `<option value="${inv.invId}">[${invRarityName(item.rarity).toUpperCase()}] ${item.name}</option>`;
   }).join('');
 }
 
@@ -814,13 +818,13 @@ window.submitListing = async function(){
   const token = getToken(); if(!token) return;
   const invId = document.getElementById('listInvSelect')?.value;
   const price = parseFloat(document.getElementById('listPrice')?.value);
-  if(!invId){ try{showToast('Select an item','#ff9900');}catch(_){} return; }
-  if(!price||price<=0){ try{showToast('Enter a valid price','#ff9900');}catch(_){} return; }
+  if(!invId){ try{showToast(T('inv.selectItem','Select an item'),'#ff9900');}catch(_){} return; }
+  if(!price||price<=0){ try{showToast(T('inv.validPrice','Enter a valid price'),'#ff9900');}catch(_){} return; }
   try{
     const r = await fetch('/api/items/market/list',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,invId,price})});
     const d = await r.json();
-    if(d.ok){ try{showToast('Item listed on market','#1D9E75');}catch(_){} document.getElementById('listForm').style.display='none'; loadMarket(); loadInventory(); }
-    else{ try{showToast('List failed: '+d.error,'#ff4444');}catch(_){} }
+    if(d.ok){ try{showToast(T('inv.itemListed','Item listed on market'),'#1D9E75');}catch(_){} document.getElementById('listForm').style.display='none'; loadMarket(); loadInventory(); }
+    else{ try{showToast(TF('inv.listFailed','List failed: {err}',{err:d.error}),'#ff4444');}catch(_){} }
   }catch(e){}
 };
 
@@ -831,7 +835,7 @@ document.addEventListener('fm_ws_msg', e=>{
     const {spins,reason} = msg.data||{};
     invState.spins = (invState.spins||0) + (spins||0);
     updateSlotModalCount();
-    try{ showToast(`+${spins} spin${spins>1?'s':''} granted! (${reason})`, '#ff9900'); }catch(_){}
+    try{ showToast(TF('inv.spinGranted','+{n} spin{s} granted! ({reason})',{n:spins,s:(spins>1?'s':''),reason:reason}), '#ff9900'); }catch(_){}
   }
   if(msg.type==='milestone_update'){
     invState.milestoneTrades = msg.data?.milestoneTrades ?? invState.milestoneTrades;
@@ -844,7 +848,7 @@ document.addEventListener('fm_ws_msg', e=>{
     if(msg.data?.guaranteed){
       const item = msg.data.item;
       const rc = msg.data.rarityColor || '#ff6a00';
-      try{ showToast(`🎁 ${item?.name||'Item'} dropped! (${(item?.rarity||'').toUpperCase()})`, rc); }catch(_){}
+      try{ showToast(TF('inv.dropped','🎁 {name} dropped! ({rarity})',{name:(item?.name||T('inv.item','Item')),rarity:invRarityName(item?.rarity||'').toUpperCase()}), rc); }catch(_){}
       loadInventory();
     }
   }

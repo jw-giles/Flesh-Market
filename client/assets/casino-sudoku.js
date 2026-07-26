@@ -2,6 +2,9 @@
 (function(){
   const pane = document.getElementById('casino-sudoku');
   if (!pane) return;
+  const T=(k,fb)=>window.t?window.t(k,fb):fb;
+  const TF=(k,fb,v)=>window.tf?window.tf(k,fb,v):fb;
+  function sdkDiffName(n){var m={'Easy':'casino.sdk.diffEasy','Medium':'casino.sdk.diffMedium','Hard':'casino.sdk.diffHard','Expert':'casino.sdk.diffExpert','Insane':'casino.sdk.diffInsane'};return T(m[n]||'',n);}
 
   const DIFFICULTIES = [
     { name:'Easy',   clues:46, reward:50,   label:'Ƒ50'   },
@@ -43,23 +46,24 @@
     #sdk-cells-left{font-size:.78rem;color:#888;margin-top:4px}
   </style>
   <div id="sdk-wrap">
-    <div style="letter-spacing:.1em;font-size:.9rem;color:#72e09c;margin-bottom:8px">SUDOKU</div>
+    <div style="letter-spacing:.1em;font-size:.9rem;color:#72e09c;margin-bottom:8px" data-i18n="casino.sdk.title">SUDOKU</div>
     <div id="sdk-diff-row" style="margin-bottom:8px;display:flex;flex-wrap:wrap">
-      ${DIFFICULTIES.map((d,i)=>`<button class="sdk-diff-btn${i===1?' active':''}" data-idx="${i}">${d.name}<span>${d.label}</span></button>`).join('')}
+      ${DIFFICULTIES.map((d,i)=>`<button class="sdk-diff-btn${i===1?' active':''}" data-idx="${i}">${sdkDiffName(d.name)}<span>${d.label}</span></button>`).join('')}
     </div>
     <div id="sdk-board"></div>
     <div id="sdk-numpad">
       ${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-n="${n}">${n}</button>`).join('')}
-      <button data-n="0" style="width:52px;font-size:.8rem">✕ Clear</button>
+      <button data-n="0" style="width:52px;font-size:.8rem" data-i18n="casino.sdk.clear">✕ Clear</button>
     </div>
     <div id="sdk-cells-left"></div>
     <div id="sdk-actions">
-      <button id="sdk-new">New Puzzle</button>
-      <button id="sdk-submit" disabled>Submit</button>
-      <button id="sdk-hint">Hint (−20% reward)</button>
+      <button id="sdk-new" data-i18n="casino.sdk.newPuzzle">New Puzzle</button>
+      <button id="sdk-submit" disabled data-i18n="casino.sdk.submit">Submit</button>
+      <button id="sdk-hint" data-i18n="casino.sdk.hint20">Hint (−20% reward)</button>
     </div>
-    <div id="sdk-status">Choose difficulty and press New Puzzle.</div>
+    <div id="sdk-status" data-i18n="casino.sdk.chooseDiff">Choose difficulty and press New Puzzle.</div>
   </div>`;
+  if(window.applyI18n) window.applyI18n(pane);
 
   // ── State ─────────────────────────────────────────────────
   let puzzle=[], solution=[], userGrid=[], selected=-1;
@@ -126,7 +130,7 @@
     const submitBtn=document.getElementById('sdk-submit');
     const cellsLbl=document.getElementById('sdk-cells-left');
     if(submitBtn)submitBtn.disabled=!playing||empty>0;
-    if(cellsLbl)cellsLbl.textContent=playing?(empty>0?`${empty} cells remaining`:'Board complete, press Submit!'):'';
+    if(cellsLbl)cellsLbl.textContent=playing?(empty>0?TF('casino.sdk.cellsRemaining','{n} cells remaining',{n:empty}):T('casino.sdk.boardComplete','Board complete, press Submit!')):'';
   }
 
   // ── New puzzle ─────────────────────────────────────────────
@@ -138,7 +142,7 @@
     const elapsed=Date.now()-last;
     if(elapsed<SUDOKU_COOLDOWN_MS){
       const remMin=Math.ceil((SUDOKU_COOLDOWN_MS-elapsed)/60000);
-      document.getElementById('sdk-status').textContent=`⏳ ${d.name} on cooldown, ${remMin} min remaining.`;
+      document.getElementById('sdk-status').textContent=TF('casino.sdk.cooldown','⏳ {name} on cooldown, {min} min remaining.',{name:sdkDiffName(d.name),min:remMin});
       return;
     }
     const gen=generateSudoku(d.clues);
@@ -154,8 +158,8 @@
     // rejected sdkRoundId stays null and submit simply won't pay out.
     CasinoNet.bet('sudoku', 1).then(r=>{ if(r&&r.ok) sdkRoundId=r.roundId; });
     render();
-    document.getElementById('sdk-status').textContent=`${d.name}, fill the grid, then press Submit.`;
-    document.getElementById('sdk-hint').textContent='Hint (−20% reward)';
+    document.getElementById('sdk-status').textContent=TF('casino.sdk.fillGrid','{name}, fill the grid, then press Submit.',{name:sdkDiffName(d.name)});
+    document.getElementById('sdk-hint').textContent=T('casino.sdk.hint20','Hint (−20% reward)');
   }
 
   // ── Submit ─────────────────────────────────────────────────
@@ -177,11 +181,11 @@
       // Start 30-min cooldown on solve
       localStorage.setItem('sudoku_cooldown_'+diffIdx, Date.now());
       render();
-      const hintNote=hintUses>0?` (${hintUses} hint${hintUses>1?'s':''} used)`:'';
-      document.getElementById('sdk-status').textContent=`✓ Correct! You earned Ƒ${reward.toLocaleString()}${hintNote}.`;
+      const hintNote=hintUses>0?TF('casino.sdk.hintNote',' ({n} hint{s} used)',{n:hintUses,s:(hintUses>1?'s':'')}):'';
+      document.getElementById('sdk-status').textContent=TF('casino.sdk.correct','✓ Correct! You earned Ƒ{amt}{note}.',{amt:reward.toLocaleString(),note:hintNote});
     } else {
       // Wrong — flash status but don't reveal which cells
-      document.getElementById('sdk-status').textContent='✗ Not quite right. Keep checking your work!';
+      document.getElementById('sdk-status').textContent=T('casino.sdk.notQuite','✗ Not quite right. Keep checking your work!');
     }
   }
 
@@ -190,14 +194,14 @@
     if(!playing)return;
     const empties=[];
     for(let i=0;i<81;i++)if(puzzle[i]===0&&userGrid[i]!==solution[i])empties.push(i);
-    if(!empties.length){document.getElementById('sdk-status').textContent='No errors found!';return;}
+    if(!empties.length){document.getElementById('sdk-status').textContent=T('casino.sdk.noErrors','No errors found!');return;}
     const pick=empties[Math.floor(Math.random()*empties.length)];
     userGrid[pick]=solution[pick];
     hintUses++;
     const penalty=Math.min(0.8,hintUses*0.2);
     render();
-    document.getElementById('sdk-hint').textContent=`Hint (−${Math.round(penalty*100)}% reward)`;
-    document.getElementById('sdk-status').textContent=`Hint used. Reward reduced to ${Math.round((1-penalty)*100)}%.`;
+    document.getElementById('sdk-hint').textContent=TF('casino.sdk.hintPct','Hint (−{pct}% reward)',{pct:Math.round(penalty*100)});
+    document.getElementById('sdk-status').textContent=TF('casino.sdk.hintUsed','Hint used. Reward reduced to {pct}%.',{pct:Math.round((1-penalty)*100)});
   }
 
   // ── Input ──────────────────────────────────────────────────

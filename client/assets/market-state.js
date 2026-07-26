@@ -183,7 +183,7 @@
 
     const nameEl = document.createElement('div');
     nameEl.className = 'store-name';
-    nameEl.textContent = item.name;
+    nameEl.textContent = window.titleNameZh ? window.titleNameZh(item.name) : item.name;
     nameEl.style.cssText = 'flex:1;font-weight:700;font-size:.88rem;color:'+tc+';letter-spacing:.01em';
 
     const priceEl = document.createElement('div');
@@ -201,7 +201,7 @@
 
     const unequipBtn = document.createElement('button');
     unequipBtn.className = 'btn';
-    unequipBtn.textContent = 'Unequip';
+    unequipBtn.textContent = (window.t?window.t('title.unequip','Unequip'):'Unequip');
     unequipBtn.style.cssText = 'padding:4px 8px;border-radius:6px;font-size:.78rem;border:1px solid #444;color:#666;display:none';
     unequipBtn.addEventListener('click', function(e){
       e.stopPropagation();
@@ -213,7 +213,7 @@
       const isOwned  = DEV_BYPASS || owned.includes(item.name);
       const isActive = active === item.name;
       if (isActive){
-        btn.textContent = '\u2713 Equipped';
+        btn.textContent = '\u2713 '+(window.t?window.t('title.equipped','Equipped'):'Equipped');
         btn.disabled = true;
         btn.style.color = tc; btn.style.borderColor = tc+'88';
         unequipBtn.style.display = 'inline-block';
@@ -221,13 +221,13 @@
         row.style.borderColor = tc+'44 #252525 #252525 '+tc;
         nameEl.style.color = tc;
       } else if (isOwned){
-        btn.textContent = 'Equip'; btn.disabled = false;
+        btn.textContent = (window.t?window.t('title.equip','Equip'):'Equip'); btn.disabled = false;
         btn.style.color = '#aaa'; btn.style.borderColor = '#444';
         unequipBtn.style.display = 'none';
         row.style.background = '#0c0c0c'; row.style.borderColor = '#252525'; row.style.borderLeftColor = tc;
         nameEl.style.color = tc;
       } else {
-        btn.textContent = 'Buy'; btn.disabled = false;
+        btn.textContent = (window.t?window.t('title.buy','Buy'):'Buy'); btn.disabled = false;
         btn.style.color = '#888'; btn.style.borderColor = '#333';
         unequipBtn.style.display = 'none';
         row.style.background = '#0c0c0c'; row.style.borderColor = '#252525'; row.style.borderLeftColor = tc;
@@ -256,7 +256,7 @@
 
     const blurbEl = document.createElement('div');
     blurbEl.className = 'store-blurb';
-    blurbEl.textContent = item.blurb;
+    blurbEl.textContent = window.titleBlurbZh ? window.titleBlurbZh(item.name, item.blurb) : item.blurb;
     blurbEl.style.cssText = 'font-size:.74rem;color:#555;margin-top:5px;font-style:italic;line-height:1.4';
 
     btnWrap.appendChild(btn); btnWrap.appendChild(unequipBtn);
@@ -290,7 +290,7 @@
 
     const nameEl = document.createElement('div');
     nameEl.className = 'store-name';
-    nameEl.textContent = item.name;
+    nameEl.textContent = window.titleNameZh ? window.titleNameZh(item.name) : item.name;
     nameEl.style.cssText = 'flex:1;font-weight:700;font-size:.88rem;letter-spacing:.01em';
 
     const reqEl = document.createElement('div');
@@ -306,7 +306,7 @@
 
     const unequipBtn = document.createElement('button');
     unequipBtn.className = 'btn';
-    unequipBtn.textContent = 'Unequip';
+    unequipBtn.textContent = (window.t?window.t('title.unequip','Unequip'):'Unequip');
     unequipBtn.style.cssText = 'padding:4px 8px;border-radius:6px;font-size:.78rem;border:1px solid #444;color:#666;display:none';
     unequipBtn.addEventListener('click', function(e){
       e.stopPropagation();
@@ -316,7 +316,7 @@
 
     const blurbEl = document.createElement('div');
     blurbEl.className = 'store-blurb';
-    blurbEl.textContent = item.blurb;
+    blurbEl.textContent = window.titleBlurbZh ? window.titleBlurbZh(item.name, item.blurb) : item.blurb;
     blurbEl.style.cssText = 'font-size:.74rem;margin-top:5px;font-style:italic;line-height:1.4';
 
     function refreshBtn(){
@@ -329,21 +329,21 @@
       reqEl.style.opacity = unlocked ? '1' : '0.4';
 
       if (!unlocked){
-        btn.textContent = '\uD83D\uDD12 Locked';
+        btn.textContent = '\uD83D\uDD12 '+(window.t?window.t('title.locked','Locked'):'Locked');
         btn.disabled = true;
         btn.style.color = '#444'; btn.style.borderColor = '#2a2a2a';
         unequipBtn.style.display = 'none';
       } else if (isActive){
-        btn.textContent = '\u2713 Equipped'; btn.disabled = true;
+        btn.textContent = '\u2713 '+(window.t?window.t('title.equipped','Equipped'):'Equipped'); btn.disabled = true;
         btn.style.color = pc; btn.style.borderColor = pc+'88';
         unequipBtn.style.display = 'inline-block';
         row.style.borderColor = pc+'44 #252525 #252525 '+pc;
       } else if (owned.includes(item.name)){
-        btn.textContent = 'Equip'; btn.disabled = false;
+        btn.textContent = (window.t?window.t('title.equip','Equip'):'Equip'); btn.disabled = false;
         btn.style.color = '#aaa'; btn.style.borderColor = '#444';
         unequipBtn.style.display = 'none';
       } else {
-        btn.textContent = 'Equip'; btn.disabled = false;
+        btn.textContent = (window.t?window.t('title.equip','Equip'):'Equip'); btn.disabled = false;
         btn.style.color = pc; btn.style.borderColor = pc+'88';
         unequipBtn.style.display = 'none';
       }
@@ -399,7 +399,7 @@
     holderLine.id = 'president-holder-line';
     holderLine.style.cssText = 'font-size:.68rem;letter-spacing:.1em;color:#00bfff66;margin-bottom:8px;font-family:monospace';
     holderLine.textContent = presidentHolder
-      ? ('CURRENTLY HELD BY: ' + presidentHolder.name.toUpperCase())
+      ? ((window.t?window.t('title.currentlyHeldBy','CURRENTLY HELD BY:'):'CURRENTLY HELD BY:') + ' ' + presidentHolder.name.toUpperCase())
       : 'SEAT IS VACANT';
     card.appendChild(holderLine);
 
@@ -408,7 +408,7 @@
 
     const nameEl = document.createElement('div');
     nameEl.style.cssText = 'flex:1;font-weight:700;font-size:.92rem;color:#00bfff;letter-spacing:.04em';
-    nameEl.textContent = PRESIDENT_TITLE.name;
+    nameEl.textContent = window.titleNameZh ? window.titleNameZh(PRESIDENT_TITLE.name) : PRESIDENT_TITLE.name;
 
     const priceEl = document.createElement('div');
     priceEl.style.cssText = 'font-size:.78rem;color:#00bfff55;white-space:nowrap';
@@ -421,12 +421,12 @@
     function refreshPresidentBtn() {
       const iAmPresident = presidentHolder && presidentHolder.name === (window?.ME?.name || '');
       if (iAmPresident) {
-        btn.textContent = '✓ In Office';
+        btn.textContent = '✓ '+(window.t?window.t('title.inOffice','In Office'):'In Office');
         btn.disabled = true;
         btn.style.color = '#00bfff';
         btn.style.borderColor = '#00bfff88';
       } else {
-        btn.textContent = presidentHolder ? 'Seize Office' : 'Claim Office';
+        btn.textContent = presidentHolder ? (window.t?window.t('title.seizeOffice','Seize Office'):'Seize Office') : (window.t?window.t('title.claimOffice','Claim Office'):'Claim Office');
         btn.disabled = false;
         btn.style.color = '#00bfff';
         btn.style.borderColor = '#00bfff44';
@@ -445,11 +445,11 @@
 
     const blurb = document.createElement('div');
     blurb.style.cssText = 'font-size:.76rem;color:#00bfff44;margin-top:6px;font-style:italic';
-    blurb.textContent = PRESIDENT_TITLE.blurb;
+    blurb.textContent = window.titleBlurbZh ? window.titleBlurbZh(PRESIDENT_TITLE.name, PRESIDENT_TITLE.blurb) : PRESIDENT_TITLE.blurb;
 
     const perks = document.createElement('div');
     perks.style.cssText = 'font-size:.68rem;color:#00bfff55;margin-top:6px;font-family:monospace;letter-spacing:.06em';
-    perks.textContent = '⬡ +15,000 Ƒ / 30 MIN  ·  NEON BLUE CHAT  ·  MARKET RALLY ON ELECTION  ·  TITLE STRIPPED ON OVERTHROW';
+    perks.textContent = '⬡ '+(window.t?window.t('title.presidentPerks','+15,000 Ƒ / 30 MIN  ·  NEON BLUE CHAT  ·  MARKET RALLY ON ELECTION  ·  TITLE STRIPPED ON OVERTHROW'):'+15,000 Ƒ / 30 MIN  ·  NEON BLUE CHAT  ·  MARKET RALLY ON ELECTION  ·  TITLE STRIPPED ON OVERTHROW');
 
     card.appendChild(top); card.appendChild(blurb); card.appendChild(perks);
     legendaryList.appendChild(card);
@@ -468,7 +468,7 @@
     const holderLine = document.getElementById('president-holder-line');
     if (holderLine) {
       holderLine.textContent = presidentHolder
-        ? ('CURRENTLY HELD BY: ' + presidentHolder.name.toUpperCase())
+        ? ((window.t?window.t('title.currentlyHeldBy','CURRENTLY HELD BY:'):'CURRENTLY HELD BY:') + ' ' + presidentHolder.name.toUpperCase())
         : 'SEAT IS VACANT';
     }
     if (presidentCard && presidentCard._refreshBtn) presidentCard._refreshBtn();
@@ -531,7 +531,7 @@
 
       const nameEl = document.createElement('span');
       var _g = giftedByLabel(titleName);
-      nameEl.textContent = (_g && _g.badge ? _g.badge + ' ' : '') + titleName;
+      nameEl.textContent = (_g && _g.badge ? _g.badge + ' ' : '') + (window.titleNameZh ? window.titleNameZh(titleName) : titleName);
       nameEl.style.cssText = 'flex:1;font-size:.80rem;font-weight:600;color:'+tc+';letter-spacing:.02em';
 
       const btnWrap = document.createElement('div');
@@ -542,7 +542,7 @@
         eqLabel.textContent = '\u2713';
         eqLabel.style.cssText = 'font-size:.74rem;color:'+tc+';padding:3px 8px';
         const unBtn = document.createElement('button');
-        unBtn.textContent = 'Unequip';
+        unBtn.textContent = (window.t?window.t('title.unequip','Unequip'):'Unequip');
         unBtn.style.cssText = 'padding:3px 8px;border-radius:3px;font-size:.70rem;border:1px solid #44444488;color:#666;background:none;cursor:pointer;font-family:inherit';
         unBtn.addEventListener('click', function() {
           try{ sendWS({ type: 'unequip_title' }); }catch(err){}
@@ -552,7 +552,7 @@
         btnWrap.appendChild(unBtn);
       } else {
         const eqBtn = document.createElement('button');
-        eqBtn.textContent = 'Equip';
+        eqBtn.textContent = (window.t?window.t('title.equip','Equip'):'Equip');
         eqBtn.style.cssText = 'padding:3px 10px;border-radius:3px;font-size:.70rem;border:1px solid '+tc+'66;color:'+tc+';background:none;cursor:pointer;font-family:inherit';
         eqBtn.addEventListener('click', function() {
           try{ sendWS({ type: 'set_title', title: titleName }); }catch(err){}

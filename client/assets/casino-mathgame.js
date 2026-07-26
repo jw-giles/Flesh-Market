@@ -2,6 +2,9 @@
 (function(){
   const pane = document.getElementById('casino-mathgame');
   if (!pane) return;
+  const T=(k,fb)=>window.t?window.t(k,fb):fb;
+  const TF=(k,fb,v)=>window.tf?window.tf(k,fb,v):fb;
+  function mqLvlName(n){var m={'Basic':'casino.math.lvlBasic','Standard':'casino.math.lvlStandard','Advanced':'casino.math.lvlAdvanced','Expert':'casino.math.lvlExpert','Genius':'casino.math.lvlGenius'};return T(m[n]||'',n);}
 
   // Each question is randomly drawn from across ALL levels — reward reflects difficulty
   const LEVELS = [
@@ -32,29 +35,30 @@
     </style>
     <div id="mq-wrap">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
-        <span style="color:#72e09c;letter-spacing:.1em;font-size:.9rem">MATH TEST</span>
-        <span style="color:#888;font-size:.78rem">10 questions across all difficulties</span>
+        <span style="color:#72e09c;letter-spacing:.1em;font-size:.9rem" data-i18n="casino.math.mathTest">MATH TEST</span>
+        <span style="color:#888;font-size:.78rem" data-i18n="casino.math.across">10 questions across all difficulties</span>
       </div>
       <div id="mq-cooldown-bar"><div id="mq-cooldown-fill" style="width:0%"></div></div>
       <div id="mq-score-row">
-        <span>Q: <b id="mq-qnum">-</b>/${TOTAL_Q}</span>
-        <span>Score: <b id="mq-score">0</b></span>
-        <span>Earned: <b id="mq-earned">Ƒ0</b></span>
+        <span><span data-i18n="casino.math.qLabel">Q:</span> <b id="mq-qnum">-</b>/${TOTAL_Q}</span>
+        <span><span data-i18n="casino.math.scoreLabel">Score:</span> <b id="mq-score">0</b></span>
+        <span><span data-i18n="casino.math.earnedLabel">Earned:</span> <b id="mq-earned">Ƒ0</b></span>
       </div>
       <div id="mq-timer-bar" style="width:100%"></div>
       <div id="mq-diff-badge">-</div>
-      <div id="mq-question">Press Start Test to begin</div>
+      <div id="mq-question" data-i18n="casino.math.pressStart">Press Start Test to begin</div>
       <div id="mq-payout-preview"></div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
         <input id="mq-input" type="number" placeholder="?" autocomplete="off" disabled>
-        <button class="btn" id="mq-submit" disabled>Answer</button>
+        <button class="btn" id="mq-submit" disabled data-i18n="casino.math.answer">Answer</button>
       </div>
       <div id="mq-feedback" style="color:#4ecdc4"></div>
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn" id="mq-start">▶ Start Test</button>
+        <button class="btn" id="mq-start" data-i18n="casino.math.startTest">▶ Start Test</button>
       </div>
       <div id="mq-status" class="muted" style="margin-top:8px;min-height:20px"></div>
     </div>`;
+    if(window.applyI18n) window.applyI18n(pane);
 
     let qNum=0, score=0, totalEarned=0, playing=false;
     let current=null, currentLvl=null, timerInterval=null, timeLeft=0;
@@ -98,7 +102,7 @@
         const remMin=Math.floor(remSec/60), remS=remSec%60;
         if(startBtn&&!playing){
           startBtn.disabled=true;
-          startBtn.textContent=`⏳ ${remMin}:${String(remS).padStart(2,'0')} cooldown`;
+          startBtn.textContent=TF('casino.math.cooldown','⏳ {t} cooldown',{t:remMin+':'+String(remS).padStart(2,'0')});
         }
       }
     }
@@ -131,8 +135,8 @@
       current=genQuestion(currentLvl);
       document.getElementById('mq-qnum').textContent=qNum;
       document.getElementById('mq-question').textContent=`${current.text} = ?`;
-      document.getElementById('mq-diff-badge').textContent=currentLvl.name+' · Ƒ'+currentLvl.perQ+' reward';
-      document.getElementById('mq-payout-preview').textContent=`Correct answer pays Ƒ${currentLvl.perQ.toLocaleString()}`;
+      document.getElementById('mq-diff-badge').textContent=TF('casino.math.badge','{lvl} · Ƒ{amt} reward',{lvl:mqLvlName(currentLvl.name),amt:currentLvl.perQ});
+      document.getElementById('mq-payout-preview').textContent=TF('casino.math.payoutPreview','Correct answer pays Ƒ{amt}',{amt:currentLvl.perQ.toLocaleString()});
       document.getElementById('mq-input').value='';
       document.getElementById('mq-input').focus();
       document.getElementById('mq-feedback').textContent='';
@@ -145,7 +149,7 @@
       const correct=Math.abs((val||0)-current.answer)<0.001;
       if(src==='timeout'||!correct){
         const fb=document.getElementById('mq-feedback');
-        fb.textContent=src==='timeout'?'⏱ Time up! Answer: '+current.answer:'✗ Wrong, answer was '+current.answer;
+        fb.textContent=src==='timeout'?TF('casino.math.timeUp','⏱ Time up! Answer: {ans}',{ans:current.answer}):TF('casino.math.wrong','✗ Wrong, answer was {ans}',{ans:current.answer});
         fb.style.color='#ff6b6b';
       } else {
         score++;
@@ -153,7 +157,7 @@
         totalEarned+=earned;
         // Accumulate only — the session total is settled server-side at endTest.
         const fb=document.getElementById('mq-feedback');
-        fb.textContent=`✓ Correct! +Ƒ${earned.toLocaleString()}`;
+        fb.textContent=TF('casino.math.correct','✓ Correct! +Ƒ{amt}',{amt:earned.toLocaleString()});
         fb.style.color='#4ecdc4';
       }
       document.getElementById('mq-score').textContent=score;
@@ -168,14 +172,14 @@
       if(mqRoundId){ CasinoNet.result(mqRoundId, totalEarned+1); mqRoundId=null; }
       document.getElementById('mq-input').disabled=true;
       document.getElementById('mq-submit').disabled=true;
-      document.getElementById('mq-question').textContent='Test complete!';
+      document.getElementById('mq-question').textContent=T('casino.math.complete','Test complete!');
       document.getElementById('mq-diff-badge').textContent='-';
       document.getElementById('mq-payout-preview').textContent='';
-      document.getElementById('mq-status').textContent=`Score: ${score}/${TOTAL_Q}, Total earned: Ƒ${totalEarned.toLocaleString()}`;
+      document.getElementById('mq-status').textContent=TF('casino.math.finalScore','Score: {score}/{total}, Total earned: Ƒ{earned}',{score:score,total:TOTAL_Q,earned:totalEarned.toLocaleString()});
       // Set cooldown
       localStorage.setItem(COOLDOWN_KEY, Date.now());
       const startBtn=document.getElementById('mq-start');
-      startBtn.textContent='▶ Start Test';
+      startBtn.textContent=T('casino.math.startTest','▶ Start Test');
       startCooldownTick();
     }
 
@@ -191,7 +195,7 @@
       document.getElementById('mq-earned').textContent='Ƒ0';
       document.getElementById('mq-input').disabled=false;
       document.getElementById('mq-submit').disabled=false;
-      document.getElementById('mq-start').textContent='In Progress...';
+      document.getElementById('mq-start').textContent=T('casino.math.inProgress','In Progress...');
       document.getElementById('mq-start').disabled=true;
       nextQuestion();
     });

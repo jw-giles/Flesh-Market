@@ -79,27 +79,27 @@
       '<div style="width:min(920px,94vw);height:min(80vh,720px);background:#070505;' +
         'border:1px solid #3a2a08;border-radius:12px;box-shadow:0 10px 50px #000c;display:flex;flex-direction:column;overflow:hidden">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #2a1e06">' +
-          '<div><span style="color:var(--amber,#f0b454);letter-spacing:.12em;text-transform:uppercase;font-size:.74rem;font-weight:800">Cycle Price History</span>' +
-          '<span style="opacity:.6;font-size:.68rem;margin-left:8px">start / end price per 30-min cycle</span></div>' +
+          '<div><span style="color:var(--amber,#f0b454);letter-spacing:.12em;text-transform:uppercase;font-size:.74rem;font-weight:800">'+(window.t?window.t('cy.title','Cycle Price History'):'Cycle Price History')+'</span>' +
+          '<span style="opacity:.6;font-size:.68rem;margin-left:8px">'+(window.t?window.t('cy.subtitle','start / end price per 30-min cycle'):'start / end price per 30-min cycle')+'</span></div>' +
           '<button id="cyhist-close" style="background:none;border:none;color:var(--amber,#f0b454);font-size:1.1rem;cursor:pointer;line-height:1;padding:0 2px">✕</button>' +
         '</div>' +
         '<div id="cyhist-filter" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 14px;border-bottom:1px solid #2a1e06;font-size:.72rem">' +
-          '<span style="opacity:.55;text-transform:uppercase;letter-spacing:.08em;font-size:.62rem">Range</span>' +
+          '<span style="opacity:.55;text-transform:uppercase;letter-spacing:.08em;font-size:.62rem">'+(window.t?window.t('cy.range','Range'):'Range')+'</span>' +
           '<button class="cyhist-chip" data-preset="24h">24H</button>' +
           '<button class="cyhist-chip" data-preset="7d">7D</button>' +
           '<button class="cyhist-chip" data-preset="30d">30D</button>' +
           '<button class="cyhist-chip" data-preset="all" title="Full retention window (~5 months)">ALL</button>' +
           '<span style="width:1px;height:16px;background:#2a1e06;margin:0 4px"></span>' +
-          '<label style="opacity:.7">From <input id="cyhist-from" type="date" style="background:#0d0a06;border:1px solid rgba(240,180,84,.3);border-radius:4px;color:#cbb78a;font-family:inherit;font-size:.72rem;padding:2px 4px;color-scheme:dark"/></label>' +
-          '<label style="opacity:.7">To <input id="cyhist-to" type="date" style="background:#0d0a06;border:1px solid rgba(240,180,84,.3);border-radius:4px;color:#cbb78a;font-family:inherit;font-size:.72rem;padding:2px 4px;color-scheme:dark"/></label>' +
+          '<label style="opacity:.7">'+(window.t?window.t('cy.from','From'):'From')+' <input id="cyhist-from" type="date" style="background:#0d0a06;border:1px solid rgba(240,180,84,.3);border-radius:4px;color:#cbb78a;font-family:inherit;font-size:.72rem;padding:2px 4px;color-scheme:dark"/></label>' +
+          '<label style="opacity:.7">'+(window.t?window.t('cy.to','To'):'To')+' <input id="cyhist-to" type="date" style="background:#0d0a06;border:1px solid rgba(240,180,84,.3);border-radius:4px;color:#cbb78a;font-family:inherit;font-size:.72rem;padding:2px 4px;color-scheme:dark"/></label>' +
         '</div>' +
         '<div style="display:flex;flex:1;min-height:0">' +
           '<div style="width:240px;min-width:180px;border-right:1px solid #2a1e06;display:flex;flex-direction:column;min-height:0">' +
-            '<div style="padding:8px"><input id="cyhist-search" class="input" placeholder="Search symbol or name" style="width:100%;font-size:.82rem"/></div>' +
+            '<div style="padding:8px"><input id="cyhist-search" class="input" placeholder="'+(window.t?window.t('cy.searchPh','Search symbol or name'):'Search symbol or name')+'" style="width:100%;font-size:.82rem"/></div>' +
             '<div id="cyhist-list" style="flex:1;min-height:0;overflow:auto;padding:0 4px 8px"></div>' +
           '</div>' +
           '<div id="cyhist-detail" style="flex:1;min-height:0;overflow:auto;padding:12px">' +
-            '<div style="opacity:.6;font-size:.82rem">Select a ticker to view its cycle history.</div>' +
+            '<div style="opacity:.6;font-size:.82rem">'+(window.t?window.t('cy.selectTicker','Select a ticker to view its cycle history.'):'Select a ticker to view its cycle history.')+'</div>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -190,7 +190,7 @@
       return '<div class="cyhist-item" data-sym="' + esc(t.symbol) + '" ' +
         'style="cursor:pointer;padding:5px 8px;border-radius:4px;font-size:.82rem;' +
         (on ? 'background:#2a1e06;color:var(--amber,#f0b454)' : 'color:#cbb78a') + '">' +
-        '<b>' + esc(t.symbol) + '</b> <span style="opacity:.6">' + esc(t.name || '') + '</span></div>';
+        '<b>' + esc(t.symbol) + '</b> <span style="opacity:.6">' + esc(window.tickerNameZh ? window.tickerNameZh(t.name || '') : (t.name || '')) + '</span></div>';
     }).join('') || '<div style="opacity:.5;font-size:.78rem;padding:8px">No match.</div>';
 
     Array.prototype.forEach.call(box.querySelectorAll('.cyhist-item'), function (el) {
@@ -267,8 +267,8 @@
     if (document.getElementById('cyhistBtn')) return true;
     var b = document.createElement('button');
     b.id = 'cyhistBtn';
-    b.title = 'Price history: start and end price per market cycle';
-    b.textContent = '📈 History';
+    b.title = (window.t?window.t('mp.historyTip','Price history: start and end price per market cycle'):'Price history: start and end price per market cycle');
+    b.textContent = '📈 '+(window.t?window.t('mp.history','History'):'History');
     b.style.cssText =
       'background:none;border:1px solid rgba(240,180,84,0.3);border-radius:4px;color:#b8893a;' +
       'font-size:.72rem;padding:3px 10px;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap';

@@ -37,7 +37,7 @@ const LEET_MAP = {
   '$': 's', '!': 'i', '+': 't', '|': 'i',
 };
 
-function normalizeLeet(str) {
+export function normalizeLeet(str) {
   return str.replace(/[01345679@$!+|]/g, ch => LEET_MAP[ch] || ch);
 }
 

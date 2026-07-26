@@ -1,0 +1,14 @@
+Thank you for your interest in my starships. This is a project that I plan to continue growing so I hope you follow me to keep up with it.
+
+License:
+You can:
+Use for commercial projects and modify assets as needed
+share with me the projects where you used these assets 
+Rate this pack
+Consider subscribing to this page for future updates and uploads
+
+You cannot:
+Resell, repackage, or redistribute the asset, even if modified.
+Include these assets in game-making tools or code templates.
+Use the assets to train AI
+Use the assets in a crypto, NFT, p2e, or meta-related project

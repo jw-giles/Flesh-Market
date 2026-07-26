@@ -4,6 +4,8 @@
   'use strict';
   const pane=document.getElementById('casino-blackjack');
   if(!pane) return;
+  const T=(k,fb)=>window.t?window.t(k,fb):fb;
+  const TF=(k,fb,v)=>window.tf?window.tf(k,fb,v):fb;
 
   // ── CSS ──────────────────────────────────────────────────────────
   if(!document.getElementById('bjCardCSS')){
@@ -63,51 +65,52 @@
   // ── HTML ─────────────────────────────────────────────────────────
   pane.innerHTML=`
 <div id="bj-wrap">
-  <h3>Blackjack</h3>
+  <h3 data-i18n="casino.bj.title">Blackjack</h3>
   <div class="bj-info">
-    <span>Stack: <strong id="bj-balance">Ƒ0</strong></span>
+    <span><span data-i18n="casino.bj.stack">Stack:</span> <strong id="bj-balance">Ƒ0</strong></span>
   </div>
   <div id="bj-shoe-bar-wrap">
     <div class="bj-shoe-header">
-      <span class="bj-shoe-title">🂠 Shoe Status</span>
-      <span class="bj-shoe-stat" id="bj-shoe-lbl">6 decks · 312 cards</span>
+      <span class="bj-shoe-title" data-i18n="casino.bj.shoeStatus">🂠 Shoe Status</span>
+      <span class="bj-shoe-stat" id="bj-shoe-lbl" data-i18n="casino.bj.shoeInit">6 decks · 312 cards</span>
     </div>
     <div id="bj-shoe-track"><div id="bj-shoe-fill"></div></div>
   </div>
   <div class="bj-table" style="position:relative">
-    <div id="bj-shuffle-overlay"><div class="shuffle-cards">🂠</div><div class="shuffle-text">Shuffling New Shoe…</div></div>
+    <div id="bj-shuffle-overlay"><div class="shuffle-cards">🂠</div><div class="shuffle-text" data-i18n="casino.bj.shuffling">Shuffling New Shoe…</div></div>
     <div class="bj-section">
-      <div class="bj-label">Dealer <span class="bj-total" id="bj-dealer-total"></span></div>
+      <div class="bj-label"><span data-i18n="casino.bj.dealer">Dealer</span> <span class="bj-total" id="bj-dealer-total"></span></div>
       <div class="bj-cards" id="bj-dealer-hand"></div>
     </div>
     <hr class="bj-divider">
     <div class="bj-section">
-      <div class="bj-label">Your hand <span class="bj-total" id="bj-player-total"></span></div>
+      <div class="bj-label"><span data-i18n="casino.bj.yourHand">Your hand</span> <span class="bj-total" id="bj-player-total"></span></div>
       <div class="bj-cards" id="bj-player-hand"></div>
     </div>
   </div>
   <div class="bj-bet-row">
-    <span style="font-size:.82rem;opacity:.6">Bet:</span>
+    <span style="font-size:.82rem;opacity:.6" data-i18n="casino.bj.bet">Bet:</span>
     <input id="bj-bet-input" type="number" min="1" value="20"/>
     <div class="bj-chips">
       <button onclick="bjAddBet(10)">+10</button>
       <button onclick="bjAddBet(25)">+25</button>
       <button onclick="bjAddBet(100)">+100</button>
       <button onclick="bjAddBet(500)">+500</button>
-      <button onclick="bjMaxBet()">MAX</button>
+      <button onclick="bjMaxBet()" data-i18n="casino.bj.max">MAX</button>
     </div>
   </div>
   <div class="bj-actions" id="bj-actions">
-    <button id="bj-btn-deal" onclick="bjDeal()">Deal</button>
-    <button id="bj-btn-hit" onclick="bjHit()" disabled>Hit</button>
-    <button id="bj-btn-stand" class="bj-btn-stand" onclick="bjStand()" disabled>Stand</button>
-    <button id="bj-btn-double" onclick="bjDouble()" disabled>Double</button>
+    <button id="bj-btn-deal" onclick="bjDeal()" data-i18n="casino.bj.deal">Deal</button>
+    <button id="bj-btn-hit" onclick="bjHit()" disabled data-i18n="casino.bj.hit">Hit</button>
+    <button id="bj-btn-stand" class="bj-btn-stand" onclick="bjStand()" disabled data-i18n="casino.bj.stand">Stand</button>
+    <button id="bj-btn-double" onclick="bjDouble()" disabled data-i18n="casino.bj.double">Double</button>
   </div>
-  <div style="font-size:.72rem;opacity:.45;margin-bottom:6px">6-deck shoe · Dealer stands soft 17 · Blackjack 3:2 · No splits/insurance · Shoe reshuffles at cut card</div>
+  <div style="font-size:.72rem;opacity:.45;margin-bottom:6px" data-i18n="casino.bj.rules">6-deck shoe · Dealer stands soft 17 · Blackjack 3:2 · No splits/insurance · Shoe reshuffles at cut card</div>
   <div id="bj-result-box"></div>
   <div id="bj-log"></div>
 </div>
 `;
+  if(window.applyI18n) window.applyI18n(pane);
 
   // ── Card engine ──────────────────────────────────────────────────
   const RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
@@ -124,12 +127,12 @@
     }
     function updateShoe(){
       const left=Math.max(totalCards-idx,0); const pct=((idx/totalCards)*100)|0;
-      const el=document.getElementById('bj-shoe-lbl'); if(el) el.textContent=`${decks}d · ${pct}% dealt · ${left} left`;
+      const el=document.getElementById('bj-shoe-lbl'); if(el) el.textContent=TF('casino.bj.shoeFmt','{d}d · {pct}% dealt · {left} left',{d:decks,pct:pct,left:left});
       const fill=document.getElementById('bj-shoe-fill');
       if(fill){ fill.style.width=pct+'%'; fill.className= pct>=80?'hot':pct>=60?'warn':''; }
     }
     function needsShuffle(){ return idx>=cutAt; }
-    function doShuffle(){ bjLog('✦ Cut card reached, shuffling new shoe…'); reset(); }
+    function doShuffle(){ bjLog(T('casino.bj.cutShuffle','✦ Cut card reached, shuffling new shoe…')); reset(); }
     function draw(){ if(idx>=cards.length){ reset(); } const c=cards[idx++]; updateShoe(); return c; }
     reset(); return {draw,reset,needsShuffle,doShuffle};
   }
@@ -139,7 +142,7 @@
     if(!shoe.needsShuffle()) return;
     const overlay=document.getElementById('bj-shuffle-overlay');
     if(overlay){ overlay.classList.add('show'); }
-    bjLog('✦ Cut card reached, shuffling new shoe…');
+    bjLog(T('casino.bj.cutShuffle','✦ Cut card reached, shuffling new shoe…'));
     await sleep(1500);
     shoe.doShuffle();
     if(overlay){ overlay.classList.remove('show'); }
@@ -244,13 +247,13 @@
     // Compute a single GROSS payout for the round (stake was deducted server-side
     // at deal / double). loss=0, push=stake, win=2x stake, blackjack=2.5x stake.
     let gross=0;
-    if(pBJ&&dBJ){ gross=playerBet; showResult('Push, both Blackjack!','push'); bjLog('Push (both BJ).'); }
-    else if(pBJ){ const pay=Math.floor(playerBet*1.5); gross=playerBet+pay; showResult(`BLACKJACK! +${fmtLocal(pay)}`, 'bj'); bjLog(`Blackjack! +${fmtLocal(pay)}`); }
-    else if(dBJ){ gross=0; showResult('Dealer Blackjack, You lose.','lose'); bjLog(`Dealer BJ. -${fmtLocal(playerBet)}`); }
-    else if(isBust(playerHand)){ gross=0; showResult('BUST, You lose.','lose'); bjLog(`Bust. -${fmtLocal(playerBet)}`); }
-    else if(isBust(dealerHand)||pTot>dTot){ gross=playerBet*2; showResult(`You win! +${fmtLocal(playerBet)}`, 'win'); bjLog(`Win. +${fmtLocal(playerBet)}`); }
-    else if(pTot===dTot){ gross=playerBet; showResult('Push, Bet returned.','push'); bjLog('Push.'); }
-    else { gross=0; showResult('Dealer wins, You lose.','lose'); bjLog(`Lose. -${fmtLocal(playerBet)}`); }
+    if(pBJ&&dBJ){ gross=playerBet; showResult(T('casino.bj.pushBothBJ','Push, both Blackjack!'),'push'); bjLog(T('casino.bj.pushBothBJLog','Push (both BJ).')); }
+    else if(pBJ){ const pay=Math.floor(playerBet*1.5); gross=playerBet+pay; showResult(TF('casino.bj.blackjackWin','BLACKJACK! +{amt}',{amt:fmtLocal(pay)}), 'bj'); bjLog(TF('casino.bj.blackjackWinLog','Blackjack! +{amt}',{amt:fmtLocal(pay)})); }
+    else if(dBJ){ gross=0; showResult(T('casino.bj.dealerBJ','Dealer Blackjack, You lose.'),'lose'); bjLog(TF('casino.bj.dealerBJLog','Dealer BJ. -{amt}',{amt:fmtLocal(playerBet)})); }
+    else if(isBust(playerHand)){ gross=0; showResult(T('casino.bj.bust','BUST, You lose.'),'lose'); bjLog(TF('casino.bj.bustLog','Bust. -{amt}',{amt:fmtLocal(playerBet)})); }
+    else if(isBust(dealerHand)||pTot>dTot){ gross=playerBet*2; showResult(TF('casino.bj.win','You win! +{amt}',{amt:fmtLocal(playerBet)}), 'win'); bjLog(TF('casino.bj.winLog','Win. +{amt}',{amt:fmtLocal(playerBet)})); }
+    else if(pTot===dTot){ gross=playerBet; showResult(T('casino.bj.pushReturn','Push, Bet returned.'),'push'); bjLog(T('casino.bj.pushLog','Push.')); }
+    else { gross=0; showResult(T('casino.bj.dealerWins','Dealer wins, You lose.'),'lose'); bjLog(TF('casino.bj.loseLog','Lose. -{amt}',{amt:fmtLocal(playerBet)})); }
 
     if(bjRoundId){
       // Pad to the server's min hand time so a fast hand (natural BJ / instant
@@ -292,11 +295,11 @@
     if(clearTmr){ clearTimeout(clearTmr); clearTmr=null; }
     const betInp=document.getElementById('bj-bet-input');
     const amt=Math.max(1,Number(betInp.value||20));
-    if(amt>getBalance()){ bjLog('Insufficient funds.'); return; }
+    if(amt>getBalance()){ bjLog(T('casino.bj.insufficient','Insufficient funds.')); return; }
 
     // Stake server-side; only proceed if accepted.
     const round=await CasinoNet.bet('blackjack', amt);
-    if(!round.ok){ bjLog(round.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Bet rejected: '+(round.error||'unknown'))); return; }
+    if(!round.ok){ bjLog(round.stale?T('casino.common.stale','Casino updated, refresh (Ctrl+Shift+R).'):TF('casino.common.betRejected','Bet rejected: {err}',{err:(round.error||'unknown')})); return; }
     bjRoundId=round.roundId;
     bjDealTs=Date.now();
 
@@ -304,7 +307,7 @@
     await shoeCheckAndShuffle();
 
     playerBet=amt;
-    bjLog(`Bet ${fmtLocal(playerBet)}.`);
+    bjLog(TF('casino.bj.betLog','Bet {amt}.',{amt:fmtLocal(playerBet)}));
 
     // Deal: player, dealer, player, dealer
     playerHand=[shoe.draw()]; dealerHand=[shoe.draw()];
@@ -341,12 +344,12 @@
 
   window.bjDouble=async function(){
     if(gamePhase!=='player'||!canDouble) return;
-    if(getBalance()<playerBet){ bjLog('Not enough to double.'); return; }
+    if(getBalance()<playerBet){ bjLog(T('casino.bj.notEnoughDouble','Not enough to double.')); return; }
     // Add the doubling stake to the open round server-side.
     const add=await CasinoNet.addon(bjRoundId, playerBet);
-    if(!add.ok){ bjLog(add.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Double rejected: '+(add.error||'unknown'))); return; }
+    if(!add.ok){ bjLog(add.stale?T('casino.common.stale','Casino updated, refresh (Ctrl+Shift+R).'):TF('casino.common.doubleRejected','Double rejected: {err}',{err:(add.error||'unknown')})); return; }
     playerBet*=2; canDouble=false;
-    bjLog(`Double down, bet now ${fmtLocal(playerBet)}.`);
+    bjLog(TF('casino.bj.doubleLog','Double down, bet now {amt}.',{amt:fmtLocal(playerBet)}));
     playerHand.push(shoe.draw());
     renderHands(true); setBtns('resolving'); setPhase('resolving');
     await sleep(500);
@@ -369,31 +372,34 @@
 (function(){
   const pane = document.getElementById('casino-horseraces');
   if (!pane) return;
+  const T=(k,fb)=>window.t?window.t(k,fb):fb;
+  const TF=(k,fb,v)=>window.tf?window.tf(k,fb,v):fb;
 
   pane.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px">
       <div style="position:relative;border:1px solid #0a3315;border-radius:6px;overflow:hidden;background:#050300">
         <canvas id="horseCanvas" width="820" height="280" style="width:100%;display:block"></canvas>
-        <div id="raceStatus" style="position:absolute;bottom:0;left:0;right:0;padding:5px 12px;font-size:.74rem;letter-spacing:.06em;color:#72e09c;background:linear-gradient(transparent,rgba(0,0,0,.85));text-align:center">
+        <div id="raceStatus" data-i18n="casino.horse.placeBet" style="position:absolute;bottom:0;left:0;right:0;padding:5px 12px;font-size:.74rem;letter-spacing:.06em;color:#72e09c;background:linear-gradient(transparent,rgba(0,0,0,.85));text-align:center">
           &#9672; Place a bet and start the race
         </div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:0 2px">
         <select id="horsePick" class="input" style="max-width:160px;font-size:.8rem">
-          <option value="0">#1 &mdash; Comet</option>
-          <option value="1">#2 &mdash; Nebula</option>
-          <option value="2">#3 &mdash; Phantom</option>
-          <option value="3">#4 &mdash; Vortex</option>
-          <option value="4">#5 &mdash; Ember</option>
-          <option value="5">#6 &mdash; Quicksilver</option>
+          <option value="0">#1 &middot; Comet</option>
+          <option value="1">#2 &middot; Nebula</option>
+          <option value="2">#3 &middot; Phantom</option>
+          <option value="3">#4 &middot; Vortex</option>
+          <option value="4">#5 &middot; Ember</option>
+          <option value="5">#6 &middot; Quicksilver</option>
         </select>
         <input id="horseBet" class="input" type="number" min="1" value="10" style="max-width:110px"/>
-        <button id="horseStart" class="btn" style="padding:6px 20px;font-size:.85rem;letter-spacing:.06em">&#9654; RACE</button>
-        <span style="font-size:.72rem;color:#555;flex:1">5x payout &bull; 16.7% house edge &bull; one bet per race</span>
-        <span id="horseBalance" style="font-size:.82rem;color:#46ff7d;font-weight:700">&#401;&mdash;</span>
+        <button id="horseStart" class="btn" data-i18n="casino.horse.race" style="padding:6px 20px;font-size:.85rem;letter-spacing:.06em">&#9654; RACE</button>
+        <span style="font-size:.72rem;color:#555;flex:1" data-i18n="casino.horse.payoutBlurb">5x payout &bull; 16.7% house edge &bull; one bet per race</span>
+        <span id="horseBalance" style="font-size:.82rem;color:#46ff7d;font-weight:700">&#401;&middot;</span>
       </div>
       <div id="horseLog" style="max-height:90px;overflow:auto;font-size:.74rem;padding:0 2px"></div>
     </div>`;
+  if(window.applyI18n) window.applyI18n(pane);
 
   // helpers
   function fmt(n){ return '\u0192'+(Math.round(n*100)/100).toLocaleString(); }
@@ -596,33 +602,33 @@
     // Result was priced and credited server-side; show the server's number.
     const gross=hrCredited|0; hrCredited=0;
     if(sel===wi){
-      pushLog('WIN  #'+(wi+1)+' '+NAMES[wi]+'  +'+fmt(gross), true);
-      setStatus('\u25c6 WINNER: #'+(wi+1)+' '+NAMES[wi]+'   PAYOUT: '+fmt(gross),'#86ff6a');
+      pushLog(TF('casino.horse.winLog','WIN  #{n} {name}  +{amt}',{n:wi+1,name:NAMES[wi],amt:fmt(gross)}), true);
+      setStatus(TF('casino.horse.winnerStatus','\u25c6 WINNER: #{n} {name}   PAYOUT: {amt}',{n:wi+1,name:NAMES[wi],amt:fmt(gross)}),'#86ff6a');
     } else {
-      pushLog('LOSS  Winner: #'+(wi+1)+' '+NAMES[wi], false);
-      setStatus('\u25c6 Winner: #'+(wi+1)+' '+NAMES[wi]+'  \u2014  Better luck next race','#ff6b6b');
+      pushLog(TF('casino.horse.lossLog','LOSS  Winner: #{n} {name}',{n:wi+1,name:NAMES[wi]}), false);
+      setStatus(TF('casino.horse.loserStatus','\u25c6 Winner: #{n} {name}, better luck next race',{n:wi+1,name:NAMES[wi]}),'#ff6b6b');
     }
     escrow=0;
-    clearTmr=setTimeout(()=>{ init(); drawFrame(); setStatus('\u25c8 Place a bet and start the race',null); },5000);
+    clearTmr=setTimeout(()=>{ init(); drawFrame(); setStatus(T('casino.horse.placeBet','\u25c8 Place a bet and start the race'),null); },5000);
   }
 
   document.getElementById('horseStart').onclick=async function(){
     if(running) return;
     pick=Number(document.getElementById('horsePick')?.value||0);
     const amt=Math.floor(Number(document.getElementById('horseBet')?.value||0));
-    if(!amt||amt<1){ setStatus('Enter a valid bet amount.','#ff9900'); return; }
-    if(amt>getBal()){ setStatus('Insufficient balance.','#ff6b6b'); return; }
+    if(!amt||amt<1){ setStatus(T('casino.horse.enterBet','Enter a valid bet amount.'),'#ff9900'); return; }
+    if(amt>getBal()){ setStatus(T('casino.horse.insufficient','Insufficient balance.'),'#ff6b6b'); return; }
     // Server-authoritative: send only pick + amount. The server picks the winner,
     // prices the result, and credits atomically. The client animates the winner
     // the server chose — it no longer decides the outcome or report the payout.
     const res=await CasinoNet.play('horseraces', { pick, amount:amt });
-    if(!res.ok){ setStatus(res.stale?'Casino updated — refresh (Ctrl+Shift+R).':('Bet rejected: '+(res.error||'unknown')),'#ff6b6b'); return; }
+    if(!res.ok){ setStatus(res.stale?T('casino.common.stale','Casino updated, refresh (Ctrl+Shift+R).'):TF('casino.common.betRejected','Bet rejected: {err}',{err:(res.error||'unknown')}),'#ff6b6b'); return; }
     hrCredited=(typeof res.credited==='number') ? res.credited : 0;
     if(clearTmr){clearTimeout(clearTmr);clearTmr=null;}
     init(); drawFrame();
     planned=(res.view && Number.isInteger(res.view.winner)) ? res.view.winner : 0;
     escrow=amt; running=true; winner=-1;
-    setStatus('\u25c8 Racing\u2026  You picked #'+(pick+1)+' ('+NAMES[pick]+')  \u2014  Bet: '+fmt(amt),'#46ff7d');
+    setStatus(TF('casino.horse.racingStatus','\u25c8 Racing\u2026  You picked #{n} ({name})  Bet: {amt}',{n:pick+1,name:NAMES[pick],amt:fmt(amt)}),'#46ff7d');
     startT=performance.now();
     animId=requestAnimationFrame(tick);
   };

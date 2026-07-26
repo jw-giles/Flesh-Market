@@ -10,6 +10,7 @@
 <title>Flesh Market, Local</title>
 <link href="style.css" rel="stylesheet"/>
 <link href="assets/mobile.css" rel="stylesheet"/>
+<script>try{if(localStorage.getItem('fm_jade_theme')==='1'){document.documentElement.classList.add('jade-theme');window._lang='zh';}else{window._lang='en';}}catch(e){}</script>
 
 
 <body>
@@ -23,6 +24,7 @@
 | __| |  | __/ __| || | |  \/  | /_\ | _ \ |/ / __|_   _|
 | _|| |__| _|\__ \ __ | | |\/| |/ _ \|   / ' &lt;| _|  | |  
 |_| |____|___|___/_||_| |_|  |_/_/ \_\_|_\_|\_\___| |_|  </pre>
+<div class="fm-wordmark-cn" aria-label="血肉市场" style="margin:0;font-size:30px;line-height:38px;letter-spacing:6px;color:var(--pale);text-shadow:0 0 10px rgba(95,201,163,.55);font-weight:700;user-select:none;font-family:'Noto Sans SC','Microsoft YaHei','PingFang SC',sans-serif">血肉市场</div>
 <small class="muted"></small>
 </div>
 <div id="eod-timer-wrap">
@@ -37,17 +39,18 @@
 <input class="input" id="name" placeholder="Your name" style="display:none"/><!-- legacy hidden -->
 <button class="btn" id="helloBtn" style="display:none">Join</button>
 <span id="fm-header-user" style="display:none;align-items:center;gap:6px;font-size:.85rem">
-  <button id="fm-tax-btn" onclick="window.openTaxPanel&&window.openTaxPanel()" title="Pay Taxes" style="display:none;align-items:center;gap:4px;padding:3px 10px;font-size:.78rem;border:1px solid #7a5e1e;border-radius:4px;background:#140d00;color:#ffce4d;cursor:pointer;flex:0 0 auto">🏛 Taxes</button>
+  <button id="fm-tax-btn" onclick="window.openTaxPanel&&window.openTaxPanel()" title="Pay Taxes" data-i18n="hdr.taxes" data-i18n-title="hdr.taxesTitle" style="display:none;align-items:center;gap:4px;padding:3px 10px;font-size:.78rem;border:1px solid #7a5e1e;border-radius:4px;background:#140d00;color:#ffce4d;cursor:pointer;flex:0 0 auto">🏛 Taxes</button>
   <span id="fm-header-portrait" onclick="window.openPortraitPicker&&window.openPortraitPicker()" title="Change portrait" style="display:none;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1px solid #2e6b4a;background:#0a1813 center/cover no-repeat;cursor:pointer;font-size:.85rem;color:#46ff7d;flex:0 0 auto">＋</span>
   <span id="fm-header-name" style="color:#46ff7d;opacity:.85"></span>
   <span id="fm-tier-badge-hdr" style="font-size:.95rem"></span>
   <span id="invNavBtn" style="display:none"></span><span id="slotNavBtn" style="display:none"><span id="slotNavSpinCount"></span></span>
-  <a href="https://www.patreon.com/FLSH" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#7a5e1e;color:#ffce4d;text-decoration:none;animation:patreonPulse 2.5s ease-in-out infinite;font-weight:500">☆ Patreon</a>
-  <a href="https://discord.gg/H47DnbY33t" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#3a3a6a;color:#8a8ae0;text-decoration:none;animation:discordPulse 2.5s ease-in-out infinite;font-weight:500">◈ Discord</a>
-  <button class="btn" onclick="var b=document.getElementById('bugsTabBtnHidden');b&&b.click();" style="padding:4px 14px;font-size:.82rem;border-color:#1a4a47;color:#4ecdc4;font-weight:500" title="Report a bug">🐛 Bugs</button>
+  <a href="https://www.patreon.com/FLSH" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#7a5e1e;color:#ffce4d;text-decoration:none;animation:patreonPulse 2.5s ease-in-out infinite;font-weight:500"data-i18n="hdr.patreon">☆ Patreon</a>
+  <a href="https://discord.gg/H47DnbY33t" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#3a3a6a;color:#8a8ae0;text-decoration:none;animation:discordPulse 2.5s ease-in-out infinite;font-weight:500"data-i18n="hdr.discord">◈ Discord</a>
+  <button class="btn" onclick="var b=document.getElementById('bugsTabBtnHidden');b&&b.click();" style="padding:4px 14px;font-size:.82rem;border-color:#1a4a47;color:#4ecdc4;font-weight:500" title="Report a bug"data-i18n="hdr.bugs">🐛 Bugs</button>
   <style>@keyframes patreonPulse{0%,100%{box-shadow:0 0 4px #ffce4d22;border-color:#7a5e1e}50%{box-shadow:0 0 8px #ffce4d44,0 0 12px #ffce4d22;border-color:#a07e2e}}@keyframes discordPulse{0%,100%{box-shadow:0 0 4px #5865f222;border-color:#3a3a6a}50%{box-shadow:0 0 8px #5865f244,0 0 12px #5865f222;border-color:#5a5a9a}}</style>
-  <button class="btn" onclick="window.showTutorial&&window.showTutorial()" style="padding:3px 10px;font-size:.78rem;border-color:#1a3a1a;color:#4a8a4a" title="Replay Tutorial">? Tutorial</button>
-  <button class="btn" onclick="window.FM_Auth&&window.FM_Auth.logout()" style="padding:3px 10px;font-size:.78rem;border-color:#1f4515;color:#888">Logout</button>
+  <button class="btn" id="jadeThemeBtn" onclick="window.toggleJadeTheme&&window.toggleJadeTheme()" style="padding:3px 10px;font-size:.78rem;border-color:#2f6a4a;color:#6fcf97" title="Toggle Jade theme"data-i18n="hdr.jade">◈ Jade</button>
+<button class="btn" onclick="window.showTutorial&&window.showTutorial()" style="padding:3px 10px;font-size:.78rem;border-color:#1a3a1a;color:#4a8a4a" title="Replay Tutorial"data-i18n="hdr.tutorial">? Tutorial</button>
+  <button class="btn" onclick="window.FM_Auth&&window.FM_Auth.logout()" style="padding:3px 10px;font-size:.78rem;border-color:#1f4515;color:#888" data-i18n="btn.logout">Logout</button>
 </span>
 </div>
 </div>
@@ -55,7 +58,8 @@
 <!-- Left: tickers + news -->
 <div class="panel">
 <h2>Companies</h2>
-<input class="input" id="search" placeholder="Search symbol or name"/>
+<input class="input" id="search" placeholder="Search symbol or name" data-i18n-ph="ph.search"/>
+<div id="marketViewTabs" class="mv-tabs"><button id="mvCoalition" class="mv-tab active" onclick="window.setMarketView&&window.setMarketView('coalition')" data-i18n="mv.coalition">Coalition</button><button id="mvJade" class="mv-tab" onclick="window.setMarketView&&window.setMarketView('jade')" data-i18n="mv.jade">◈ Jade Exchange</button></div>
 <div class="list" id="tickers"></div>
 <hr/>
 <pre class="ascii-title" aria-label="News" style="margin:.3rem 0 .5rem;font-family:'Share Tech Mono',ui-monospace,monospace;font-size:7.5px;line-height:8px;letter-spacing:0;color:var(--amber);text-shadow:0 0 6px rgba(240,180,84,.5);white-space:pre;font-weight:400;user-select:none"> _  _ _____      _____ 
@@ -68,10 +72,10 @@
 <!-- Center: chart + trade + tabs -->
 <div class="panel">
 <div class="tabs">
-<div class="tab active" data-tab="market">Market</div>
-<div class="tab" data-tab="heat">🔥 Heat</div>
-<div class="tab" data-tab="pnl">P&amp;L</div>
-<div class="tab" data-tab="casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none">⚖ Capital Houses</div><div class="tab" data-tab="store">Store</div><div class="tab" data-tab="galactic">⬡ Galaxy</div><div class="tab" data-tab="mining">⛏ Mining</div><div class="tab" data-tab="fleshbook">📣 Fleshbook<span id="unread-fleshbook" style="display:none;background:#a78bfa;color:#000;border-radius:8px;font-size:.6rem;padding:0 5px;margin-left:4px;font-weight:bold">0</span></div><div class="tab" data-tab="arena">🃏 Corpo-Cards</div><div class="tab" data-tab="devlogs">📺 Dev Logs</div><div class="tab" data-tab="bugs" id="bugsTabBtnHidden" style="display:none">🐛 Bugs</div>
+<div class="tab active" data-tab="market" data-i18n="tab.market">Market</div>
+<div class="tab" data-tab="heat" data-i18n="tab.heat">🔥 Heat</div>
+<div class="tab" data-tab="pnl" data-i18n="tab.pnl">P&amp;L</div>
+<div class="tab" data-tab="casino" data-i18n="tab.casino">Casino</div><div class="tab" data-tab="guild" id="guildTabBtn" style="display:none" data-i18n="tab.guild">⚖ Capital Houses</div><div class="tab" data-tab="store" data-i18n="tab.store">Store</div><div class="tab" data-tab="galactic" data-i18n="tab.galactic">⬡ Galaxy</div><div class="tab" data-tab="mining" data-i18n="tab.mining">⛏ Mining</div><div class="tab" data-tab="fleshbook"><span data-i18n="tab.fleshbook">📣 Fleshbook</span><span id="unread-fleshbook" style="display:none;background:#a78bfa;color:#000;border-radius:8px;font-size:.6rem;padding:0 5px;margin-left:4px;font-weight:bold">0</span></div><div class="tab" data-tab="arena" data-i18n="tab.arena">🃏 Corpo-Cards</div><div class="tab" data-tab="devlogs" data-i18n="tab.devlogs">📺 Dev Logs</div><div class="tab" data-tab="bugs" id="bugsTabBtnHidden" style="display:none" data-i18n="tab.bugs">🐛 Bugs</div>
 </div>
 <div id="devlogsTab" style="display:none">
   <style>
@@ -80,13 +84,13 @@
   #devlogsTab .kick-badge.live{color:#53fc18;font-weight:bold}
   </style>
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-    <span style="color:var(--amber);font-weight:bold;letter-spacing:.08em">📺 DEV LOGS</span>
-    <span class="muted" id="devlogsSubtitle" style="font-size:.7rem">Broadcasts, dev logs, lore and news</span>
-    <a id="devlogsOpenLink" href="https://www.youtube.com/@FleshMarketNews" target="_blank" rel="noopener" class="btn" style="margin-left:auto;font-size:.72rem;padding:4px 10px">Open channel</a>
+    <span style="color:var(--amber);font-weight:bold;letter-spacing:.08em" data-i18n="dl.title">📺 DEV LOGS</span>
+    <span class="muted" id="devlogsSubtitle" style="font-size:.7rem" data-i18n="dl.subtitle">Broadcasts, dev logs, lore and news</span>
+    <a id="devlogsOpenLink" href="https://www.youtube.com/@FleshMarketNews" target="_blank" rel="noopener" class="btn" style="margin-left:auto;font-size:.72rem;padding:4px 10px" data-i18n="dl.openChannel">Open channel</a>
   </div>
   <div style="display:flex;gap:6px;margin-bottom:8px">
-    <button class="btn sub-on" id="dlSubYt" data-sub="yt" style="font-size:.72rem;padding:4px 12px">▶ Videos</button>
-    <button class="btn" id="dlSubKick" data-sub="kick" style="font-size:.72rem;padding:4px 12px">🟢 Live on Kick</button>
+    <button class="btn sub-on" id="dlSubYt" data-sub="yt" style="font-size:.72rem;padding:4px 12px"data-i18n="dl.videos">▶ Videos</button>
+    <button class="btn" id="dlSubKick" data-sub="kick" style="font-size:.72rem;padding:4px 12px"data-i18n="dl.liveOnKick">🟢 Live on Kick</button>
   </div>
   <div id="dlPaneYt" style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border:1px solid #0a3315;border-radius:6px;overflow:hidden">
     <iframe id="devlogsFrame" data-src="https://www.youtube.com/embed/videoseries?list=UU7jGc6Xo_-Koo8IyQCD9iQA&rel=0&autoplay=1&mute=1" title="Flesh Market News" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%"></iframe>
@@ -105,22 +109,22 @@
 <div id="marketTab">
 <canvas id="chart"></canvas>
 <div class="row" style="margin-top:8px">
-<input class="input" id="sym" placeholder="Symbol (e.g. ORGX)" style="max-width:140px"/>
+<input class="input" id="sym" placeholder="Symbol (e.g. ORGX)" data-i18n-ph="ph.symOrder" style="max-width:140px"/>
 <input class="input" id="shares" min="1" style="max-width:120px" type="number" value="1"/>
-<button class="btn" id="buy">Buy</button>
-<button class="btn" id="sell">Sell</button>
-<button class="btn" id="shortBtn" style="background:#1a0808;border-color:#a83232;color:#ff7878;" title="Open/Cover short positions">⬇ Short</button>
+<button class="btn" id="buy" data-i18n="btn.buy">Buy</button>
+<button class="btn" id="sell" data-i18n="btn.sell">Sell</button>
+<button class="btn" id="shortBtn" style="background:#1a0808;border-color:#a83232;color:#ff7878;" title="Open/Cover short positions" data-i18n="btn.short">⬇ Short</button>
 <div class="muted" id="cash" style="margin-left:auto"></div>
 </div>
 <!-- v5.0: Limit Orders Panel -->
 <div id="limitPanel" style="margin-top:6px;padding:8px;border:1px solid #0a3315;border-radius:6px;background:#050403">
-  <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px">Limit Orders</div>
+  <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px" data-i18n="sec.limitOrders">Limit Orders</div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-    <select id="limitSide" class="input" style="max-width:70px"><option value="buy">BUY</option><option value="sell">SELL</option></select>
-    <input id="limitSym" class="input" placeholder="Symbol" style="max-width:90px" maxlength="5"/>
-    <input id="limitQty" class="input" type="number" min="1" placeholder="Qty" style="max-width:80px"/>
-    <input id="limitPrice" class="input" type="number" min="0.01" step="0.01" placeholder="Limit Ƒ" style="max-width:90px"/>
-    <button class="btn" id="limitPlaceBtn" style="font-size:.8rem">Place</button>
+    <select id="limitSide" class="input" style="max-width:70px"><option value="buy" data-i18n="opt.buy">BUY</option><option value="sell" data-i18n="opt.sell">SELL</option></select>
+    <input id="limitSym" class="input" placeholder="Symbol" data-i18n-ph="ph.symShort" style="max-width:90px" maxlength="5"/>
+    <input id="limitQty" class="input" type="number" min="1" placeholder="Qty" data-i18n-ph="ph.qty" style="max-width:80px"/>
+    <input id="limitPrice" class="input" type="number" min="0.01" step="0.01" placeholder="Limit Ƒ" data-i18n-ph="ph.limitPrice" style="max-width:90px"/>
+    <button class="btn" id="limitPlaceBtn" style="font-size:.8rem" data-i18n="btn.place">Place</button>
     <span id="limitHint" style="font-size:.75rem;opacity:.6;margin-left:4px"></span>
   </div>
   <div id="openOrders" style="margin-top:6px;font-size:.78rem;max-height:80px;overflow:auto"></div>
@@ -134,7 +138,7 @@
   </div>
 </div>
 <div id="tradeFeedWrap" style="padding:4px 0 0 0">
-  <div style="font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;opacity:.4;margin-bottom:4px">Live Trades</div>
+  <div style="font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;opacity:.4;margin-bottom:4px" data-i18n="sec.liveTrades">Live Trades</div>
   <div id="tradeFeedPanel"></div>
 </div>
 </div>
@@ -150,47 +154,47 @@
   </div>
 </div>
 <div class="pnl-ctl">
-  <input id="pnlSearch" class="input" placeholder="Filter positions by ticker..." style="font-size:.8rem" oninput="window.pnlApplySearch&&window.pnlApplySearch(this.value)"/>
+  <input id="pnlSearch" class="input" placeholder="Filter positions by ticker..." data-i18n-ph="pnl.filterPh" style="font-size:.8rem" oninput="window.pnlApplySearch&&window.pnlApplySearch(this.value)"/>
   <select id="pnlSort" class="sector-select" title="Sort or filter by sector" onchange="window.pnlApplySort&&window.pnlApplySort(this.value)">
-    <option value="default">All positions</option>
-    <option value="group">Grouped by sector</option>
+    <option value="default" data-i18n="pnl.allPositions">All positions</option>
+    <option value="group" data-i18n="pnl.groupedBySector">Grouped by sector</option>
     <optgroup label="Show one sector">
-      <option value="0">Finance</option>
-      <option value="1">Biotech</option>
-      <option value="2">Insurance</option>
-      <option value="3">Manufacturing</option>
-      <option value="4">Energy</option>
-      <option value="5">Logistics</option>
-      <option value="6">Tech</option>
-      <option value="7">Misc</option>
+      <option value="0" data-i18n="sector.0">Finance</option>
+      <option value="1" data-i18n="sector.1">Biotech</option>
+      <option value="2" data-i18n="sector.2">Insurance</option>
+      <option value="3" data-i18n="sector.3">Manufacturing</option>
+      <option value="4" data-i18n="sector.4">Energy</option>
+      <option value="5" data-i18n="sector.5">Logistics</option>
+      <option value="6" data-i18n="sector.6">Tech</option>
+      <option value="7" data-i18n="sector.7">Misc</option>
     </optgroup>
   </select>
 </div>
 <div class="list" id="pnlBox" style="max-height:360px;overflow-y:auto"></div>
 <!-- v5.0 Sector Breakdown -->
 <div id="sectorBreakdown" style="margin-top:10px;padding:8px;border:1px solid #0a3315;border-radius:6px;background:#050403">
-  <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px">Sector Exposure</div>
+  <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px" data-i18n="sec.exposure">Sector Exposure</div>
   <div id="sectorBars" style="display:flex;flex-direction:column;gap:4px"></div>
 </div>
 </div>
 <!-- v5.0 Heatmap Tab -->
 <div id="heatTab" style="display:none;padding:8px">
-  <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:8px">Market Heatmap, % change today</div>
+  <div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:8px" data-i18n="sec.heatmap">Market Heatmap, % change today</div>
   <div id="heatGrid" style="display:flex;flex-direction:column;gap:10px"></div>
 </div>
 <div id="casinoTab" style="display:none">
 <div class="tabs" id="casinoTabs">
-<div class="subtab active" data-subtab="roulette">Roulette</div>
-<div class="subtab" data-subtab="blackjack">Blackjack</div>
-<div class="subtab" data-subtab="poker">Poker</div>
-<div class="subtab" data-subtab="horseraces">Horse Races</div>
-<div class="subtab" data-subtab="baccarat">Baccarat</div>
-<div class="subtab" data-subtab="sicbo">Sic Bo</div>
-<div class="subtab" data-subtab="chess">Chess</div>
-<div class="subtab" data-subtab="sudoku">Sudoku</div>
-<div class="subtab" data-subtab="mathgame">Math Quiz</div>
-<div class="subtab" data-subtab="minesweeper">Minesweeper</div>
-<div class="subtab" data-subtab="solitaire">Solitaire</div>
+<div class="subtab active" data-subtab="roulette" data-i18n="casino.tab.roulette">Roulette</div>
+<div class="subtab" data-subtab="blackjack" data-i18n="casino.tab.blackjack">Blackjack</div>
+<div class="subtab" data-subtab="poker" data-i18n="casino.tab.poker">Poker</div>
+<div class="subtab" data-subtab="horseraces" data-i18n="casino.tab.horseraces">Horse Races</div>
+<div class="subtab" data-subtab="baccarat" data-i18n="casino.tab.baccarat">Baccarat</div>
+<div class="subtab" data-subtab="sicbo" data-i18n="casino.tab.sicbo">Sic Bo</div>
+<div class="subtab" data-subtab="chess" data-i18n="casino.tab.chess">Chess</div>
+<div class="subtab" data-subtab="sudoku" data-i18n="casino.tab.sudoku">Sudoku</div>
+<div class="subtab" data-subtab="mathgame" data-i18n="casino.tab.mathgame">Math Quiz</div>
+<div class="subtab" data-subtab="minesweeper" data-i18n="casino.tab.minesweeper">Minesweeper</div>
+<div class="subtab" data-subtab="solitaire" data-i18n="casino.tab.solitaire">Solitaire</div>
 </div>
 <div id="casinoContent" style="margin-top:8px">
 <link rel="stylesheet" href="assets/casino-roulette.css">
@@ -199,49 +203,49 @@
 <div class="casino-pane" id="casino-poker" style="display:none">
 <link rel="stylesheet" href="assets/casino-poker.css">
 <div id="poker-wrap">
-  <h3>Texas Hold'em, 6-max vs AI</h3>
+  <h3 data-i18n="casino.poker.title">Texas Hold'em, 6-max vs AI</h3>
   <div class="pk-info">
-    <span>Stack: <strong id="pk-balance">Ƒ0</strong></span>
-    <span>Blind: <strong id="pk-blind-lbl">Ƒ10/Ƒ20</strong></span>
-    <span>Pot: <strong id="pk-pot">Ƒ0</strong></span>
+    <span><span data-i18n="casino.poker.stack">Stack:</span> <strong id="pk-balance">Ƒ0</strong></span>
+    <span><span data-i18n="casino.poker.blind">Blind:</span> <strong id="pk-blind-lbl">Ƒ10/Ƒ20</strong></span>
+    <span><span data-i18n="casino.poker.pot">Pot:</span> <strong id="pk-pot">Ƒ0</strong></span>
     <span id="pk-street-info" style="color:#46ff7d;opacity:.8"></span>
   </div>
   <div class="pk-table">
     <!-- AI seats -->
-    <div class="pk-label">OPPONENTS</div>
+    <div class="pk-label" data-i18n="casino.poker.opponents">OPPONENTS</div>
     <div class="pk-seats" id="pk-seats"></div>
     <!-- Community -->
     <div class="pk-section">
-      <div class="pk-label">Community <span class="pk-street-label" id="pk-community-label"></span></div>
+      <div class="pk-label"><span data-i18n="casino.poker.community">Community</span> <span class="pk-street-label" id="pk-community-label"></span></div>
       <div class="pk-cards" id="pk-community"></div>
     </div>
     <!-- Player hand -->
     <div class="pk-section">
-      <div class="pk-label">Your Hand</div>
+      <div class="pk-label" data-i18n="casino.poker.yourHand">Your Hand</div>
       <div class="pk-cards" id="pk-player-cards"></div>
     </div>
   </div>
 
   <!-- Bet sizing -->
   <div class="pk-bet-row">
-    <span style="font-size:.78rem;opacity:.6">Bet: </span>
+    <span style="font-size:.78rem;opacity:.6" data-i18n="casino.poker.bet">Bet: </span>
     <input id="pk-bet-input" type="number" min="1" value="20"/>
     <div class="pk-chips">
       <button onclick="pkSetBet(10)">+10</button>
       <button onclick="pkSetBet(50)">+50</button>
       <button onclick="pkSetBet(100)">+100</button>
       <button onclick="pkSetBet(500)">+500</button>
-      <button onclick="pkAllin()">ALL-IN</button>
+      <button onclick="pkAllin()" data-i18n="casino.poker.allin">ALL-IN</button>
     </div>
   </div>
 
   <!-- Actions -->
   <div class="pk-actions" id="pk-actions">
-    <button id="pk-btn-deal" onclick="pkDeal()">Deal Hand</button>
-    <button id="pk-btn-fold" class="btn-fold" onclick="pkFold()" disabled>Fold</button>
-    <button id="pk-btn-check" onclick="pkCheck()" disabled>Check</button>
-    <button id="pk-btn-call" onclick="pkCall()" disabled>Call</button>
-    <button id="pk-btn-raise" onclick="pkRaise()" disabled>Bet/Raise</button>
+    <button id="pk-btn-deal" onclick="pkDeal()" data-i18n="casino.poker.dealHand">Deal Hand</button>
+    <button id="pk-btn-fold" class="btn-fold" onclick="pkFold()" disabled data-i18n="casino.poker.fold">Fold</button>
+    <button id="pk-btn-check" onclick="pkCheck()" disabled data-i18n="casino.poker.check">Check</button>
+    <button id="pk-btn-call" onclick="pkCall()" disabled data-i18n="casino.poker.call">Call</button>
+    <button id="pk-btn-raise" onclick="pkRaise()" disabled data-i18n="casino.poker.betRaise">Bet/Raise</button>
   </div>
 
   <div id="pk-result-box"></div>
@@ -263,44 +267,44 @@
 </div>
 </div><div class="tab-pane" id="storeTab" style="display:none; padding:8px;"><div id="patreon-panel" style="margin-bottom:16px;padding:12px;border:1px solid #3a2a08;border-radius:8px;background:#060504">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-    <span style="font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;color:#ffce4d">Patreon Membership</span>
+    <span style="font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;color:#ffce4d" data-i18n="store.patreonMembership">Patreon Membership</span>
     <span id="fm-tier-badge" style="font-size:1.1rem"></span>
   </div>
   <div style="font-size:.8rem;opacity:.7;margin-bottom:10px;line-height:1.5">
-    Link your Patreon email to unlock tier benefits.<br>
-    <span style="color:#72e09c">Premium ★ $5 · +Ƒ500/30min</span> · 
-    <span style="color:#2ecc71">Guild ⚖ $15 · +Ƒ1,500/30min</span> · 
-    <span style="color:#9dff5a">CEO ♛ $100 · +Ƒ10,000/30min</span>
+    <span data-i18n="store.linkEmail">Link your Patreon email to unlock tier benefits.</span><br>
+    <span style="color:#72e09c" data-i18n="store.tierPremium">Premium ★ $5 · +Ƒ500/30min</span> · 
+    <span style="color:#2ecc71" data-i18n="store.tierGuild">Guild ⚖ $15 · +Ƒ1,500/30min</span> · 
+    <span style="color:#9dff5a" data-i18n="store.tierCeo">CEO ♛ $100 · +Ƒ10,000/30min</span>
   </div>
   <div style="display:flex;gap:8px">
-    <input id="patreon-email" class="input" placeholder="Your Patreon email" type="email" style="flex:1;font-size:.85rem"/>
-    <button class="btn" id="patreon-link-btn" style="font-size:.85rem;white-space:nowrap">Link Account</button>
+    <input id="patreon-email" class="input" placeholder="Your Patreon email" data-i18n-ph="store.emailPh" type="email" style="flex:1;font-size:.85rem"/>
+    <button class="btn" id="patreon-link-btn" style="font-size:.85rem;white-space:nowrap" data-i18n="store.linkAccount">Link Account</button>
   </div>
   <div id="patreon-hint" style="font-size:.78rem;min-height:16px;margin-top:6px"></div>
   <div style="margin-top:10px;font-size:.75rem;opacity:.5;line-height:1.4">
-    After linking, your tier updates automatically when Patreon processes your membership.
+    <span data-i18n="store.afterLinking">After linking, your tier updates automatically when Patreon processes your membership.</span>
     <a href="https://www.patreon.com/FLSH" target="_blank" style="color:#46ff7d;opacity:.8">patreon.com/FLSH</a>
   </div>
 </div>
 <div style="display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid #3a1a08;padding-bottom:0;background:#0a0604;border-radius:4px 4px 0 0">
-  <button class="store-stab active" data-stab="titles" onclick="storeSubTab('titles')" style="background:none;border:none;border-bottom:2px solid #cc6644;color:#72e09c;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Titles</button>
-  <button class="store-stab" data-stab="inventory" onclick="storeSubTab('inventory')" style="background:none;border:none;border-bottom:2px solid transparent;color:#997755;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Inventory</button>
+  <button class="store-stab active" data-stab="titles" onclick="storeSubTab('titles')" style="background:none;border:none;border-bottom:2px solid #cc6644;color:#72e09c;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase" data-i18n="store.stabTitles">Titles</button>
+  <button class="store-stab" data-stab="inventory" onclick="storeSubTab('inventory')" style="background:none;border:none;border-bottom:2px solid transparent;color:#997755;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase" data-i18n="store.stabInventory">Inventory</button>
   <button class="store-stab" data-stab="fbay" onclick="storeSubTab('fbay')" style="background:none;border:none;border-bottom:2px solid transparent;color:#997755;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">Ƒbay</button>
-  <button class="store-stab" data-stab="slots" onclick="storeSubTab('slots')" style="background:none;border:none;border-bottom:2px solid transparent;color:#997755;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase">🎰 Slots</button>
+  <button class="store-stab" data-stab="slots" onclick="storeSubTab('slots')" style="background:none;border:none;border-bottom:2px solid transparent;color:#997755;font-size:.75rem;padding:8px 16px;cursor:pointer;font-family:inherit;letter-spacing:.08em;text-transform:uppercase" data-i18n="store.stabSlots">🎰 Slots</button>
 </div>
 
 <!-- ── TITLES PANE ── -->
 <div id="store-pane-titles" class="store-pane">
 <div id="storeContainer">
   <div id="store-equipped-bar" style="display:none;align-items:center;gap:8px;padding:7px 10px;margin-bottom:12px;border-radius:7px;background:#0f0f0f;border:1px solid #2a2a2a;font-size:.78rem">
-    <span style="opacity:.45;letter-spacing:.08em;text-transform:uppercase;font-size:.68rem">Equipped</span>
+    <span style="opacity:.45;letter-spacing:.08em;text-transform:uppercase;font-size:.68rem" data-i18n="store.equipped">Equipped</span>
     <span id="store-equipped-name" style="font-weight:700;flex:1"></span>
     <span id="store-equipped-tier" style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;opacity:.7"></span>
   </div>
 
   <div id="title-inventory-block" style="margin-bottom:16px;display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer" onclick="var el=document.getElementById('title-inventory-list');var ar=document.getElementById('title-inv-arrow');if(el.style.display==='none'){el.style.display='block';ar.textContent='\u25BC';}else{el.style.display='none';ar.textContent='\u25B6';}">
-      <div style="font-size:.76rem;color:#aaa;letter-spacing:.12em;text-transform:uppercase">YOUR TITLES</div>
+      <div style="font-size:.76rem;color:#aaa;letter-spacing:.12em;text-transform:uppercase" data-i18n="store.yourTitles">YOUR TITLES</div>
       <span id="title-inv-arrow" style="font-size:.66rem;color:#555">&#x25BC;</span>
     </div>
     <div id="title-inventory-list"></div>
@@ -308,7 +312,7 @@
 
   <div class="store-tier-block">
     <div class="store-tier-head" style="--tc:#808080">
-      <span class="store-tier-label">Common</span>
+      <span class="store-tier-label" data-i18n="store.tierCommon">Common</span>
       <span class="store-tier-range">Ƒ1k – Ƒ5k</span>
     </div>
     <div class="store-section"></div>
@@ -316,7 +320,7 @@
 
   <div class="store-tier-block">
     <div class="store-tier-head" style="--tc:#5b82b5">
-      <span class="store-tier-label">Mid Prestige</span>
+      <span class="store-tier-label" data-i18n="store.tierMid">Mid Prestige</span>
       <span class="store-tier-range">Ƒ10k – Ƒ50k</span>
     </div>
     <div class="store-section"></div>
@@ -324,7 +328,7 @@
 
   <div class="store-tier-block">
     <div class="store-tier-head" style="--tc:#00d4ff">
-      <span class="store-tier-label">High Prestige</span>
+      <span class="store-tier-label" data-i18n="store.tierHigh">High Prestige</span>
       <span class="store-tier-range">Ƒ100k – Ƒ500k</span>
     </div>
     <div class="store-section"></div>
@@ -332,7 +336,7 @@
 
   <div class="store-tier-block">
     <div class="store-tier-head" style="--tc:#a83232">
-      <span class="store-tier-label">Mythic</span>
+      <span class="store-tier-label" data-i18n="store.tierMythic">Mythic</span>
       <span class="store-tier-range">Ƒ1M – Ƒ50M</span>
     </div>
     <div class="store-section"></div>
@@ -340,16 +344,16 @@
 
   <div class="store-tier-block" style="margin-top:20px">
     <div class="store-tier-head" style="--tc:#888;border-left-color:#888">
-      <span class="store-tier-label" style="color:#888">Patreon Exclusive</span>
-      <span class="store-tier-range">Requires active membership</span>
+      <span class="store-tier-label" style="color:#888" data-i18n="store.tierPatreon">Patreon Exclusive</span>
+      <span class="store-tier-range" data-i18n="store.reqMembership">Requires active membership</span>
     </div>
     <div id="patreon-titles-list" style="display:block"></div>
   </div>
 
   <div class="store-tier-block" style="margin-top:20px">
     <div class="store-tier-head" style="--tc:#00bfff;border-left-color:#00bfff;border-top:1px solid #00bfff33">
-      <span class="store-tier-label" style="color:#00bfff;letter-spacing:.12em">⬡ LEGENDARY</span>
-      <span class="store-tier-range" style="color:#00bfff88">One seat. No permanence.</span>
+      <span class="store-tier-label" style="color:#00bfff;letter-spacing:.12em" data-i18n="store.tierLegendary">⬡ LEGENDARY</span>
+      <span class="store-tier-range" style="color:#00bfff88" data-i18n="store.oneSeat">One seat. No permanence.</span>
     </div>
     <div id="legendary-titles-list" style="display:block"></div>
   </div>
@@ -362,13 +366,13 @@
   <div id="invTab-inventory" class="inv-tab-content">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div>
-        <div style="font-size:.65rem;letter-spacing:.12em;color:#884444;text-transform:uppercase;margin-bottom:10px">Equipped</div>
+        <div style="font-size:.65rem;letter-spacing:.12em;color:#884444;text-transform:uppercase;margin-bottom:10px" data-i18n="store.equipped">Equipped</div>
         <div id="equippedGrid"></div>
-        <div style="font-size:.68rem;color:#553333;margin-top:8px">Item passive: <span id="invPassiveTotal" style="color:#42ff7e">+0 Ƒ/30min</span></div>
+        <div style="font-size:.68rem;color:#553333;margin-top:8px"><span data-i18n="store.itemPassive">Item passive:</span> <span id="invPassiveTotal" style="color:#42ff7e">+0 Ƒ/30min</span></div>
         <div id="invSetBonuses" style="display:none;margin-top:8px"></div>
       </div>
       <div>
-        <div style="font-size:.65rem;letter-spacing:.12em;color:#884444;text-transform:uppercase;margin-bottom:10px">Bag <span id="invBagCount" style="color:#553333"></span></div>
+        <div style="font-size:.65rem;letter-spacing:.12em;color:#884444;text-transform:uppercase;margin-bottom:10px"><span data-i18n="store.bag">Bag</span> <span id="invBagCount" style="color:#553333"></span></div>
         <div id="bagGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-height:320px;overflow-y:auto"></div>
       </div>
     </div>
@@ -381,46 +385,46 @@
     <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
       <span style="font-size:.7rem;color:#42ff7e;letter-spacing:.1em;text-transform:uppercase;font-weight:500">Ƒbay</span>
       <select id="mktFilterSlot" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
-        <option value="">All Slots</option>
-        <option value="hat">Hat</option>
-        <option value="glasses">Glasses</option>
-        <option value="upperbody">Upper Body</option>
-        <option value="necklace">Necklace</option>
-        <option value="watch">Watch</option>
-        <option value="pants">Pants</option>
-        <option value="shoes">Shoes</option>
-        <option value="vehicle">Vehicle</option>
-        <option value="property">Property</option>
-        <option value="implant">Implant</option>
-        <option value="ring">Ring</option>
-        <option value="earring">Earring</option>
-        <option value="bracelet">Bracelet</option>
-        <option value="__titles__">👑 Titles</option>
+        <option value="" data-i18n="store.allSlots">All Slots</option>
+        <option value="hat" data-i18n="store.slotHat">Hat</option>
+        <option value="glasses" data-i18n="store.slotGlasses">Glasses</option>
+        <option value="upperbody" data-i18n="store.slotUpperBody">Upper Body</option>
+        <option value="necklace" data-i18n="store.slotNecklace">Necklace</option>
+        <option value="watch" data-i18n="store.slotWatch">Watch</option>
+        <option value="pants" data-i18n="store.slotPants">Pants</option>
+        <option value="shoes" data-i18n="store.slotShoes">Shoes</option>
+        <option value="vehicle" data-i18n="store.slotVehicle">Vehicle</option>
+        <option value="property" data-i18n="store.slotProperty">Property</option>
+        <option value="implant" data-i18n="store.slotImplant">Implant</option>
+        <option value="ring" data-i18n="store.slotRing">Ring</option>
+        <option value="earring" data-i18n="store.slotEarring">Earring</option>
+        <option value="bracelet" data-i18n="store.slotBracelet">Bracelet</option>
+        <option value="__titles__" data-i18n="store.slotTitles">👑 Titles</option>
       </select>
       <select id="mktFilterRarity" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
-        <option value="">All Rarities</option>
-        <option value="common">Common</option>
-        <option value="uncommon">Uncommon</option>
-        <option value="rare">Rare</option>
-        <option value="epic">Epic</option>
-        <option value="legendary">Legendary</option>
+        <option value="" data-i18n="store.allRarities">All Rarities</option>
+        <option value="common" data-i18n="store.rarCommon">Common</option>
+        <option value="uncommon" data-i18n="store.rarUncommon">Uncommon</option>
+        <option value="rare" data-i18n="store.rarRare">Rare</option>
+        <option value="epic" data-i18n="store.rarEpic">Epic</option>
+        <option value="legendary" data-i18n="store.rarLegendary">Legendary</option>
       </select>
       <select id="mktSortBy" onchange="applyMarketFilters()" style="background:#060303;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 6px;border-radius:4px;font-family:inherit">
-        <option value="newest">Newest</option>
-        <option value="price_asc">Price ↑</option>
-        <option value="price_desc">Price ↓</option>
-        <option value="rarity">Rarity</option>
+        <option value="newest" data-i18n="store.sortNewest">Newest</option>
+        <option value="price_asc" data-i18n="store.sortPriceAsc">Price ↑</option>
+        <option value="price_desc" data-i18n="store.sortPriceDesc">Price ↓</option>
+        <option value="rarity" data-i18n="store.sortRarity">Rarity</option>
       </select>
       <div style="flex:1"></div>
       <button onclick="loadMarket()" style="background:#0d0505;border:1px solid #2a1010;color:#884444;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">↻</button>
-      <button onclick="showListForm()" style="background:#0d0505;border:1px solid #2f9f4a44;color:#42ff7e;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">+ List</button>
+      <button onclick="showListForm()" style="background:#0d0505;border:1px solid #2f9f4a44;color:#42ff7e;font-size:.68rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit" data-i18n="store.addList">+ List</button>
     </div>
     <div id="listForm" style="display:none;background:#0a0303;border:1px solid #2a1010;border-radius:6px;padding:10px;margin-bottom:10px">
-      <div style="font-size:.68rem;color:#884444;margin-bottom:8px">List an item for sale</div>
+      <div style="font-size:.68rem;color:#884444;margin-bottom:8px" data-i18n="store.listItem">List an item for sale</div>
       <select id="listInvSelect" style="width:100%;background:#060303;border:1px solid #2a1010;color:#7fc090;padding:5px;font-family:inherit;font-size:.75rem;margin-bottom:6px;border-radius:4px"></select>
       <div style="display:flex;gap:6px">
-        <input id="listPrice" type="number" min="1" placeholder="Price in Ƒ" style="flex:1;background:#060303;border:1px solid #2a1010;color:#7fc090;padding:5px 8px;font-family:inherit;font-size:.75rem;border-radius:4px">
-        <button onclick="submitListing()" style="background:#0d0505;border:1px solid #2f9f4a55;color:#42ff7e;font-size:.75rem;padding:5px 14px;border-radius:4px;cursor:pointer;font-family:inherit">List</button>
+        <input id="listPrice" type="number" min="1" placeholder="Price in Ƒ" data-i18n-ph="store.pricePh" style="flex:1;background:#060303;border:1px solid #2a1010;color:#7fc090;padding:5px 8px;font-family:inherit;font-size:.75rem;border-radius:4px">
+        <button onclick="submitListing()" style="background:#0d0505;border:1px solid #2f9f4a55;color:#42ff7e;font-size:.75rem;padding:5px 14px;border-radius:4px;cursor:pointer;font-family:inherit" data-i18n="store.listBtn">List</button>
         <button onclick="document.getElementById('listForm').style.display='none'" style="background:none;border:1px solid #2a1010;color:#553333;font-size:.75rem;padding:5px 10px;border-radius:4px;cursor:pointer;font-family:inherit">✕</button>
       </div>
     </div>
@@ -431,10 +435,10 @@
 <!-- ── SLOTS PANE ── -->
 <div id="store-pane-slots" class="store-pane" style="display:none">
   <div style="max-width:420px;margin:0 auto;text-align:center">
-    <div style="font-size:.65rem;color:#553333;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px">Spins Available</div>
+    <div style="font-size:.65rem;color:#553333;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px" data-i18n="store.spinsAvail">Spins Available</div>
     <div id="slotModalSpinCount" style="font-size:3rem;font-weight:500;color:#42ff7e;line-height:1;margin-bottom:4px">0</div>
     <div style="font-size:.68rem;color:#443333;margin-bottom:20px">
-      <div style="margin-bottom:6px">Every 9 day trades earns a free spin</div>
+      <div style="margin-bottom:6px" data-i18n="store.everyNine">Every 9 day trades earns a free spin</div>
       <div style="display:flex;align-items:center;justify-content:center;gap:8px">
         <span style="color:#42ff7e;font-size:.75rem;font-weight:600" id="slotMilestoneCount">0</span>
         <div style="flex:0 0 140px;height:6px;background:#1a0800;border:1px solid #331500;border-radius:3px;overflow:hidden">
@@ -455,14 +459,14 @@
       font-size:.9rem;padding:11px 40px;border-radius:6px;
       cursor:pointer;font-family:inherit;letter-spacing:.12em;text-transform:uppercase;
       width:100%;transition:all .15s;margin-bottom:16px;
-    ">Spin</button>
+    " data-i18n="store.spin">Spin</button>
     <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
-      <span style="font-size:.62rem;color:#888780;border:1px solid #88878033;padding:1px 7px;border-radius:3px">Common 55%</span>
-      <span style="font-size:.62rem;color:#1D9E75;border:1px solid #1D9E7533;padding:1px 7px;border-radius:3px">Uncommon 25%</span>
-      <span style="font-size:.62rem;color:#3B8BD4;border:1px solid #3B8BD433;padding:1px 7px;border-radius:3px">Rare 12%</span>
-      <span style="font-size:.62rem;color:#8B5CF6;border:1px solid #8B5CF633;padding:1px 7px;border-radius:3px">Epic 6%</span>
-      <span style="font-size:.62rem;color:#2f9f4a;border:1px solid #2f9f4a33;padding:1px 7px;border-radius:3px">Legendary 0.5%</span>
-      <span style="font-size:.62rem;color:#ff0055;border:1px solid #ff005533;padding:1px 7px;border-radius:3px">Phantom 0.00001%</span>
+      <span style="font-size:.62rem;color:#888780;border:1px solid #88878033;padding:1px 7px;border-radius:3px" data-i18n="store.chipCommon">Common 55%</span>
+      <span style="font-size:.62rem;color:#1D9E75;border:1px solid #1D9E7533;padding:1px 7px;border-radius:3px" data-i18n="store.chipUncommon">Uncommon 25%</span>
+      <span style="font-size:.62rem;color:#3B8BD4;border:1px solid #3B8BD433;padding:1px 7px;border-radius:3px" data-i18n="store.chipRare">Rare 12%</span>
+      <span style="font-size:.62rem;color:#8B5CF6;border:1px solid #8B5CF633;padding:1px 7px;border-radius:3px" data-i18n="store.chipEpic">Epic 6%</span>
+      <span style="font-size:.62rem;color:#2f9f4a;border:1px solid #2f9f4a33;padding:1px 7px;border-radius:3px" data-i18n="store.chipLegendary">Legendary 0.5%</span>
+      <span style="font-size:.62rem;color:#ff0055;border:1px solid #ff005533;padding:1px 7px;border-radius:3px" data-i18n="store.chipPhantom">Phantom 0.00001%</span>
     </div>
   </div>
 </div>
@@ -490,7 +494,7 @@ window.storeSubTab=storeSubTab;
   <!-- DIRECTORY VIEW -->
   <div id="guild-dir">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;opacity:.55">Capital Houses</div>
+      <div style="font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;opacity:.55" data-i18n="sec.capitalHouses">Capital Houses</div>
       <button class="btn" id="g-create-btn" style="padding:4px 14px;font-size:.8rem">+ Create Fund</button>
     </div>
     <div id="guild-fund-list" style="display:flex;flex-direction:column;gap:6px"></div>
@@ -600,17 +604,17 @@ window.storeSubTab=storeSubTab;
       <div class="pnl-ctl">
         <input id="g-holdings-search" class="input" placeholder="Filter holdings..." style="font-size:.78rem" oninput="window.guildHoldingsSearch&&window.guildHoldingsSearch(this.value)"/>
         <select id="g-holdings-sort" class="sector-select" title="Sort or filter by sector" onchange="window.guildHoldingsSort&&window.guildHoldingsSort(this.value)">
-          <option value="default">All holdings</option>
-          <option value="group">Grouped by sector</option>
+          <option value="default" data-i18n="guild.allHoldings">All holdings</option>
+          <option value="group" data-i18n="pnl.groupedBySector">Grouped by sector</option>
           <optgroup label="Show one sector">
-            <option value="0">Finance</option>
-            <option value="1">Biotech</option>
-            <option value="2">Insurance</option>
-            <option value="3">Manufacturing</option>
-            <option value="4">Energy</option>
-            <option value="5">Logistics</option>
-            <option value="6">Tech</option>
-            <option value="7">Misc</option>
+            <option value="0" data-i18n="sector.0">Finance</option>
+            <option value="1" data-i18n="sector.1">Biotech</option>
+            <option value="2" data-i18n="sector.2">Insurance</option>
+            <option value="3" data-i18n="sector.3">Manufacturing</option>
+            <option value="4" data-i18n="sector.4">Energy</option>
+            <option value="5" data-i18n="sector.5">Logistics</option>
+            <option value="6" data-i18n="sector.6">Tech</option>
+            <option value="7" data-i18n="sector.7">Misc</option>
           </optgroup>
         </select>
       </div>
@@ -764,11 +768,12 @@ window.storeSubTab=storeSubTab;
 <!-- ═══ Galaxy Tab ═══ -->
 <div id="galacticTab" style="display:none;padding:0;overflow:hidden;flex:1;min-height:0;font-family:'Courier New','Lucida Console',monospace">
   <div id="galaxySubTabs" style="display:flex;border-bottom:1px solid #1a1a2e;background:#07070e">
-    <div class="galaxy-stab active" data-gstab="map" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid #4ecdc4;color:#4ecdc4;text-transform:uppercase;font-family:inherit">⬡ Sector Map</div>
-    <div class="galaxy-stab" data-gstab="markets" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit">💱 Markets</div>
-    <div class="galaxy-stab" data-gstab="shipping" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit">💀 Smuggling</div>
-    <div class="galaxy-stab" data-gstab="contracts" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit">📋 Contracts</div>
-    <div class="galaxy-stab" data-gstab="factions" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit">◈ Factions</div>
+    <div class="galaxy-stab active" data-gstab="map" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid #4ecdc4;color:#4ecdc4;text-transform:uppercase;font-family:inherit" data-i18n="gstab.map">⬡ Sector Map</div>
+    <div class="galaxy-stab" data-gstab="markets" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit" data-i18n="gstab.markets">💱 Markets</div>
+    <div class="galaxy-stab" data-gstab="shipping" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit" data-i18n="gstab.shipping">💀 Smuggling</div>
+    <div class="galaxy-stab" data-gstab="contracts" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit" data-i18n="gstab.contracts">📋 Contracts</div>
+    <div class="galaxy-stab" data-gstab="factions" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit" data-i18n="gstab.factions">◈ Factions</div>
+    <div class="galaxy-stab" data-gstab="cities" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit" data-i18n="gstab.cities">🏙 Cities</div>
   </div>
   <!-- Map pane -->
   <div id="gMapPane" style="display:flex;flex:1;min-height:0;background:#02020a">
@@ -781,6 +786,7 @@ window.storeSubTab=storeSubTab;
           <filter id="gf-contested" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="10" result="b"/><feFlood flood-color="#f39c12" flood-opacity="0.9" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           <filter id="gf-dev" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="10" result="b"/><feFlood flood-color="#9dff5a" flood-opacity="0.8" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           <filter id="gf-guild"  x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#2ecc71" flood-opacity="0.7" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="gf-jade"   x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#e8e4d8" flood-opacity="0.75" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
         </defs>
         <image id="gNebula" href="assets/space/backgrounds/blue_purple.png" x="-300" y="-300" width="1700" height="1400" preserveAspectRatio="xMidYMid slice" opacity="0" style="transition:opacity 1.2s ease"/>
         <g id="gStars"></g>
@@ -806,12 +812,12 @@ window.storeSubTab=storeSubTab;
         <g id="gColonies"></g>
       </svg>
       <div style="position:absolute;bottom:10px;left:10px;background:#07070eee;border:1px solid #1a1a2e;padding:8px 12px;font-size:.6rem;color:#666;line-height:1.9;letter-spacing:.05em">
-        <div style="color:#444;letter-spacing:.1em;margin-bottom:3px;text-transform:uppercase">Shipping Lanes</div>
-        <div><span style="display:inline-block;width:16px;height:2px;background:#4ecdc4;opacity:.7;vertical-align:middle;margin-right:5px"></span>Corporate</div>
-        <div><span style="display:inline-block;width:16px;height:2px;background:#c8cdd6;opacity:.7;vertical-align:middle;margin-right:5px"></span>Grey Market</div>
-        <div><span style="display:inline-block;width:16px;height:2px;background:#9b59b6;opacity:.7;vertical-align:middle;margin-right:5px"></span>Dark Net</div>
-        <div><span style="display:inline-block;width:16px;height:2px;background:#f39c12;opacity:.7;vertical-align:middle;margin-right:5px"></span>Contested</div>
-        <div style="margin-top:3px;color:#555">&#9888; = Contested Colony</div>
+        <div style="color:#444;letter-spacing:.1em;margin-bottom:3px;text-transform:uppercase" data-i18n="sec.shippingLanes">Shipping Lanes</div>
+        <div><span style="display:inline-block;width:16px;height:2px;background:#4ecdc4;opacity:.7;vertical-align:middle;margin-right:5px"></span><span data-i18n="lane.corporate">Corporate</span></div>
+        <div><span style="display:inline-block;width:16px;height:2px;background:#c8cdd6;opacity:.7;vertical-align:middle;margin-right:5px"></span><span data-i18n="lane.grey">Grey Market</span></div>
+        <div><span style="display:inline-block;width:16px;height:2px;background:#9b59b6;opacity:.7;vertical-align:middle;margin-right:5px"></span><span data-i18n="lane.dark">Dark Net</span></div>
+        <div><span style="display:inline-block;width:16px;height:2px;background:#f39c12;opacity:.7;vertical-align:middle;margin-right:5px"></span><span data-i18n="lane.contested">Contested</span></div>
+        <div style="margin-top:3px;color:#555">&#9888; = <span data-i18n="galx.contestedColony">Contested Colony</span></div>
       </div>
     </div>
     <!-- Colony detail sidebar -->
@@ -819,21 +825,18 @@ window.storeSubTab=storeSubTab;
       <div id="gColonyDetailInner" style="padding:14px">
         <div style="text-align:center;padding:28px 0;opacity:.22">
           <div style="font-size:1.8rem">&#9670;</div>
-          <div style="font-size:.66rem;letter-spacing:.14em;margin-top:6px;font-family:'Courier New',monospace">SELECT A COLONY</div>
+          <div style="font-size:.66rem;letter-spacing:.14em;margin-top:6px;font-family:'Courier New',monospace" data-i18n="galx.selectColony">SELECT A COLONY</div>
         </div>
       </div>
     </div>
   </div>
   <!-- Factions pane -->
   <div id="gFactionsPane" style="display:none;padding:14px 16px;overflow-y:auto;flex:1;min-height:0">
-    <div style="font-size:.6rem;color:#555;letter-spacing:.13em;margin-bottom:14px;text-transform:uppercase">Choose Your Allegiance, Bonuses Apply To All Holdings</div>
+    <div style="font-size:.6rem;color:#555;letter-spacing:.13em;margin-bottom:14px;text-transform:uppercase" data-i18n="galx.chooseAllegiance">Choose Your Allegiance, Bonuses Apply To All Holdings</div>
     <div id="gFactionList"></div>
     <div style="margin-top:14px;padding:12px;border:1px solid #1a1a2e;font-size:.68rem;color:#666;line-height:1.7">
-      <div style="color:#4ecdc4;letter-spacing:.1em;margin-bottom:5px;font-size:.6rem;text-transform:uppercase">How Faction Wars Work</div>
-      Fund factions through colony panels on the Sector Map.
-      When a faction's control crosses <span style="color:#f39c12">75%</span>, a 24-hour conquest timer begins.
-      If it holds, the colony changes hands, all aligned players receive passive bonuses
-      on holdings tied to that colony's sectors.
+      <div style="color:#4ecdc4;letter-spacing:.1em;margin-bottom:5px;font-size:.6rem;text-transform:uppercase" data-i18n="galx.howFactionWars">How Faction Wars Work</div>
+      <span data-i18n="galx.factionWars1">Fund factions through colony panels on the Sector Map. When faction control crosses</span> <span style="color:#f39c12">75%</span><span data-i18n="galx.factionWars2">, a 24-hour conquest timer begins. If it holds, the colony changes hands, and all aligned players receive passive bonuses on holdings tied to the sectors of that colony.</span>
     </div>
   </div>
   <!-- Shipping pane -->
@@ -844,31 +847,36 @@ window.storeSubTab=storeSubTab;
   <div id="gMarketsPane" style="display:none;padding:14px 16px;overflow-y:auto;flex:1;min-height:0">
     <div id="gMarketsInner"></div>
   </div>
+  <!-- Cities pane -->
+  <div id="gCitiesPane" style="display:none;padding:8px 10px;overflow:hidden;flex:1;min-height:0;
+       font-family:'Share Tech Mono',ui-monospace,Menlo,Consolas,monospace;font-size:14px;line-height:1.45;color:#42ff7e">
+    <div id="citiesTabInner" class="fmcity" style="height:100%"></div>
+  </div>
   <!-- Contracts pane -->
   <div id="gContractsPane" style="display:none;padding:14px 16px;overflow-y:auto;flex:1;min-height:0">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:.72rem;color:#888;letter-spacing:.1em;text-transform:uppercase">Lane Shares, Bonding Curve Market</div>
-      <div style="font-size:.68rem;color:#2ecc71;letter-spacing:.06em">Dividends every 30 min</div>
+      <div style="font-size:.72rem;color:#888;letter-spacing:.1em;text-transform:uppercase" data-i18n="galx.laneSharesTitle">Lane Shares, Bonding Curve Market</div>
+      <div style="font-size:.68rem;color:#2ecc71;letter-spacing:.06em" data-i18n="galx.dividends30">Dividends every 30 min</div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <select id="gCtrFilterType" style="background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 10px;font-size:.72rem;font-family:inherit;border-radius:2px">
-        <option value="">All types</option><option value="corporate">Corporate</option><option value="grey">Grey Market</option><option value="dark">Dark Net</option><option value="contested">Contested</option>
+        <option value="" data-i18n="galx.allTypes">All types</option><option value="corporate" data-i18n="lane.corporate">Corporate</option><option value="grey" data-i18n="lane.grey">Grey Market</option><option value="dark" data-i18n="lane.dark">Dark Net</option><option value="contested" data-i18n="lane.contested">Contested</option>
       </select>
       <select id="gCtrFilterStatus" style="background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 10px;font-size:.72rem;font-family:inherit;border-radius:2px">
-        <option value="">All status</option><option value="open">Open slots</option><option value="held">Has holders</option><option value="mine">My share</option>
+        <option value="" data-i18n="galx.allStatus">All status</option><option value="open" data-i18n="galx.openSlots">Open slots</option><option value="held" data-i18n="galx.hasHolders">Has holders</option><option value="mine" data-i18n="galx.myShare">My share</option>
       </select>
       <select id="gCtrSort" style="background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 10px;font-size:.72rem;font-family:inherit;border-radius:2px">
-        <option value="vol">Sort: Volume</option><option value="supply">Sort: Supply</option><option value="price">Sort: Price</option><option value="type">Sort: Type</option>
+        <option value="vol" data-i18n="galx.sortVolume">Sort: Volume</option><option value="supply" data-i18n="galx.sortSupply">Sort: Supply</option><option value="price" data-i18n="galx.sortPrice">Sort: Price</option><option value="type" data-i18n="galx.sortType">Sort: Type</option>
       </select>
     </div>
     <div id="gContractsTable"></div>
     <div style="margin-top:14px;padding:12px 14px;border:1px solid #1a1a2e;font-size:.74rem;color:#777;line-height:1.7">
-      <div style="color:#3498db;letter-spacing:.1em;margin-bottom:5px;font-size:.68rem;text-transform:uppercase">How Lane Shares Work</div>
-      Buy a share in any shipping lane's trade volume. Price follows a bonding curve, so early buyers get in cheap and later buyers pay more.
+      <div style="color:#3498db;letter-spacing:.1em;margin-bottom:5px;font-size:.68rem;text-transform:uppercase" data-i18n="galx.howLaneShares">How Lane Shares Work</div>
+      <span data-i18n="galx.laneSharesDesc">Buy a share in the trade volume of any shipping lane. Price follows a bonding curve, so early buyers get in cheap and later buyers pay more.
       Each share pays a dividend every 30 minutes (high vol: &#401;50, med: &#401;20, low: &#401;8).
       War reduces dividends. Contested colonies halve income; high tension cuts it to 25%. Blockades stack another 50% cut.
       If a colony is conquered, all shares on connected lanes are voided for a total loss.
-      Sell anytime at the current curve price. One share per player. Swap to rotate positions.
+      Sell anytime at the current curve price. One share per player. Swap to rotate positions.</span>
     </div>
   </div>
 </div>
@@ -886,27 +894,18 @@ window.storeSubTab=storeSubTab;
                 #02020a;
      min-height:400px; flex-direction:column; align-items:center; overflow-y:auto">
 
-  <div style="font-size:13px; letter-spacing:.2em; color:#4f8f5f; text-transform:uppercase; text-align:center; margin-bottom:10px">OPEN RANGE · UNREGULATED EXTRACTION ZONE</div>
+  <div style="font-size:13px; letter-spacing:.2em; color:#4f8f5f; text-transform:uppercase; text-align:center; margin-bottom:10px" data-i18n="dm.eyebrow">OPEN RANGE · UNREGULATED EXTRACTION ZONE</div>
 
-  <h2 style="font-size:32px; letter-spacing:.3em; color:var(--amber); margin:0 0 6px; text-shadow:0 0 24px rgba(230,194,122,.3); text-align:center">DRONE MINING</h2>
-  <div style="font-size:14px; letter-spacing:.22em; color:#8a6a30; text-align:center; margin-bottom:22px">ONE SHOT · ONE TANK · ONE CHANCE</div>
+  <h2 style="font-size:32px; letter-spacing:.3em; color:var(--amber); margin:0 0 6px; text-shadow:0 0 24px rgba(230,194,122,.3); text-align:center" data-i18n="dm.title">DRONE MINING</h2>
+  <div style="font-size:14px; letter-spacing:.22em; color:#8a6a30; text-align:center; margin-bottom:22px" data-i18n="dm.tagline">ONE SHOT · ONE TANK · ONE CHANCE</div>
 
   <!-- Lore panel: high contrast prose -->
   <div style="max-width:720px; width:100%; box-sizing:border-box;
               margin:0 auto 22px; padding:20px 26px;
               border:1px solid #3a2a10; background:rgba(10,6,2,.55);
               font-size:16px; color:#a8d8b8; line-height:1.75; letter-spacing:.03em">
-    <p style="margin:0 0 12px">
-      Every faction agreed on one thing: the asteroid belts are where conflict happens.
-      No treaty covers the open range. No safety board patrols the rocks.
-      Mining drones meet other mining drones, and they go to war.
-    </p>
-    <p style="margin:0">
-      You pilot a single drone through hostile belts. One fuel tank. One life.
-      The deeper you push, the richer the ore and the heavier the opposition.
-      Bring cargo back to the mothership to bank it. Come home alive and the drone
-      itself refunds its build cost.
-    </p>
+    <p style="margin:0 0 12px" data-i18n="dm.body1">Every faction agreed on one thing: the asteroid belts are where conflict happens. No treaty covers the open range. No safety board patrols the rocks. Mining drones meet other mining drones, and they go to war.</p>
+    <p style="margin:0" data-i18n="dm.body2">You pilot a single drone through hostile belts. One fuel tank. One life. The deeper you push, the richer the ore and the heavier the opposition. Bring cargo back to the mothership to bank it. Come home alive and the drone itself refunds its build cost.</p>
   </div>
 
   <!-- Current stats -->
@@ -914,32 +913,31 @@ window.storeSubTab=storeSubTab;
               border:1px solid #3a2a10; background:rgba(10,6,2,.6);
               padding:16px 24px; display:flex; flex-direction:column; gap:8px; box-sizing:border-box">
     <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px">
-      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase">Current Bank</span>
+      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase" data-i18n="dm.currentBank">Current Bank</span>
       <span id="mining-brief-bank" style="color:#72e09c; font-weight:bold; font-size:18px">Ƒ0</span>
     </div>
     <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px">
-      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase">Minimum Loadout</span>
+      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase" data-i18n="dm.minimumLoadout">Minimum Loadout</span>
       <span style="color:#72e09c; font-weight:bold; font-size:18px">Ƒ1,000</span>
     </div>
     <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px">
-      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase">Drone Refund</span>
-      <span style="color:#86ff6a; font-weight:bold; font-size:18px">+Ƒ1,000 if drone survives the run</span>
+      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase" data-i18n="dm.droneRefund">Drone Refund</span>
+      <span style="color:#86ff6a; font-weight:bold; font-size:18px" data-i18n="dm.refundLine">+Ƒ1,000 if drone survives the run</span>
     </div>
     <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px">
-      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase">Factions</span>
+      <span style="color:#4f8f5f; letter-spacing:.1em; text-transform:uppercase" data-i18n="dm.factions">Factions</span>
       <span style="font-weight:bold; font-size:14px; letter-spacing:.08em">
-        <span style="color:#4ecdc4">COALITION</span> ·
-        <span style="color:#e74c3c">SYNDICATE</span> ·
-        <span style="color:#9b59b6">VOID</span>
+        <span style="color:#4ecdc4" data-i18n="dm.facCoalition">COALITION</span> ·
+        <span style="color:#e74c3c" data-i18n="dm.facSyndicate">SYNDICATE</span> ·
+        <span style="color:#9b59b6" data-i18n="dm.facVoid">VOID</span>
       </span>
     </div>
   </div>
 
-  <button id="miningLaunchBtn" style="display:block; margin:8px auto 16px; padding:18px 56px; min-width:360px; background:linear-gradient(180deg, #1a0f04 0%, #0a0600 100%); border:1px solid #8a6a30; color:#72e09c; font:bold 20px 'Courier New',monospace; letter-spacing:.2em; cursor:pointer; transition:all .15s">⛏ LAUNCH EXPEDITION</button>
+  <button id="miningLaunchBtn" style="display:block; margin:8px auto 16px; padding:18px 56px; min-width:360px; background:linear-gradient(180deg, #1a0f04 0%, #0a0600 100%); border:1px solid #8a6a30; color:#72e09c; font:bold 20px 'Courier New',monospace; letter-spacing:.2em; cursor:pointer; transition:all .15s" data-i18n="dm.launch">⛏ LAUNCH EXPEDITION</button>
 
   <div style="max-width:560px; margin:10px auto 20px; font-size:12px; color:#6a5a38; letter-spacing:.08em; line-height:1.6; text-align:center">
-    Game opens in a fullscreen view. The in-game BACK button returns you here.
-    Your bank syncs with your FleshMarket account.
+<span data-i18n="dm.footer">Game opens in a fullscreen view. The in-game BACK button returns you here. Your bank syncs with your FleshMarket account.</span>
   </div>
 
   <!-- Leaderboard: top 10 single-run profit -->
@@ -952,7 +950,7 @@ window.storeSubTab=storeSubTab;
       <div style="color:#6a5a38; text-align:center; padding:14px 0">Loading leaderboard…</div>
     </div>
     <div style="margin-top:10px; font-size:11px; color:#6a5a38; letter-spacing:.06em">
-      Ranked by best single-run profit (banked minus invested).
+      <span data-i18n="mw.ranked">Ranked by best single-run profit (banked minus invested).</span>
     </div>
   </div>
 
@@ -961,45 +959,45 @@ window.storeSubTab=storeSubTab;
               margin:0 auto 22px; padding:20px 26px;
               border:1px solid #3a2a10; background:rgba(10,6,2,.55);
               font-size:15px; color:#a8d8b8; line-height:1.7">
-    <h3 style="margin:0 0 14px; font-size:16px; letter-spacing:.22em; color:#72e09c; text-transform:uppercase">How Mining Works</h3>
+    <h3 style="margin:0 0 14px; font-size:16px; letter-spacing:.22em; color:#72e09c; text-transform:uppercase" data-i18n="mw.title">How Mining Works</h3>
 
     <div style="display:grid; grid-template-columns:120px 1fr; gap:10px 18px; align-items:baseline">
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Movement</div>
-      <div><span style="color:#72e09c;font-weight:bold">WASD</span> or arrow keys fly the drone. Momentum carries you; plan approaches.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="mw.movement">Movement</div>
+      <div data-i18n="mw.movementBody"><span style="color:#72e09c;font-weight:bold">WASD</span> or arrow keys fly the drone. Momentum carries you; plan approaches.</div>
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Mining</div>
-      <div>Hold <span style="color:#72e09c;font-weight:bold">LEFT CLICK</span> to fire the mining laser at rocks. Each rock takes time to drill. When the drill bar fills, its mineral type and ore yield are revealed. Empty rocks still require a drill cycle, then explode. Buy the Improved Scanner perk to see contents without drilling.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="sec.mining">Mining</div>
+      <div data-i18n="mw.miningBody">Hold <span style="color:#72e09c;font-weight:bold">LEFT CLICK</span> to fire the mining laser at rocks. Each rock takes time to drill. When the drill bar fills, its mineral type and ore yield are revealed. Empty rocks still require a drill cycle, then explode. Buy the Improved Scanner perk to see contents without drilling.</div>
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Combat</div>
-      <div><span style="color:#72e09c;font-weight:bold">RIGHT CLICK</span> fires your auto-cannon. Bullets travel forward from your nose, but within medium range and a ±60° forward cone they snap to the nearest rival. Hostile ships show a red <span style="color:#ff4a4a;font-weight:bold">HOSTILE</span> tag above them. Two solid hits kill a fighter.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="mw.combat">Combat</div>
+      <div data-i18n="mw.combatBody"><span style="color:#72e09c;font-weight:bold">RIGHT CLICK</span> fires your auto-cannon. Bullets travel forward from your nose, but within medium range and a ±60° forward cone they snap to the nearest rival. Hostile ships show a red <span style="color:#ff4a4a;font-weight:bold">HOSTILE</span> tag above them. Two solid hits kill a fighter.</div>
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Heat</div>
-      <div>Sustained mining overheats the laser. At 100% heat the laser <em style="color:#ff9a4a;font-style:normal">and</em> your thrust lock out until it cools below 40%. Don't hold the trigger on rock you've already depleted.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="sec.heat">Heat</div>
+      <div data-i18n="mw.heatBody">Sustained mining overheats the laser. At 100% heat the laser <em style="color:#ff9a4a;font-style:normal">and</em> your thrust lock out until it cools below 40%. Don't hold the trigger on rock you've already depleted.</div>
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Factions</div>
-      <div>Your drone flies under your FleshMarket faction's colors. Same-faction drones patrol but won't attack you. Rivals will, and show HOSTILE tags. If you have no faction set, <em style="color:#ff9a4a;font-style:normal">every</em> patrol treats you as hostile, factionless is lone-wolf mode. Syndicate drones are fast and swarm; Void drones are slow but their bullets hit harder; Coalition is balanced.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="mw.factions">Factions</div>
+      <div data-i18n="mw.factionsBody">Your drone flies under your FleshMarket faction's colors. Same-faction drones patrol but won't attack you. Rivals will, and show HOSTILE tags. If you have no faction set, <em style="color:#ff9a4a;font-style:normal">every</em> patrol treats you as hostile, factionless is lone-wolf mode. Syndicate drones are fast and swarm; Void drones are slow but their bullets hit harder; Coalition is balanced.</div>
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Scrap</div>
-      <div>Killing enemies drops salvage. Tougher fights drop more: Void enemies drop more than Coalition, chasing enemies drop more than patrollers, and higher run difficulty scales scrap value up. Risky combat pays off.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="mw.scrap">Scrap</div>
+      <div data-i18n="mw.scrapBody">Killing enemies drops salvage. Tougher fights drop more: Void enemies drop more than Coalition, chasing enemies drop more than patrollers, and higher run difficulty scales scrap value up. Risky combat pays off.</div>
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Depth</div>
-      <div><span style="color:#86ff6a;font-weight:bold">NEAR</span> iron and cobalt, thin hostiles. <span style="color:#72e09c;font-weight:bold">MID</span> gold appears. <span style="color:#ff9a4a;font-weight:bold">DEEP</span> painite, void opal, thick hostiles. <span style="color:#ff4a4a;font-weight:bold">VOID</span> musgravite, Ƒ250/unit, swarms.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="mw.depth">Depth</div>
+      <div data-i18n="mw.depthBody"><span style="color:#86ff6a;font-weight:bold">NEAR</span> iron and cobalt, thin hostiles. <span style="color:#72e09c;font-weight:bold">MID</span> gold appears. <span style="color:#ff9a4a;font-weight:bold">DEEP</span> painite, void opal, thick hostiles. <span style="color:#ff4a4a;font-weight:bold">VOID</span> musgravite, Ƒ250/unit, swarms.</div>
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Docking</div>
-      <div>Return to the mothership and press <span style="color:#72e09c;font-weight:bold">Q</span> to bank your current cargo. You can dock, leave, and mine again as many times as you want. Drones only get refunded at end of run if they're still alive. Fuel is <em style="color:#ff9a4a;font-style:normal">not</em> refilled on dock. One tank per drone.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="mw.docking">Docking</div>
+      <div data-i18n="mw.dockingBody">Return to the mothership and press <span style="color:#72e09c;font-weight:bold">Q</span> to bank your current cargo. You can dock, leave, and mine again as many times as you want. Drones only get refunded at end of run if they're still alive. Fuel is <em style="color:#ff9a4a;font-style:normal">not</em> refilled on dock. One tank per drone.</div>
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Dying</div>
-      <div>One hostile round ends the drone. The run is over. Undeployed escorts and refineries are refunded at end of run.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="mw.dying">Dying</div>
+      <div data-i18n="mw.dyingBody">One hostile round ends the drone. The run is over. Undeployed escorts and refineries are refunded at end of run.</div>
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Refineries</div>
-      <div>Optional loadout item. Press <span style="color:#72e09c;font-weight:bold">R</span> in the field to deploy a portable fuel refinery. It generates fuel while you park near it. Enemies can destroy it.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="mw.refineries">Refineries</div>
+      <div data-i18n="mw.refineriesBody">Optional loadout item. Press <span style="color:#72e09c;font-weight:bold">R</span> in the field to deploy a portable fuel refinery. It generates fuel while you park near it. Enemies can destroy it.</div>
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Escorts</div>
-      <div>Optional loadout item. Small combat drones orbit your drone and shoot hostiles automatically. They absorb hits for you. They die with your drone.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="mw.escorts">Escorts</div>
+      <div data-i18n="mw.escortsBody">Optional loadout item. Small combat drones orbit your drone and shoot hostiles automatically. They absorb hits for you. They die with your drone.</div>
 
-      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px">Ships</div>
-      <div>The <span style="color:#72e09c;font-weight:bold">SHIPS</span> button opens the shipyard. Twelve alternate hulls across three faction styles: <span style="color:#4ecdc4;font-weight:bold">Coalition</span> (mining focus, faster drills, higher heat cap), <span style="color:#e74c3c;font-weight:bold">Syndicate</span> (combat focus, higher fire rate, free escorts), <span style="color:#9b59b6;font-weight:bold">Void</span> (drone focus, built-in cargo drones that haul ore to the mothership while you mine). Ships are one-time purchases, available regardless of your own faction. Stats multiply your loadout tiers and perks. Each ship class also grants additional hull HP: Scout 2, Prospector 3, Hauler 4, Dreadnought 5. You survive that many hits before dying. Press <span style="color:#72e09c;font-weight:bold">T</span> in the field to toggle auto-miner on ships that have it, off by default to protect your heat sink in easy zones.</div>
+      <div style="color:#4f8f5f; letter-spacing:.15em; text-transform:uppercase; font-size:12px" data-i18n="mw.ships">Ships</div>
+      <div data-i18n="mw.shipsBody">The <span style="color:#72e09c;font-weight:bold">SHIPS</span> button opens the shipyard. Twelve alternate hulls across three faction styles: <span style="color:#4ecdc4;font-weight:bold">Coalition</span> (mining focus, faster drills, higher heat cap), <span style="color:#e74c3c;font-weight:bold">Syndicate</span> (combat focus, higher fire rate, free escorts), <span style="color:#9b59b6;font-weight:bold">Void</span> (drone focus, built-in cargo drones that haul ore to the mothership while you mine). Ships are one-time purchases, available regardless of your own faction. Stats multiply your loadout tiers and perks. Each ship class also grants additional hull HP: Scout 2, Prospector 3, Hauler 4, Dreadnought 5. You survive that many hits before dying. Press <span style="color:#72e09c;font-weight:bold">T</span> in the field to toggle auto-miner on ships that have it, off by default to protect your heat sink in easy zones.</div>
 
     </div>
   </div>
@@ -1102,13 +1100,13 @@ window.storeSubTab=storeSubTab;
 <!-- Unified Chat Box -->
 <div id="chatBox">
   <div id="chatTabs">
-    <div class="chat-tab active" data-channel="global">Global<span class="chat-unread" id="unread-global" style="display:none">0</span></div>
-    <div class="chat-tab" data-channel="patreon">Premium<span class="chat-unread" id="unread-patreon" style="display:none">0</span></div>
-    <div class="chat-tab" data-channel="guild">Merchants Guild<span class="chat-unread" id="unread-guild" style="display:none">0</span></div>
+    <div class="chat-tab active" data-channel="global"><span data-i18n="chat.global">Global</span><span class="chat-unread" id="unread-global" style="display:none">0</span></div>
+    <div class="chat-tab" data-channel="patreon"><span data-i18n="chat.premium">Premium</span><span class="chat-unread" id="unread-patreon" style="display:none">0</span></div>
+    <div class="chat-tab" data-channel="guild"><span data-i18n="chat.guild">Merchants Guild</span><span class="chat-unread" id="unread-guild" style="display:none">0</span></div>
     <div class="chat-tab" data-channel="whisper" id="whisper-chat-tab" style="color:#a78bfa;border-color:transparent">💬<span class="chat-unread" id="unread-whisper" style="display:none">0</span></div>
-    <div class="chat-tab" data-channel="unmod" id="unmod-chat-tab" style="color:#ff8c00;border-color:transparent">🔞 Unmod<span class="chat-unread" id="unread-unmod" style="display:none">0</span></div>
-    <div class="chat-tab" data-channel="dunce" id="dunce-chat-tab" style="display:none;color:#ff4444;border-color:#ff2222">🎓 Dunce<span class="chat-unread" id="unread-dunce" style="display:none">0</span></div>
-    <div id="contacts-chat-tab" onclick="window.FMContacts&&FMContacts.open()" title="Faction rep contacts" style="margin-left:auto;align-self:center;color:#42ff7e;cursor:pointer;font-size:.72rem;letter-spacing:.06em;padding:4px 10px;border:1px solid #1c3a30;border-radius:4px">☎ Contacts</div>
+    <div class="chat-tab" data-channel="unmod" id="unmod-chat-tab" style="color:#ff8c00;border-color:transparent"><span data-i18n="chat.unmod">🔞 Unmod</span><span class="chat-unread" id="unread-unmod" style="display:none">0</span></div>
+    <div class="chat-tab" data-channel="dunce" id="dunce-chat-tab" style="display:none;color:#ff4444;border-color:#ff2222"><span data-i18n="chat.dunce">🎓 Dunce</span><span class="chat-unread" id="unread-dunce" style="display:none">0</span></div>
+    <div id="contacts-chat-tab" onclick="window.FMContacts&&FMContacts.open()" title="Faction rep contacts" style="margin-left:auto;align-self:center;color:#42ff7e;cursor:pointer;font-size:.72rem;letter-spacing:.06em;padding:4px 10px;border:1px solid #1c3a30;border-radius:4px" data-i18n="btn.contacts">☎ Contacts</div>
   </div>
 
   <!-- Global Room Pager -->
@@ -1192,8 +1190,8 @@ window.storeSubTab=storeSubTab;
   <div id="chatInputRow" style="position:relative">
     <span id="chatChannelBadge" style="font-size:.68rem;opacity:.6;color:var(--amber);white-space:nowrap">global</span>
     <span id="whisperTargetBadge" style="display:none;font-size:.68rem;color:#a78bfa;white-space:nowrap;padding:0 4px;border:1px solid #4a3580;border-radius:4px;cursor:pointer" title="Click to clear">→ …</span>
-    <input id="chatInput" placeholder="Say something… @mention" autocomplete="off"/>
-    <button id="chatSend">Send</button>
+    <input id="chatInput" placeholder="Say something… @mention" autocomplete="off" data-i18n-ph="ph.chat"/>
+    <button id="chatSend" data-i18n="btn.send">Send</button>
     <div id="chatMentionDrop" style="display:none;bottom:34px;left:0"></div>
     <div style="position:absolute;right:0;bottom:calc(100% + 2px);display:flex;gap:2px">
       <button id="chatFontDec" title="Smaller text" style="background:rgba(6,26,14,.6);border:1px solid rgba(240,180,84,.35);border-radius:3px;color:#f0b454;font-size:.85rem;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.2;user-select:none" onmouseenter="this.style.color='#ffd98a';this.style.borderColor='#a07e2e'" onmouseleave="this.style.color='#f0b454';this.style.borderColor='rgba(240,180,84,.35)'">A−</button>
@@ -1204,10 +1202,10 @@ window.storeSubTab=storeSubTab;
 <!-- Margin Call Banner (hidden unless player has an active margin call) -->
 <div id="margin-call-banner" style="display:none;background:linear-gradient(135deg,#2a1800,#1a1000);border:2px solid #f0b454;border-radius:8px;padding:12px 14px;margin-bottom:10px;text-align:center">
   <div style="font-size:1.4rem;margin-bottom:4px">⚠</div>
-  <div style="color:#f0b454;font-weight:700;letter-spacing:.1em;font-size:.85rem;text-transform:uppercase;margin-bottom:4px">Margin Call — <span id="mc-symbol">—</span></div>
-  <div style="color:#c89a4a;font-size:.73rem;margin-bottom:8px">This short ran 65% past your entry. Cover it (or the price recovers) before the timer ends, or it's auto-liquidated to cover the loss — and if the loss exceeds everything you own, you're zeroed and dunced.</div>
+  <div style="color:#f0b454;font-weight:700;letter-spacing:.1em;font-size:.85rem;text-transform:uppercase;margin-bottom:4px"><span data-i18n="mc.title">Margin Call</span>: <span id="mc-symbol">-</span></div>
+  <div style="color:#c89a4a;font-size:.73rem;margin-bottom:8px" data-i18n="mc.desc">This short ran 65% past your entry. Cover it (or the price recovers) before the timer ends, or it is auto-liquidated to cover the loss, and if the loss exceeds everything you own, you are zeroed and dunced.</div>
   <div style="font-size:1.6rem;font-weight:700;letter-spacing:.08em;color:#ffd27d;margin-bottom:8px;font-variant-numeric:tabular-nums" id="mc-countdown">--:--:--</div>
-  <button id="mc-cover-btn" style="background:#1a1000;border:1px solid #f0b454;color:#ffd27d;font-family:inherit;font-size:.78rem;padding:6px 18px;border-radius:5px;cursor:pointer;letter-spacing:.06em">↩ COVER NOW</button>
+  <button id="mc-cover-btn" style="background:#1a1000;border:1px solid #f0b454;color:#ffd27d;font-family:inherit;font-size:.78rem;padding:6px 18px;border-radius:5px;cursor:pointer;letter-spacing:.06em" data-i18n="mc.coverNow">↩ COVER NOW</button>
 </div>
 <!-- Dunce Banner (hidden unless player is dunced) -->
 <div id="dunce-banner" style="display:none;background:linear-gradient(135deg,#2a0000,#1a0000);border:2px solid #ff2222;border-radius:8px;padding:12px 14px;margin-bottom:10px;text-align:center">
@@ -1220,18 +1218,18 @@ window.storeSubTab=storeSubTab;
 </div>
 <!-- Transfer pinned at bottom -->
 <div id="transferSection" class="collapsible collapsed" data-collapse-key="fm_wire_collapsed">
-  <h2 class="collapse-toggle" role="button" tabindex="0" aria-label="Toggle Wire Credits"><span class="collapse-chevron">▸</span>Wire Credits</h2>
+  <h2 class="collapse-toggle" role="button" tabindex="0" aria-label="Toggle Wire Credits"><span class="collapse-chevron">▸</span><span data-i18n="chat.wireCredits">Wire Credits</span></h2>
   <div class="collapse-body">
     <div class="row">
-      <input class="input" id="toName" placeholder="Recipient name"/>
+      <input class="input" id="toName" placeholder="Recipient name" data-i18n-ph="ph.recipient"/>
       <input class="input" id="amt" min="1" style="max-width:110px" type="number" value="10"/>
-      <button class="btn" id="xfer">Wire</button>
+      <button class="btn" id="xfer" data-i18n="btn.wire">Wire</button>
     </div>
-    <div style="font-size:.62rem;color:#3a5f3a;margin-top:4px;letter-spacing:.03em;line-height:1.3">* Standard 2% transfer tax applies. Transfers exceeding Ƒ10,000 are subject to 90% taxation by the Merchant Guild.</div>
+    <div style="font-size:.62rem;color:#3a5f3a;margin-top:4px;letter-spacing:.03em;line-height:1.3" data-i18n="chat.taxNote">* Standard 2% transfer tax applies. Transfers exceeding Ƒ10,000 are subject to 90% taxation by the Merchant Guild.</div>
   </div>
 </div>
 <div id="leaderboardCompact" class="collapsible collapsed" data-collapse-key="fm_lb_collapsed">
-  <h2 class="collapse-toggle" role="button" tabindex="0" aria-label="Toggle Leaderboard" style="margin:4px 0 4px 0;font-size:11px"><span class="collapse-chevron">▸</span>Leaderboard <span style="opacity:.4;font-weight:400;letter-spacing:.04em">NET WORTH</span></h2>
+  <h2 class="collapse-toggle" role="button" tabindex="0" aria-label="Toggle Leaderboard" style="margin:4px 0 4px 0;font-size:11px"><span class="collapse-chevron">▸</span><span data-i18n="chat.leaderboard">Leaderboard</span> <span style="opacity:.4;font-weight:400;letter-spacing:.04em" data-i18n="chat.netWorth">NET WORTH</span></h2>
   <div class="collapse-body">
     <div id="board"></div>
   </div>
@@ -1274,7 +1272,7 @@ window.storeSubTab=storeSubTab;
     if(bk) bk.classList.toggle('sub-on', s==='kick');
     var st=fr('devlogsSubtitle'), lk=fr('devlogsOpenLink');
     if(s==='kick'){ if(st) st.textContent='Live streams on Kick'; if(lk){ lk.textContent='Open on Kick'; lk.href='https://kick.com/'+KICK_USER; } checkLive(); }
-    else { if(st) st.textContent='Broadcasts, dev logs, lore and news'; if(lk){ lk.textContent='Open channel'; lk.href='https://www.youtube.com/@FleshMarketNews'; } }
+    else { if(st) st.textContent=(window.t?window.t('dl.subtitle','Broadcasts, dev logs, lore and news'):'Broadcasts, dev logs, lore and news'); if(lk){ lk.textContent=(window.t?window.t('dl.openChannel','Open channel'):'Open channel'); lk.href='https://www.youtube.com/@FleshMarketNews'; } }
     if(visible) window.__devlogsSync(true);
   }
   /* Best-effort LIVE badge. Kick's channel API is behind Cloudflare, so this
@@ -1361,19 +1359,19 @@ window.storeSubTab=storeSubTab;
 <link rel="stylesheet" href="assets/sell-modal.css">
 <div id="sell-modal">
 <div class="card">
-<div class="hdr"><span id="sm-title">Sell</span></div>
-<div class="row"><div class="lab">Symbol</div><div class="val" id="sm-symbol"></div></div>
-<div class="row"><div class="lab">Owned</div><div class="val" id="sm-owned">0</div></div>
-<div class="row"><div class="lab">Avg Cost</div><div class="val" id="sm-avg">0</div></div>
-<div class="row"><div class="lab">Last Price</div><div class="val" id="sm-last">0</div></div>
-<div class="row"><div class="lab">Qty to sell</div><input id="sm-qty" min="1" step="1" style="width:120px;" type="number" value="1"/><span class="small">max <span id="sm-max">0</span></span></div>
-<div class="row small"><div class="lab">Sale Value</div><div class="val" id="sm-value" style="color:#72e09c">0</div></div>
-<div class="row small"><div class="lab">Fee (0.25%)</div><div class="val" id="sm-fee" style="color:#e0a85a">0</div></div>
-<div class="row small"><div class="lab">Net proceeds</div><div class="val" id="sm-net" style="color:#72e09c">0</div></div>
-<div class="row small"><div class="lab">Unrealized P&amp;L</div><div class="val" id="sm-pnl">0</div></div>
+<div class="hdr"><span id="sm-title" data-i18n="sm.title">Sell</span></div>
+<div class="row"><div class="lab" data-i18n="sm.symbol">Symbol</div><div class="val" id="sm-symbol"></div></div>
+<div class="row"><div class="lab" data-i18n="sm.owned">Owned</div><div class="val" id="sm-owned">0</div></div>
+<div class="row"><div class="lab" data-i18n="sm.avgCost">Avg Cost</div><div class="val" id="sm-avg">0</div></div>
+<div class="row"><div class="lab" data-i18n="sm.lastPrice">Last Price</div><div class="val" id="sm-last">0</div></div>
+<div class="row"><div class="lab" data-i18n="sm.qtyToSell">Qty to sell</div><input id="sm-qty" min="1" step="1" style="width:120px;" type="number" value="1"/><span class="small"><span data-i18n="sm.max">max</span> <span id="sm-max">0</span></span></div>
+<div class="row small"><div class="lab" data-i18n="sm.saleValue">Sale Value</div><div class="val" id="sm-value" style="color:#72e09c">0</div></div>
+<div class="row small"><div class="lab" data-i18n="sm.fee">Fee (0.25%)</div><div class="val" id="sm-fee" style="color:#e0a85a">0</div></div>
+<div class="row small"><div class="lab" data-i18n="sm.netProceeds">Net proceeds</div><div class="val" id="sm-net" style="color:#72e09c">0</div></div>
+<div class="row small"><div class="lab" data-i18n="sm.unrealizedPnl">Unrealized P&amp;L</div><div class="val" id="sm-pnl">0</div></div>
 <div class="actions">
-<button id="sm-cancel">Cancel</button>
-<button id="sm-confirm">Confirm Sell</button>
+<button id="sm-cancel" data-i18n="sm.cancel">Cancel</button>
+<button id="sm-confirm" data-i18n="sm.confirmSell">Confirm Sell</button>
 </div>
 </div>
 </div>
@@ -1457,42 +1455,42 @@ function __updateEffectivePositions(){
 <link rel="stylesheet" href="assets/short-modal.css">
 <div id="short-modal">
 <div class="card">
-  <div class="shdr">⬇ Short Sell</div>
+  <div class="shdr" data-i18n="short.title">⬇ Short Sell</div>
   <div class="stabs">
-    <div class="stab active" id="short-tab-open" onclick="window.__ShortModal&&__ShortModal.setMode('open')">Open Short</div>
-    <div class="stab" id="short-tab-cover" onclick="window.__ShortModal&&__ShortModal.setMode('cover')">Cover Short</div>
+    <div class="stab active" id="short-tab-open" onclick="window.__ShortModal&&__ShortModal.setMode('open')" data-i18n="short.openTab">Open Short</div>
+    <div class="stab" id="short-tab-cover" onclick="window.__ShortModal&&__ShortModal.setMode('cover')" data-i18n="short.coverTab">Cover Short</div>
   </div>
   <!-- Open Short fields -->
   <div id="short-open-body">
-    <div class="srow"><div class="slab">Symbol</div><input id="sho-sym" placeholder="e.g. ORGX" maxlength="5" style="width:100px;text-transform:uppercase"/></div>
-    <div class="srow"><div class="slab">Current Price</div><div class="sval" id="sho-price">-</div></div>
-    <div class="srow"><div class="slab">Qty to Short</div><input id="sho-qty" type="number" min="1" step="1" value="1" style="width:100px"/></div>
+    <div class="srow"><div class="slab" data-i18n="short.symbol">Symbol</div><input id="sho-sym" placeholder="e.g. ORGX" data-i18n-ph="short.symPh" maxlength="5" style="width:100px;text-transform:uppercase"/></div>
+    <div class="srow"><div class="slab" data-i18n="short.currentPrice">Current Price</div><div class="sval" id="sho-price">-</div></div>
+    <div class="srow"><div class="slab" data-i18n="short.qtyToShort">Qty to Short</div><input id="sho-qty" type="number" min="1" step="1" value="1" style="width:100px"/></div>
     <hr class="divider"/>
-    <div class="srow"><div class="slab">Collateral Locked</div><div class="sval" id="sho-proceeds">-</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px">(held, not cash)</span></div>
-    <div class="srow"><div class="slab">Liquidation @</div><div class="sval" id="sho-margin">-</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px">(entry ×1.65)</span></div>
-    <div class="srow"><div class="slab">Borrow Fee</div><div class="sval" id="sho-fee">-</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px">/30 min</span></div>
+    <div class="srow"><div class="slab" data-i18n="short.collateral">Collateral Locked</div><div class="sval" id="sho-proceeds">-</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px" data-i18n="short.heldNotCash">(held, not cash)</span></div>
+    <div class="srow"><div class="slab" data-i18n="short.liquidation">Liquidation @</div><div class="sval" id="sho-margin">-</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px" data-i18n="short.entryMult">(entry ×1.65)</span></div>
+    <div class="srow"><div class="slab" data-i18n="short.borrowFee">Borrow Fee</div><div class="sval" id="sho-fee">-</div> <span style="font-size:.72rem;opacity:.6;margin-left:4px" data-i18n="short.per30">/30 min</span></div>
     <div id="sho-warn" class="warn-box" style="display:none"></div>
     <div id="sho-ok" class="ok-box" style="display:none"></div>
   </div>
   <!-- Cover Short fields -->
   <div id="short-cover-body" style="display:none">
-    <div class="srow"><div class="slab">Symbol</div><input id="shc-sym" placeholder="e.g. ORGX" maxlength="5" style="width:100px;text-transform:uppercase"/></div>
-    <div class="srow"><div class="slab">Short Position</div><div class="sval" id="shc-position">-</div></div>
-    <div class="srow"><div class="slab">Current Price</div><div class="sval" id="shc-price">-</div></div>
-    <div class="srow"><div class="slab">Avg Entry</div><div class="sval" id="shc-avg">-</div></div>
-    <div class="srow"><div class="slab">Qty to Cover</div><input id="shc-qty" type="number" min="1" step="1" value="1" style="width:100px"/></div>
+    <div class="srow"><div class="slab" data-i18n="short.symbol">Symbol</div><input id="shc-sym" placeholder="e.g. ORGX" data-i18n-ph="short.symPh" maxlength="5" style="width:100px;text-transform:uppercase"/></div>
+    <div class="srow"><div class="slab" data-i18n="short.shortPosition">Short Position</div><div class="sval" id="shc-position">-</div></div>
+    <div class="srow"><div class="slab" data-i18n="short.currentPrice">Current Price</div><div class="sval" id="shc-price">-</div></div>
+    <div class="srow"><div class="slab" data-i18n="short.avgEntry">Avg Entry</div><div class="sval" id="shc-avg">-</div></div>
+    <div class="srow"><div class="slab" data-i18n="short.qtyToCover">Qty to Cover</div><input id="shc-qty" type="number" min="1" step="1" value="1" style="width:100px"/></div>
     <hr class="divider"/>
-    <div class="srow"><div class="slab">Cover Cost</div><div class="sval" id="shc-cost">-</div></div>
-    <div class="srow"><div class="slab">Estimated P&amp;L</div><div class="sval" id="shc-pnl">-</div></div>
+    <div class="srow"><div class="slab" data-i18n="short.coverCost">Cover Cost</div><div class="sval" id="shc-cost">-</div></div>
+    <div class="srow"><div class="slab" data-i18n="short.estPnl">Estimated P&amp;L</div><div class="sval" id="shc-pnl">-</div></div>
     <div id="shc-warn" class="warn-box" style="display:none"></div>
     <!-- Open short positions list -->
-    <div style="font-size:.72rem;opacity:.6;margin-top:8px;margin-bottom:2px;letter-spacing:.08em">YOUR SHORT POSITIONS</div>
+    <div style="font-size:.72rem;opacity:.6;margin-top:8px;margin-bottom:2px;letter-spacing:.08em" data-i18n="short.yourShorts">YOUR SHORT POSITIONS</div>
     <div id="shc-pos-list" class="spos-list"></div>
   </div>
   <div class="sactions">
-    <button id="sho-cancel-btn">Cancel</button>
-    <button id="sho-confirm-btn" class="sconfirm" style="display:none">Confirm Short</button>
-    <button id="shc-confirm-btn" class="scovconfirm" style="display:none">Cover Position</button>
+    <button id="sho-cancel-btn" data-i18n="short.cancel">Cancel</button>
+    <button id="sho-confirm-btn" class="sconfirm" style="display:none" data-i18n="short.confirmShort">Confirm Short</button>
+    <button id="shc-confirm-btn" class="scovconfirm" style="display:none" data-i18n="short.coverPosition">Cover Position</button>
   </div>
 </div>
 </div>
@@ -1571,7 +1569,7 @@ function __updateEffectivePositions(){
     window.__chatRooms[ch] = room;
     // Update badge label
     var badge = document.getElementById('chatChannelBadge');
-    if (badge) badge.textContent = ch + ' · room ' + room;
+    if (badge) badge.textContent = (window.t?window.t('ch.'+ch,ch):ch) + ' · ' + (window.t?window.t('ch.room','room'):'room') + ' ' + room;
     // Clear unread
     var unread = document.getElementById('unread-' + ch);
     if (unread) { unread.style.display = 'none'; unread.textContent = '0'; }
@@ -1595,7 +1593,7 @@ function __updateEffectivePositions(){
       if (p) p.style.display = ch === 'global' ? 'flex' : 'none';
     });
     var badge = document.getElementById('chatChannelBadge');
-    if (badge) badge.textContent = 'global · room 1';
+    if (badge) badge.textContent = (window.t?window.t('ch.global','global'):'global') + ' · ' + (window.t?window.t('ch.room','room'):'room') + ' 1';
   });
 })();
 </script>
@@ -1691,6 +1689,7 @@ ws.addEventListener('message', function(ev){
 <script src="assets/fm-auth.js"></script>
 <!-- leaderboard-local.js removed: server-frozen EOD snapshot is canonical -->
 <script src="assets/funds.js"></script>
+<script src="assets/city.js"></script>
 <script src="assets/tax-panel.js"></script>
 <script src="assets/title-market.js"></script>
 
@@ -2384,14 +2383,14 @@ ws.addEventListener('message', function(ev){
       <div class="god-section-title">Sector Shock</div>
       <div style="display:flex;gap:6px;margin-bottom:6px">
         <select id="god-sector-select" class="god-input" style="flex:1">
-          <option value="0">Finance</option>
-          <option value="1">Biotech</option>
-          <option value="2">Insurance</option>
-          <option value="3">Manufacturing</option>
-          <option value="4">Energy</option>
-          <option value="5">Logistics</option>
-          <option value="6">Tech</option>
-          <option value="7">Misc</option>
+          <option value="0" data-i18n="sector.0">Finance</option>
+          <option value="1" data-i18n="sector.1">Biotech</option>
+          <option value="2" data-i18n="sector.2">Insurance</option>
+          <option value="3" data-i18n="sector.3">Manufacturing</option>
+          <option value="4" data-i18n="sector.4">Energy</option>
+          <option value="5" data-i18n="sector.5">Logistics</option>
+          <option value="6" data-i18n="sector.6">Tech</option>
+          <option value="7" data-i18n="sector.7">Misc</option>
         </select>
         <input id="god-sector-pct" type="number" min="-50" max="50" value="-15" placeholder="%" class="god-input" style="width:70px">
         <button class="god-btn god-btn-orange" onclick="godSectorShock()">Shock</button>
@@ -2441,7 +2440,28 @@ ws.addEventListener('message', function(ev){
         <input id="god-clear-orders-name" placeholder="Player name (blank=all)" class="god-input" style="flex:1">
         <button class="god-btn god-btn-red" onclick="godClearOrders()">Clear</button>
       </div>
-    </div>
+    
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #2a1e06">
+        <div style="font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;opacity:.55;margin-bottom:8px">World Gates</div>
+
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <span style="font-size:.76rem;min-width:118px">Jade Passage</span>
+          <span id="godGateWormhole" style="font-size:.72rem;padding:1px 8px;border-radius:3px;border:1px solid #444;color:#888">unknown</span>
+          <button class="god-btn" onclick="window.godSetWormhole(true)">Open Passage</button>
+          <button class="god-btn god-btn-orange" onclick="window.godSetWormhole(false)">Seal Passage</button>
+        </div>
+        <div style="font-size:.66rem;opacity:.5;margin:0 0 12px 118px">Sealing delists the Jade tickers from the tape and blocks Jade trades. Open positions are not liquidated.</div>
+
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <span style="font-size:.76rem;min-width:118px">Commodity Trading</span>
+          <span id="godGateCommodities" style="font-size:.72rem;padding:1px 8px;border-radius:3px;border:1px solid #444;color:#888">unknown</span>
+          <button class="god-btn" onclick="window.godSetCommodities(true)">Resume</button>
+          <button class="god-btn god-btn-orange" onclick="window.godSetCommodities(false)">Halt</button>
+        </div>
+        <div style="font-size:.66rem;opacity:.5;margin:0 0 0 118px">Halts commodity buy and sell only. Cargo in transit still lands and launched runs still resolve.</div>
+        <div id="godGateHint" style="font-size:.72rem;margin-top:10px;min-height:15px"></div>
+      </div>
+</div>
 
     <!-- COMMS TAB (dev-only view of all queues) -->
     <div id="godTab-comms" class="god-tab-content" style="display:none">

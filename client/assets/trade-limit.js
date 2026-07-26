@@ -115,7 +115,7 @@
           el.textContent = '(Day Trades: 0 / 3 \u00b7 resets ' + fmtCountdown(ms) + ')';
           el.classList.add('dt-exhausted');
         } else {
-          el.textContent = '(Day Trades left: ' + left + ' / 3)';
+          el.textContent = (window.tf?window.tf('cd.dayTradesLeft','(Day Trades left: '+left+' / 3)',{n:left}):('(Day Trades left: '+left+' / 3)'));
           el.classList.remove('dt-exhausted');
         }
       }

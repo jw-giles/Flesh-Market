@@ -22,7 +22,7 @@
     panel.style.cssText = 'margin-top:6px;padding:8px;border:1px solid #0a3315;border-radius:6px;background:#050403';
     panel.innerHTML =
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-        '<div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">Market Upgrades</div>' +
+        '<div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5">'+(window.t?window.t('mu.title','Market Upgrades'):'Market Upgrades')+'</div>' +
         '<button class="btn" id="muRefresh" style="font-size:.7rem;margin-left:auto;padding:2px 8px" title="Refresh">↻</button>' +
       '</div><div id="muBody"></div>';
     host.appendChild(panel);
@@ -37,17 +37,17 @@
     if (!body) return;
     var cat = window.FM_MARKET_CATALOG || [];
     var html = '<div style="display:flex;flex-direction:column;gap:5px">';
-    if (!cat.length) html += '<div class="muted" style="font-size:.78rem;opacity:.5">Loading…</div>';
+    if (!cat.length) html += '<div class="muted" style="font-size:.78rem;opacity:.5">'+(window.t?window.t('mu.loading','Loading…'):'Loading…')+'</div>';
     cat.forEach(function (u) {
       var ownedU = u.owned || owns(u.id);
       html +=
         '<div style="display:flex;align-items:center;gap:8px;padding:5px;border:1px solid #0a2510;border-radius:5px">' +
           '<div style="flex:1">' +
-            '<div style="color:#86ff6a;font-size:.82rem">' + u.name + '</div>' +
-            '<div class="muted" style="font-size:.72rem;opacity:.6">' + u.desc + '</div>' +
+            '<div style="color:#86ff6a;font-size:.82rem">' + (window.upgradeNameZh?window.upgradeNameZh(u.id,u.name):u.name) + '</div>' +
+            '<div class="muted" style="font-size:.72rem;opacity:.6">' + (window.upgradeDescZh?window.upgradeDescZh(u.id,u.desc):u.desc) + '</div>' +
           '</div>' +
           (ownedU
-            ? '<span style="color:#d4b87a;font-size:.75rem;letter-spacing:.08em">OWNED</span>'
+            ? '<span style="color:#d4b87a;font-size:.75rem;letter-spacing:.08em">'+(window.t?window.t('mu.owned','OWNED'):'OWNED')+'</span>'
             : '<button class="btn muBuy" data-id="' + u.id + '" style="font-size:.78rem;white-space:nowrap">' + fmtF(u.price) + '</button>') +
         '</div>';
     });
@@ -58,7 +58,7 @@
       var cfgs = aa.configs || [];
       html +=
         '<div style="margin-top:10px;border-top:1px solid #0a2510;padding-top:8px">' +
-          '<div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px">Auto-Accumulate</div>' +
+          '<div style="font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:6px">'+(window.t?window.t('mu.autoAccumulate','Auto-Accumulate'):'Auto-Accumulate')+'</div>' +
           '<div class="muted" style="font-size:.72rem;opacity:.6;margin-bottom:6px">Set aside cash as a per-symbol reserve. When a held position drops below your average cost, auto-buys spend from that reserve, not your spendable cash. Fund or withdraw the reserve any time. Runs while you are connected.</div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">' +
             '<input id="muSym" class="input" placeholder="Symbol" maxlength="5" style="max-width:80px"/>' +

@@ -47,8 +47,8 @@
       '<div style="width:min(860px,94vw);height:min(78vh,680px);background:#070505;' +
         'border:1px solid #3a2a08;border-radius:12px;box-shadow:0 10px 50px #000c;display:flex;flex-direction:column;overflow:hidden">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #2a1e06">' +
-          '<div><span style="color:var(--amber,#f0b454);letter-spacing:.12em;text-transform:uppercase;font-size:.74rem;font-weight:800">Index Funds</span>' +
-          '<span style="opacity:.6;font-size:.68rem;margin-left:8px">player-run funds trading as tickers, priced off NAV per share</span></div>' +
+          '<div><span style="color:var(--amber,#f0b454);letter-spacing:.12em;text-transform:uppercase;font-size:.74rem;font-weight:800">'+(window.t?window.t('mp.indexFunds','Index Funds'):'Index Funds')+'</span>' +
+          '<span style="opacity:.6;font-size:.68rem;margin-left:8px">'+(window.t?window.t('mp.indexSub','player-run funds trading as tickers, priced off NAV per share'):'player-run funds trading as tickers, priced off NAV per share')+'</span></div>' +
           '<button id="idx-close" style="background:none;border:none;color:var(--amber,#f0b454);font-size:1.1rem;cursor:pointer;line-height:1;padding:0 2px">✕</button>' +
         '</div>' +
         '<div id="idx-body" style="flex:1;min-height:0;overflow:auto;padding:12px">' +
@@ -86,8 +86,8 @@
     var box = document.getElementById('idx-body');
     if (!box) return;
     if (!listings.length) {
-      box.innerHTML = '<div style="opacity:.6;font-size:.82rem">No houses are listed on the Index yet. ' +
-        'A Capital House with a NAV above the threshold can list from its owner panel.</div>';
+      box.innerHTML = '<div style="opacity:.6;font-size:.82rem">' +
+        (window.t?window.t('mp.indexEmpty','No houses are listed on the Index yet. A Capital House with a NAV above the threshold can list from its owner panel.'):'No houses are listed on the Index yet. A Capital House with a NAV above the threshold can list from its owner panel.') + '</div>';
       return;
     }
     var rows = listings.slice().sort(function (a, b) { return (b.nav || 0) - (a.nav || 0); });
@@ -136,8 +136,8 @@
     if (document.getElementById('idxBtn')) return true;
     var b = document.createElement('button');
     b.id = 'idxBtn';
-    b.title = 'Index Funds: player-run houses trading as tickers';
-    b.textContent = 'Index Funds';
+    b.title = (window.t?window.t('mp.indexFundsTip','Index Funds: player-run houses trading as tickers'):'Index Funds: player-run houses trading as tickers');
+    b.textContent = (window.t?window.t('mp.indexFunds','Index Funds'):'Index Funds');
     b.style.cssText =
       'background:none;border:1px solid rgba(240,180,84,0.3);border-radius:4px;color:#b8893a;' +
       'font-size:.72rem;padding:3px 10px;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap';

@@ -109,16 +109,16 @@
     header.appendChild(el('h2', null, opts.title));
     const controls = el('div','controls'); header.appendChild(controls);
     // filters / sort
-    const search = el('input'); search.placeholder='Filter by ticker…'; controls.appendChild(search);
-    const minVal = el('input'); minVal.type='number'; minVal.placeholder='Min position $'; controls.appendChild(minVal);
+    const search = el('input'); search.placeholder=(window.t?window.t('pnl.filterTicker','Filter by ticker…'):'Filter by ticker…'); controls.appendChild(search);
+    const minVal = el('input'); minVal.type='number'; minVal.placeholder=(window.t?window.t('pnl.minPosition','Min position'):'Min position')+' $'; controls.appendChild(minVal);
     const sortSel = el('select'); ['value','gainPct','ticker','shares','last','avgPrice'].forEach(k=>{ const o=el('option',null,k); o.value=k; sortSel.appendChild(o); }); controls.appendChild(sortSel);
     const dirBtn = el('button','btn small', '↑/↓'); controls.appendChild(dirBtn);
 
     // quick actions
     const quick = el('div','quick-actions');
-    const btnCSV = el('button','btn small ghost','Export CSV');
-    const btnCloseWinners = el('button','btn small', 'Close Winners');
-    const btnCloseLosers  = el('button','btn small danger', 'Close Losers');
+    const btnCSV = el('button','btn small ghost',(window.t?window.t('pnl.exportCsv','Export CSV'):'Export CSV'));
+    const btnCloseWinners = el('button','btn small', (window.t?window.t('pnl.closeWinners','Close Winners'):'Close Winners'));
+    const btnCloseLosers  = el('button','btn small danger', (window.t?window.t('pnl.closeLosers','Close Losers'):'Close Losers'));
     quick.append(btnCSV, btnCloseWinners, btnCloseLosers);
 
     
@@ -133,7 +133,7 @@ btnCSV.onclick = ()=>{
     const blob = new Blob([head+body], {type:'text/csv'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href=url; a.download='pnl.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url), 500);
-  }catch(e){ alert('Export failed: '+(e&&e.message||e)); }
+  }catch(e){ alert((window.t?window.t('pnl.exportFailed','Export failed:'):'Export failed:')+' '+(e&&e.message||e)); }
 };
 
 btnCloseWinners.onclick = async ()=>{
@@ -161,12 +161,12 @@ btnCloseLosers.onclick = async ()=>{
     // KPIs
     const kpis = el('div','kpis'); card.appendChild(kpis);
     const kpi = (label)=>{ const d=el('div','kpi'); d.appendChild(el('div','label',label)); d.appendChild(el('div','value','-')); return d; };
-    const kEquity=kpi('Equity'), kCash=kpi('Cash'), kUPL=kpi('Unrealized P&L'), kDailyIncome=kpi('Daily Income');
+    const kEquity=kpi('Equity'), kCash=kpi('Cash'), kUPL=kpi((window.t?window.t('pnl.unrealized','Unrealized P&L'):'Unrealized P&L')), kDailyIncome=kpi((window.t?window.t('pnl.dailyIncome','Daily Income'):'Daily Income'));
     kpis.append(kEquity,kCash,kDailyIncome);
 
 // Mini Equity+Cash Chart (CRT-green)
 const chartWrap = el('div','minichart-wrap');
-const chartTitle = el('h3', null, 'Equity & Cash');
+const chartTitle = el('h3', null, (window.t?window.t('pnl.equityCash','Equity & Cash'):'Equity & Cash'));
 const mini = document.createElement('canvas'); mini.className='minichart'; mini.width=600; mini.height=42;
 chartWrap.append(chartTitle, mini);
 card.appendChild(chartWrap);
@@ -210,10 +210,10 @@ function __drawMini(canvas){
     const right = el('div','right-col'); body.appendChild(right); right.style.display='none'; // hidden per user request
     const chartCard = el('div','card chart-card'); right.appendChild(chartCard); chartCard.style.display='none';
     const pie = el('canvas'); pie.style.width='100%'; pie.style.height='260px'; chartCard.appendChild(pie);
-    const foot = el('div','footnote','Holdings allocation (positions vs cash).'); chartCard.appendChild(foot);
+    const foot = el('div','footnote',(window.t?window.t('pnl.allocationNote','Holdings allocation (positions vs cash).'):'Holdings allocation (positions vs cash).')); chartCard.appendChild(foot);
 
     const history = el('div','card history'); right.appendChild(history); history.style.display='none';
-    const histHeader = el('div','header'); histHeader.append(el('h2',null,'Trade History'), el('div','muted','(select a row)'));
+    const histHeader = el('div','header'); histHeader.append(el('h2',null,(window.t?window.t('pnl.tradeHistory','Trade History'):'Trade History')), el('div','muted','(select a row)'));
     const histList = el('ul'); history.append(histHeader, histList);
 
 
@@ -245,10 +245,10 @@ function __drawMini(canvas){
       histList.innerHTML = '';
       try{
         const arr = (t && adapters.getHistory) ? await adapters.getHistory(t) : [];
-        if(!arr || !arr.length){ histList.appendChild(el('li',null, t ? `No history for ${t}` : 'Select a row')); return; }
+        if(!arr || !arr.length){ histList.appendChild(el('li',null, t ? `No history for ${t}` : (window.t?window.t('pnl.selectRow','Select a row'):'Select a row'))); return; }
         arr.slice(-50).reverse().forEach(x=> histList.appendChild(el('li',null, JSON.stringify(x))));
       }catch(e){
-        histList.appendChild(el('li',null,'History unavailable.'));
+        histList.appendChild(el('li',null,(window.t?window.t('pnl.historyUnavailable','History unavailable.'):'History unavailable.')));
       }
     }
 
@@ -279,7 +279,7 @@ function __drawMini(canvas){
 
         // Actions cell
         const actions = el('div','row-actions');
-        const btnAll  = el('button','btn small danger','Sell All');
+        const btnAll  = el('button','btn small danger',(window.t?window.t('pnl.sellAll','Sell All'):'Sell All'));
         const btnHalf = el('button','btn small','Sell ½');
         const qty     = el('input','qty'); qty.type='number'; qty.min='1'; qty.step='1'; qty.value=String(Math.max(1, Math.floor(r.shares/4)||1));
         const btnSome = el('button','btn small','Sell Qty');
@@ -287,7 +287,7 @@ function __drawMini(canvas){
         actions.append(btnAll, btnHalf, qty, btnSome, btnHist);
 
         const btnByVal = el('button','btn small','Sell $…');
-        const btnCloseGreen = el('button','btn small','Close Green');
+        const btnCloseGreen = el('button','btn small',(window.t?window.t('pnl.closeGreen','Close Green'):'Close Green'));
         actions.append(btnByVal, btnCloseGreen);
 
         btnHist.onclick = async ()=>{ state.selectedTicker = r.ticker; await renderHistory(); };
@@ -313,7 +313,7 @@ function __drawMini(canvas){
           if(!v) return;
           btnSome.disabled=true;
           try{ await adapters.sell({ticker:r.ticker, amount: Math.min(v, r.shares)}); await refresh(); }
-          catch(e){ alert('Sell qty failed: '+(e&&e.message||e)); }
+          catch(e){ alert((window.t?window.t('pnl.sellQtyFailed','Sell qty failed:'):'Sell qty failed:')+' '+(e&&e.message||e)); }
           finally{ btnSome.disabled=false; }
         };
 
@@ -332,7 +332,7 @@ function __drawMini(canvas){
 
         btnCloseGreen.onclick = async ()=>{
           const basis=(REALIZE_AGAINST==='MARK'?r.last:r.avgPrice); const plNow=(r.last-basis)*r.shares;
-          if(plNow<=0) { alert('Not a winner.'); return; }
+          if(plNow<=0) { alert((window.t?window.t('pnl.notAWinner','Not a winner.'):'Not a winner.')); return; }
           btnCloseGreen.disabled = true;
           try{ await adapters.sell({ticker:r.ticker, amount:r.shares}); await refresh(); }
           catch(e){ alert('Close green failed: '+(e&&e.message||e)); }

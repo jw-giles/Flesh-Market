@@ -10,6 +10,16 @@
   window.__corpoInit = true;
 
   var Engine = null, CARDS = null, D = null, AI = null, ART = null;
+  function _ccT(k, fb){ return window.t ? window.t(k, fb) : fb; }
+  function _ccF(k, fb, v){ return window.tf ? window.tf(k, fb, v) : fb; }
+  // Faction label, reusing the galaxy FACTION_ZH map so the TCG and the map
+  // never disagree on a faction's name. Falls back to capitalised English.
+  function _ccFac(f){
+    var cap = String(f||'').charAt(0).toUpperCase() + String(f||'').slice(1);
+    var m = window.FACTION_ZH;
+    if (window._lang === 'zh' && m && m[f] && m[f].name) return m[f].name;
+    return cap;
+  }
   var CCVER = Date.now();            // cache-bust for tcg dep scripts so deploys always load fresh
   var depsReady = false;
   var state = { cash: 0, collection: [], decks: [], packs: [], cardListings: [], myCardListings: [] };
@@ -395,9 +405,9 @@
     inMatch = false;
     r.innerHTML = '';
     var wrap = el('div', 'cc-root'); wrap.style.cssText = 'padding:10px;max-width:1040px;margin:0 auto';
-    wrap.appendChild(el('div', 'cc-top', '<div class="cc-ttl">Corpo-Cards<small>The Arena</small><a class="cc-credit" href="https://subotai-khudozhnik.itch.io/" target="_blank" rel="noopener noreferrer">Art by subotai \u2197</a></div><div class="cc-cash">' + fmtF(state.cash) + '</div>'));
+    wrap.appendChild(el('div', 'cc-top', '<div class="cc-ttl">Corpo-Cards<small>' + _ccT('cc.arena','The Arena') + '</small><a class="cc-credit" href="https://subotai-khudozhnik.itch.io/" target="_blank" rel="noopener noreferrer">Art by subotai \u2197</a></div><div class="cc-cash">' + fmtF(state.cash) + '</div>'));
     var nav = el('div', 'cc-nav');
-    [['play', 'Play'], ['decks', 'Decks'], ['collection', 'Collection'], ['rules', 'Rules'], ['packs', 'Card Packs'], ['fbay', 'Ƒbay']].forEach(function (v) {
+    [['play', _ccT('cc.tabPlay','Play')], ['decks', _ccT('cc.tabDecks','Decks')], ['collection', _ccT('cc.tabCollection','Collection')], ['rules', _ccT('cc.tabRules','Rules')], ['packs', _ccT('cc.tabPacks','Card Packs')], ['fbay', _ccT('cc.tabFbay','Ƒbay')]].forEach(function (v) {
       var b = el('button', arenaView === v[0] ? 'on' : null, v[1]); b.onclick = function () { arenaView = v[0]; builder.open = false; if (v[0] === 'fbay') send({ type: 'tcg_card_listings' }); renderArena(); }; nav.appendChild(b);
     });
     wrap.appendChild(nav);
@@ -498,19 +508,19 @@
   function playableDecks() {
     var out = [];
     state.decks.forEach(function (dk) { if (dk.cards && dk.cards.length === D.DECK_SIZE) out.push({ kind: 'saved', name: dk.name, faction: dk.faction, cards: dk.cards }); });
-    FAC.forEach(function (f) { var s = D.STARTER_DECKS[f]; if (s) out.push({ kind: 'starter', name: 'Starter: ' + f.charAt(0).toUpperCase() + f.slice(1), faction: f, cards: s.cards.slice() }); });
+    FAC.forEach(function (f) { var s = D.STARTER_DECKS[f]; if (s) out.push({ kind: 'starter', name: _ccF('cc.starter','Starter: ' + f.charAt(0).toUpperCase() + f.slice(1), {name:_ccFac(f)}), faction: f, cards: s.cards.slice() }); });
     return out;
   }
   function renderPlayPicker(body) {
-    body.appendChild(el('div', null, '<div style="color:#5d6f6a;font-size:.76rem;margin:0 2px 10px">Pick a deck and play a match against the AI. Starter decks are always available; build your own in <b style="color:#7df0a6">Decks</b>.</div>'));
+    body.appendChild(el('div', null, '<div style="color:#5d6f6a;font-size:.76rem;margin:0 2px 10px">' + _ccT('cc.playIntro','Pick a deck and play a match against the AI. Starter decks are always available; build your own in Decks.') + '</div>'));
     var list = el('div', 'cc-decks');
     playableDecks().forEach(function (dk) {
       var row = el('div', 'cc-deckrow');
       var isStarter = dk.kind === 'starter';
       var av = isStarter ? { ok: true, missing: 0, listed: 0 } : deckAvailability(dk.cards);
-      var sub = dk.faction + ' · ' + dk.cards.length + ' cards' + (isStarter ? ' · prebuilt' : (av.ok ? '' : ' · ' + av.missing + ' ' + availWord(av)));
+      var sub = _ccFac(dk.faction) + ' · ' + _ccF('cc.cardsCount', dk.cards.length + ' cards', {n:dk.cards.length}) + (isStarter ? ' · ' + _ccT('cc.prebuilt','prebuilt') : (av.ok ? '' : ' · ' + av.missing + ' ' + availWord(av)));
       row.appendChild(el('div', 'dt', '<b>' + dk.name + '</b><small>' + sub + '</small>'));
-      var play = el('button', 'cc-btn sm', 'Play ▶'); play.disabled = !av.ok; play.onclick = function () { startMatch(dk.cards, isStarter); }; row.appendChild(play);
+      var play = el('button', 'cc-btn sm', _ccT('cc.playBtn','Play') + ' ▶'); play.disabled = !av.ok; play.onclick = function () { startMatch(dk.cards, isStarter); }; row.appendChild(play);
       list.appendChild(row);
     });
     body.appendChild(list);

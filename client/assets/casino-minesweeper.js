@@ -2,6 +2,9 @@
 (function(){
   const pane = document.getElementById('casino-minesweeper');
   if (!pane) return;
+  const T=(k,fb)=>window.t?window.t(k,fb):fb;
+  const TF=(k,fb,v)=>window.tf?window.tf(k,fb,v):fb;
+  function msModeName(n){var m={'Beginner':'casino.mine.modeBeginner','Intermediate':'casino.mine.modeIntermediate','Expert':'casino.mine.modeExpert'};return T(m[n]||'',n);}
 
   const MODES = [
     { name:'Beginner',     cols:9,  rows:9,  mines:10, reward:20   },
@@ -30,24 +33,25 @@
   </style>
   <div id="ms-wrap">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-      <span style="color:#72e09c;letter-spacing:.1em;font-size:.9rem">MINESWEEPER</span>
+      <span style="color:#72e09c;letter-spacing:.1em;font-size:.9rem" data-i18n="casino.mine.title">MINESWEEPER</span>
       
     </div>
     <div id="ms-mode-row" style="margin-bottom:8px">
-      ${MODES.map((m,i)=>`<button class="ms-mode-btn${i===0?' active':''}" data-idx="${i}">${m.name}<br><span style="color:#aaa;font-size:.7rem">${m.cols}×${m.rows} · ${m.mines}💣 · Ƒ${m.reward.toLocaleString()}</span></button>`).join('')}
+      ${MODES.map((m,i)=>`<button class="ms-mode-btn${i===0?' active':''}" data-idx="${i}">${msModeName(m.name)}<br><span style="color:#aaa;font-size:.7rem">${m.cols}×${m.rows} · ${m.mines}💣 · Ƒ${m.reward.toLocaleString()}</span></button>`).join('')}
     </div>
     <div id="ms-hud">
       <span>💣 <b id="ms-mines-left">10</b></span>
-      <span>⏱ <b id="ms-timer">0</b>s</span>
+      <span>⏱ <b id="ms-timer">0</b><span data-i18n="casino.mine.sec">s</span></span>
       <span id="ms-msg" style="color:#72e09c"></span>
     </div>
-    <div style="margin-bottom:6px;font-size:.8rem;color:#888">Left click: reveal · Right click: flag</div>
+    <div style="margin-bottom:6px;font-size:.8rem;color:#888" data-i18n="casino.mine.controls">Left click: reveal · Right click: flag</div>
     <div id="ms-board"></div>
     <div style="display:flex;gap:8px;margin-top:6px">
-      <button class="btn" id="ms-new">New Game</button>
+      <button class="btn" id="ms-new" data-i18n="casino.mine.newGame">New Game</button>
     </div>
     <div id="ms-status" class="muted" style="margin-top:6px;min-height:18px"></div>
   </div>`;
+  if(window.applyI18n) window.applyI18n(pane);
 
   let modeIdx=0, grid=[], revealed=[], flagged=[], firstClick=true, gameOver=false;
   let timerInterval=null, elapsed=0;
@@ -164,8 +168,8 @@
         renderBoard();
         // Loss — return the nominal stake only (net 0).
         if(msRoundId){ CasinoNet.result(msRoundId, 1); msRoundId=null; }
-        document.getElementById('ms-msg').textContent='💥 Boom!';
-        document.getElementById('ms-status').textContent='Hit a mine. Better luck next time.';
+        document.getElementById('ms-msg').textContent=T('casino.mine.boom','💥 Boom!');
+        document.getElementById('ms-status').textContent=T('casino.mine.hitMine','Hit a mine. Better luck next time.');
         return;
       }
       reveal(i);
@@ -176,8 +180,8 @@
         const reward=MODES[modeIdx].reward;
         // Win — gross = reward + nominal stake, netting the reward.
         if(msRoundId){ CasinoNet.result(msRoundId, reward+1); msRoundId=null; }
-        document.getElementById('ms-msg').textContent='✓ Board cleared!';
-        document.getElementById('ms-status').textContent=`You earned Ƒ${reward.toLocaleString()}! Time: ${elapsed}s`;
+        document.getElementById('ms-msg').textContent=T('casino.mine.cleared','✓ Board cleared!');
+        document.getElementById('ms-status').textContent=TF('casino.mine.earned','You earned Ƒ{amt}! Time: {t}s',{amt:reward.toLocaleString(),t:elapsed});
       }
     });
     board.addEventListener('contextmenu',(e)=>{

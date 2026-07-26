@@ -23,6 +23,27 @@
   --text-glow:0 0 3px rgba(70,255,125,0.30);
 }
 
+/* ── Market view tabs (Coalition / Jade Exchange) ── */
+.mv-tabs{display:flex;gap:4px;margin:0 0 6px 0}
+.mv-tab{flex:1;background:transparent;border:1px solid var(--panel-edge);color:var(--muted);padding:3px 6px;font-family:inherit;font-size:.64rem;letter-spacing:.08em;cursor:pointer;border-radius:2px;text-transform:uppercase;transition:all .15s}
+.mv-tab:hover{color:var(--green);border-color:var(--green)}
+.mv-tab.active{background:var(--dim);color:var(--green);border-color:var(--green)}
+#jadeThemeBtn.active{border-color:var(--green);color:var(--green);box-shadow:0 0 6px rgba(95,201,163,.4)}
+
+/* ── Jade theme: porcelain / celadon palette override ── */
+:root.jade-theme{
+  --bg:#04120d; --green:#5fc9a3; --pale:#e8e4d8; --amber:#c9b48f; --gold:#e2d3a4; --dim:#22624aaa; --good:#8fe0c4; --bad:#e08a8a;
+  --muted:#a7cdbf; --hr:#123a2c; --input-bg:#030e0a; --surface:#06160f; --surface-2:#08201a;
+  --scroll:#5fc9a3; --body-bg:#04120d; --panel-edge:#4a9f7e;
+  --panel-bg:rgba(12,34,26,0.5); --panel-shadow:0 0 10px #2affb314, inset 0 0 1px #2affb344;
+  --tab-glow:0 0 8px rgba(201,180,143,0.45); --text-glow:0 0 3px rgba(95,201,163,0.30);
+}
+/* Logo swap under jade theme: ASCII wordmark -> Chinese characters */
+.fm-wordmark-cn{display:none}
+:root.jade-theme .fm-wordmark{display:none}
+:root.jade-theme .fm-wordmark-cn{display:block}
+
+
 /* CRT scanline overlay: always on. */
 #crtOverlay{
   position:fixed; inset:0; z-index:99990; pointer-events:none;
@@ -218,3 +239,8 @@ h1, h2, .tab, .subtab, .chat-tab,
 
 /* amber navigation chrome glow */
 .tab,.subtab,.chat-tab{text-shadow:0 0 4px rgba(240,180,84,0.35)}
+
+
+/* Jade Circuit portal - slow spin */
+@keyframes gPortalSpin { to { transform: rotate(360deg); } }
+.g-portal-spin { transform-box: fill-box; transform-origin: center; animation: gPortalSpin 90s linear infinite; }
