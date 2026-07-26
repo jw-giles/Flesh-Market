@@ -1,4 +1,13 @@
-# FleshMarket v1.2.4 - MANIFEST
+# FleshMarket v1.2.5 - MANIFEST
+
+## 1.2.5 changes (Hotfix: lore editor unreachable on an empty book; CLIENT)
+- ROOT CAUSE, lore-book.js render(): `if (!pages.length) { right.innerHTML = empty-message } else { renderPage(right) }`. renderPage is the ONLY path that delegates to renderEditor. On an empty book the editor branch was unreachable, so NEW PAGE set `editing` and render() overwrote the editor with the empty-book message. Silent, no console error.
+- SCOPE: empty book only. Any book with >=1 page worked, which is why manual testing after seeding a page would not reproduce it. Every fresh install starts empty.
+- FIX: `if (editing) { ...renderEditor } else if (!pages.length) {...} else {...}`. The editing branch also renders the index so the page list stays visible while writing.
+- WHY THE 38 EXISTING CHECKS MISSED IT: all static regex over source. They can prove a route is gated or a string is escaped; they cannot prove a click sequence produces a result. tools/lore-check.mjs 38 -> 48 with a jsdom block that boots the real module, mounts, opens, clicks NEW PAGE on an EMPTY page list, and asserts the editor exists and the empty message is gone; repeats with a page present including a full type-and-save round trip asserting the POST body carries the token and the typed title; and asserts a non-dev gets no controls at all.
+- JSDOM GOTCHA: document.readyState is 'loading' when the module is eval'd, so it registers DOMContentLoaded and mounts a beat later. The check polls for #loreBtn (waitFor helper) rather than asserting on the next tick.
+- A CHECK THAT WAS PASSING FOR THE WRONG REASON: 'no innerHTML is fed a raw page field' used /innerHTML...p.(title|body)(?![^;]*esc)/ i.e. it looked for esc AFTER the field. Escaping is esc(p.title), i.e. BEFORE. It reported clean regardless of the code. Replaced with a scan that checks the 5 characters preceding every p./e. field use for `esc(`. REGRESSION TESTED: unescaping one title makes it fail with the offset.
+- Changed: client/assets/lore-book.js, client/version.json, tools/lore-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
 
 ## 1.2.4 changes (Lore Events book; dev-authored world record; SERVER + CLIENT)
 - SCHEMA: new table lore_pages (id, title, body, author, author_name, created_at, updated_at, sort, published) + idx_lore_sort, created in db_city.js initCityDb. Additive; rollback leaves it unread.

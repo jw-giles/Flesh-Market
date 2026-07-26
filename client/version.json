@@ -1,7 +1,7 @@
 {
-  "version": "1.2.4",
+  "version": "1.2.5",
   "built": "2026-07-26T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.2.4",
-  "notes": "LORE EVENTS. A book beside the End of Day clock where dev accounts write down what has happened in the world and everyone else reads it. Opens with the pixel book animation, set in the supplied pixel serif with a Han fallback so it reads in Chinese too. Pages support drafts and ordering, are dev-write only, and appear live in an open book. SERVER: restart required, one additive table."
+  "patch": "1.2.5",
+  "notes": "Hotfix: NEW PAGE did nothing on an empty lore book. render() tested pages.length before it tested whether the editor was open, so on a fresh install, which is the only state where NEW PAGE is the sole usable button, it painted the empty-book message straight over the editor. CLIENT only, no restart needed."
 }

@@ -4,6 +4,24 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.2.5 (2026-07-26) - Hotfix: NEW PAGE did nothing on an empty book (CLIENT)
+
+Client only. Hard refresh. No restart needed.
+
+render() tested pages.length before it tested whether the editor was open, so the empty-book branch wrote "Nothing has been written down yet" into the right-hand page and returned without ever reaching the editor. Clicking NEW PAGE set the editor state, called render, and had its own editor painted over by the empty message.
+
+The bug existed only on an empty book, which is the state every fresh install is in and the only state where NEW PAGE is the sole button that can do anything. The one path that was broken was the one path a new install takes.
+
+THIRTY EIGHT CHECKS PASSED ON THAT BUILD. They were all regex over source: they proved a gate existed, a field was escaped, a key had a translation. Not one of them clicked a button, so none of them could see that the button did nothing. Static assertions describe a file; they cannot describe a sequence.
+
+tools/lore-check.mjs 38 to 48, and ten of the new ones drive the real module in a real DOM. Mount the button, open the book on an empty page list, click NEW PAGE, assert the editor exists and the empty message is gone. Then the same with a page present, typing a title and body and asserting the save posts to the server with the token and the typed text. Then a non-dev, asserting the controls are not rendered at all.
+
+AND ONE OF THE ORIGINAL CHECKS WAS LYING. The assertion that no innerHTML is fed a raw page field looked for esc AFTER the field, while escaping happens BEFORE it, so it was testing an expression it had not understood and reporting clean either way. It now checks the characters immediately preceding every use of a page field, and it was verified by unescaping one title and confirming it fails. A check that passes for the wrong reason is worse than no check, because it is counted.
+
+Changed files: client/assets/lore-book.js, client/version.json, tools/lore-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
 ## v1.2.4 (2026-07-26) - Lore Events (SERVER + CLIENT)
 
 Server change. `pm2 restart fleshmarket` required. One additive table, no migration.

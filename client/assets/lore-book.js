@@ -148,7 +148,18 @@
     var bar = document.getElementById('loreDevBar');
     if (!idx || !right) return;
 
-    if (!pages.length) {
+    // The editor wins over everything. This used to test pages.length first, so
+    // on an EMPTY book, which is the state every fresh install is in, clicking
+    // NEW PAGE set the editor and then painted the empty-book message straight
+    // over it. The button appeared dead precisely when it was the only button
+    // that could do anything.
+    if (editing) {
+      idx.innerHTML = pages.map(function (p, i) {
+        return '<div class="lore-idx' + (p.published ? '' : ' draft') + '" data-i="' + i + '">' +
+          esc(p.title) + '</div>';
+      }).join('');
+      renderEditor(right);
+    } else if (!pages.length) {
       idx.innerHTML = '';
       right.innerHTML = '<div class="lore-empty">' +
         esc(T('lore.empty', 'Nothing has been written down yet.')) + '</div>';
