@@ -118,6 +118,23 @@ export function initCityDb(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_hist_place ON city_history(colony_id, district, ts);
     -- Petition filings, so the cooldown survives a restart.
+    -- The lore book. Dev-written pages recording what has happened in the
+    -- world: not a changelog, a record kept in character. Lives here because
+    -- db_city already owns the shared handle and the narrative tables; it is
+    -- not city data, but it is world data and it is read the same way.
+    CREATE TABLE IF NOT EXISTS lore_pages (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      title      TEXT    NOT NULL,
+      body       TEXT    NOT NULL DEFAULT '',
+      author     TEXT,
+      author_name TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      sort       INTEGER NOT NULL DEFAULT 0,
+      published  INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE INDEX IF NOT EXISTS idx_lore_sort ON lore_pages(published, sort, created_at);
+
     CREATE TABLE IF NOT EXISTS city_petitions (
       colony_id TEXT    NOT NULL,
       district  INTEGER NOT NULL,
@@ -207,6 +224,36 @@ export function recordPetition(colonyId, district, playerId) {
 export function setCharterOwner(colonyId, owner, prev) {
   S(`UPDATE city_state SET charter_owner=?, prev_charter=? WHERE colony_id=?`)
     .run(owner || null, prev || null, colonyId);
+}
+
+// ── Lore book ────────────────────────────────────────────────────────────────
+// Ordered by sort then age, so a dev can pin an entry above the chronology
+// without renumbering everything under it.
+export function listLorePages(includeDrafts) {
+  return includeDrafts
+    ? S(`SELECT * FROM lore_pages ORDER BY sort ASC, created_at ASC`).all()
+    : S(`SELECT * FROM lore_pages WHERE published=1 ORDER BY sort ASC, created_at ASC`).all();
+}
+export function getLorePage(id) {
+  return S(`SELECT * FROM lore_pages WHERE id=?`).get(id) || null;
+}
+export function createLorePage(title, body, author, authorName) {
+  const now = Date.now();
+  const r = S(`INSERT INTO lore_pages (title, body, author, author_name, created_at, updated_at, sort, published)
+               VALUES (?,?,?,?,?,?,0,1)`).run(title, body, author || null, authorName || null, now, now);
+  return Number(r.lastInsertRowid);
+}
+const LORE_COLS = new Set(['title', 'body', 'sort', 'published']);
+export function updateLorePage(id, fields) {
+  const keys = Object.keys(fields).filter(k => LORE_COLS.has(k));
+  if (!keys.length) return false;
+  const set = keys.map(k => `${k}=?`).join(',');
+  S(`UPDATE lore_pages SET ${set}, updated_at=? WHERE id=?`)
+    .run(...keys.map(k => fields[k]), Date.now(), id);
+  return true;
+}
+export function deleteLorePage(id) {
+  S(`DELETE FROM lore_pages WHERE id=?`).run(id);
 }
 
 export function getCityKV(k) {

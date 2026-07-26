@@ -8,7 +8,28 @@
 var activeGalaxy = 'coalition';
 var WORMHOLE_OPEN = (typeof window!=='undefined' && window._WORMHOLE_OPEN===true);
 window._jadeRerender = function(){ try{ if(typeof gSelected!=='undefined' && gSelected && typeof selectColony==='function') selectColony(gSelected); }catch(e){} };
-window._setWormhole = function(open){ WORMHOLE_OPEN = !!open; if(typeof gMapActive!=='undefined' && gMapActive){ if(typeof renderPortal==='function') renderPortal(); if(typeof gSelected!=='undefined' && gSelected && typeof selectColony==='function') selectColony(gSelected); } };
+window._setWormhole = function(open){
+  WORMHOLE_OPEN = !!open;
+  if(typeof gMapActive!=='undefined' && gMapActive){
+    if(typeof renderPortal==='function') renderPortal();
+    if(typeof gSelected!=='undefined' && gSelected && typeof selectColony==='function') selectColony(gSelected);
+  }
+  // The passage gates the Circuit's COMMODITY markets too, not just its stock
+  // exchange. Anything already on screen that lists Circuit colonies has to be
+  // rebuilt from the server, or it keeps offering prices the server will now
+  // refuse and the dev switch looks like it did nothing.
+  try {
+    if(typeof renderMarketsTab==='function'){
+      var mk=document.getElementById('gMarketsInner');
+      if(mk && mk.offsetParent!==null) renderMarketsTab();
+    }
+    // window property, not an in-scope binding: a bare reference here throws.
+    if(typeof window.renderShippingTab==='function'){
+      var sp=document.getElementById('gShippingInner');
+      if(sp && sp.offsetParent!==null) window.renderShippingTab();
+    }
+  } catch(e) { console.error('[wormhole] refresh', e); }
+};
 
 // ── Factions ──────────────────────────────────────────────────────────────────
 var FACTIONS = {
@@ -502,8 +523,18 @@ var LANES=[
   {from:'chiyou_marches',    to:'houtu_foundry',     vol:'low',   type:'dark'},
   {from:'chiyou_marches',    to:'quanzhou_docks',    vol:'medium',type:'dark'},
   {from:'chiyou_marches',    to:'houji_fields',      vol:'low',   type:'contested'},
+  // The passage. Cascade Station to Mozi Array through the FTL gate, the one
+  // lane that crosses the border. Its endpoints sit in different galaxies, so
+  // renderLanes cannot draw it as an ordinary line: renderPortal draws the
+  // connector to the gate instead, on whichever side you are standing. It is
+  // listed here so the client and server lane tables stay identical, which
+  // tools/lane-check.mjs enforces.
+  {from:'cascade_station',   to:'mozi_array',        vol:'medium',type:'passage', passage:true},
 ];
-var LANE_COLOR={corporate:'#4ecdc4',grey:'#c8cdd6',dark:'#9b59b6',contested:'#f39c12'};
+function laneIsPassage(l){ return !!(l && l.passage); }
+// Which colony anchors the passage on each side of the border.
+var PASSAGE_ANCHOR={ coalition:'cascade_station', jade:'mozi_array' };
+var LANE_COLOR={corporate:'#4ecdc4',grey:'#c8cdd6',dark:'#9b59b6',contested:'#f39c12',passage:'#7fe3a0'};
 window._FM_LANES = LANES;  // exposed for smuggling/blockade/contract panels
 
 // Matches COLONY_BONUSES on server
@@ -1774,7 +1805,11 @@ var SCOUNDREL_POOL = ['scoundrel','scoundrel_ew'];
 // lanes with one Circuit end and one Coalition end, so this is a clean split
 // and not a probability: 26 of 63 lanes are Circuit, 37 are not, 0 are mixed.
 function poolForLane(fromId, toId, variant){
-  var p = (isJadeWorld(fromId) && isJadeWorld(toId)) ? JADE_POOL : MERCHANT_POOL;
+  // The Circuit works its own gate. A run with one end inside the Circuit is
+  // Circuit freight even though its other end is Coalition, so a Changzheng
+  // hull is what comes through the passage and what a Coalition player sees
+  // arriving at Cascade Station.
+  var p = (isJadeWorld(fromId) || isJadeWorld(toId)) ? JADE_POOL : MERCHANT_POOL;
   return p[variant] || p.v1;
 }
 
@@ -1791,12 +1826,35 @@ function poolForLane(fromId, toId, variant){
 //
 // So tag each hull with the sector it flies in and show only the active one.
 function shipGalaxy(fromId, toId){
+  // A run through the passage belongs to BOTH sectors: it leaves one and
+  // arrives in the other, and hiding it from either side would mean the gate
+  // never visibly carries anything. Tagged 'both' and shown in either view.
+  if (isPassageRun(fromId, toId)) return 'both';
   return (isJadeWorld(fromId) || isJadeWorld(toId)) ? 'jade' : 'coalition';
+}
+function isPassageRun(fromId, toId){
+  return isJadeWorld(fromId) !== isJadeWorld(toId);
 }
 function tagShipGalaxy(grp, fromId, toId){
   var gx = shipGalaxy(fromId, toId);
   grp.setAttribute('data-gx', gx);
-  grp.style.display = (gx === activeGalaxy) ? '' : 'none';
+  grp.style.display = (gx === 'both' || gx === activeGalaxy) ? '' : 'none';
+}
+
+// Where a passage run is drawn. Its two colonies live in different views, so a
+// straight line between their coordinates would have the ship fly out of empty
+// space. Instead each side draws the half it can see: the anchor colony on this
+// side of the border, out to the gate. Crossing the gate is the cut between
+// the two halves, which is also how it reads in fiction.
+function passageEndpoints(fromId, toId){
+  var cfg = portalConfig();
+  var here = isJadeWorld(fromId) === (activeGalaxy === 'jade') ? fromId : toId;
+  var m = COLONY_META[here];
+  if (!m) return null;
+  var outbound = (here === fromId);   // leaving this sector, or arriving in it
+  return outbound
+    ? { ax:m.x, ay:m.y, bx:cfg.x, by:cfg.y }
+    : { ax:cfg.x, ay:cfg.y, bx:m.x, by:m.y };
 }
 
 // Deterministic hull choice, so a ship keeps the same silhouette across the
@@ -2005,6 +2063,12 @@ function spawnServerShip(npc) {
   var meta = COLONY_META;
   var a = meta[npc.from], b = meta[npc.to];
   if (!a || !b) return;
+  // A run through the passage is redrawn as anchor-to-gate for whichever side
+  // is on screen, since its real endpoints sit in two different views.
+  if (isPassageRun(npc.from, npc.to)) {
+    var pe = passageEndpoints(npc.from, npc.to);
+    if (pe) { a = { x:pe.ax, y:pe.ay }; b = { x:pe.bx, y:pe.by }; }
+  }
   var typeKey = npc.variant || 'v1';
   var base = SHIP_TYPES[typeKey]; if (!base) return;
   // Painted as one of the merchant hulls for this variant. Keyed off the npc id
@@ -2104,6 +2168,7 @@ function laneIsGrey(l){
 function pickScoundrelLane(){
   var w = [];
   LANES.forEach(function(l){
+    if(laneIsPassage(l)) return;   // the gate is watched, nobody runs it
     var n = laneIsGrey(l) ? 5 : (laneIsJade(l) ? 1 : 2);
     for (var i=0;i<n;i++) w.push(l);
   });
@@ -2366,6 +2431,10 @@ function spawnNext() {
     // Small freighter — weighted by volume (high=4, medium=2, low=0.5)
     var weighted = [];
     LANES.forEach(function(l) {
+      // Decorative traffic on the passage is drawn by the portal, not here: a
+      // ship tweened between two colonies in different views would appear to
+      // fly out of empty space.
+      if (laneIsPassage(l)) return;
       var w = l.vol === 'high' ? 4 : l.vol === 'medium' ? 2 : 0.5;
       for (var i = 0; i < w * 2; i++) weighted.push(l);
     });
@@ -2930,9 +2999,56 @@ function portalConfig(){
   }
   return { x:990, y:250, size:120, target:'coalition', label:'COALITION SPACE' };
 }
+// The passage, drawn as a lane from its anchor colony to the gate. Cascade
+// Station on the Coalition side, Mozi Array on the Circuit side. It is the one
+// route between the galaxies and the only lane whose existence is a decision
+// rather than geography, so it is drawn in the Circuit's own green and it
+// disappears entirely when the passage is sealed. A greyed out line would read
+// as a route that is temporarily busy; nothing at all reads as a border.
+function renderPassageLink(){
+  var g=document.getElementById('gLanes'); if(!g) return;
+  var old=document.getElementById('gPassageLink'); if(old) old.remove();
+  if(!WORMHOLE_OPEN) return;
+  var anchorId=PASSAGE_ANCHOR[activeGalaxy]; if(!anchorId) return;
+  var a=COLONY_META[anchorId]; if(!a) return;
+  var cfg=portalConfig();
+  var NS='http://www.w3.org/2000/svg';
+  var grp=document.createElementNS(NS,'g');
+  grp.setAttribute('id','gPassageLink'); grp.setAttribute('pointer-events','none');
+  // Stop short of the gate so the line does not run under the sprite.
+  var dx=cfg.x-a.x, dy=cfg.y-a.y, len=Math.sqrt(dx*dx+dy*dy)||1;
+  var stop=Math.max(0, len-cfg.size*0.55);
+  var ex=a.x+dx/len*stop, ey=a.y+dy/len*stop;
+  var line=document.createElementNS(NS,'line');
+  line.setAttribute('x1',a.x); line.setAttribute('y1',a.y);
+  line.setAttribute('x2',ex.toFixed(1)); line.setAttribute('y2',ey.toFixed(1));
+  line.setAttribute('stroke',LANE_COLOR.passage);
+  line.setAttribute('stroke-width','1.4');
+  line.setAttribute('stroke-dasharray','6 6');
+  line.setAttribute('opacity','0.75');
+  grp.appendChild(line);
+  // Crawl along the line so an open passage reads as live rather than drawn on.
+  var anim=document.createElementNS(NS,'animate');
+  anim.setAttribute('attributeName','stroke-dashoffset');
+  anim.setAttribute('from','24'); anim.setAttribute('to','0');
+  anim.setAttribute('dur','1.6s'); anim.setAttribute('repeatCount','indefinite');
+  line.appendChild(anim);
+  var mx=(a.x+ex)/2, my=(a.y+ey)/2;
+  var lbl=document.createElementNS(NS,'text');
+  lbl.setAttribute('x',mx.toFixed(1)); lbl.setAttribute('y',(my-6).toFixed(1));
+  lbl.setAttribute('text-anchor','middle'); lbl.setAttribute('fill',LANE_COLOR.passage);
+  lbl.setAttribute('font-size','8'); lbl.setAttribute('letter-spacing','2');
+  lbl.setAttribute('opacity','0.7');
+  lbl.setAttribute('font-family',"'Courier New',monospace");
+  lbl.textContent=(window.t?window.t('galx.passageLane','PASSAGE'):'PASSAGE');
+  grp.appendChild(lbl);
+  g.appendChild(grp);
+}
+
 function renderPortal(){
   var svg=document.getElementById('galaxySVG'); if(!svg) return;
   var old=document.getElementById('gPortal'); if(old) old.remove();
+  renderPassageLink();
   var cfg=portalConfig();
   var NS='http://www.w3.org/2000/svg';
   var stroke = cfg.target==='jade' ? '#e8e4d8' : '#4ecdc4';
@@ -3179,6 +3295,9 @@ function colonyDominant(id){
 function renderLanes(){
   var g=document.getElementById('gLanes'); if(!g) return; g.innerHTML='';
   LANES.forEach(function(l){
+    // The passage spans two galaxies, so there is no straight line to draw in
+    // either view. renderPortal draws the connector to the gate instead.
+    if(laneIsPassage(l)) return;
     var a=COLONY_META[l.from],b=COLONY_META[l.to]; if(!a||!b) return;
     if((a.galaxy||'coalition')!==activeGalaxy) return;
     var baseCol=LANE_COLOR[l.type];
@@ -3294,6 +3413,10 @@ function renderLanes(){
       }
     }
   });
+  // gLanes was cleared at the top and the passage link lives in it, so it has
+  // to go back on every repaint or it vanishes the first time anything else
+  // redraws the lane layer.
+  try { renderPassageLink(); } catch(e) { console.error('[passage]', e); }
 }
 
 // Helper: get leading faction for a colony
@@ -5404,15 +5527,19 @@ window.openShipManifest = function(ship) {
     var toId    = ship.toId   || 'new_anchor';
     var typeKey = ship.typeKey || 'v1';
 
-    // The deep-scan is a Flesh Station capability and it stops at the Circuit
-    // border. Circuit hulls file with the Circuit, not with the station, so on
-    // this side of the passage there is no manifest to read. Jurisdiction, not
-    // stealth.
+    // The deep-scan is a Flesh Station capability and Flesh Station sits in the
+    // Coalition cluster. It reads anything flying on this side of the border,
+    // Changzheng hulls included: a Circuit freighter that has come through the
+    // passage is in range like anything else, and its manifest is readable.
     //
-    // Keyed off the LANE, the same way the sector tag is, so the rule is "any
-    // hull in Circuit space refuses" rather than "these nine silhouettes
-    // refuse". That matters: a player learns one border, not a hull list, and
-    // no two identical looking ships ever behave differently on click.
+    // What it cannot do is see past the gate. A run entirely inside the Circuit
+    // is outside the station's cluster, so there is nothing to read, and that
+    // is a matter of where the sensor is rather than what the ship is carrying.
+    //
+    // Keyed off the RUN, not the hull: a Coalition hauler somehow running an
+    // internal Circuit lane would be equally unreadable, and a Changzheng hull
+    // at Cascade Station scans fine. A player learns one border, not a list of
+    // silhouettes, and no two identical ships behave differently on click.
     var FJ = window._fmFleet;
     if (FJ && typeof FJ.shipGalaxy === 'function' && FJ.shipGalaxy(fromId, toId) === 'jade') {
       var seedJ = ((fromId.charCodeAt(0)||65) * 17 + (toId.charCodeAt(0)||65) * 31 + Math.floor((ship.t||0) * 100)) || 42;
@@ -5420,7 +5547,7 @@ window.openShipManifest = function(ship) {
       var hlJ = (FJ.HULLS && FJ.HULLS[ship.hullKey]) || null;
       var TFJ = function(k, fb, v){ return window.tf ? window.tf(k, fb, v) : fb; };
       var msgJ = TFJ('galx.scanCircuit',
-        'FLESH STATION DEEP-SCAN REFUSED // {id}, {cls} // Circuit registry, nothing filed outside the passage',
+        'FLESH STATION DEEP-SCAN REFUSED // {id}, {cls} // beyond the passage, outside station sensor range',
         { id: identJ, cls: hlJ ? (window.hullNameZh ? window.hullNameZh(hlJ.n) : hlJ.n) : 'unknown hull' });
       if (window.gToast) window.gToast(msgJ, '#e8e4d8');
       return;

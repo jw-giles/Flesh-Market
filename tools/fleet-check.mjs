@@ -240,8 +240,14 @@ if (A) {
     grp2.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles:true, cancelable:true }));
     ok('clicking it is refused by the Flesh Station deep-scan',
        !!toast2 && /REFUSED/.test(toast2), String(toast2));
-    ok('and the refusal names the Circuit, not an unregistered hull',
-       !!toast2 && /Circuit/.test(toast2) && !/unregistered/.test(toast2), String(toast2));
+    // 1.2.3 reframed this: the scan is a SENSOR, not a jurisdiction. Flesh
+    // Station reads a Changzheng hull fine once it is on this side of the gate;
+    // what it cannot do is see past the gate, because it is not in that
+    // cluster. So the refusal has to give range as the reason, and must not
+    // read as the hull being unregistered or the Circuit refusing to file.
+    ok('the refusal gives sensor range as the reason',
+       !!toast2 && /sensor range/i.test(toast2) && !/unregistered/.test(toast2), String(toast2));
+    ok('and names the passage as the limit', !!toast2 && /passage/i.test(toast2), String(toast2));
     ok('and it names the hull actually being drawn',
        !!toast2 && /CZ-\d/.test(toast2), String(toast2));
     ok('and the transit log stays shut',

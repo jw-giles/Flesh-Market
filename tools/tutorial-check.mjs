@@ -128,6 +128,14 @@ const must = [
   ['civic works', /civic works/i],
   ['petitions', /petition/i],
   ['siege stores', /siege stores/i],
+  // The Circuit slide has now been wrong in both directions: it first omitted
+  // the Circuit entirely, then asserted that no cargo crosses, which is the
+  // opposite of the design. Pin the facts a player has to leave with.
+  ['the passage as a lane', /one lane crosses the border/i],
+  ['both anchor colonies named', /Cascade Station/],
+  ['the Circuit end named', /Mozi Array/],
+  ['that it opens and closes', /opens and closes on the Circuit/i],
+  ['that it cannot be bought', /cannot be bought into as a lane share/i],
   ['legitimacy pricing the seat', /legitimacy/i],
 ];
 const missing = must.filter(([, re]) => !re.test(enSrc)).map(([n]) => n);
@@ -137,6 +145,18 @@ ok('the tutorial covers what 1.2.0 actually shipped', missing.length === 0, miss
 // as it gets. The shell check for this was silently broken for a long time.
 const em = (enSrc + zhSrc).split('\u2014').length - 1;
 ok('no em dashes in tutorial content', em === 0, String(em));
+
+// The slide must not claim the opposite of what the lane table says. This is
+// the assertion that would have caught both previous versions of it.
+{
+  const laneSrc = fs.readFileSync(process.cwd() + '/client/assets/galaxy.js', 'utf8');
+  const hasPassage = /type:'passage', passage:true/.test(laneSrc);
+  ok('the lane table actually has a passage', hasPassage);
+  const claimsNoCrossing = /no cargo is ever hauled between/i.test(enSrc)
+    || /no lane crosses the border<\/strong>, so no cargo/i.test(enSrc);
+  ok('the tutorial does not claim cargo cannot cross', !claimsNoCrossing);
+  ok('and says so in Chinese too', /星门/.test(zhSrc) && /有且仅有/.test(zhSrc));
+}
 
 console.log('');
 console.log(`${pass} passed, ${fail} failed`);

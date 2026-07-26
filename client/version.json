@@ -1,7 +1,7 @@
 {
-  "version": "1.2.0",
+  "version": "1.2.4",
   "built": "2026-07-26T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.2.0",
-  "notes": "FleshMarket 1.2. Three things that were not in 1.1.9.13: the Jade Circuit, a sealed second galaxy with its own exchange, its own worlds and its own Changzheng hull family; a full Chinese localization of the client, from the trading chrome to the news engine to the casino; and Cities, where players hold mayoral office over districts, develop them, tax the trade, and now feel it in the commodity market. Carries everything from the 1.2.0.0 to 1.6.3.0 development series. SERVER: restart required. Schema changes are additive, rollback is safe."
+  "patch": "1.2.4",
+  "notes": "LORE EVENTS. A book beside the End of Day clock where dev accounts write down what has happened in the world and everyone else reads it. Opens with the pixel book animation, set in the supplied pixel serif with a Han fallback so it reads in Chinese too. Pages support drafts and ordering, are dev-write only, and appear live in an open book. SERVER: restart required, one additive table."
 }

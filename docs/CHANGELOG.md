@@ -4,6 +4,102 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.2.4 (2026-07-26) - Lore Events (SERVER + CLIENT)
+
+Server change. `pm2 restart fleshmarket` required. One additive table, no migration.
+
+A book sits beside the End of Day clock. Dev accounts write pages into it recording what has happened in the world, and everyone else reads them. It is not a changelog. Everything else in the client shows the present tick; this is the only place that says what any of it meant, which is why it reads as a physical object rather than another panel.
+
+It opens with the pixel book animation, fifteen frames stepped across one sprite sheet by background position so the whole thing is a single request. Left page is the index, right page is the entry. Set in the supplied pixel serif throughout.
+
+WRITING IS DEV ONLY, READING IS NOT. All three write routes refuse an unauthenticated caller and refuse a non-dev, checked separately per route so a gate on one can never be counted for another. Unpublished pages are withheld from everyone who cannot write them, so an entry can be started and finished later without the world reading it half written. Pages carry an order value, so a dev can pin something above the chronology without renumbering everything under it. A page written while somebody has the book open appears in it without a reload.
+
+A DEV ACCOUNT IS STILL AN ACCOUNT. This is the only place in the game where a human types prose that lands in the DOM of every other client, so the body is escaped and only line breaks are honoured, titles are stripped of control characters and capped, bodies go through the same three pass text filter as every other player visible string, and the update path takes a column allowlist. Posting an onerror image tag as a title stores it and renders it as text, which is the correct layer for that to be handled at.
+
+THE FONT DOES NOT COVER CHINESE. Anti kvak is a sixteen unit per em pixel serif with Latin and Cyrillic and no Han block at all: the characters in this game's own name are not in it. A stack of just that font would have rendered the entire book as tofu boxes the moment anyone opened it in Chinese, which is the one thing a lore book cannot do. The stack falls through to a Han serif, and the checks assert that it does rather than trusting anybody to remember.
+
+TWO THINGS THAT DID NOT WORK FIRST TIME, both mine, both caught by testing against a running server rather than by reading. The token global was a guess and was wrong: the rest of the client uses window.__fmToken and this module invented three names that do not exist, so every write would have gone out unauthenticated. And the title sanitiser was borrowed from the city handlers, where it is declared inside the websocket message closure and is not reachable from an express route, so every create and every edit answered five hundred.
+
+CHECKS. tools/lore-check.mjs, new, 38 checks. Per route auth, the column allowlist, escaping at every point a page field reaches innerHTML, the font stack leading with the pixel serif and falling through to a Han face, the assets existing, the mount point, and every string the book can show having a key and a Chinese translation.
+
+Changed files: server/server.js, server/db_city.js, client/index.html, client/assets/lore-book.js (new), client/assets/lore-book.css (new), client/assets/core.js, client/assets/fonts/Anti_kvak.ttf (new), client/assets/ui/book/ (new), client/version.json, tools/lore-check.mjs (new), docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.2.3 (2026-07-26) - Circuit freight works its own gate (SERVER)
+
+Server change. `pm2 restart fleshmarket` required. No schema change.
+
+1.2.2 built the lane. Nothing used it.
+
+CHANGZHENG HULLS RUN THE PASSAGE. Hull selection asked whether BOTH ends of a run were in the Circuit, which is true of an internal Circuit lane and false of the passage, so the one route the Circuit actually cares about was being flown by Coalition freighters. A run with EITHER end inside the Circuit is Circuit freight now, so what comes through the gate and docks at Cascade Station is a Changzheng hull, which is the point of having given them their own family.
+
+A crossing belongs to both sides. The sector tag used to file a run under one view or the other, and a run through the passage has one end in each, so it was being hidden from whichever side you happened to be standing on. It is tagged to both now and drawn anchor-to-gate: each side renders the half it can see, since the two colonies live in different views and a straight line between their coordinates would have the ship fly out of empty space. Crossing the gate is the cut between the two halves, which is also how it reads in fiction.
+
+AND THE GATE IS ACTUALLY BUSY. The passage was one lane in sixty four at ordinary weight. Watching the live fleet for a hundred and thirteen samples produced zero crossings, which for the single most interesting route in the game is the same as not having built it. It is weighted as the trunk route it is: everything moving between two galaxies funnels through one door. Roughly one spawn in nine, frequent enough that a player watching Cascade Station sees Circuit hulls arrive, rare enough that it stays an event.
+
+Measured on a running server: crossings appear while the passage is open and none is spawned while it is sealed. A crossing already in flight when the gate closes finishes its run rather than vanishing, which is the same courtesy in-transit cargo has always been given, and the checks distinguish that from a new spawn so the two can never be confused.
+
+THE SCAN IS A SENSOR, NOT A JURISDICTION. This is the part I had wrong in fiction as well as in code. The refusal used to read as the Circuit declining to file its manifests, which made a Changzheng hull unreadable anywhere, including parked in Coalition space. Flesh Station sits in the Coalition cluster and its sensors reach as far as the gate. It reads a Circuit freighter that has come through the passage exactly like anything else in range. What it cannot do is see past the gate, and that is a fact about where the sensor is rather than about what the ship is carrying. The refusal now says so, in both languages, and only a run wholly inside the Circuit gets it.
+
+THE PASSAGE STAYS WHERE YOU PUT IT. Sealed as a story beat, the gate used to reopen on the next deploy because the state lived in a variable and nothing wrote it down. It is persisted to city_kv on every dev command and restored at boot. Absent means never set, which is open: the passage starts open and closes only on the Circuit's word.
+
+CHECKS. tools/lane-check.mjs 38 to 52. Traffic weight sits in a band, busy enough to be seen and not so busy it becomes a conveyor belt, computed against the real lane table rather than asserted. Hull family, both-sector tagging, anchor-to-gate geometry, the scan keying on the run rather than the hull, the refusal wording, and all four halves of persistence.
+
+tools/fleet-check.mjs 55 to 56, and one assertion CORRECTED rather than added: it required the refusal to name the Circuit registry, which was the old fiction. It now requires the refusal to give sensor range as the reason and to name the passage as the limit. That check failing on this build is what caught the wording drift, which is what it is for.
+
+Changed files: server/server.js, client/assets/galaxy.js, client/assets/tutorial.js, client/assets/core.js, client/version.json, tools/lane-check.mjs, tools/fleet-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.2.2 (2026-07-26) - The passage is a lane (SERVER)
+
+Server change. `pm2 restart fleshmarket` required. No schema change.
+
+I had the model backwards. 1.2.1 sealed the Circuit off correctly and left the far more basic problem in place: there was no way to trade across the border at all, ever, open or sealed. The two sectors were separate graph components, so the Circuit was a place you could look at, fly around inside, and never carry a single unit into or out of. That is not what a passage is for.
+
+ONE LANE CROSSES THE BORDER NOW. Cascade Station to Mozi Array through the FTL gate. It is drawn as a dotted line running from its anchor colony to the gate on whichever side you are standing, animated so an open passage reads as live rather than painted on, and it is simply absent when the passage is sealed. Not greyed out: a dimmed line reads as a route that is temporarily busy, and nothing at all reads as a border.
+
+The gate is checked in one place, findLane, which is the choke point every consumer already goes through. Routing, freight, smuggling, contracts and the share market are therefore all gated by construction rather than by each of them remembering to ask. The routing graph and the NPC spawn table drop the edge separately, since both build their own adjacency.
+
+IT IS NOT PROPERTY. The passage cannot be bought into as a lane share and cannot be blockaded. A share in it would be a holding the seller can delete on a whim, and nobody should be able to buy a toll booth on the only door between two galaxies. Refused in all three handlers, buy, swap and blockade.
+
+Verified against a running server across the full cycle. With the passage open, New Anchor to Yujing routes in three hops through the gate and Cascade Station to Mozi Array in one. Sealed, both refuse with no_lane while New Anchor to Cascade Station and Yujing to Tiangong keep routing normally, so the border closes without either sector losing its own internal trade. Circuit colonies on the arbitrage board go sixteen, zero, sixteen across the same cycle.
+
+Defaults open, and awaits the dev command to close.
+
+THE TUTORIAL HAS NOW BEEN WRONG TWICE, BOTH TIMES MINE. In 1.2.0 it did not mention the Circuit at all. In 1.2.1 I corrected it to say that no cargo is ever hauled between the galaxies, which was me writing my own misreading into the game's own explanation of itself and is the worse of the two errors: an omission leaves a player uninformed, a false rule teaches them something they will act on. It now says what is true. One lane, named at both ends, opening and closing on the Circuit's word, not for sale and not blockadeable. Rewritten in both languages.
+
+CHECKS. tools/lane-check.mjs 22 to 38, and the border assertion INVERTED: it used to assert that no lane crosses and that the Circuit is its own component, which was correct for the old model and is exactly wrong for this one. It now asserts that exactly one lane crosses, that it is the passage, that it runs between the two named anchors, that no other lane crosses, that the Circuit is reachable when open, and that removing the passage parts the graph again while leaving the Circuit whole on its own side. Plus eleven assertions that the gate reaches findLane, routing, NPC spawning, shares, swaps, blockades and all four client render paths, counted rather than merely found, because gating two of three handlers would be worse than gating none.
+
+tools/tutorial-check.mjs 19 to 22, and it now cross checks the slide against the lane table: if the table has a passage, the tutorial may not claim cargo cannot cross. That assertion would have caught both previous versions of this slide.
+
+Changed files: server/server.js, client/assets/galaxy.js, client/assets/tutorial.js, client/assets/core.js, client/version.json, tools/lane-check.mjs, tools/tutorial-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.2.1 (2026-07-26) - The passage seals the whole Circuit (SERVER)
+
+Server change. `pm2 restart fleshmarket` required. No schema change.
+
+The dev panel switch that seals the Jade passage did nothing to the commodity market, because nothing in the commodity market ever asked. WORMHOLE_OPEN was read in exactly two places since the Circuit shipped: the ticker list sent at connect, and the stock order handler. Sealing the passage therefore hid the Jade Exchange and left the Circuit's sixteen commodity markets fully open, listed on the arbitrage board, priced every tick, and tradeable. The switch looked broken because it was only ever half a switch.
+
+One predicate now, jadeSealed, consulted by every path that can reach a Circuit market: the arbitrage grid, the per colony price board, buy, sell, smuggling departures and freight departures. Sealed means gone from the board rather than greyed out, because a price a player cannot act on reads as an arbitrage being withheld rather than a market that is closed.
+
+Cargo already parked on the far side is not destroyed, only frozen. It stays where it is and becomes sellable the moment the passage reopens. Runs already in flight are left to finish, which is how the commodity halt has always treated in transit cargo.
+
+Verified against a running server across the full cycle, driving the real dev endpoint: sixteen Circuit colonies listed with the passage open, zero while sealed, sixteen again on reopen, with Coalition markets answering normally throughout and a buy at Yujing going from filled to refused to filled.
+
+The client rebuilds on the broadcast too. An open Markets or Shipping tab used to keep showing a board the server had started refusing, which was the other half of why the switch looked dead.
+
+THE TUTORIAL SAID SO WITHOUT SAYING WHY. It stated that no lane crosses the border, which is true and was the wrong emphasis: what a player needs to know is that no cargo is ever hauled between the galaxies, that Circuit goods are bought and sold inside the Circuit, and that the passage can be sealed, at which point the whole Circuit closes to them. Corrected in both languages.
+
+CHECKS. tools/lane-check.mjs 13 to 22. It asserts a single sealed predicate exists, that the grid filters on it, that the price board and both trade handlers refuse on it, that both smuggling and shipping refuse on it, that the predicate recognises all sixteen Circuit worlds, and that toggling the passage rebuilds the two client views. Counting the guards rather than just finding one is deliberate: the failure this release fixes was a gate applied in some paths and not others.
+
+Changed files: server/server.js, client/assets/galaxy.js, client/assets/tutorial.js, client/version.json, tools/lane-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
 ## v1.2.0 (2026-07-26) - FleshMarket 1.2 (SERVER + CLIENT)
 
 The public release. 1.1.9.13 is what has been running; this is everything since.

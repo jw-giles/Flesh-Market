@@ -144,6 +144,7 @@ import {
   leaseShop, closeShop, getShop, renameShop,
   isNpcShop, adoptShop, deleteShop, countNpcShops,
   getCityKV, setCityKV, listAllCityLots, wipeAllCityLots, wipeAllShops,
+  listLorePages, getLorePage, createLorePage, updateLorePage, deleteLorePage,
   pushCityHistory, getCityHistory, getColonyHistory,
   lastPetition, recordPetition, setCharterOwner,
 } from './db_city.js';
@@ -1645,12 +1646,40 @@ const LANES_SERVER = [
   {from:'chiyou_marches',to:'houtu_foundry',vol:'low',type:'dark'},
   {from:'chiyou_marches',to:'quanzhou_docks',vol:'medium',type:'dark'},
   {from:'chiyou_marches',to:'houji_fields',vol:'low',type:'contested'},
+  // ── The passage (1.2.2) ───────────────────────────────────────────────────
+  // The one lane that crosses the border, Cascade Station to Mozi Array through
+  // the FTL gate. It is the reason the Circuit is reachable at all: without it
+  // the two sectors were separate graph components and no cargo could ever move
+  // between them, which is not what the Circuit is for.
+  //
+  // It is NOT an ordinary lane. It exists only while the Circuit permits it, it
+  // cannot be bought into as a lane share, and it cannot be blockaded, because
+  // it is a diplomatic arrangement rather than a trade route somebody owns.
+  // findLane returns it only while the passage is open, so every consumer of
+  // findLane, routing, freight, smuggling, contracts, is gated by construction
+  // rather than by remembering to check.
+  {from:'cascade_station',to:'mozi_array',vol:'medium',type:'passage',passage:true},
 ];
 
+// The passage, by lane key, so nothing has to string-match colony ids.
+const PASSAGE_KEY = 'cascade_station|mozi_array';
+// Spawn weight for the gate. Total weight across the other 63 lanes is ~127, so
+// this puts roughly one crossing in every eight or nine NPC spawns: frequent
+// enough that a player watching Cascade Station sees Changzheng hulls arrive,
+// rare enough that it stays an event rather than a conveyor belt.
+const PASSAGE_TRAFFIC_WEIGHT = Number(process.env.PASSAGE_TRAFFIC_WEIGHT) || 16;
+function isPassageLane(l) { return !!(l && l.passage); }
+
 function findLane(from, to) {
-  return LANES_SERVER.find(l =>
-    (l.from === from && l.to === to) || (l.from === to && l.to === from)
+  const l = LANES_SERVER.find(x =>
+    (x.from === from && x.to === to) || (x.from === to && x.to === from)
   );
+  // The passage is only a lane while the Circuit permits it. Gating HERE rather
+  // than at each caller means routing, freight, smuggling, contracts and the
+  // share market are all gated by construction, and a future caller cannot
+  // forget to check.
+  if (isPassageLane(l) && !WORMHOLE_OPEN) return undefined;
+  return l;
 }
 
 // Multi-hop routing: BFS over the lane graph for the fewest-hops path from->to.
@@ -1663,6 +1692,7 @@ function findRoute(from, to) {
   // Build adjacency once per call (graph is small, ~30 edges).
   const adj = {};
   for (const l of LANES_SERVER) {
+    if (isPassageLane(l) && !WORMHOLE_OPEN) continue;   // sealed: not an edge
     (adj[l.from] = adj[l.from] || []).push({ to:l.to, lane:l });
     (adj[l.to]   = adj[l.to]   || []).push({ to:l.from, lane:l });
   }
@@ -2434,7 +2464,11 @@ companies.push(BRNC_COMPANY);
 // Separate id range keeps Jade history isolated from base tickers and funds. Priced/stepped
 // through the normal GBM loop (not _special). Trades are gated by WORMHOLE_OPEN so players
 // cannot touch the board until the Circuit opens the passage. Ƒ-denominated, no cross-listing.
-let WORMHOLE_OPEN = true; // default OPEN for testing; set false to seal the passage by default
+// Defaults OPEN. Persisted, so a passage sealed as a story beat stays sealed
+// across a deploy instead of quietly reopening on the next restart. Read from
+// city_kv at boot, below, once the tables exist.
+let WORMHOLE_OPEN = true;
+const WORMHOLE_KEY = 'wormhole_open';
 
 // Global gate on commodity buying and selling. GM switch, same shape as the
 // passage. In-memory only and therefore resets to open on restart: a halt is a
@@ -2446,6 +2480,20 @@ let WORMHOLE_OPEN = true; // default OPEN for testing; set false to seal the pas
 // Halting mid-flight would destroy player cargo, which is not what a market
 // halt means.
 let COMMODITIES_OPEN = true;
+
+// The passage gates ACCESS TO THE CIRCUIT, not just its stock exchange.
+//
+// Until 1.2.1 WORMHOLE_OPEN was read in exactly two places, the ticker list
+// sent at init and the stock order handler, so sealing the passage hid the
+// Jade Exchange and left the Circuit's sixteen commodity markets fully open:
+// listed on the arbitrage board, priced, and tradeable. The dev panel switch
+// appeared to do nothing to commodities because it did nothing to commodities.
+//
+// One predicate, used by every path that can reach a Circuit market, so the
+// gate can never again be enforced in some of them and not others.
+function jadeSealed(colonyId) {
+  try { return !WORMHOLE_OPEN && isJadeColony(colonyId); } catch(_) { return false; }
+}
 const JADE_SEED = [
   {sym:'JCH', name:'Jade Circuit Holdings', price:500, sector:0},
   {sym:'YJT', name:'Yujing Trust',          price:85,  sector:0},
@@ -2484,7 +2532,14 @@ const JADE_COMPANIES = JADE_SEED.map((j,i)=>{
 });
 JADE_COMPANIES.forEach(c => companies.push(c));
 const JADE_SYMBOLS = new Set(JADE_COMPANIES.map(c => c.symbol));
-console.log('[Jade] '+JADE_COMPANIES.length+' Jade Exchange tickers registered (WORMHOLE_OPEN='+WORMHOLE_OPEN+')');
+// Restore the passage state written by the last dev command. Absent means
+// never set, which is open: the passage starts open and closes only on the
+// Circuit's word.
+try {
+  const saved = getCityKV(WORMHOLE_KEY);
+  if (saved === '0' || saved === '1') WORMHOLE_OPEN = (saved === '1');
+} catch(e) { console.error('[Jade] restore passage state', e); }
+console.log('[Jade] '+JADE_COMPANIES.length+' Jade Exchange tickers registered, passage '+(WORMHOLE_OPEN?'OPEN':'SEALED'));
 
 
 // SWT anchored mean-reversion init — BRNC uses default beta model from main loop
@@ -3244,12 +3299,16 @@ app.post('/api/dev/wormhole', (req, res) => {
     if (!isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
     const open = !!(req.body && req.body.open);
     WORMHOLE_OPEN = open;
+    try { setCityKV(WORMHOLE_KEY, open ? '1' : '0'); } catch(e) { console.error('[Jade] persist', e); }
     const jadeCos = companies.filter(c => c._jade);
     if (open) {
       for (const c of jadeCos) broadcast({ type:'company_added', data:{ id:c.id, name:c.name, symbol:c.symbol, price:c.price, sector:c.sector, hq:null, jade:true } });
     } else {
       for (const c of jadeCos) broadcast({ type:'index_delisted', data:{ symbol:c.symbol } });
     }
+    // The client has to rebuild anything Circuit shaped, not just repaint the
+    // map. An open Markets tab would otherwise keep showing a board the server
+    // has started refusing.
     broadcast({ type:'wormhole', data:{ open:WORMHOLE_OPEN } });
     console.log('[Jade] passage '+(open?'OPENED':'SEALED')+' by '+actor.name);
     res.json({ ok:true, open:WORMHOLE_OPEN, tickers:jadeCos.length });
@@ -3267,6 +3326,101 @@ app.post('/api/dev/commodities', (req, res) => {
     broadcast({ type:'commodities_gate', data:{ open:COMMODITIES_OPEN } });
     console.log('[Commodities] trading '+(COMMODITIES_OPEN?'RESUMED':'HALTED')+' by '+actor.name);
     res.json({ ok:true, open:COMMODITIES_OPEN });
+  } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
+});
+
+// ─── LORE BOOK ────────────────────────────────────────────────────────────────
+// Dev-written pages recording what has happened in the world, kept in character
+// rather than as a changelog. Readable by anyone, writable only by a dev.
+//
+// Body length is capped and the text goes through the same three-pass filter as
+// every other player-visible string. A dev account is still an account, and a
+// page is rendered into the DOM of every client that opens the book.
+const LORE_TITLE_MAX = 90;
+const LORE_BODY_MAX  = 12000;
+
+// The city handlers have their own cleanLabel, but it is declared inside the
+// websocket message closure and is not reachable from an express route. Same
+// rule, module scope: strip control characters, trim, cap.
+function loreLabel(v, max) {
+  return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
+}
+
+function loreActor(req) {
+  const tok = tokenFrom(req) || (req.body && req.body.token) || null;
+  return tok ? getPlayer(tok) : null;
+}
+function loreWire(p, isDev) {
+  return { id:p.id, title:p.title, body:p.body, author:p.author_name || null,
+           created:p.created_at, updated:p.updated_at, sort:p.sort,
+           published: !!p.published, canEdit: !!isDev };
+}
+
+app.get('/api/lore', (req, res) => {
+  try {
+    const actor = loreActor(req);
+    const dev = !!(actor && isDevAccount(actor.id));
+    // Drafts are visible only to the people who can write them, so a page can
+    // be started and finished later without the world reading it half-written.
+    res.json({ ok:true, dev, pages: listLorePages(dev).map(p => loreWire(p, dev)) });
+  } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
+});
+
+app.post('/api/lore', (req, res) => {
+  try {
+    const actor = loreActor(req);
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    if (!isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
+    const title = loreLabel(req.body && req.body.title, LORE_TITLE_MAX);
+    if (!title) return res.status(400).json({ ok:false, error:'bad_title' });
+    const rawBody = String((req.body && req.body.body) || '').slice(0, LORE_BODY_MAX);
+    if (rawBody && !isTextClean(rawBody)) return res.status(400).json({ ok:false, error:'bad_body' });
+    const id = createLorePage(title, rawBody, actor.id, actor.name);
+    broadcast({ type:'lore_update', data:{ id } });
+    res.json({ ok:true, id });
+  } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
+});
+
+app.put('/api/lore/:id', (req, res) => {
+  try {
+    const actor = loreActor(req);
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    if (!isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || !getLorePage(id)) return res.status(404).json({ ok:false, error:'not_found' });
+    const fields = {};
+    if (req.body && req.body.title != null) {
+      const t = loreLabel(req.body.title, LORE_TITLE_MAX);
+      if (!t) return res.status(400).json({ ok:false, error:'bad_title' });
+      fields.title = t;
+    }
+    if (req.body && req.body.body != null) {
+      const b = String(req.body.body).slice(0, LORE_BODY_MAX);
+      if (b && !isTextClean(b)) return res.status(400).json({ ok:false, error:'bad_body' });
+      fields.body = b;
+    }
+    if (req.body && req.body.sort != null) {
+      const n = Number(req.body.sort);
+      if (!Number.isFinite(n)) return res.status(400).json({ ok:false, error:'bad_sort' });
+      fields.sort = Math.max(-9999, Math.min(9999, Math.round(n)));
+    }
+    if (req.body && req.body.published != null) fields.published = req.body.published ? 1 : 0;
+    if (!updateLorePage(id, fields)) return res.status(400).json({ ok:false, error:'nothing_to_update' });
+    broadcast({ type:'lore_update', data:{ id } });
+    res.json({ ok:true });
+  } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
+});
+
+app.delete('/api/lore/:id', (req, res) => {
+  try {
+    const actor = loreActor(req);
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    if (!isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ ok:false, error:'bad_id' });
+    deleteLorePage(id);
+    broadcast({ type:'lore_update', data:{ id, deleted:true } });
+    res.json({ ok:true });
   } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
 });
 
@@ -4804,7 +4958,10 @@ app.post('/api/galaxy/join-faction', (req, res) => {
 // Full price grid across all colonies (for the Markets tab arbitrage view).
 app.get('/api/commodities-grid', (req, res) => {
   try {
-    const colonies = getAllColonyStates().filter(isMarketColony);
+    // Sealed means gone from the board, not greyed out. A price a player cannot
+    // act on is worse than no price: it reads as an arbitrage they are being
+    // denied rather than a market that is closed.
+    const colonies = getAllColonyStates().filter(isMarketColony).filter(c => !jadeSealed(c.id));
     const all = getAllCommodityPrices();
     const byColony = {};
     for (const r of all) { (byColony[r.colony_id] = byColony[r.colony_id] || {})[r.commodity_id] = r; }
@@ -4847,6 +5004,7 @@ app.get('/api/commodities/:colonyId', (req, res) => {
     const colony = getColonyState(colonyId);
     if (!colony) return res.status(404).json({ ok:false, error:'colony_not_found' });
     if (!isMarketColony(colony)) return res.status(403).json({ ok:false, error:'no_market_here' });
+    if (jadeSealed(colonyId)) return res.status(403).json({ ok:false, error:'passage_sealed' });
     const leading = colonyLeadingFaction(colony);
     const tithe = leading === 'guild' ? GUILD_TITHE : 0;
     let rows = getColonyCommodityPrices(colonyId);
@@ -4938,7 +5096,16 @@ const NPC_SHORT_MIN_MS = 40_000;
 function npcPickLane() {
   const weighted = [];
   for (const l of LANES_SERVER) {
-    const w = l.vol === 'high' ? 4 : l.vol === 'medium' ? 2 : 1;
+    // A sealed passage carries no freight, so no NPC hauler may be spawned on
+    // it. An open one does, and that traffic is the visible sign it is open.
+    if (isPassageLane(l) && !WORMHOLE_OPEN) continue;
+    // The passage is one lane out of sixty four. At an ordinary weight it took
+    // 113 fleet samples to produce ZERO crossings, which for the single most
+    // interesting route in the game is the same as not having built it. It is
+    // weighted as the trunk route it is: everything moving between two galaxies
+    // funnels through this one door, so it should be visibly busy.
+    const w = isPassageLane(l) ? PASSAGE_TRAFFIC_WEIGHT
+      : l.vol === 'high' ? 4 : l.vol === 'medium' ? 2 : 1;
     for (let i = 0; i < w; i++) weighted.push(l);
   }
   return weighted[Math.floor(Math.random() * weighted.length)];
@@ -5202,6 +5369,9 @@ app.post('/api/commodities/buy', (req, res) => {
     const colony = getColonyState(colonyId);
     if (!colony) return res.status(404).json({ ok:false, error:'colony_not_found' });
     if (!isMarketColony(colony)) return res.status(403).json({ ok:false, error:'no_market_here' });
+    // Cargo already parked on the far side is NOT destroyed, only frozen: it
+    // stays where it is and becomes sellable again when the passage reopens.
+    if (jadeSealed(colonyId)) return res.status(403).json({ ok:false, error:'passage_sealed' });
 
     const leading = colonyLeadingFaction(colony);
     const tithe = leading === 'guild' ? GUILD_TITHE : 0;
@@ -5245,6 +5415,9 @@ app.post('/api/commodities/sell', (req, res) => {
     const colony = getColonyState(colonyId);
     if (!colony) return res.status(404).json({ ok:false, error:'colony_not_found' });
     if (!isMarketColony(colony)) return res.status(403).json({ ok:false, error:'no_market_here' });
+    // Cargo already parked on the far side is NOT destroyed, only frozen: it
+    // stays where it is and becomes sellable again when the passage reopens.
+    if (jadeSealed(colonyId)) return res.status(403).json({ ok:false, error:'passage_sealed' });
 
     const held = getCargoQty(p.id, commodityId, colonyId);
     if (held <= 0) return res.status(400).json({ ok:false, error:'no_cargo_here' });
@@ -9255,6 +9428,13 @@ wss.on('connection',(ws,req)=>{
       }
       const lane = findLane(from, to);
       if (!lane) { ws.send(JSON.stringify({ type:'smuggling_error', error:'No lane exists' })); return; }
+      // No lane crosses the border, so a run can never span the two sectors. It
+      // CAN run entirely inside a sealed Circuit, which is the same access the
+      // passage is supposed to deny. Runs already in flight are left alone,
+      // matching how the commodity halt treats in-transit cargo.
+      if (jadeSealed(from) || jadeSealed(to)) {
+        ws.send(JSON.stringify({ type:'smuggling_error', error:'The Jade passage is sealed. No run may set out inside the Circuit.' })); return;
+      }
       const cargo = CARGO_TYPES.find(c => c.id === cargoId);
       if (!cargo) { ws.send(JSON.stringify({ type:'smuggling_error', error:'Unknown cargo' })); return; }
       const amt = Math.max(100, Math.min(10_000_000, Math.round(Number(stake) * 100) / 100));
@@ -9304,6 +9484,9 @@ wss.on('connection',(ws,req)=>{
       }
       const lane = findLane(from, to);
       if (!lane) { ws.send(JSON.stringify({ type:'shipping_error', error:'No lane exists' })); return; }
+      if (jadeSealed(from) || jadeSealed(to)) {
+        ws.send(JSON.stringify({ type:'shipping_error', error:'The Jade passage is sealed. No freight moves inside the Circuit.' })); return;
+      }
 
       // Check blockade: shipping is BLOCKED during active blockade
       const laneKey = getLaneKey(from, to);
@@ -9368,6 +9551,11 @@ wss.on('connection',(ws,req)=>{
       if (!from || !to) { ws.send(JSON.stringify({ type:'blockade_error', error:'Missing lane endpoints' })); return; }
       const lane = findLane(from, to);
       if (!lane) { ws.send(JSON.stringify({ type:'blockade_error', error:'No lane exists' })); return; }
+      // Nobody besieges the gate. It closes when the Circuit says so, not
+      // because a faction paid for it.
+      if (isPassageLane(lane)) {
+        ws.send(JSON.stringify({ type:'blockade_error', error:'The passage cannot be blockaded. It answers only to the Circuit.' })); return;
+      }
       const laneKey = getLaneKey(from, to);
       // Check if blockade already active BEFORE touching cash
       const existingBlk = activeBlockades.get(laneKey);
@@ -9446,6 +9634,13 @@ wss.on('connection',(ws,req)=>{
       if (!from || !to) { ws.send(JSON.stringify({ type:'share_error', error:'Missing lane endpoints' })); return; }
       const lane = findLane(from, to);
       if (!lane) { ws.send(JSON.stringify({ type:'share_error', error:'No lane exists' })); return; }
+      // The passage is a diplomatic arrangement, not a trade route somebody
+      // owns. It can close on the Circuit's word, so a share in it would be a
+      // holding the seller can delete, and nobody should be able to buy a toll
+      // booth on the only door between two galaxies.
+      if (isPassageLane(lane)) {
+        ws.send(JSON.stringify({ type:'share_error', error:'The passage is not for sale. It opens and closes on the Circuit\'s word.' })); return;
+      }
       const laneKey = getLaneKey(from, to);
       // One share per player
       const existing = getPlayerShare(actor.id);
@@ -9490,6 +9685,9 @@ wss.on('connection',(ws,req)=>{
       if (!existing) { ws.send(JSON.stringify({ type:'share_error', error:'No share to sell. Use buy instead.' })); return; }
       const lane = findLane(from, to);
       if (!lane) { ws.send(JSON.stringify({ type:'share_error', error:'No lane exists' })); return; }
+      if (isPassageLane(lane)) {
+        ws.send(JSON.stringify({ type:'share_error', error:'The passage is not for sale. It opens and closes on the Circuit\'s word.' })); return;
+      }
       const newLaneKey = getLaneKey(from, to);
       if (existing.lane_key === newLaneKey) { ws.send(JSON.stringify({ type:'share_error', error:'Already holding this lane' })); return; }
       // Calculate sell proceeds

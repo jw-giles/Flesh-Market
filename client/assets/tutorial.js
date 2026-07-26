@@ -105,8 +105,8 @@
     },
     {
       heading: 'THE JADE CIRCUIT',
-      text: `Beyond a sealed passage lies a <em>second galaxy</em>. The <em style="color:#7fe3a0">Jade Circuit</em> is sixteen worlds with their own exchange, their own tickers and their own lane network. Toggle to it from the <em>Sector Map</em>. The Circuit trades with itself: <strong>no lane crosses the border</strong>, and its freight flies the <em>Changzheng</em> hull family, CZ-1 through CZ-9, built at Changzheng Yards. You will never see a Coalition hauler over Yujing, or a Circuit hull over New Anchor. Flesh Station's deep scan stops at the passage too, so you can watch a Circuit freighter cross the map and never learn what is in its hold.`,
-      callout: 'Circuit worlds run their own prices. What is dear in Coalition space may be cheap behind the passage.',
+      text: `Beyond a sealed passage lies a <em>second galaxy</em>. The <em style="color:#7fe3a0">Jade Circuit</em> is sixteen worlds with their own exchange, their own tickers and their own lane network. Toggle to it from the <em>Sector Map</em>. Exactly <strong>one lane crosses the border</strong>: the passage itself, running from <em>Cascade Station</em> to <em>Mozi Array</em> through the FTL gate. Everything moves through that one door. Haul Circuit goods back to Coalition space, or Coalition goods into the Circuit, and the spread is whatever two galaxies that rarely trade have let drift apart. Circuit freight flies the <em>Changzheng</em> hull family, CZ-1 through CZ-9, built at Changzheng Yards. <span class="warn">The passage opens and closes on the Circuit's word</span>, and while it is sealed the lane is simply gone: no crossing, no Jade Exchange, and all sixteen Circuit markets shut to you until it opens again. The passage cannot be bought into as a lane share and cannot be blockaded. It answers to nobody but the Circuit. Watch Cascade Station and you will see <em>Changzheng</em> hulls come through it: Circuit freight works its own gate. Once they are on this side, <em>Flesh Station can read them</em> like anything else in the cluster. Its sensors reach as far as the gate and no further, so a hull running an internal Circuit lane refuses the scan for a plain reason: it is out of range, not hiding.`,
+      callout: 'One door, and the Circuit decides when it is open. Watch the passage before you plan a run through it.',
       tab: 'galactic',
       galaxySub: 'map',
     },
@@ -239,8 +239,8 @@
     },
     {
       heading: '玉环',
-      text: `封闭的星门之后，是 <em>第二个星系</em>。<em style="color:#7fe3a0">玉环</em> 由十六个世界组成，拥有自己的交易所、自己的代码与自己的航道网。可从 <em>星区地图</em> 切换过去。玉环自成一体：<strong>没有任何航道跨越边界</strong>，其货运一律由 <em>长征</em> 级船体承担，即长征一号至长征九号，全部建于长征船坞。您绝不会在玉京上空见到联合体货轮，也不会在新锚点上空见到玉环船体。血肉站的深层扫描同样止步于星门，因此您可以看着一艘玉环货船横穿地图，却始终无从得知它舱中所载。`,
-      callout: '玉环世界自行定价。在联合体空域昂贵之物，星门之后未必如此。',
+      text: `封闭的星门之后，是 <em>第二个星系</em>。<em style="color:#7fe3a0">玉环</em> 由十六个世界组成，拥有自己的交易所、自己的代码与自己的航道网。可从 <em>星区地图</em> 切换过去。跨越边界的航道有且仅有 <strong>一条</strong>：星门本身，自 <em>瀑布站</em> 经 FTL 星门通往 <em>墨子阵列</em>。一切往来皆经此门。您可将玉环的货物运回联合体空域，或把联合体的货物运入玉环，而其中的价差，正是两个鲜少通商的星系长年背离所积累的。玉环货运一律由 <em>长征</em> 级船体承担，即长征一号至长征九号，全部建于长征船坞。<span class="warn">星门的开闭取决于玉环的意志</span>，封闭期间此航道直接消失：无从穿越，玉环交易所关闭，其全部十六个市场亦对您关闭，直至再度开启。此航道不可作为航道份额买入，亦不可被封锁。它只听命于玉环。留意瀑布站，您会见到 <em>长征</em> 级船体自星门驶入：玉环货运由其自家船只承担。一旦驶抵此侧，<em>血肉站即可如常读取其舱单</em>，与本星团内任何船只无异。该站传感范围至星门为止，绝不越界，因此一艘在玉环境内航行的船体拒绝扫描，原因十分朴素：超出传感范围，而非刻意隐匿。`,
+      callout: '只有一道门，而何时开启由玉环决定。规划穿越航程之前，请先确认星门状态。',
     },
     {
       heading: '大宗商品市场',

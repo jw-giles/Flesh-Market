@@ -1,0 +1,147 @@
+/* ── LORE EVENTS ───────────────────────────────────────────────────────────── */
+
+/* Anti kvak: a 16-unit-per-em pixel serif. It has Latin and Cyrillic and NO
+   real CJK coverage, so the stack falls through to a Han face for Chinese.
+   Without that fallback the book renders tofu boxes the moment anyone reads it
+   in zh, which is the one thing a lore book cannot do. */
+@font-face {
+  font-family: 'Antikvak';
+  src: url('fonts/Anti_kvak.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+:root {
+  --lore-font: 'Antikvak', 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  --lore-ink: #d8cfa8;
+  --lore-ink-dim: #8d8563;
+  --lore-page: #17150e;
+  --lore-edge: #3a3524;
+}
+
+/* ── The header button, beside the End of Day clock ───────────────────────── */
+#loreBtn {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  cursor: pointer; user-select: none; padding: 2px 6px;
+  border: 1px solid transparent; border-radius: 4px;
+  transition: border-color .18s, transform .18s;
+}
+#loreBtn:hover, #loreBtn:focus-visible {
+  border-color: #6b5a2a; transform: translateY(-1px); outline: none;
+}
+#loreBtnIcon {
+  width: 26px; height: 26px;
+  background: url('ui/book/book_icon.png') center/contain no-repeat;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 5px rgba(216,207,168,.35));
+}
+#loreBtn:hover #loreBtnIcon { filter: drop-shadow(0 0 9px rgba(216,207,168,.7)); }
+#loreBtnLabel {
+  font-family: var(--lore-font);
+  font-size: .58rem; letter-spacing: .12em;
+  color: #b8ad80; white-space: nowrap;
+}
+
+/* ── Modal ─────────────────────────────────────────────────────────────────── */
+#loreModal { position: fixed; inset: 0; z-index: 9200; display: none; }
+#loreModal.open { display: block; }
+#loreBackdrop { position: absolute; inset: 0; background: rgba(0,0,0,.78); backdrop-filter: blur(2px); }
+#loreBook {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  width: min(980px, 94vw); height: min(660px, 88vh);
+  background: var(--lore-page);
+  border: 1px solid var(--lore-edge);
+  box-shadow: 0 0 0 1px #0c0b07, 0 22px 60px rgba(0,0,0,.7);
+  display: flex; flex-direction: column;
+}
+/* The opening animation. One sprite sheet, stepped by background-position, so
+   fifteen frames cost one request. */
+#loreCover {
+  position: absolute; inset: 0; margin: auto;
+  width: 256px; height: 256px;
+  background-image: url('ui/book/Book_Sheet.png');
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  image-rendering: pixelated;
+  transform: scale(1.6);
+  pointer-events: none;
+}
+#loreInner { display: flex; flex: 1; min-height: 0; transition: opacity .25s; }
+#loreSpine { width: 1px; background: linear-gradient(180deg, transparent, var(--lore-edge) 18%, var(--lore-edge) 82%, transparent); }
+#loreLeft {
+  width: 270px; flex: 0 0 270px; padding: 18px 14px 14px;
+  display: flex; flex-direction: column; min-height: 0;
+  border-right: 1px solid #241f16;
+}
+#loreHeading {
+  font-family: var(--lore-font);
+  font-size: 1.15rem; letter-spacing: .1em; color: var(--lore-ink);
+  margin-bottom: 12px; text-shadow: 0 0 10px rgba(216,207,168,.25);
+}
+#loreIndex { flex: 1; overflow-y: auto; min-height: 0; }
+.lore-idx {
+  font-family: var(--lore-font);
+  font-size: .82rem; line-height: 1.5; color: var(--lore-ink-dim);
+  padding: 4px 6px; cursor: pointer; border-left: 2px solid transparent;
+}
+.lore-idx:hover { color: var(--lore-ink); background: #1d1a11; }
+.lore-idx.on { color: var(--lore-ink); border-left-color: #8d7b3a; background: #1f1b12; }
+.lore-idx.draft { opacity: .62; font-style: italic; }
+.lore-draft-tag { font-size: .62rem; color: #7a6a2e; }
+#loreDevBar { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; }
+
+#loreRight { flex: 1; overflow-y: auto; padding: 22px 26px; min-height: 0; }
+.lore-page { max-width: 62ch; }
+.lore-page h2 {
+  font-family: var(--lore-font);
+  font-size: 1.5rem; color: var(--lore-ink); margin: 0 0 4px;
+  letter-spacing: .04em; font-weight: normal;
+}
+.lore-meta {
+  font-family: var(--lore-font);
+  font-size: .72rem; color: var(--lore-ink-dim); margin-bottom: 16px;
+  border-bottom: 1px solid #241f16; padding-bottom: 8px;
+}
+.lore-body {
+  font-family: var(--lore-font);
+  font-size: .96rem; line-height: 1.75; color: var(--lore-ink);
+}
+.lore-body p { margin: 0 0 1em; }
+.lore-empty {
+  font-family: var(--lore-font);
+  color: var(--lore-ink-dim); font-style: italic; font-size: .9rem;
+}
+#loreClose {
+  position: absolute; top: 6px; right: 10px;
+  background: none; border: none; color: var(--lore-ink-dim);
+  font-size: 1.4rem; cursor: pointer; line-height: 1;
+}
+#loreClose:hover { color: var(--lore-ink); }
+
+/* ── Dev editing ───────────────────────────────────────────────────────────── */
+.lore-dev {
+  font-family: var(--lore-font);
+  font-size: .7rem; letter-spacing: .09em;
+  background: #1c1810; color: #c8bb85;
+  border: 1px solid #4a4128; padding: 4px 10px; cursor: pointer;
+}
+.lore-dev:hover { background: #262013; color: var(--lore-ink); }
+.lore-dev.warn { color: #d08a72; border-color: #5a3327; }
+.lore-input, .lore-area, .lore-num {
+  font-family: var(--lore-font);
+  background: #100e09; color: var(--lore-ink);
+  border: 1px solid #332d1e; padding: 8px 10px; width: 100%;
+}
+.lore-input { font-size: 1.2rem; margin-bottom: 10px; }
+.lore-area { font-size: .92rem; line-height: 1.7; min-height: 320px; resize: vertical; }
+.lore-edit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
+.lore-chk { font-family: var(--lore-font); font-size: .74rem; color: var(--lore-ink-dim); display: flex; align-items: center; gap: 5px; }
+.lore-num { width: 70px; font-size: .78rem; padding: 3px 6px; }
+.lore-err { font-family: var(--lore-font); color: #d08a72; font-size: .78rem; margin-top: 8px; min-height: 1em; }
+
+@media (max-width: 760px) {
+  #loreBook { width: 96vw; height: 90vh; }
+  #loreInner { flex-direction: column; }
+  #loreLeft { width: auto; flex: 0 0 auto; max-height: 34%; border-right: none; border-bottom: 1px solid #241f16; }
+  #loreBtnLabel { display: none; }
+}
