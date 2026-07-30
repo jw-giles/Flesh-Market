@@ -1586,6 +1586,35 @@ window.I18N = {
   'tab.arena':{en:'🃏 Corpo-Cards',zh:'🃏 企业卡牌'},
   'tab.devlogs':{en:'📺 Dev Logs',zh:'📺 开发日志'},
   'tab.bugs':{en:'🐛 Bugs',zh:'🐛 缺陷'},
+  // ── Mobile shell (v1.3.0). Icons live in the markup, so these strings carry
+  //    no emoji; the tab.* equivalents above do, and would double up on a tile.
+  'mob.eod':{en:'END OF DAY',zh:'日终'},
+  'mob.nav.market':{en:'Market',zh:'市场'},
+  'mob.nav.board':{en:'Board',zh:'行情'},
+  'mob.nav.chat':{en:'Chat',zh:'聊天'},
+  'mob.nav.wallet':{en:'Wallet',zh:'钱包'},
+  'mob.nav.more':{en:'More',zh:'更多'},
+  'mob.seg.companies':{en:'Companies',zh:'企业'},
+  'mob.seg.news':{en:'News',zh:'新闻'},
+  'mob.seg.heat':{en:'Heat',zh:'热力'},
+  'mob.seg.pnl':{en:'P&L',zh:'盈亏'},
+  'mob.seg.wire':{en:'Wire',zh:'汇款'},
+  'mob.seg.ranks':{en:'Ranks',zh:'排行榜'},
+  'mob.sect.play':{en:'Play',zh:'玩法'},
+  'mob.sect.read':{en:'Read',zh:'阅览'},
+  'mob.sect.account':{en:'Account',zh:'账户'},
+  'mob.tile.casino':{en:'Casino',zh:'赌场'},
+  'mob.tile.galactic':{en:'Galaxy',zh:'星系'},
+  'mob.tile.mining':{en:'Mining',zh:'采矿'},
+  'mob.tile.arena':{en:'Corpo-Cards',zh:'企业卡牌'},
+  'mob.tile.store':{en:'Store',zh:'商店'},
+  'mob.tile.guild':{en:'Capital Houses',zh:'资本商号'},
+  'mob.tile.fleshbook':{en:'Fleshbook',zh:'血肉簿'},
+  'mob.tile.devlogs':{en:'Dev Logs',zh:'开发日志'},
+  'mob.tile.lore':{en:'Lore Events',zh:'纪事'},
+  'mob.tile.inventory':{en:'Inventory',zh:'库存'},
+  'mob.tile.titles':{en:'Titles',zh:'称号'},
+  'mob.tile.bugs':{en:'Bugs',zh:'缺陷'},
   'ph.search':{en:'Search symbol or name',zh:'搜索代码或名称'},
   'ph.chat':{en:'Say something… @mention',zh:'说点什么… @提及'},
   'btn.send':{en:'Send',zh:'发送'},
@@ -3712,7 +3741,25 @@ function drawChart() {
   canvas.height = cssH * dpr;
   ctx.scale(dpr, dpr);
   const W = cssW, H = cssH;
-  if (W < 10 || H < 10) { setTimeout(drawChart, 100); return; }
+  if (W < 10 || H < 10) {
+    // Not laid out. Retry ONLY while the canvas is actually on screen.
+    //
+    // This used to retry unconditionally. _pushWave() schedules drawChart on
+    // every price tick regardless of which tab is open, so with the market tab
+    // hidden every tick landed here and started its own 100ms self rescheduling
+    // chain, and none of them terminated until the chart became visible again.
+    // The chains accumulate for as long as the player is on another tab, and
+    // setTimeout keeps firing while the page is backgrounded even though the
+    // requestAnimationFrame that started them does not. On a phone, where the
+    // shell means the player is off Market most of the time, that is a battery
+    // drain with no visible symptom.
+    //
+    // offsetParent is null whenever an ancestor is display:none, which is
+    // exactly the tab-hidden case. When the canvas comes back, the
+    // ResizeObserver below redraws it, and the next tick redraws it again.
+    if (canvas.offsetParent !== null) setTimeout(drawChart, 100);
+    return;
+  }
 
   const MR = 64, MB = 18, MT = 24;
   const CW = W - MR, CH = H - MB - MT;

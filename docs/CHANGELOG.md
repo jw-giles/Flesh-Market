@@ -4,6 +4,54 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.1 (2026-07-30) - drawChart retry loop while hidden (CLIENT)
+
+Client only. Hard refresh. No restart needed. Found while verifying an open question from 1.3.0 rather than reported by a player, and it predates the mobile shell by a long way.
+
+`drawChart()` measured its own canvas and, if the result was under 10px in either axis, called `setTimeout(drawChart, 100)` and returned. The intent was to wait out a layout that had not happened yet. But a canvas inside a `display:none` tab also measures zero, and `_pushWave()` schedules `drawChart` through requestAnimationFrame on every price tick with no check on which tab is open. So with the market tab hidden, every tick arrived at that line and started its own 100ms self rescheduling chain, and not one of them terminated until the chart became visible again.
+
+The chains accumulate for as long as the player is on another tab. Worse, requestAnimationFrame stops firing when the page is backgrounded but setTimeout does not, so every chain already started keeps running with the phone screen off.
+
+This was always true on desktop. It matters more now, because the shell means a phone player is off Market by default and spends most of a session somewhere else.
+
+The retry now happens only when `canvas.offsetParent !== null`, which is false exactly when an ancestor is `display:none`. When the canvas comes back, the existing ResizeObserver redraws it and the next tick redraws it again.
+
+That ResizeObserver was the only thing covering the come-back case, which was the open question left at the end of 1.3.0: the chart canvas is sized in JS from its own clientWidth, so switching views changes the width it should be drawn at. Rather than depend on a single observer firing for a display change, `render()` in the shell now nudges `drawChart` on the next frame when Market or Heat becomes the visible view.
+
+Five new assertions in `tools/mobile-check.mjs`, 71 to 76. Regression tested by restoring the unguarded retry and removing the nudge, which fails three of them including the live one that counts redraws on entering Market.
+
+Changed files: client/assets/core.js, client/assets/mobile.js, client/version.json, tools/mobile-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.3.0 (2026-07-30) - Mobile shell (CLIENT)
+
+Client only. Hard refresh. No restart needed. Desktop layout is byte for byte unchanged; every rule added is scoped to `body.fm-mobile`, which only exists at 900px and under.
+
+The phone layout was three desktop panels stacked into one document scroll with a six button bar underneath. That is the source of the clutter, and of the formatting drift. `html` and `body` were released to `overflow:auto` and `.wrap` to `height:auto`, so every fixed and absolutely positioned child in the client was measuring itself against a viewport that no longer matched its container. Chart canvas, galaxy map, chat log, modals and the god panel all drift under that arrangement, and no amount of per element patching fixes it because the container is the thing that is wrong.
+
+The shell inverts it. `.wrap` is fixed and inset, and `.grid` is the only element in the client that scrolls. Above it sits a 46px top bar carrying portrait, name, cash and the End of Day clock, and below it a 56px nav with five destinations. A 34px context bar appears between them only on views that have segments.
+
+Five destinations. MARKET is the chart and the order ticket. BOARD is Companies, News and Heat, which puts the three read only market surfaces in one place instead of two panels and a top level tab. CHAT is the whole region with the input pinned above the nav, which it has never had; on a game whose social core is chat, a 280px box buried in a long scroll was the worst allocation on the page. WALLET is P&L, Wire and Ranks. MORE is a grid of the remaining twelve destinations, one tap deep.
+
+Casino opens on a lobby grid rather than an eleven item horizontal scroller. Galaxy fills the region and the map opts out of scroll gestures so panning does not fight the page.
+
+THE BUG UNDER THE OLD NAV. There are two independent tab systems in this client. `core.js` binds a click listener to `.tab` that does the real work: lazy loading dev-comms, fleshbook and tcg, calling `loadGuildDirectory`, `drawEquity` and `__devlogsSync`. `market-state.js` separately defines `window.showTab()`, which knows nine of the twelve tab ids and performs none of that. The 1.2.5 bottom nav called `showTab()`. Reaching P&L from a phone therefore never drew the equity line, and Bugs, Fleshbook and Corpo-Cards were not in the nav at all because routing to them through that function does nothing. The shell dispatches a real click on the `.tab` node, which runs both listeners, which is the path a desktop player triggers.
+
+A margin call must not be reachable only from one view. `#margin-call-banner` and `#dunce-banner` live inside the right panel, so hiding that panel to show a different view would bury them. Panels are therefore never set to `display:none`; they get `.fm-off`, which hides their children with those two ids excluded, and the banners are pinned under the top bar. This is checked against all five root views.
+
+Also removed: the `touchend` handler that called `preventDefault()` and then `e.target.click()` on every button. It double fired in some paths and killed any scroll that began on a button. `touch-action: manipulation` does the job in CSS.
+
+NO DOM IS MOVED. Every view is an existing panel or tab body shown in place. The drawer is `#fm-header-user` repositioned by CSS rather than relocated, so its listeners, ids and `data-i18n` attributes survive untouched. The top bar reads cash, name, portrait and the clock from the existing nodes on a one second mirror rather than duplicating their wiring.
+
+Twenty eight new i18n keys, en and zh. The More grid is built from a JS array, which is exactly the shape that silently stays English in Jade mode, so every label in it carries a key and the check suite verifies each one resolves to a Han string.
+
+`tools/mobile-check.mjs` is new: 71 assertions, most of them driving the real markup in jsdom. Both of the assertions that matter were regression tested by breaking the code and confirming they fail.
+
+Changed files: client/assets/mobile.css, client/assets/mobile.js, client/assets/core.js, client/version.json, tools/mobile-check.mjs (new), docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
 ## v1.2.5 (2026-07-26) - Hotfix: NEW PAGE did nothing on an empty book (CLIENT)
 
 Client only. Hard refresh. No restart needed.

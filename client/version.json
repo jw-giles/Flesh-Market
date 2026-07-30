@@ -1,7 +1,7 @@
 {
-  "version": "1.2.5",
-  "built": "2026-07-26T00:00:00Z",
+  "version": "1.3.1",
+  "built": "2026-07-30T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.2.5",
-  "notes": "Hotfix: NEW PAGE did nothing on an empty lore book. render() tested pages.length before it tested whether the editor was open, so on a fresh install, which is the only state where NEW PAGE is the sole usable button, it painted the empty-book message straight over the editor. CLIENT only, no restart needed."
+  "patch": "1.3.1",
+  "notes": "drawChart retried on a 100ms timer whenever its canvas measured under 10px, including the case where the market tab is simply hidden. _pushWave schedules drawChart on every price tick regardless of the open tab, so each tick started its own self rescheduling chain that never terminated. Guarded on offsetParent, and the mobile shell now nudges a redraw when Market becomes visible. CLIENT only, no restart needed, hard refresh required."
 }

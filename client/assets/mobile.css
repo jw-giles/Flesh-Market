@@ -1,6 +1,16 @@
 /* ═══════════════════════════════════════════════════════════════════════════════
- * mobile.css — FleshMarket Mobile Responsiveness
- * Progressive enhancement: desktop layout unchanged, mobile overrides below
+ * mobile.css - FleshMarket Mobile Shell
+ *
+ * v1.3.0 replaces the old "stack every panel into one document scroll" approach
+ * with an app shell: one fixed top bar, one optional context bar, ONE scrolling
+ * region, one fixed bottom nav. The page itself never scrolls.
+ *
+ * Everything below the tablet block is scoped to body.fm-mobile, which mobile.js
+ * adds only at <=900px. Desktop layout is untouched.
+ *
+ * The shell shows and hides EXISTING panels. It does not move them. The only
+ * new DOM is the four chrome pieces (top bar, context bar, nav, drawer scrim)
+ * plus the More grid and the casino lobby.
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
 /* ── Touch device: disable custom cursor PNGs ─────────────────────────────── */
@@ -9,8 +19,8 @@
   button:active, a:active, [onclick]:active { cursor: auto !important; }
 }
 
-/* ── Small desktop / tablet (≤1100px) ─────────────────────────────────────── */
-@media (max-width: 1100px) {
+/* ── Small desktop / tablet (<=1100px), unchanged from 1.2.5 ─────────────── */
+@media (max-width: 1100px) and (min-width: 901px) {
   .grid {
     grid-template-columns: minmax(220px,1fr) 2fr minmax(220px,1fr) !important;
     gap: 8px;
@@ -21,334 +31,404 @@
   .subtab { padding: 4px 10px; font-size: .78rem; }
 }
 
-/* ── Tablet portrait / large phone (≤900px) — 2-column then stack ─────────── */
-@media (max-width: 900px) {
-  html, body { overflow: auto; height: auto; }
-  .wrap {
-    height: auto !important;
-    min-height: 100vh;
-    min-height: 100dvh; /* dynamic viewport height — fixes Safari */
-    overflow: visible !important;
-    padding: 8px;
-  }
-  .grid {
-    grid-template-columns: 1fr !important;
-    grid-template-rows: auto !important;
-    overflow: visible !important;
-    gap: 8px;
-  }
-  .grid > .panel {
-    max-height: none !important;
-    overflow: visible !important;
-    display: flex;
-    flex-direction: column;
-  }
-  /* Left panel: tickers + news — collapsible on mobile */
-  .grid > .panel:first-child {
-    overflow: visible !important;
-    display: flex !important;
-    flex-direction: column;
-  }
-  .grid > .panel:first-child .list { max-height: 200px; overflow-y: auto; }
-  .grid > .panel:first-child .news { max-height: 150px; overflow-y: auto; }
+/* ═══════════════════════════════════════════════════════════════════════════
+ * SHELL
+ * ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Center panel: chart + trade */
-  #chart { height: 260px; }
-  #marketTab .row { flex-wrap: wrap; }
-  #marketTab .row .input { max-width: none !important; flex: 1 1 60px; min-width: 60px; }
-  #marketTab .row .btn { flex-shrink: 0; }
-  #limitPanel { font-size: .72rem; }
-  #limitPanel .input { max-width: none !important; flex: 1 1 60px; min-width: 60px; }
-
-  /* Right panel: chat */
-  #chatBox { height: 320px; }
-
-  /* Tabs: horizontal scroll if they overflow */
-  .tabs { flex-wrap: wrap; gap: 4px; }
-  .tab { font-size: .72rem; padding: 3px 6px; white-space: nowrap; }
-
-  /* Casino subtabs wrap */
-  #casinoTabs { gap: 4px; }
-  .subtab { font-size: .75rem; padding: 4px 8px; }
-
-  /* Galaxy map: prevent clipping */
-  #galacticTab { overflow: auto !important; min-height: 500px; }
-  #gMapPane { flex-direction: column !important; }
-  #gColonyDetail { width: 100% !important; border-left: none !important; border-top: 1px solid #1a1a2e; max-height: 300px; }
-  #galaxySVG { min-height: 400px; }
-
-  /* Guild: stack grid */
-  #guildTab { overflow: auto !important; max-height: none !important; }
-
-  /* Store: full width sub-panes */
-  #storeTab { overflow: auto !important; }
-
-  /* Leaderboard: compact */
-  #leaderboardCompact { padding-top: 4px; margin-top: 4px; }
-  #bottomRow { display: none; } /* hide bottom ticker strip on mobile — too wide */
-
-  /* Header: wrap controls */
-  .wrap > .row:first-child { flex-wrap: wrap; gap: 4px; }
-  #fm-header-user { flex-wrap: wrap; gap: 4px !important; }
-  #eod-timer-wrap { margin-left: auto; }
+body.fm-mobile {
+  --fm-top: 46px;
+  --fm-ctx: 0px;
+  --fm-nav: 56px;
+  font-size: 13.5px;
+  overflow: hidden;
+  height: 100%;
+  /* Replaces the old touchend preventDefault hack in mobile.js, which
+     double fired clicks and killed scrolls that started on a button. */
+  touch-action: manipulation;
 }
-
-/* ── Phone (≤640px) — single column, everything stacked ──────────────────── */
-@media (max-width: 640px) {
-  body { font-size: 13px; }
-  .wrap { padding: 4px; }
-
-  /* Header: stack vertically */
-  .wrap > .row:first-child {
-    flex-direction: column;
-    align-items: flex-start !important;
-    gap: 4px;
-  }
-  .wrap > .row:first-child > .row {
-    width: 100%;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-  #eod-timer-wrap { margin-left: 0; }
-  h1 { font-size: 14px !important; letter-spacing: .08em !important; }
-
-  /* Panels: minimal padding */
-  .panel { padding: 6px; border-radius: 6px; }
-  h2 { font-size: 13px; margin: .1rem 0 .4rem 0; }
-
-  /* Tickers: shorter list */
-  .grid > .panel:first-child .list { max-height: 160px; }
-  .grid > .panel:first-child .news { max-height: 120px; }
-  .news-line { font-size: 11px; padding: 2px 4px; }
-
-  /* Chart: smaller */
-  #chart { height: 200px; }
-
-  /* Trade controls: stack */
-  #marketTab > .row { flex-direction: row; flex-wrap: wrap; }
-  #marketTab > .row .input { font-size: .75rem; }
-  #shortBtn { font-size: .72rem; padding: 4px 6px; }
-
-  /* Limit orders: tighter */
-  #limitPanel > div { flex-direction: row; flex-wrap: wrap; }
-
-  /* Alert panel */
-  #alertPanel > div { flex-direction: row; flex-wrap: wrap; }
-
-  /* Chat: shorter */
-  #chatBox { height: 280px; }
-  #chatTabs { flex-wrap: wrap; }
-  .chat-tab { font-size: .65rem; padding: 4px 5px; letter-spacing: .04em; }
-  .chat-channel .cm { font-size: .75rem; }
-  #chatInput { font-size: .75rem; }
-  #chatSend { padding: 3px 8px; font-size: .75rem; }
-  #chatInputRow { gap: 4px; padding: 4px; }
-  /* Hide font size buttons on phone — too small to be useful */
-  #chatFontDec, #chatFontInc { display: none !important; }
-
-  /* Transfer: compact */
-  #transferSection .row { flex-wrap: wrap; }
-  #transferSection .input { max-width: none !important; flex: 1 1 80px; }
-
-  /* Tabs: smaller */
-  .tabs { gap: 3px; margin-bottom: 4px; }
-  .tab { font-size: .65rem; padding: 3px 5px; border-radius: 6px; }
-
-  /* Casino: tighter */
-  .subtab { font-size: .68rem; padding: 3px 6px; }
-  #casinoContent { min-height: 360px; }
-
-  /* PnL tab */
-  #pnlTab > div:first-child { flex-direction: column; }
-  #pnl-donut { width: 140px !important; height: 140px !important; flex: 0 0 140px !important; }
-
-  /* Metrics grid: 2 cols on phone */
-  #metricsGrid { grid-template-columns: repeat(2, 1fr) !important; }
-  .metric-card { padding: 4px !important; }
-  .metric-card div:last-child { font-size: .85rem !important; }
-
-  /* Company detail: stack */
-  #companyDetail > div:first-child { flex-direction: column; }
-
-  /* Galaxy */
-  #galacticTab { min-height: 400px; }
-  #galaxySubTabs { flex-wrap: wrap; }
-  .galaxy-stab { font-size: .62rem !important; padding: 5px 10px !important; }
-  #gColonyDetail { max-height: 250px; }
-  #gMapPane { min-height: 350px; }
-  #galaxySVG { min-height: 300px; }
-  /* Galaxy sub-panes */
-  #gFactionsPane, #gShippingPane, #gContractsPane { padding: 10px 8px !important; }
-
-  /* Store tab */
-  .store-stab { font-size: .62rem !important; padding: 5px 8px !important; }
-
-  /* Guild tab */
-  #guild-detail > div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
-
-  /* Sell/Short modals: full width */
-  #sell-modal .card, #short-modal .card {
-    width: 95vw !important;
-    max-width: 95vw !important;
-    margin: 10px auto;
-  }
-
-  /* Player profile popup: full width bottom sheet style */
-  #playerProfilePopup {
-    width: 100% !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    top: auto !important;
-    border-radius: 10px 10px 0 0 !important;
-    max-height: 60vh;
-    overflow-y: auto;
-  }
-
-  /* God panel: full width */
-  #godPanel {
-    left: 4px !important;
-    right: 4px !important;
-    top: 40px !important;
-    min-width: auto !important;
-    max-width: none !important;
-    width: auto !important;
-  }
-  .god-tab { font-size: .6rem !important; padding: 4px 6px !important; }
-  .god-input { font-size: .72rem !important; }
-
-  /* Mod panel: center on screen */
-  #modPanel {
-    left: 10px !important;
-    right: 10px !important;
-    min-width: auto !important;
-    width: auto !important;
-  }
-
-  /* Bugs tab */
-  #bugsTab > div:last-child { padding: 12px !important; }
-
-  /* Hide Patreon button text, keep icon */
-  #fm-header-user a[href*="patreon"] { font-size: .72rem !important; padding: 3px 8px !important; }
-
-  /* Watchlist bar */
-  #watchlist-bar { margin-bottom: 4px; }
-  #watchlist-bar button { font-size: .65rem !important; padding: 2px 8px !important; }
-
-  /* Tutorial/logout buttons smaller */
-  #fm-header-user button { font-size: .68rem !important; padding: 2px 6px !important; }
-
-  /* Sound toggle */
-  #soundToggle { font-size: .7rem; padding: 3px 6px; bottom: 8px; left: 8px; }
-
-  /* Dunce banner */
-  #dunce-banner { padding: 8px 10px; }
-
-  /* Toast area: full width */
-  #toastArea { left: 4px !important; right: 4px !important; max-width: none !important; }
-}
-
-/* ── Tiny phone (≤400px) — extreme compaction ────────────────────────────── */
-@media (max-width: 400px) {
-  body { font-size: 12px; }
-  h1 { font-size: 12px !important; }
-  .panel { padding: 4px; }
-  #chart { height: 180px; }
-  #chatBox { height: 240px; }
-  .grid > .panel:first-child .list { max-height: 120px; }
-  .grid > .panel:first-child .news { max-height: 100px; }
-  .tab { font-size: .6rem; padding: 2px 4px; }
-  .chat-tab { font-size: .58rem; padding: 3px 4px; }
-  #metricsGrid { grid-template-columns: 1fr 1fr !important; gap: 4px !important; }
-  #pnl-donut { width: 120px !important; height: 120px !important; flex: 0 0 120px !important; }
-
-  /* Hide less critical header elements */
-  #fm-header-user button[onclick*="showTutorial"] { display: none !important; }
-}
-
-/* ── Landscape phone (short height) ───────────────────────────────────────── */
-@media (max-height: 500px) and (max-width: 900px) {
-  #chart { height: 150px; }
-  #chatBox { height: 200px; }
-  .grid > .panel:first-child .list { max-height: 100px; }
-  .grid > .panel:first-child .news { max-height: 80px; }
-}
-
-/* ── Mobile collapsible sections (toggled by mobile.js) ───────────────────── */
-.fm-collapse-head {
-  display: none; /* only show on mobile */
-  cursor: pointer;
-  padding: 6px 8px;
-  background: #0a0804;
-  border: 1px solid #0a3315;
-  border-radius: 6px;
-  margin-bottom: 4px;
-  font-size: .72rem;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: #7fc090;
-  user-select: none;
-}
-.fm-collapse-head::after {
-  content: ' ▼';
-  font-size: .6rem;
-  opacity: .5;
-}
-.fm-collapse-head.collapsed::after { content: ' ▶'; }
-
-@media (max-width: 900px) {
-  .fm-collapse-head { display: flex; align-items: center; justify-content: space-between; }
-  .fm-collapse-body.collapsed { display: none !important; }
-}
-
-/* ── Mobile bottom nav bar ────────────────────────────────────────────────── */
-#mobileNav {
-  display: none;
+body.fm-mobile .wrap {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 9990;
-  background: #0a0804;
-  border-top: 1px solid #0a3315;
+  inset: 0;
+  height: 100dvh;
+  max-width: none;
+  margin: 0;
   padding: 0;
+  overflow: hidden;
+  display: block;
+}
+
+/* The desktop header row and the bottom ticker strip are replaced by chrome. */
+body.fm-mobile .wrap > .row:first-child { display: none !important; }
+body.fm-mobile #bottomRow { display: none !important; }
+
+/* THE scroll region. Everything the player reads lives in here. */
+body.fm-mobile .grid {
+  position: absolute;
+  top: calc(var(--fm-top) + var(--fm-ctx));
+  bottom: var(--fm-nav);
+  left: 0; right: 0;
+  display: block !important;
+  grid-template-columns: none !important;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 8px 8px calc(14px + env(safe-area-inset-bottom, 0px));
+  gap: 0;
+}
+/* Views that own their own height and must not scroll the region. */
+body.fm-mobile[data-fmfill="1"] .grid { overflow: hidden; padding: 0; }
+
+body.fm-mobile .grid > .panel {
+  max-height: none !important;
+  overflow: visible !important;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+body.fm-mobile .grid > .panel > h2:empty { display: none; }
+body.fm-mobile .list { max-height: none !important; overflow: visible !important; }
+body.fm-mobile .news { max-height: none !important; overflow: visible !important; }
+
+/* The desktop tab strip is replaced by the bottom nav and the More grid. */
+body.fm-mobile #fmCenter > .tabs { display: none !important; }
+
+/* ── Top bar ──────────────────────────────────────────────────────────────── */
+#fmTop {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--fm-top);
+  z-index: 9992;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  background: color-mix(in srgb, var(--body-bg) 93%, transparent);
+  border-bottom: 1px solid var(--hr);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+#fmTop .fmt-back {
+  display: none;
+  background: none; border: 0;
+  color: var(--amber); font: inherit; font-size: 17px;
+  padding: 4px 6px; cursor: pointer;
+}
+body.fm-mobile[data-fmdepth="1"] #fmTop .fmt-back { display: block; }
+body.fm-mobile[data-fmdepth="1"] #fmTop .fmt-portrait { display: none; }
+#fmTop .fmt-portrait {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid var(--panel-edge);
+  background: var(--surface-2) center/cover no-repeat;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--green); flex: 0 0 auto; cursor: pointer;
+}
+#fmTop .fmt-id { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; flex: 1 1 auto; }
+#fmTop .fmt-name {
+  font-size: 11px; color: var(--green); opacity: .85;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  letter-spacing: .04em;
+}
+#fmTop .fmt-cash { font-size: 13px; color: var(--gold); font-weight: 700; }
+#fmTop .fmt-eod { text-align: right; line-height: 1.15; flex: 0 0 auto; }
+#fmTop .fmt-eod-l { font-size: 7.5px; letter-spacing: .14em; color: var(--muted); opacity: .6; }
+#fmTop .fmt-eod-v {
+  font-size: 13px; color: #00ff88; font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 6px rgba(0,255,136,.5);
+}
+#fmTop .fmt-eod-v.urgent { color: #ff4444; text-shadow: 0 0 6px rgba(255,68,68,.6); }
+#fmTop .fmt-menu {
+  background: none; border: 1px solid var(--hr); border-radius: 6px;
+  color: var(--muted); font: inherit; font-size: 15px;
+  padding: 3px 9px; cursor: pointer; flex: 0 0 auto;
+}
+
+/* ── Context bar ──────────────────────────────────────────────────────────── */
+#fmCtx {
+  position: fixed;
+  top: var(--fm-top); left: 0; right: 0;
+  height: 34px;
+  z-index: 9991;
+  display: none;
+  align-items: stretch;
+  overflow-x: auto; overflow-y: hidden;
+  background: color-mix(in srgb, var(--body-bg) 96%, transparent);
+  border-bottom: 1px solid var(--hr);
+  scrollbar-width: none;
+}
+#fmCtx::-webkit-scrollbar { display: none; }
+body.fm-mobile[data-fmctx="1"] #fmCtx { display: flex; }
+#fmCtx .fm-seg {
+  flex: 0 0 auto;
+  background: none; border: 0; border-bottom: 2px solid transparent;
+  color: #4c6b57; font: inherit; font-size: 10.5px;
+  letter-spacing: .12em; text-transform: uppercase;
+  padding: 0 15px; cursor: pointer; white-space: nowrap;
+}
+#fmCtx .fm-seg.on { color: var(--amber); border-bottom-color: var(--amber); }
+
+/* Native subtab strips (chat channels, galaxy, store, casino, guild, bugs)
+   stick to the top of the scroll region instead of scrolling away. */
+body.fm-mobile #chatTabs,
+body.fm-mobile #galaxySubTabs,
+body.fm-mobile #casinoTabs,
+body.fm-mobile .store-stabs {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--body-bg);
+  flex-wrap: nowrap !important;
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none;
+}
+body.fm-mobile #chatTabs::-webkit-scrollbar,
+body.fm-mobile #galaxySubTabs::-webkit-scrollbar,
+body.fm-mobile #casinoTabs::-webkit-scrollbar { display: none; }
+body.fm-mobile .chat-tab,
+body.fm-mobile .galaxy-stab,
+body.fm-mobile .store-stab,
+body.fm-mobile .subtab { flex: 0 0 auto; white-space: nowrap; min-height: 32px; }
+body.fm-mobile #contacts-chat-tab { margin-left: 8px !important; }
+
+/* ── Bottom nav ───────────────────────────────────────────────────────────── */
+#fmNav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: calc(var(--fm-nav) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  z-index: 9992;
+  display: flex;
+  background: color-mix(in srgb, var(--body-bg) 97%, transparent);
+  border-top: 1px solid var(--hr);
   box-shadow: 0 -4px 16px rgba(0,0,0,.6);
 }
-#mobileNav .mnav-items {
-  display: flex;
-  justify-content: space-around;
-  align-items: stretch;
-}
-#mobileNav .mnav-btn {
+#fmNav button {
   flex: 1;
-  text-align: center;
-  padding: 8px 2px 6px;
-  font-size: .58rem;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: #3a5f3a;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  line-height: 1.2;
-  border-top: 2px solid transparent;
-  transition: color .15s, border-color .15s;
+  background: none; border: 0; border-top: 2px solid transparent;
+  color: #3a5f43; font: inherit; font-size: 8.5px;
+  letter-spacing: .06em; text-transform: uppercase;
+  cursor: pointer; padding: 6px 0 4px;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; position: relative;
 }
-#mobileNav .mnav-btn.active {
-  color: #46ff7d;
-  border-top-color: #46ff7d;
-}
-#mobileNav .mnav-btn .mnav-icon {
-  display: block;
-  font-size: 1rem;
-  margin-bottom: 1px;
+#fmNav button.on { color: var(--green); border-top-color: var(--green); }
+#fmNav .fmn-ic { font-size: 17px; line-height: 1; text-shadow: none; }
+#fmNav .fmn-badge {
+  position: absolute; top: 4px; right: calc(50% - 20px);
+  min-width: 15px; padding: 0 3px; border-radius: 8px;
+  background: var(--bad); color: #000;
+  font-size: 8.5px; font-weight: 700; text-shadow: none;
 }
 
-@media (max-width: 900px) {
-  #mobileNav { display: block; }
-  /* Pad bottom of page so content doesn't hide behind nav */
-  .wrap { padding-bottom: 60px !important; }
-  /* Hide desktop bottom row */
-  #bottomRow { display: none !important; }
+/* ── Drawer. This IS #fm-header-user, repositioned. No DOM move. ──────────── */
+body.fm-mobile #fm-header-user {
+  position: fixed !important;
+  top: 0; right: 0; bottom: 0;
+  width: 238px;
+  z-index: 9995;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 0 !important;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border-left: 1px solid var(--panel-edge);
+  transform: translateX(100%);
+  transition: transform .2s ease;
+  overflow-y: auto;
+  font-size: .85rem;
 }
+body.fm-mobile.fm-drawer #fm-header-user { transform: translateX(0); }
+body.fm-mobile #fm-header-user > * {
+  width: 100% !important;
+  flex: 0 0 auto !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  border-radius: 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--hr) !important;
+  padding: 11px 4px !important;
+  margin: 0 !important;
+  font-size: 12px !important;
+  animation: none !important;
+  box-shadow: none !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px;
+}
+body.fm-mobile #fm-header-user > style { display: none !important; }
+body.fm-mobile #fm-header-user > span:empty { display: none !important; }
+body.fm-mobile #fm-header-portrait {
+  width: 100% !important; height: auto !important;
+  border-radius: 0 !important;
+}
+body.fm-mobile #fmScrim {
+  position: fixed; inset: 0; z-index: 9994;
+  background: rgba(0,0,0,.65);
+  display: none;
+}
+body.fm-mobile.fm-drawer #fmScrim { display: block; }
+
+/* ── More grid ────────────────────────────────────────────────────────────── */
+#fmMore { display: none; }
+body.fm-mobile[data-fmv="more"] #fmMore { display: block; }
+#fmMore .fm-sect {
+  font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--muted); opacity: .5; margin: 14px 0 7px;
+}
+#fmMore .fm-sect:first-child { margin-top: 2px; }
+.fm-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.fm-tile {
+  border: 1px solid var(--panel-edge); border-radius: 8px;
+  background: var(--panel-bg); box-shadow: var(--panel-shadow);
+  aspect-ratio: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 5px; cursor: pointer; position: relative; padding: 4px;
+}
+.fm-tile .ic { font-size: 22px; text-shadow: none; line-height: 1; }
+.fm-tile .lb {
+  font-size: 9px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); text-align: center; line-height: 1.25;
+}
+.fm-tile .bg {
+  position: absolute; top: 5px; right: 6px;
+  min-width: 15px; padding: 0 3px; border-radius: 8px;
+  background: #a78bfa; color: #000;
+  font-size: 8.5px; font-weight: 700; text-shadow: none;
+}
+
+/* ── Casino lobby ─────────────────────────────────────────────────────────── */
+#fmCasinoLobby { display: none; padding: 2px 0 8px; }
+body.fm-mobile[data-fmtab="casino"][data-fmgame="0"] #fmCasinoLobby { display: block; }
+body.fm-mobile[data-fmtab="casino"][data-fmgame="0"] #casinoTabs,
+body.fm-mobile[data-fmtab="casino"][data-fmgame="0"] #casinoContent { display: none !important; }
+body.fm-mobile[data-fmtab="casino"][data-fmgame="1"] #casinoTabs { display: none !important; }
+
+/* ── Chat view: chatBox owns the whole region, input pinned above the nav ─── */
+body.fm-mobile[data-fmv="chat"] #chatBox {
+  position: absolute;
+  inset: 0;
+  height: auto !important;
+  min-height: 0 !important;
+  border: 0; border-radius: 0;
+}
+body.fm-mobile[data-fmv="chat"] .chat-channel.active { display: flex; flex-direction: column; }
+body.fm-mobile .chat-channel { font-size: .8rem; }
+body.fm-mobile #chatInputRow { padding: 7px; gap: 6px; }
+body.fm-mobile #chatInput { font-size: 16px; }  /* 16px stops iOS zoom on focus */
+body.fm-mobile #chatFontDec, body.fm-mobile #chatFontInc { display: none !important; }
+body.fm-mobile #globalRoomPager .roomDots,
+body.fm-mobile .roomDots { max-width: none !important; }
+
+/* ── Galaxy: fills the region, map owns its own gestures ──────────────────── */
+body.fm-mobile[data-fmtab="galactic"] #galacticTab {
+  position: absolute; inset: 0;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  flex-direction: column !important;
+}
+body.fm-mobile #gMapPane { flex-direction: column !important; flex: 1 1 auto; min-height: 0; }
+body.fm-mobile #galaxySVG { touch-action: none; flex: 1 1 auto; min-height: 220px; }
+body.fm-mobile #gColonyDetail {
+  width: 100% !important;
+  border-left: none !important;
+  border-top: 1px solid var(--panel-edge);
+  max-height: 42%;
+  overflow-y: auto;
+}
+
+/* ── Mining: the fullscreen host is z-index 9999, above the chrome. ───────── */
+body.fm-mobile[data-fmtab="mining"] #miningTab { min-height: 0; }
+
+/* ── Banners float above every view so a margin call is never buried ──────── */
+body.fm-mobile #margin-call-banner,
+body.fm-mobile #dunce-banner {
+  position: fixed;
+  top: calc(var(--fm-top) + 4px);
+  left: 8px; right: 8px;
+  z-index: 9993;
+  margin-bottom: 0 !important;
+}
+
+/* ── Touch targets and typography ─────────────────────────────────────────── */
+body.fm-mobile .btn, body.fm-mobile button { min-height: 34px; }
+body.fm-mobile .input { padding: 9px 10px; font-size: 16px; }
+body.fm-mobile .ticker { min-height: 40px; padding: 7px 6px; align-items: center; }
+body.fm-mobile .news-line { min-height: 34px; padding: 6px 6px; }
+body.fm-mobile .wl-star { font-size: 1.15rem !important; padding: 0 8px !important; }
+body.fm-mobile h2 { font-size: 13px; margin: .1rem 0 .4rem 0; }
+body.fm-mobile #chart { height: 190px; }
+body.fm-mobile #marketTab .row { flex-wrap: wrap; }
+body.fm-mobile #marketTab .row .input { max-width: none !important; flex: 1 1 70px; min-width: 70px; }
+body.fm-mobile #limitPanel .input { max-width: none !important; flex: 1 1 70px; min-width: 70px; }
+body.fm-mobile #metricsGrid { grid-template-columns: repeat(2, 1fr) !important; }
+body.fm-mobile #pnlTab > div:first-child { flex-direction: column; }
+body.fm-mobile #pnl-donut { width: 150px !important; height: 150px !important; flex: 0 0 150px !important; }
+body.fm-mobile #companyDetail > div:first-child { flex-direction: column; }
+body.fm-mobile #guild-detail > div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+body.fm-mobile #transferSection .row { flex-wrap: wrap; }
+body.fm-mobile #transferSection .input { max-width: none !important; flex: 1 1 90px; }
+body.fm-mobile #sell-modal .card, body.fm-mobile #short-modal .card {
+  width: 95vw !important; max-width: 95vw !important; margin: 10px auto;
+}
+body.fm-mobile #playerProfilePopup {
+  width: 100% !important; left: 0 !important; right: 0 !important;
+  bottom: var(--fm-nav) !important; top: auto !important;
+  border-radius: 10px 10px 0 0 !important;
+  max-height: 60vh; overflow-y: auto;
+}
+body.fm-mobile #godPanel {
+  left: 4px !important; right: 4px !important; top: calc(var(--fm-top) + 4px) !important;
+  min-width: auto !important; max-width: none !important; width: auto !important;
+}
+body.fm-mobile #modPanel {
+  left: 10px !important; right: 10px !important;
+  min-width: auto !important; width: auto !important;
+}
+body.fm-mobile #toastArea {
+  left: 8px !important; right: 8px !important; max-width: none !important;
+  bottom: calc(var(--fm-nav) + 8px) !important;
+}
+body.fm-mobile #soundToggle {
+  bottom: calc(var(--fm-nav) + 8px); left: 8px;
+  font-size: .7rem; padding: 4px 8px; z-index: 9990;
+}
+
+/* ── Tiny phone ───────────────────────────────────────────────────────────── */
+@media (max-width: 380px) {
+  body.fm-mobile { font-size: 12.5px; }
+  body.fm-mobile #chart { height: 165px; }
+  #fmNav button { font-size: 8px; }
+  #fmNav .fmn-ic { font-size: 16px; }
+  .fm-tile .lb { font-size: 8.5px; }
+}
+
+/* ── Landscape phone ──────────────────────────────────────────────────────── */
+@media (max-height: 500px) and (max-width: 900px) {
+  body.fm-mobile { --fm-nav: 46px; --fm-top: 40px; }
+  body.fm-mobile #chart { height: 140px; }
+  #fmNav .fmn-ic { font-size: 14px; }
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  body.fm-mobile #fm-header-user { transition: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * VIEW SWITCHING PRIMITIVES (driven by mobile.js)
+ *
+ * .fm-off hides a panel's contents WITHOUT hiding the panel, so the margin
+ * call and dunce banners stay in the layout and keep their fixed position on
+ * every view. Hiding #rightPanel outright would bury a margin call under
+ * whatever tab the player happened to be on, which is a real loss of money.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+body.fm-mobile .fm-off > *:not(#margin-call-banner):not(#dunce-banner) {
+  display: none !important;
+}
+body.fm-mobile [data-fmgrp].fm-hide { display: none !important; }
+
+/* Soft keyboard open: drop the nav so the chat input is not covered. */
+body.fm-mobile.fm-kbd { --fm-nav: 0px; }
+body.fm-mobile.fm-kbd #fmNav { display: none; }
