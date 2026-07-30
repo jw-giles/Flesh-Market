@@ -32,6 +32,7 @@ const mobCss  = fs.readFileSync(ROOT + '/client/assets/mobile.css', 'utf8');
 const coreJs  = fs.readFileSync(ROOT + '/client/assets/core.js', 'utf8');
 const toastCss= fs.readFileSync(ROOT + '/client/assets/toast.css', 'utf8');
 const soundJs = fs.readFileSync(ROOT + '/client/assets/sound.js', 'utf8');
+const cityJs  = fs.readFileSync(ROOT + '/client/assets/city.js', 'utf8');
 const stateJs = fs.readFileSync(ROOT + '/client/assets/market-state.js', 'utf8');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -101,6 +102,68 @@ ok('the grid is the only scroll region',
 ok('the drawer is #fm-header-user repositioned, not a duplicate menu',
   /body\.fm-mobile #fm-header-user\s*\{[\s\S]{0,300}?position:\s*fixed/.test(mobCss) &&
   !/createElement\('div'\)[\s\S]{0,200}fmDrawerMenu/.test(mobJs));
+
+// ── Galaxy > Cities ─────────────────────────────────────────────────────────
+// The fix rests on two facts about code the shell does not own. If either
+// changes, the !important overrides below become stale and this says so.
+const citiesPane = html.match(/id="gCitiesPane" style="([^"]*)"/);
+ok('#gCitiesPane is still the one galaxy pane that does not scroll',
+  !!citiesPane && /overflow:\s*hidden/.test(citiesPane[1]),
+  citiesPane ? citiesPane[1].slice(0, 60) : 'pane not found');
+const otherPanes = [...html.matchAll(/id="g(Factions|Shipping|Markets|Contracts)Pane" style="([^"]*)"/g)];
+ok('every other galaxy pane scrolls itself and needs no override',
+  otherPanes.length === 4 && otherPanes.every(m => /overflow-y:\s*auto/.test(m[2])),
+  otherPanes.length + ' panes matched');
+ok('city.js still collapses .cywrap to one column under 1100px',
+  /@media\(max-width:1100px\)\{SCOPE \.cywrap,SCOPE \.cywrap\.railopen\{grid-template-columns:minmax\(0,1fr\)\}/.test(cityJs));
+ok('city.js still height-caps .cywrap, which is what clipped the stack',
+  /SCOPE \.cywrap\{[^}]*height:calc\(100% - 42px\)/.test(cityJs));
+
+ok('mobile releases the cities pane to scroll',
+  /#gCitiesPane\s*\{[\s\S]{0,120}?overflow-y:\s*auto\s*!important/.test(mobCss));
+ok('mobile drops the cities height cap',
+  /\.fmcity \.cywrap[\s\S]{0,200}?height:\s*auto\s*!important/.test(mobCss));
+ok('mobile releases the nested side-panel scroller',
+  /\.fmcity \.cyside\s*\{[\s\S]{0,160}?overflow:\s*visible\s*!important/.test(mobCss));
+ok('the district map keeps its 1180x720 ratio',
+  /\.fmcity \.cvwrap\s*\{[\s\S]{0,160}?aspect-ratio:\s*1180\s*\/\s*720/.test(mobCss));
+ok('the district canvas opts out of scroll gestures',
+  /#cityCv\s*\{[\s\S]{0,80}?touch-action:\s*none/.test(mobCss));
+ok('the colony rail stays bounded so the map is not pushed offscreen',
+  /\.cywrap\.railopen \.cyrail\s*\{[\s\S]{0,120}?max-height:\s*140px/.test(mobCss));
+
+// ── Panel audit fixes (v1.3.4) ──────────────────────────────────────────────
+ok('non-fill tab bodies are auto height, closing the Cities class structurally',
+  /\[data-fmfill="0"\] #fmCenter > \[id\$="Tab"\]\s*\{[\s\S]{0,200}?overflow:\s*visible\s*!important/.test(mobCss));
+ok('the sudoku board is released from its 369px hard width',
+  /#sdk-board\s*\{[\s\S]{0,80}?width:\s*100%\s*!important/.test(mobCss));
+ok('casino content can scroll sideways so no game is unreachable',
+  /#casinoContent\s*\{[\s\S]{0,60}?overflow-x:\s*auto/.test(mobCss));
+ok('the lore book stacks instead of splitting into a 270px sidebar',
+  /#loreInner\s*\{[\s\S]{0,60}?flex-direction:\s*column/.test(mobCss) &&
+  /#loreLeft\s*\{[\s\S]{0,120}?width:\s*100%\s*!important/.test(mobCss));
+ok('sell and short modal cards drop their 420px min-width',
+  /#sell-modal \.card,[\s\S]{0,80}?#short-modal \.card\s*\{\s*min-width:\s*0\s*!important/.test(mobCss));
+ok('the login card drops its 340px min-width',
+  /#fm-auth-card\s*\{\s*min-width:\s*0\s*!important/.test(mobCss));
+ok('the god button is lifted clear of the nav',
+  /#godModeBtn\s*\{[\s\S]{0,120}?bottom:\s*calc\(var\(--fm-nav\)/.test(mobCss));
+
+// These guard the upstream facts each override depends on. If a file is fixed
+// properly later, the override here is stale and should go, not linger.
+const sellCss = fs.readFileSync(ROOT + '/client/assets/sell-modal.css', 'utf8');
+const shortCss = fs.readFileSync(ROOT + '/client/assets/short-modal.css', 'utf8');
+const authJs = fs.readFileSync(ROOT + '/client/assets/fm-auth.js', 'utf8');
+const sdkCss = fs.readFileSync(ROOT + '/client/assets/casino-sudoku.css', 'utf8');
+const loreCss = fs.readFileSync(ROOT + '/client/assets/lore-book.css', 'utf8');
+ok('sell/short cards still declare the 420px min-width being overridden',
+  /min-width:\s*420px/.test(sellCss) && /min-width:\s*420px/.test(shortCss));
+ok('the login card still declares the 340px min-width being overridden',
+  /min-width:\s*340px/.test(authJs));
+ok('#sdk-board still declares the 369px hard width being overridden',
+  /#sdk-board\{[^}]*[;{]width:369px/.test(sdkCss));
+ok('#loreLeft still declares the 270px basis being overridden',
+  /#loreLeft\s*\{[^}]*width:\s*270px/.test(loreCss));
 
 ok('galaxy map opts out of scroll gestures',
   /#galaxySVG\s*\{[\s\S]{0,120}?touch-action:\s*none/.test(mobCss));

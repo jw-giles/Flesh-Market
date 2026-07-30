@@ -1,7 +1,7 @@
 {
-  "version": "1.3.2",
+  "version": "1.3.4",
   "built": "2026-07-30T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.3.2",
-  "notes": "Sound toggle hidden. It floated over the corner of every screen and its only function was turning on a feature that defaults to off. One CSS rule, no code removed: markup, toggleSound, playSound and every call site are intact and window.toggleSound() still works from the console. Delete the rule in toast.css to bring it back. CLIENT only, no restart needed, hard refresh required."
+  "patch": "1.3.4",
+  "notes": "Full mobile panel audit via the new tools/mobile-audit.mjs. Worst find: the sell and short modal cards kept a 420px min-width, which beats the max-width the 1.3.0 shell set, so the confirm button sat off the right edge of a phone. Also fixed the 340px login card, the 369px sudoku board, the 270px lore sidebar, and the god button covering the nav. The Cities class of bug is now closed structurally rather than panel by panel. CLIENT only, no restart needed, hard refresh required."
 }

@@ -4,6 +4,50 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.4 (2026-07-30) - Mobile panel audit (CLIENT)
+
+Client only. Hard refresh. No restart needed. CSS only plus one new tool. No change to any panel's own code.
+
+Cities was not a one-off, it was a class, so this pass audited every panel rather than waiting for the next report. `tools/mobile-audit.mjs` is new: it reads inline styles from index.html, every client stylesheet, and the CSS that modules inject as strings, and reports seven hazard classes plus tab reachability. It is static and exits 0. It reports suspects, not verdicts, because there is no layout engine here to measure a rendered box.
+
+WORST FIND, and it was mine. `#sell-modal .card` and `#short-modal .card` declare `min-width:420px`. The 1.3.0 shell set `width:95vw` and `max-width:95vw` on them and did nothing at all, because min-width beats max-width in the cascade. The card stayed 420px on a 360px screen with the confirm button off the right edge, and the page cannot scroll sideways. Selling and covering a short are core actions and they were unreachable from a phone for four patches. Now `min-width:0`.
+
+The same trap on `#fm-auth-card`, which declares `min-width:340px` and overflows a 320px device. That is the login screen, the first thing anyone sees.
+
+THE CITIES CLASS IS NOW CLOSED STRUCTURALLY. Four tab bodies (bugs, fleshbook, galactic, mining) are shown as flex by core.js and carry `flex:1; min-height:0; overflow:hidden`. That pattern needs an ancestor to hand down a definite height, which inside the shell happens only in fill mode, and fill mode is galactic and chat. So fleshbook and bugs are almost certainly fine today. "Almost certainly" is what Cities was before it wasn't, and the invariant is invisible: the bug arms itself the moment a surface is added to fill mode. A non-fill tab body is now declared auto height in CSS, so the class cannot come back panel by panel.
+
+Other fixes: `#sdk-board` released from `width:369px` (its grid is `repeat(9,1fr)` so it scales cleanly); `#casinoContent` gets `overflow-x:auto` as a net so no game is unreachable even where it is still ugly; the lore book stacks instead of splitting, since `#loreLeft` was taking 270px of a 300px book; `#godModeBtn` lifted clear of the nav, where its z-index 9998 was sitting on the More slot.
+
+THREE THINGS THE AUDIT GOT WRONG FIRST, all recorded in the tool: it reported `#pnl-root .row` as a live overflow when that selector exists only in pnl-simple.css and nothing renders it; it reported five casino games as hard pinned because `/width:\d+px/` also matches `max-width:520px`, when only the sudoku board is actually pinned; and it used a 340px phone floor, which is why `#fm-auth-card{min-width:340px}` slipped past for not being greater than 340. The floor is 320. All three are fixed and commented, because a hazard report full of ghosts gets skimmed.
+
+`tools/mobile-check.mjs` 94 to 105. Four of the new assertions guard the upstream declarations each override depends on, so if a file is ever fixed properly the stale override is flagged rather than left to fight the new code. Regression tested by deleting the audit block, which fails seven.
+
+Changed files: client/assets/mobile.css, client/version.json, tools/mobile-audit.mjs (new), tools/mobile-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
+## v1.3.3 (2026-07-30) - Galaxy > Cities on mobile (CLIENT)
+
+Client only. Hard refresh. No restart needed. CSS only, scoped to `body.fm-mobile`. No change to city.js, index.html or any city logic.
+
+Cities is the only galaxy pane that does not scroll. The other four (Factions, Smuggling, Markets, Contracts) are `overflow-y:auto; flex:1; min-height:0` and survive the shell's fill mode without help. `#gCitiesPane` is `overflow:hidden`, `#citiesTabInner` is `height:100%`, and city.js sizes `.cywrap` at `height:calc(100% - 42px)`. On desktop that is correct: Cities is a fixed height three column layout, rail and map and side, each scrolling itself.
+
+At `max-width:1100px` city.js collapses `.cywrap` to a single column, so those three stack vertically. The height cap and the `overflow:hidden` do not collapse with it. Everything below the district map is clipped and unreachable, and because the overflow is hidden rather than auto there is no scrollbar to say anything is missing.
+
+This is not shell specific. A 1000px desktop window reproduces it. The shell only guarantees it, because a phone is always under the breakpoint.
+
+On mobile the pane now scrolls as one column, `.cywrap` loses the height cap, and the two inner scrollers on `.cyside` and the colony rail are released, because a nested scroll region inside a page scroll cannot be driven with a thumb. The colony rail is the one thing left bounded, at 140px, or it pushes the map off the first screen entirely.
+
+The district map needed its own handling. `#cityCv` is 1180x720 intrinsic and stretched by `canvas{width:100%;height:100%}`. Once `.cywrap` is no longer height constrained, `.cymid` has no definite height, so `.cvwrap{flex:1}` collapses to its 220px minimum and the districts squash. It now carries `aspect-ratio:1180/720` instead. Hit testing already scales per axis so taps were never at risk; this is purely about not distorting the Voronoi. `#cityCv` also gets `touch-action:none`, since it binds one finger pan and pinch zoom on a non-passive touchmove and would otherwise race the pane scroll.
+
+Ten new assertions. Four of them check facts about code the shell does not own: that `#gCitiesPane` still has `overflow:hidden`, that the other four panes still scroll themselves, and that city.js still both collapses and height-caps `.cywrap`. If any of those change, the `!important` overrides here are stale and the suite says so rather than leaving dead CSS behind.
+
+`tools/mobile-check.mjs` 84 to 94. Regression tested by deleting the Cities block, which fails six.
+
+Changed files: client/assets/mobile.css, client/version.json, tools/mobile-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
 ## v1.3.2 (2026-07-30) - Sound toggle hidden (CLIENT)
 
 Client only. Hard refresh. No restart needed.
