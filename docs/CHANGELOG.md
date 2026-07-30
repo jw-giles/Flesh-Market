@@ -4,6 +4,22 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.2 (2026-07-30) - Sound toggle hidden (CLIENT)
+
+Client only. Hard refresh. No restart needed.
+
+The sound button sat `position:fixed` in a corner on every screen at every size. `_soundOn` defaults to false in sound.js, so the control's only job was turning ON a feature nobody had asked for, in exchange for a permanent piece of a phone screen.
+
+It is hidden, not removed. One rule in `assets/toast.css`. The markup, `toggleSound()`, `playSound()` and every call site are untouched, `window.toggleSound()` still works from the console, and the mobile placement rule in mobile.css is left in place for whenever it comes back. Deleting the single rule restores it exactly as it was.
+
+Also added, no behaviour change: assertions covering the viewport meta and the two layout primitives the shell rests on. `width=device-width` is the one line that makes a phone map CSS pixels to its real logical width instead of rendering at a faked 980px and zooming out. If it is ever edited, every proportional rule in the shell is measured against the wrong viewport and the whole layout is silently wrong. It now fails loudly instead.
+
+`tools/mobile-check.mjs` 76 to 84. Regression tested by stripping the viewport meta and the hide rule, which fails three.
+
+Changed files: client/assets/toast.css, client/assets/mobile.css (comment only), client/version.json, tools/mobile-check.mjs, docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
 ## v1.3.1 (2026-07-30) - drawChart retry loop while hidden (CLIENT)
 
 Client only. Hard refresh. No restart needed. Found while verifying an open question from 1.3.0 rather than reported by a player, and it predates the mobile shell by a long way.

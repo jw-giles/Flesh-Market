@@ -390,6 +390,8 @@ body.fm-mobile #toastArea {
   left: 8px !important; right: 8px !important; max-width: none !important;
   bottom: calc(var(--fm-nav) + 8px) !important;
 }
+/* Kept, but inert: #soundToggle is display:none from v1.3.2 (see toast.css).
+   This is its mobile placement for whenever it comes back. */
 body.fm-mobile #soundToggle {
   bottom: calc(var(--fm-nav) + 8px); left: 8px;
   font-size: .7rem; padding: 4px 8px; z-index: 9990;

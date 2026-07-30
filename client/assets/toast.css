@@ -33,3 +33,14 @@
 /* Sound toggle */
 #soundToggle{position:fixed;bottom:48px;right:12px;z-index:9998;background:#111;border:1px solid #333;border-radius:6px;padding:4px 10px;font-size:.75rem;cursor:pointer;font-family:monospace;color:#888;}
 #soundToggle.on{color:#86ff6a;border-color:#86ff6a44;}
+
+/* DISABLED in v1.3.2. The button floated over the bottom right of every screen
+   and did nothing a player wanted: _soundOn defaults to false in sound.js, so
+   the control's only job was turning ON a feature nobody was asking for, while
+   costing a permanent corner of a phone screen.
+
+   Nothing else is removed. The markup, toggleSound(), playSound() and every
+   call site are untouched, and window.toggleSound() still works from the
+   console. Delete this one rule to bring the button back; the mobile placement
+   rule in mobile.css is still there waiting for it. */
+#soundToggle{display:none;}

@@ -30,6 +30,8 @@ const html    = fs.readFileSync(ROOT + '/client/index.html', 'utf8');
 const mobJs   = fs.readFileSync(ROOT + '/client/assets/mobile.js', 'utf8');
 const mobCss  = fs.readFileSync(ROOT + '/client/assets/mobile.css', 'utf8');
 const coreJs  = fs.readFileSync(ROOT + '/client/assets/core.js', 'utf8');
+const toastCss= fs.readFileSync(ROOT + '/client/assets/toast.css', 'utf8');
+const soundJs = fs.readFileSync(ROOT + '/client/assets/sound.js', 'utf8');
 const stateJs = fs.readFileSync(ROOT + '/client/assets/market-state.js', 'utf8');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -39,6 +41,26 @@ const stateJs = fs.readFileSync(ROOT + '/client/assets/market-state.js', 'utf8')
 section('SOURCE');
 
 ok('index.html loads assets/mobile.js', /<script src="assets\/mobile\.js">/.test(html));
+
+// If this meta is ever edited, the phone renders at a faked ~980px and zooms
+// out, and every proportional rule in the shell is measured against the wrong
+// viewport. It is the single line the whole mobile layout rests on.
+const vp = html.match(/<meta[^>]*name="viewport"[^>]*>/);
+ok('viewport meta maps CSS px to the device width',
+  !!vp && /width=device-width/.test(vp[0]) && /initial-scale=1/.test(vp[0]),
+  vp ? vp[0] : 'no viewport meta');
+ok('viewport-fit=cover is set for notched devices',
+  !!vp && /viewport-fit=cover/.test(vp[0]));
+ok('the nav respects the home indicator inset',
+  /#fmNav\s*\{[\s\S]{0,300}?env\(safe-area-inset-bottom/.test(mobCss));
+ok('the top bar id column can truncate instead of overflowing',
+  /\.fmt-id\s*\{[^}]*min-width:\s*0/.test(mobCss));
+
+// Sound toggle: disabled, not deleted.
+ok('sound toggle is hidden', /#soundToggle\s*\{\s*display:\s*none/.test(toastCss));
+ok('sound toggle markup is still present', /id="soundToggle"/.test(html));
+ok('toggleSound is still callable', /window\.toggleSound\s*=/.test(soundJs));
+ok('playSound and its call sites are untouched', /window\.playSound\s*=/.test(soundJs));
 ok('index.html links assets/mobile.css', /assets\/mobile\.css/.test(html));
 
 // The reason clicking is mandatory. If someone ever fixes market-state's
