@@ -1677,6 +1677,10 @@ window.I18N = {
   'mob.tile.inventory':{en:'Inventory',zh:'库存'},
   'mob.tile.titles':{en:'Titles',zh:'称号'},
   'mob.tile.bugs':{en:'Bugs',zh:'缺陷'},
+  // ── Mobile shell (v1.3.6). Systems with no touch control scheme.
+  'mob.lock.tag':{en:'DESKTOP ONLY',zh:'仅限桌面端'},
+  'mob.lock.mining':{en:'Needs a mouse and keyboard. Play on desktop.',zh:'需要鼠标和键盘。请在桌面端游玩。'},
+  'mob.lock.miningLong':{en:'Drone Mining is a mouse aimed, keyboard flown game. There is no touch control scheme for it yet, so it is disabled on this device. Your bank and the leaderboard below stay live. Launch a run from a desktop browser.',zh:'无人机采矿需要鼠标瞄准、键盘操纵。目前尚无触屏操作方案，因此在本设备上已停用。您的存款与下方排行榜仍然实时更新。请在桌面端浏览器中出击。'},
   'ph.search':{en:'Search symbol or name',zh:'搜索代码或名称'},
   'ph.chat':{en:'Say something… @mention',zh:'说点什么… @提及'},
   'btn.send':{en:'Send',zh:'发送'},

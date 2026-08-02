@@ -576,3 +576,173 @@ body.fm-mobile #godModeBtn {
 /* ── [H7] EOD splash HUD, 300px against a 320px floor with padding ─────────
    Not over the line, but it has no room either. */
 body.fm-mobile #spHUD { max-width: 100%; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * v1.3.6 MOBILE PASS
+ * 1. Drawer lockup
+ * 2. Systems that cannot be played on a touch device
+ * 3. Casino games that are still wider than the pane
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── [1] Drawer lockup ────────────────────────────────────────────────────
+   The scrim is z-index 9994 and #fmTop is 9992, so opening the drawer buried
+   the only control that could have closed it. The button now toggles, so it
+   has to be reachable while the drawer is open. Lift the whole top bar over
+   the scrim rather than the button alone, otherwise the button floats over a
+   dimmed strip with no bar behind it. */
+body.fm-mobile.fm-drawer #fmTop { z-index: 9996; }
+body.fm-mobile.fm-drawer #fmTop .fmt-menu {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+/* The rest of the bar is inert while the drawer is open. Only the toggle and
+   the close button should respond, or a stray tap on the portrait fires the
+   picker underneath an open menu. */
+body.fm-mobile.fm-drawer #fmTop .fmt-portrait,
+body.fm-mobile.fm-drawer #fmTop .fmt-back,
+body.fm-mobile.fm-drawer #fmTop .fmt-id,
+body.fm-mobile.fm-drawer #fmTop .fmt-eod { pointer-events: none; opacity: .45; }
+
+/* Explicit close control. cursor is forced to auto by the pointer:coarse block
+   at the top of this file, so this has to be a real <button> to be reliably
+   tappable on iOS. It is. */
+#fmDrawerClose { display: none; }
+body.fm-mobile.fm-drawer #fmDrawerClose {
+  display: flex;
+  position: fixed;
+  top: calc(var(--fm-top) + 8px);
+  right: 246px;
+  z-index: 9996;
+  width: 38px; height: 38px;
+  align-items: center; justify-content: center;
+  border: 1px solid var(--panel-edge);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit; font-size: 15px;
+  padding: 0;
+}
+/* On a narrow phone the drawer is 238px of a 320px screen, so a button placed
+   to its left has nowhere to sit. Put it inside the drawer instead. */
+@media (max-width: 340px) {
+  body.fm-mobile.fm-drawer #fmDrawerClose { right: 10px; top: 8px; }
+}
+
+/* The drawer is taller than a landscape phone once every row is 11px padded,
+   and it already scrolls. Give the scroll somewhere to end. */
+body.fm-mobile #fm-header-user { padding-top: 54px; overscroll-behavior: contain; }
+
+/* ── [2] Systems locked on touch devices ──────────────────────────────────
+   Gated on body.fm-touchonly, which mobile.js sets from
+   (pointer:coarse) and not (any-pointer:fine). A narrow desktop window is not
+   locked; a 1024px tablet is. */
+.fm-tile.fm-locked {
+  border-color: #6a1e1e;
+  background: linear-gradient(180deg, #1a0808 0%, var(--panel-bg) 70%);
+}
+.fm-tile.fm-locked .ic { filter: grayscale(1) brightness(.75); opacity: .55; }
+.fm-tile.fm-locked .lb { color: #a05050; }
+.fm-tile .lk {
+  position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+  font-size: 6.5px; letter-spacing: .1em; white-space: nowrap;
+  color: #ff6b6b; border: 1px solid #6a1e1e; border-radius: 3px;
+  padding: 0 3px; background: #1a0606;
+}
+.fm-tile.fm-locked .lb { margin-bottom: 9px; }
+
+#fmMiningLock { display: none; }
+body.fm-mobile.fm-touchonly #fmMiningLock {
+  display: block;
+  max-width: 560px; width: 100%; box-sizing: border-box;
+  margin: 0 auto 14px; padding: 14px 18px;
+  border: 1px solid #6a1e1e; border-radius: 4px;
+  background: rgba(26,6,6,.75);
+}
+#fmMiningLock .fml-tag {
+  font-size: 10px; letter-spacing: .22em; color: #ff6b6b; margin-bottom: 7px;
+}
+#fmMiningLock .fml-body {
+  font-size: 13px; line-height: 1.6; color: #c89090; letter-spacing: .02em;
+}
+body.fm-mobile.fm-touchonly #miningLaunchBtn {
+  min-width: 0 !important;
+  opacity: .28;
+  filter: grayscale(1);
+  pointer-events: none;
+  border-color: #5a2020 !important;
+}
+
+/* ── [3a] Roulette ────────────────────────────────────────────────────────
+   #wheelCanvas is width="400" height="400" with no CSS width, so the pane had
+   a 400px floor before padding on a 360px screen. The wheel is drawn into the
+   backing store and is display only, so scaling the box costs nothing. */
+body.fm-mobile #wheelCanvas {
+  width: 100% !important;
+  max-width: 300px;
+  height: auto !important;
+}
+/* 13 cells at a hard 22px plus gaps is 310px inside a table that already
+   spends 32px on padding. The track is 1fr, so the hard width was the only
+   thing stopping it reflowing. */
+body.fm-mobile .rl-num-grid { gap: 3px; }
+body.fm-mobile .rl-num-cell {
+  width: auto !important;
+  min-width: 0;
+  height: 24px;
+  font-size: .62rem;
+}
+body.fm-mobile #rl-table { padding: 10px 8px 12px; gap: 12px; }
+body.fm-mobile #rl-wrap { padding: 8px 0; }
+body.fm-mobile #rl-controls { min-width: 0 !important; }
+body.fm-mobile #rl-history { flex-wrap: wrap; }
+
+/* ── [3b] Table padding across the casino ─────────────────────────────────
+   Every game pads its felt for a ~700px pane. On a 360px screen the padding
+   alone is up to 56px of the 344px available. */
+body.fm-mobile .bj-table { padding: 14px 12px 16px !important; }
+body.fm-mobile .pk-table { padding: 12px 10px 14px !important; }
+body.fm-mobile #bj-wrap,
+body.fm-mobile #poker-wrap,
+body.fm-mobile #ms-wrap { padding: 8px 0 !important; }
+body.fm-mobile .bj-info,
+body.fm-mobile .pk-info,
+body.fm-mobile .rl-info-row { gap: 10px !important; }
+body.fm-mobile .pk-seats { gap: 6px; }
+body.fm-mobile .pk-seat { min-width: 92px; }
+
+/* ── [3c] Boards that are scaled by mobile.js, not reflowed ───────────────
+   #chessBoard, .sol-board and #ms-board are laid out in hard pixels that are
+   load bearing: chess positions its squares at x*45 in JS, solitaire draws
+   cards from a sprite sheet whose background-position is derived from the card
+   width, and minesweeper writes repeat(cols,28px) as an inline style. CSS
+   cannot resize any of them without breaking hit testing or tearing the
+   sprite, so mobile.js scales the whole board and pulls the layout box in with
+   negative margins. These rules only handle what falls outside that box. */
+
+/* The drag ghost is position:fixed and therefore outside the scaled board.
+   --fm-sol-k is written by mobile.js on each fit. */
+body.fm-mobile .sol-ghost {
+  transform: scale(var(--fm-sol-k, 1));
+  transform-origin: top left;
+}
+body.fm-mobile .sol-piles { gap: 12px; }
+body.fm-mobile .sol-bar { flex-wrap: wrap; gap: 6px; }
+
+/* Minesweeper Expert is 30 columns. mobile.js stops scaling at 0.58, because
+   below that a cell is under 17px and no thumb can hit one. Past the floor the
+   board scrolls inside its own wrapper rather than widening the pane. */
+body.fm-mobile #ms-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+body.fm-mobile #ms-mode-row { display: flex; flex-wrap: wrap; }
+
+/* Chess sits in a .row with the control card at min-width:260px. Once the
+   board is scaled the card should take the full remaining line rather than
+   squeezing alongside a 300px board. */
+body.fm-mobile #casino-chess > .row { gap: 8px !important; }
+body.fm-mobile #casino-chess > .row > div:not(#chessBoard) {
+  min-width: 0 !important;
+  flex: 1 1 100% !important;
+}
+
+/* The safety net from the v1.3.4 audit stays. It is now genuinely a net rather
+   than the primary mechanism: nothing above should reach it. */
+body.fm-mobile #casinoContent { overflow-x: auto; }

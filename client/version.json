@@ -1,7 +1,7 @@
 {
-  "version": "1.3.5",
+  "version": "1.3.6",
   "built": "2026-08-02T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.3.5",
-  "notes": "Math Quiz becomes the Guild Numeracy Exams: five papers, ten topics, server-generated questions and server-held answers. Fixes the reported non-payment, which was a stale open round silently swallowing every test started in a fifteen minute window while the score row counted up to a number that was never real. Also closes two payout holes found on the way, one of them live since solitaire shipped: casino_result would settle ANY open round by id without checking which game opened it, so solitaire_start plus a crafted casino_result paid 1848 on a 250 buy-in with no cards played. SERVER + CLIENT, restart required, hard refresh required."
+  "patch": "1.3.6",
+  "notes": "Mobile pass. The hamburger drawer could lock the client on iOS: the scrim was a bare div relying on a synthesized click, which Safari withholds because the pointer:coarse block strips cursor:pointer from every element, and the scrim sits above the top bar so the only other exit was buried. The button also never toggled. Fixed on four fronts. Drone Mining is now reddened and disabled on touch only devices, since it is mouse aimed and keyboard flown. Four casino surfaces that were still wider than the pane now fit: the 400px roulette wheel canvas, the 13 column number grid, and the chess, solitaire and minesweeper boards, which are scaled rather than reflowed because their pixel geometry is load bearing. CLIENT ONLY, no restart, hard refresh required."
 }

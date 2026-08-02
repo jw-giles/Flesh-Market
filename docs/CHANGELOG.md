@@ -4,6 +4,38 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.6 (2026-08-02) - Mobile: drawer lockup, touch incompatible systems, casino widths (CLIENT)
+
+Client only. No restart. Hard refresh required.
+
+THE DRAWER COULD LOCK THE CLIENT, AND IT TOOK FOUR THINGS TO DO IT.
+
+`#fmScrim` was a bare `div` with a `click` listener. iOS Safari only synthesizes a click on a non-interactive element when it has decided the element is clickable, and one of the signals it uses is `cursor:pointer`. The `pointer:coarse` block at the top of mobile.css sets `cursor:auto !important` on every element on the page, which strips that signal. So on iPhone the scrim could swallow every tap and never close.
+
+That alone would have been survivable if anything else could have closed it. Nothing could. `.fmt-menu` called `drawer(true)` unconditionally rather than toggling, so tapping the button again was a no-op. The scrim is z-index 9994 and `#fmTop` is 9992, so the button was underneath it and unreachable regardless. And the drawer had no close control at all. Four independent gaps, all pointing the same way: tap the menu, and the game is gone until you reload.
+
+Every one of the four is closed. The scrim binds `pointerdown` and `touchstart` alongside `click`, debounced 400ms, and carries `role="button"`. The menu button toggles. The top bar is lifted to 9996 while the drawer is open, with the rest of the bar made inert so a stray tap cannot fire the portrait picker underneath an open menu. A `#fmDrawerClose` control was added, and Escape and `popstate` both dismiss.
+
+AND A SECOND THING WITH THE SAME SYMPTOM. The drawer's Bugs button runs `document.getElementById('bugsTabBtnHidden').click()`, which is a real `.tab` node. core.js switches the center panel and mobile.js never hears about it, because `bridgeShowTab` only patches `window.showTab`. If the current view was not a center panel view then `#fmCenter` still carried `.fm-off`, so the player tapped Bugs, the drawer closed, and the screen did not change. Fixed at the root with `bridgeTabClicks`, a capture phase listener that resyncs the shell after any `.tab` click the shell did not initiate, so anything added later is covered too.
+
+SYSTEMS THAT CANNOT BE PLAYED ON A TOUCH DEVICE. Drone Mining is mouse aimed and keyboard flown and there is no touch control scheme for it. It is now reddened in the More grid with a DESKTOP ONLY tag, and LAUNCH EXPEDITION is disabled behind a notice pinned directly above it. The tab is still reachable on purpose: the brief screen carries the bank balance and the leaderboard, and those are worth reading on a phone. The gate is `(pointer: coarse)` and not `(any-pointer: fine)`, not screen width, so a 1024px tablet is locked and a narrow desktop window is not. It is driven by a `LOCKED` table, so adding a system is one line.
+
+CASINO WIDTHS. The v1.3.4 audit set `#casinoContent{overflow-x:auto}` as a net and said in its own comment that it did not reflow anything. That is why the games still read as too wide. Four surfaces actually fixed:
+
+- `#wheelCanvas` is `width="400" height="400"` with no CSS width, so roulette had a 400px floor before padding, on the pane that opens by default. Capped at 300px. The wheel is drawn into the backing store and is display only, so scaling the box costs nothing.
+- `.rl-num-cell` was a hard 22px across 13 `1fr` tracks, 310px inside a table already spending 32px on padding. The hard width was the only thing stopping it reflowing.
+- `#chessBoard` (360px, squares absolutely positioned at `x*45` in JS), `.sol-board` (`repeat(7,minmax(56px,1fr))`, 440px floor) and `#ms-board` (JS writes `repeat(cols,28px)`, Expert is 898px) are laid out in pixels that are load bearing. Overriding those widths in CSS breaks hit testing or tears the solitaire sprite sheet, whose `background-position` is computed from card width. So the boards are SCALED, not reflowed. All three use real child elements with their own listeners, or `elementFromPoint` in the solitaire drag case, and browsers map pointer coordinates through transforms for both. `transform` alone does not shrink the layout box, so negative margins pull the box in to match, which is what actually kills the overflow.
+
+Minesweeper stops scaling at 0.58, because below that a cell is under 17px and no thumb can hit one; past the floor `#ms-wrap` scrolls. Expert on a phone remains thumb hostile and is a candidate for the `LOCKED` table.
+
+tools/mobile-136-check.mjs NEW, 52 assertions. Half of them are FIX assertions. The other half are ANCHORS, and those are the point of the file: `fitBoard` scales using hardcoded natural widths because none of the three boards can be measured from CSS, so the check asserts `const S = 45`, `minmax(56px,1fr)`, `gap:8px`, `28px`, `cols:30` and `width="400"`. Change any of those and the scale goes silently wrong with nothing throwing. Now it fails instead. Verified non-vacuous by mutation: reverting the menu toggle, moving chess S to 44 and lifting the wheel cap produced exactly three failures.
+
+client/mobile-mockup.html NEW. A skeleton that satisfies everything mobile.js reaches for and loads the real mobile.css and mobile.js, with the three boards stubbed at their exact natural sizes. Verifies the shell on a phone with no server, socket or login, and reads out viewport, touchOnly, view state, page overflow and the live scale factor for each board. Safe to delete before a public release.
+
+NEW I18N KEYS, ENGLISH ONLY: `mob.lock.tag`, `mob.lock.mining`, `mob.lock.miningLong`. These will render English in Jade mode until zh entries are added.
+
+---
+
 ## v1.3.5 (2026-08-02) - Guild Numeracy Exams; two payout holes closed (SERVER + CLIENT)
 
 Server and client. Restart required. Hard refresh required.

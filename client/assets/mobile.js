@@ -48,6 +48,26 @@
 var BP = 900;
 var isMobile = function () { return window.innerWidth <= BP; };
 
+// A device with a coarse primary pointer and no fine pointer anywhere has no
+// mouse and no physical keyboard. That is the real gate for "can this system be
+// played here", not screen width: a 1024px tablet fails it and a 380px window on
+// a desktop passes it. Systems in LOCKED below are gated on this, not on BP.
+var TOUCH_ONLY = (function () {
+  try {
+    if (!window.matchMedia) return false;
+    return window.matchMedia('(pointer: coarse)').matches &&
+           !window.matchMedia('(any-pointer: fine)').matches;
+  } catch (e) { return false; }
+})();
+
+// Systems that cannot be played without a mouse and keyboard. The tile is
+// reddened and the entry point inside the system is disabled, but the system is
+// still reachable, because the brief screen carries the bank balance and the
+// leaderboard and those are worth reading on a phone.
+var LOCKED = {
+  mining: { key: 'mob.lock.mining', text: 'Needs a mouse and keyboard. Play on desktop.' }
+};
+
 var body = document.body;
 var active = false;
 var syncing = false;
@@ -162,7 +182,13 @@ function buildChrome() {
       '<button class="fmt-menu" type="button" aria-label="Menu">\u2630</button>';
     body.appendChild(top);
     top.querySelector('.fmt-back').addEventListener('click', goBack);
-    top.querySelector('.fmt-menu').addEventListener('click', function () { drawer(true); });
+    // Toggle, not open. The old handler was drawer(true) unconditionally, and
+    // the scrim sits at 9994 over the 9992 top bar, so once the drawer was open
+    // the button was unreachable anyway. Both halves of that are fixed here:
+    // this toggles, and the button is lifted above the scrim in CSS.
+    top.querySelector('.fmt-menu').addEventListener('click', function () {
+      drawer(!body.classList.contains('fm-drawer'));
+    });
     el('fmtPortrait').addEventListener('click', function () {
       if (window.openPortraitPicker) window.openPortraitPicker();
     });
@@ -191,12 +217,51 @@ function buildChrome() {
     });
   }
 
-  // Scrim
+  // Scrim.
+  //
+  // This was a bare div with a click listener. iOS Safari only synthesizes a
+  // click on a non-interactive element when the browser has decided the element
+  // is clickable, and one of the signals it uses is cursor:pointer. The
+  // pointer:coarse block at the top of mobile.css sets cursor:auto !important on
+  // every element on the page, which strips that signal from the scrim. So on
+  // iPhone the scrim could swallow every tap and never close, the top bar was
+  // buried under it, and there was no other exit: the screen was locked until
+  // reload. Bind pointerdown, which is not subject to that heuristic, keep click
+  // as the fallback for anything without Pointer Events, and give it a role so
+  // assistive tech and the browser both read it as a control.
   if (!el('fmScrim')) {
     var scrim = document.createElement('div');
     scrim.id = 'fmScrim';
-    scrim.addEventListener('click', function () { drawer(false); });
+    scrim.setAttribute('role', 'button');
+    scrim.setAttribute('tabindex', '-1');
+    scrim.setAttribute('aria-label', 'Close menu');
+    var closed = 0;
+    var shut = function (e) {
+      // pointerdown and click both fire for one tap. Debounce so the second one
+      // cannot immediately reopen anything.
+      var now = Date.now();
+      if (now - closed < 400) return;
+      closed = now;
+      if (e && e.preventDefault) e.preventDefault();
+      drawer(false);
+    };
+    scrim.addEventListener('pointerdown', shut);
+    scrim.addEventListener('touchstart', shut, { passive: false });
+    scrim.addEventListener('click', shut);
     body.appendChild(scrim);
+  }
+
+  // Explicit close control. The drawer had no visible way out at all, which is
+  // the second half of the lockup: even with a working scrim, nothing on screen
+  // said the dimmed area was tappable.
+  if (!el('fmDrawerClose')) {
+    var xb = document.createElement('button');
+    xb.id = 'fmDrawerClose';
+    xb.type = 'button';
+    xb.setAttribute('aria-label', 'Close menu');
+    xb.textContent = '\u2715';
+    xb.addEventListener('click', function () { drawer(false); });
+    body.appendChild(xb);
   }
 
   // More grid, lives inside the scroll region
@@ -209,8 +274,13 @@ function buildChrome() {
         sect[2].map(function (t) {
           var badge = (t[0] === 'fleshbook')
             ? '<span class="bg" id="fmMoreFbBadge" style="display:none">0</span>' : '';
-          return '<div class="fm-tile" data-fmgo="' + t[3] + '" data-fmkey="' + t[0] +
-                 '" data-fmi18n="' + t[4] + '" role="button" tabindex="0">' + badge +
+          var lk = (TOUCH_ONLY && LOCKED[t[0]]) ? LOCKED[t[0]] : null;
+          var lock = lk
+            ? '<span class="lk" data-i18n="mob.lock.tag">' + T('mob.lock.tag', 'DESKTOP ONLY') + '</span>'
+            : '';
+          return '<div class="fm-tile' + (lk ? ' fm-locked' : '') +
+                 '" data-fmgo="' + t[3] + '" data-fmkey="' + t[0] +
+                 '" data-fmi18n="' + t[4] + '" role="button" tabindex="0">' + badge + lock +
                  '<span class="ic">' + t[1] + '</span>' +
                  '<span class="lb" data-i18n="' + t[4] + '">' + T(t[4], t[2]) + '</span></div>';
         }).join('') + '</div>';
@@ -239,6 +309,24 @@ function buildChrome() {
     qa('#fmCasinoLobby .fm-tile').forEach(function (t) {
       t.addEventListener('click', function () { openGame(t.dataset.fmgame); });
     });
+  }
+
+  // Mining lock notice. Sits directly above LAUNCH EXPEDITION so the reason is
+  // next to the thing that will not respond, rather than a toast that has faded
+  // by the time the player scrolls down to the button.
+  var launch = el('miningLaunchBtn');
+  if (TOUCH_ONLY && launch && !el('fmMiningLock')) {
+    var note = document.createElement('div');
+    note.id = 'fmMiningLock';
+    note.innerHTML =
+      '<div class="fml-tag" data-i18n="mob.lock.tag">' + T('mob.lock.tag', 'DESKTOP ONLY') + '</div>' +
+      '<div class="fml-body" data-i18n="mob.lock.miningLong">' +
+      T('mob.lock.miningLong',
+        'Drone Mining is a mouse aimed, keyboard flown game. There is no touch control scheme for it yet, so it is disabled on this device. Your bank and the leaderboard below stay live. Launch a run from a desktop browser.') +
+      '</div>';
+    launch.parentNode.insertBefore(note, launch);
+    launch.setAttribute('disabled', 'disabled');
+    launch.setAttribute('aria-disabled', 'true');
   }
 
   return true;
@@ -302,6 +390,9 @@ function tileLabel(tile) {
 
 function moreGo(tile) {
   var go = tile.dataset.fmgo, key = tile.dataset.fmkey, label = tileLabel(tile);
+  // No toast here on purpose. gToast is inline styled at bottom:24px, which is
+  // underneath the 56px nav, so it would be invisible. The reason lives inside
+  // the system instead, pinned above its own entry point. See #fmMiningLock.
   if (go === 'tab') { openTab(key, label); return; }
   if (go === 'lore') {
     var b = el('loreBtn');
@@ -415,6 +506,98 @@ function render() {
   if (centerOn && (v === 'market' || (v === 'board' && seg === 'heat'))) {
     nudgeChart();
   }
+
+  // After the layout settles, not during it: fitBoard measures parentElement
+  // clientWidth and the panel it lives in was display:none one frame ago.
+  if (typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(fitBoards);
+  } else {
+    setTimeout(fitBoards, 0);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Casino board fitting
+//
+// Three boards are laid out in hard pixels and cannot be reflowed from CSS,
+// because the pixels are load bearing:
+//
+//   #chessBoard  360x360, squares absolutely positioned at x*45, y*45 in JS
+//   .sol-board   7 columns of minmax(56px,1fr), cards drawn from a sprite
+//                sheet whose background-position is computed from the card
+//                width, so overriding the width in CSS tears the sprite
+//   #ms-board    grid-template-columns written by JS as repeat(cols,28px)
+//
+// Overriding any of those widths in CSS breaks hit testing or the sprite math.
+// Scaling the whole board does neither: every one of these uses real child
+// elements with their own listeners, or document.elementFromPoint in the
+// solitaire drag case, and the browser maps pointer coordinates through
+// transforms for both.
+//
+// transform alone does not shrink the layout box, so the board would still
+// force the pane wide. The negative margins pull the box in to match, which is
+// what actually kills the horizontal overflow.
+// ═══════════════════════════════════════════════════════════════════════════
+
+var FIT_FLOOR = { msBoard: 0.58 };  // below this a minesweeper cell is untappable
+
+function fitBoard(el, natW, floor) {
+  if (!el) return;
+  el.style.transform = '';
+  el.style.marginRight = '';
+  el.style.marginBottom = '';
+  if (!el.offsetParent) return;                 // not on screen, nothing to measure
+  var host = el.parentElement;
+  if (!host) return;
+  var nat = natW || el.offsetWidth;
+  var natH = el.offsetHeight;
+  var avail = host.clientWidth;
+  if (!nat || !natH || !avail || avail >= nat) return;
+  var k = avail / nat;
+  if (floor && k < floor) k = floor;            // let it scroll rather than shrink further
+  el.style.transformOrigin = 'top left';
+  el.style.transform = 'scale(' + k.toFixed(4) + ')';
+  el.style.marginRight = (-(nat * (1 - k))).toFixed(1) + 'px';
+  el.style.marginBottom = (-(natH * (1 - k))).toFixed(1) + 'px';
+  return k;
+}
+
+// The mirror tick alone would leave a board unscaled for up to a second after
+// each move. Watch the three panes instead and refit on the next frame.
+var FIT_PANES = ['casino-chess', 'casino-solitaire', 'casino-minesweeper'];
+var fitPending = false;
+
+function watchFittedPanes() {
+  if (typeof window.MutationObserver !== 'function') return;
+  FIT_PANES.forEach(function (id) {
+    var pane = el(id);
+    if (!pane || pane.dataset.fmFitWatched) return;
+    pane.dataset.fmFitWatched = '1';
+    new window.MutationObserver(function () {
+      if (fitPending) return;
+      fitPending = true;
+      window.requestAnimationFrame(function () { fitPending = false; fitBoards(); });
+    }).observe(pane, { childList: true, subtree: true });
+  });
+}
+
+function fitBoards() {
+  if (!active || state.tab !== 'casino' || !state.game) return;
+  watchFittedPanes();
+
+  fitBoard(el('chessBoard'), 362, 0);
+
+  // 7 tracks at the 56px minimum plus six 8px gaps. Measuring instead would
+  // read the container width, because .sol-board is a block level grid: it is
+  // its CONTENT that overflows, not the box.
+  var sol = q('.sol-board');
+  var solK = fitBoard(sol, 7 * 56 + 6 * 8, 0);
+  // The drag ghost is position:fixed and therefore outside the scaled board.
+  // Match it or the card jumps size the instant the player picks it up.
+  body.style.setProperty('--fm-sol-k', solK ? solK.toFixed(4) : '1');
+
+  // inline-grid, so its own offsetWidth is already the natural width.
+  fitBoard(el('ms-board'), 0, FIT_FLOOR.msBoard);
 }
 
 function nudgeChart() {
@@ -509,6 +692,13 @@ function mirror() {
   // which is the same gate the desktop tab uses.
   var gt = el('guildTabBtn'), gtile = q('#fmMore .fm-tile[data-fmkey="guild"]');
   if (gt && gtile) gtile.style.display = (gt.style.display === 'none') ? 'none' : '';
+
+  // Every one of the three fitted boards rebuilds its own innerHTML on each
+  // move, new game and difficulty change, which drops the inline transform.
+  // There is no single event to hang this on across three unrelated modules,
+  // and fitBoard is a no-op unless the board is on screen AND overflowing, so
+  // riding the mirror tick is cheaper than three MutationObservers.
+  fitBoards();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -517,6 +707,22 @@ function mirror() {
 
 function drawer(on) {
   body.classList.toggle('fm-drawer', !!on);
+}
+
+// Two more ways out, because the scrim being the only exit is how this became
+// a lockup in the first place. A hardware back press or an Escape from a
+// bluetooth keyboard should never be the thing that cannot dismiss a menu.
+function wireDrawerEscapes() {
+  if (window.__fmDrawerEsc) return;
+  window.__fmDrawerEsc = true;
+  document.addEventListener('keydown', function (e) {
+    if ((e.key === 'Escape' || e.keyCode === 27) && body.classList.contains('fm-drawer')) {
+      drawer(false);
+    }
+  });
+  window.addEventListener('popstate', function () {
+    if (body.classList.contains('fm-drawer')) drawer(false);
+  });
 }
 
 // Any tap inside the drawer that hits an actionable control closes it, so the
@@ -538,6 +744,42 @@ function wireDrawerAutoClose() {
 // move the shell too, or the player taps a link and the panel changes behind a
 // view that is still showing something else.
 // ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Some controls click a real .tab node directly instead of going through
+ * window.showTab. The Bugs button in the drawer is one: its onclick is
+ * `document.getElementById('bugsTabBtnHidden').click()`. core.js switches the
+ * center panel, mobile.js never hears about it, and if the current view is not
+ * a center-panel view then #fmCenter still carries .fm-off, so the player taps
+ * Bugs, the drawer closes, and the screen does not change. Indistinguishable
+ * from a hang.
+ *
+ * bridgeShowTab only covers window.showTab. This covers the other path, at the
+ * root rather than per button, so any future control that clicks a tab node is
+ * covered too.
+ */
+function bridgeTabClicks() {
+  if (window.__fmTabClickBridged) return;
+  window.__fmTabClickBridged = true;
+  document.addEventListener('click', function (e) {
+    if (!active || syncing) return;
+    var t = e.target && e.target.closest && e.target.closest('.tab[data-tab]');
+    if (!t) return;
+    var name = t.getAttribute('data-tab');
+    if (!name) return;
+    // Let core.js's own listener run first, then follow it.
+    setTimeout(function () {
+      if (!active) return;
+      if (name === 'market') { setView('market'); }
+      else if (name === 'heat') { state.seg.board = 'heat'; setView('board'); }
+      else if (name === 'pnl') { state.seg.wallet = 'pnl'; setView('wallet'); }
+      else if (state.tab !== name) {
+        var tile = q('#fmMore .fm-tile[data-fmkey="' + name + '"]');
+        openTab(name, tile ? tileLabel(tile) : name);
+      }
+    }, 0);
+  }, true);
+}
 
 function bridgeShowTab() {
   if (window.__fmShowTabBridged) return;
@@ -582,11 +824,14 @@ function enter() {
   if (!buildChrome()) return;
   active = true;
   body.classList.add('fm-mobile');
+  body.classList.toggle('fm-touchonly', TOUCH_ONLY);
   var t = el('fmTop'), n = el('fmNav');
   if (t) t.style.display = '';
   if (n) n.style.display = '';
   wireDrawerAutoClose();
+  wireDrawerEscapes();
   bridgeShowTab();
+  bridgeTabClicks();
   render();
   mirror();
   if (window.applyI18n) { try { window.applyI18n(); } catch (e) {} }
@@ -595,10 +840,20 @@ function enter() {
 function leave() {
   active = false;
   drawer(false);
-  body.classList.remove('fm-mobile', 'fm-kbd');
+  body.classList.remove('fm-mobile', 'fm-kbd', 'fm-touchonly');
   ['data-fmv', 'data-fmctx', 'data-fmdepth', 'data-fmfill', 'data-fmtab', 'data-fmgame']
     .forEach(function (a) { body.removeAttribute(a); });
   body.style.removeProperty('--fm-ctx');
+  body.style.removeProperty('--fm-sol-k');
+  // The fit transforms are inline, so widening the window past the breakpoint
+  // would otherwise leave a permanently shrunk chess board on the desktop
+  // layout. Same class of bug as the .fm-off cleanup two lines down.
+  ['chessBoard', 'ms-board'].forEach(function (id) {
+    var e = el(id);
+    if (e) { e.style.transform = ''; e.style.marginRight = ''; e.style.marginBottom = ''; }
+  });
+  var solb = q('.sol-board');
+  if (solb) { solb.style.transform = ''; solb.style.marginRight = ''; solb.style.marginBottom = ''; }
   var t = el('fmTop'), n = el('fmNav');
   if (t) t.style.display = 'none';
   if (n) n.style.display = 'none';
@@ -624,10 +879,16 @@ function init() {
   var last = isMobile();
   window.addEventListener('resize', function () {
     var now = isMobile();
-    if (now === last) return;
-    last = now;
-    if (now) enter(); else leave();
+    if (now !== last) {
+      last = now;
+      if (now) enter(); else leave();
+      return;
+    }
+    // Same side of the breakpoint, but a rotation or a URL bar collapse still
+    // changes the width the boards were fitted to.
+    fitBoards();
   });
+  window.addEventListener('orientationchange', function () { setTimeout(fitBoards, 150); });
 
   // Public surface for other modules and for tools/mobile-check.mjs.
   window.FM_MOBILE = {
@@ -642,7 +903,11 @@ function init() {
     setSeg: setSeg,
     openGame: openGame,
     back: goBack,
-    drawer: drawer
+    drawer: drawer,
+    isDrawerOpen: function () { return body.classList.contains('fm-drawer'); },
+    touchOnly: function () { return TOUCH_ONLY; },
+    locked: function () { return Object.keys(LOCKED); },
+    fitBoards: fitBoards
   };
 }
 
