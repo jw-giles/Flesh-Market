@@ -4066,6 +4066,25 @@ export function resolveCasinoRound(id, status, payout, cashAfter, resolvedTs) {
 export function getExpiredOpenCasinoRounds(cutoffTs) {
   return stmt("SELECT * FROM casino_rounds WHERE status='open' AND opened_ts < ?").all(cutoffTs);
 }
+// Most recent round OPENED for this player+game, whatever its status. The math
+// exams derive their cooldown from this rather than a new column: the ledger
+// already records every sitting, so there is nothing to migrate and nothing to
+// keep in sync. Counting from opened_ts (not resolved_ts) means abandoning a
+// paper does not reset the clock.
+export function getLastCasinoRoundTs(playerId, game) {
+  const r = stmt("SELECT opened_ts FROM casino_rounds WHERE player_id=? AND game=? ORDER BY opened_ts DESC LIMIT 1")
+    .get(playerId, game);
+  return r ? r.opened_ts : 0;
+}
+// Best profitable sitting for this player+game. Used as the certification gate:
+// with the math grade curve, payout > wager is reachable only at grade C and
+// above, so "has ever profited on this paper" and "has ever passed it" are the
+// same fact and no extra table is needed to record it.
+export function getBestCasinoResult(playerId, game) {
+  return stmt(`SELECT * FROM casino_rounds
+               WHERE player_id=? AND game=? AND status IN ('resolved','clamped')
+               ORDER BY (payout - wager) DESC LIMIT 1`).get(playerId, game) || null;
+}
 // All rounds still 'open' — used once on boot to void anything a crash left dangling.
 export function getAllOpenCasinoRounds() {
   return stmt("SELECT * FROM casino_rounds WHERE status='open'").all();

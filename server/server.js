@@ -130,8 +130,10 @@ import {
   openCasinoRound, getCasinoRound, getOpenCasinoRound, getOpenRoundForGame,
   addCasinoWager, resolveCasinoRound, getExpiredOpenCasinoRounds,
   getAllOpenCasinoRounds, getCasinoActivity,
+  getLastCasinoRoundTs, getBestCasinoResult,
 } from './db.js';
 import { replay as solitaireReplay } from './solitaire.js';
+import * as MathTest from './mathtest.js';
 import { newBuckets, checkRate } from './ratelimit.js';
 
 // City Charters (1.2.5.25): player-owned cities on colony planets
@@ -827,7 +829,6 @@ const CASINO_CFG = {
   poker:       { mult: 1,  flat: 5000, minDurMs: 5000,  timeoutMs: 10 * 60_000 },
   chess:       { mult: 2.5,flat: 0,    minDurMs: 1500,  timeoutMs: 60 * 60_000 },
   sudoku:      { mult: 0,  flat: 4200, minDurMs: 20000, timeoutMs: 45 * 60_000 },
-  mathgame:    { mult: 0,  flat: 900,  minDurMs: 5000,  timeoutMs: 15 * 60_000 },
   minesweeper: { mult: 0,  flat: 450,  minDurMs: 4000,  timeoutMs: 30 * 60_000 },
   // One-shot games (settled atomically in casino_play): only mult/flat are read as
   // the payout-cap backstop; minDurMs/timeoutMs are inert (no round is left open).
@@ -838,6 +839,37 @@ const CASINO_CFG = {
   // above the theoretical max (52*perCard + winBonus) and tracks the constants.
   solitaire:   { mult: 0,  flat: Math.ceil((52*SOLITAIRE_PER_CARD + SOLITAIRE_WIN_BONUS) * 1.2), minDurMs: 0, timeoutMs: 30 * 60_000 },
 };
+// Guild Numeracy Exams. One CASINO_CFG entry per paper, generated from the exam
+// table in mathtest.js so the backstop cap tracks a retune instead of drifting
+// away from it. mult is 0 because nothing here scales with the stake: the payout
+// is the graded paper, computed server-side, and flat is its theoretical ceiling.
+// minDurMs is 0 because the per-question clocks already bound the pace far more
+// tightly than a whole-round floor could, and a floor would void a genuinely fast
+// player on a 10-question drill.
+for (const ex of MathTest.EXAMS) {
+  CASINO_CFG[ex.game] = { mult: 0, flat: MathTest.maxGross(ex), minDurMs: 0, timeoutMs: ex.timeoutMs };
+}
+// The pre-1.3.5 'mathgame' round type is retired. Its entry stays so an old row
+// in casino_rounds still resolves through the sweep, but casino_bet refuses to
+// open a new one (see the stale guard below) because the client that opened them
+// declared its own payout.
+CASINO_CFG.mathgame = { mult: 0, flat: 900, minDurMs: 5000, timeoutMs: 15 * 60_000 };
+
+// Rounds that only their OWN handler may resolve.
+//
+// casino_result looks a round up by id and player and then pays whatever the
+// client asked for, capped at that game's flat. It never checked WHICH game.
+// So any round opened by a server-authoritative handler could be settled through
+// the client-declared path instead, skipping the thing that was supposed to
+// decide the payout. solitaire_start plus casino_result{payout:999999} paid 1848
+// against a 250 buy-in without a card being moved, with minDurMs 0 to slow it
+// down. That has been live since solitaire shipped; the exams would have
+// inherited it on day one.
+//
+// Found by playing it against a running server, not by reading it. The static
+// checks all passed: every individual handler is correct, and the hole is only
+// visible when you ask what ELSE can reach a round after one of them opens it.
+const SERVER_SETTLED_GAMES = new Set(['solitaire', ...MathTest.EXAMS.map(e => e.game)]);
 // ─── Casino: server-authoritative one-shot games (roulette, horse races) ──────
 // These pure-RNG games no longer trust a client-declared payout. The client sends
 // only its bet selection; the server rolls with crypto.randomInt (unbiased, not
@@ -5333,9 +5365,27 @@ function sweepCasinoRounds() {
       const p = getPlayer(r.player_id);
       const cashAfter = p ? p.cash : r.cash_before - r.wager;
       resolveCasinoRound(r.id, 'expired', 0, cashAfter, now);
+      MATH_PAPERS.delete(r.id);
+    }
+    // Belt and braces: a key whose round resolved by any other path is dead
+    // weight. Anything older than the longest exam timeout cannot be live.
+    if (MATH_PAPERS.size) {
+      for (const [id, paper] of MATH_PAPERS) {
+        if (now - paper.openedTs > 60 * 60_000) MATH_PAPERS.delete(id);
+      }
     }
   } catch(e) { console.error('[CasinoSweep]', e); }
 }
+
+// ─── Guild Numeracy Exams: live answer keys ──────────────────────────────────
+// roundId -> { playerId, examId, game, questions, idx, correct, accrued, streak,
+//              bestStreak, qSentTs, total }
+// In memory on purpose. The answer key must never touch the wire and never needs
+// to outlive the process: voidOpenCasinoRoundsOnBoot already refunds every round
+// a restart interrupts, so a paper with no key is a paper whose entry fee has
+// been handed back. Pruned by the casino sweep so an abandoned sitting cannot
+// pin its key here for the life of the process.
+const MATH_PAPERS = new Map();
 
 // On boot, void every round left 'open' by a crash/restart and REFUND the stake.
 // Players can't trigger server restarts, so this can't be farmed the way the
@@ -7851,7 +7901,14 @@ wss.on('connection',(ws,req)=>{
       const { payout, view } = g.roll(parsed);
 
       const cfg      = CASINO_CFG[game] || { mult:1, flat:0 };
-      const cap      = parsed.stake * (cfg.mult||1) + (cfg.flat||0);
+      // Same falsy-zero guard as the casino_result cap. Inert today, because
+      // every one-shot game declares a real multiplier (roulette 36, sicbo 160),
+      // so nothing here is currently wrong. It is written anyway because the
+      // failure only appears the day someone adds a flat-paying one-shot, and on
+      // that day the cap would be silently one stake too generous with no error
+      // and nothing on screen to suggest it.
+      const capMult  = Number.isFinite(cfg.mult) ? cfg.mult : 1;
+      const cap      = parsed.stake * capMult + (cfg.flat||0);
       const credited = Math.round(Math.min(Math.max(payout,0), cap) * 100) / 100;
       const clamped  = payout > cap + 0.005;
 
@@ -7896,7 +7953,10 @@ wss.on('connection',(ws,req)=>{
       // Roulette and horse races are now fully server-authoritative via casino_play
       // (server rolls + settles atomically). The old client-declared bet/result path
       // is closed for them so a stale or crafted client can't reopen the payout hole.
-      if(ONESHOT_GAMES.has(game)){
+      // 'mathgame' joins them from 1.3.5: the Math Quiz is now the Guild Numeracy
+      // Exams, which run on math_start / math_answer and are settled by the server.
+      // A cached old client would otherwise open a round it cannot settle.
+      if(ONESHOT_GAMES.has(game) || game === 'mathgame'){
         ws.send(JSON.stringify({ type:'casino_stale', data:{
           msg:'Casino updated — hard-refresh (Ctrl+Shift+R) to load the new version.' } }));
         return;
@@ -7927,6 +7987,11 @@ wss.on('connection',(ws,req)=>{
       const round  = getOpenCasinoRound(String(msg.roundId||''), actor.id);
       const amount = Math.round((Number(msg.amount)||0)*100)/100;
       if(!round){ ws.send(JSON.stringify({type:'casino_addon_ack',data:{ok:false,error:'No open round.'}})); return; }
+      // wager feeds the payout cap, so raising it on a server-settled round is
+      // the same lever as declaring the payout outright.
+      if(SERVER_SETTLED_GAMES.has(round.game)){
+        ws.send(JSON.stringify({type:'casino_addon_ack',data:{ok:false,roundId:round.id,error:'This round is settled by the server.'}})); return;
+      }
       if(!(amount>0)){ ws.send(JSON.stringify({type:'casino_addon_ack',data:{ok:false,error:'Invalid amount.'}})); return; }
       if(amount > actor.cash){ ws.send(JSON.stringify({type:'casino_addon_ack',data:{ok:false,error:'Insufficient funds.'}})); return; }
       safeAddCash(actor, -amount);
@@ -7945,12 +8010,19 @@ wss.on('connection',(ws,req)=>{
     // that arrives implausibly fast voids the round (refund stake, zero payout).
     if(msg.type==='casino_result'){
       const round  = getOpenCasinoRound(String(msg.roundId||''), actor.id);
-      if(!round){ ws.send(JSON.stringify({type:'casino_result_ack',data:{ok:false,error:'No open round.'}})); return; }
+      if(!round){ ws.send(JSON.stringify({type:'casino_result_ack',data:{ok:false,roundId:String(msg.roundId||''),error:'No open round.'}})); return; }
+      // The round is real and belongs to this player, and neither of those facts
+      // entitles the client to price it. See SERVER_SETTLED_GAMES.
+      if(SERVER_SETTLED_GAMES.has(round.game)){
+        ws.send(JSON.stringify({type:'casino_result_ack',data:{ok:false,roundId:round.id,error:'This round is settled by the server.'}}));
+        broadcastToAdmins({ type:'admin_log', data:{ action:'casino_bad_settle', by:actor.name, game:round.game, claimed:Number(msg.payout)||0 } });
+        return;
+      }
       const cfg    = CASINO_CFG[round.game] || { mult:1, flat:0, minDurMs:0 };
       const payout = Number(msg.payout);
       if(!Number.isFinite(payout) || payout < 0){
         // Malformed — leave the round open; the sweep will forfeit it on timeout.
-        ws.send(JSON.stringify({type:'casino_result_ack',data:{ok:false,error:'Invalid payout.'}})); return;
+        ws.send(JSON.stringify({type:'casino_result_ack',data:{ok:false,roundId:round.id,error:'Invalid payout.'}})); return;
       }
       const now     = Date.now();
       const elapsed = now - round.opened_ts;
@@ -7960,12 +8032,18 @@ wss.on('connection',(ws,req)=>{
         actor.cash = Math.round(actor.cash*100)/100;
         savePlayer(actor);
         resolveCasinoRound(round.id, 'rejected_fast', 0, actor.cash, now);
-        ws.send(JSON.stringify({type:'casino_result_ack',data:{ok:false,error:'Round voided (too fast).', cash:actor.cash}}));
+        ws.send(JSON.stringify({type:'casino_result_ack',data:{ok:false,roundId:round.id,error:'Round voided (too fast).', cash:actor.cash}}));
         ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
         broadcastToAdmins({ type:'admin_log', data:{ action:'casino_fast_void', by:actor.name, game:round.game, wager:round.wager } });
         return;
       }
-      const cap      = round.wager * (cfg.mult||1) + (cfg.flat||0);
+      // The old fallback read a multiplier of 1 for every game that declares 0
+      // (sudoku, minesweeper, the math exams), because 0 is falsy, so their cap
+      // was silently wager plus flat rather than flat. Harmless while the honest
+      // maximum sat under the cap, but the cap is the backstop, and a backstop
+      // that is not the number you wrote is not a backstop.
+      const capMult  = Number.isFinite(cfg.mult) ? cfg.mult : 1;
+      const cap      = round.wager * capMult + (cfg.flat||0);
       const credited = Math.round(Math.min(Math.max(payout,0), cap)*100)/100;
       const clamped  = payout > cap + 0.005;
       safeAddCash(actor, credited);
@@ -8029,7 +8107,7 @@ wss.on('connection',(ws,req)=>{
       const rep   = solitaireReplay(round.id, moves);               // server owns the deal + validation
       const gross = rep.foundations * SOLITAIRE_PER_CARD + (rep.won ? SOLITAIRE_WIN_BONUS : 0);
       const cfg   = CASINO_CFG['solitaire'] || { mult:0, flat:0 };
-      const cap   = round.wager * (cfg.mult||0) + (cfg.flat||0);    // pure backstop; server payout is already bounded
+      const cap   = round.wager * (Number.isFinite(cfg.mult) ? cfg.mult : 0) + (cfg.flat||0); // pure backstop; server payout is already bounded
       const credited = Math.round(Math.min(Math.max(gross,0), cap) * 100) / 100;
       const clamped  = gross > cap + 0.005;
       const now = Date.now();
@@ -8049,6 +8127,238 @@ wss.on('connection',(ws,req)=>{
       if(clamped){
         broadcastToAdmins({ type:'admin_log', data:{ action:'casino_clamped', by:actor.name, game:'solitaire', wager:round.wager, claimed:gross, paid:credited } });
       }
+      return;
+    }
+
+    // ── Guild Numeracy Exams ─────────────────────────────────────────────────
+    // Replaces the old Math Quiz. Every fact the payout depends on lives here:
+    // the questions, the answer key, the per-question clock, the running score,
+    // the grade curve and the settlement. The client posts an answer and is told
+    // whether it was right. It never sends a payout and never receives an answer
+    // before the question it belongs to has resolved.
+
+    // Helper: settle a finished (or abandoned) paper and clear its key.
+    const mathSettle = (round, paper, abandoned) => {
+      const now   = Date.now();
+      const exam  = MathTest.EXAM_BY_ID.get(paper.examId);
+      const total = paper.total;
+      const pct   = total ? paper.correct / total : 0;
+      const grade = abandoned ? { label:'F', mult:0 } : MathTest.gradeFor(pct);
+      const gross = Math.round(paper.accrued * grade.mult);
+      const cfg   = CASINO_CFG[paper.game] || { mult:0, flat:0 };
+      const cap   = round.wager * (Number.isFinite(cfg.mult) ? cfg.mult : 0) + (cfg.flat||0);
+      const credited = Math.round(Math.min(Math.max(gross,0), cap) * 100) / 100;
+      const clamped  = gross > cap + 0.005;
+      safeAddCash(actor, credited);
+      actor.cash = Math.round(actor.cash*100)/100;
+      savePlayer(actor);
+      resolveCasinoRound(round.id, abandoned ? 'abandoned' : (clamped ? 'clamped' : 'resolved'), credited, actor.cash, now);
+      MATH_PAPERS.delete(round.id);
+      try {
+        const equity = Object.entries(actor.holdings||{}).reduce((acc,[sym,qty])=>{
+          const co=companies.find(x=>x.symbol===sym); return acc+(co?co.price*qty:0);
+        },0);
+        recordNetWorth(actor.id, actor.cash+equity, actor.cash, equity);
+      } catch(_) {}
+      if(clamped){
+        // A generator or tuning bug, not a player. The cap is derived from the
+        // exam table, so tripping it means the table and the payout disagree.
+        broadcastToAdmins({ type:'admin_log', data:{ action:'casino_clamped', by:actor.name, game:paper.game, wager:round.wager, claimed:gross, paid:credited } });
+      }
+      return {
+        examId: paper.examId, exam: exam ? exam.name : paper.examId,
+        score: paper.correct, total, pct: Math.round(pct*1000)/1000,
+        grade: grade.label, mult: grade.mult,
+        accrued: paper.accrued, bestStreak: paper.bestStreak,
+        entry: round.wager, credited,
+        net: Math.round((credited - round.wager)*100)/100,
+        cash: actor.cash, abandoned: !!abandoned,
+      };
+    };
+
+    // ── Exams: the lobby list, with live cooldowns and gate state ─────────────
+    if(msg.type==='math_exams'){
+      const now = Date.now();
+      const exams = MathTest.EXAMS.map(ex => {
+        const lastTs = getLastCasinoRoundTs(actor.id, ex.game);
+        const cdLeft = Math.max(0, ex.cooldownMs - (now - lastTs));
+        let locked = false, lockReason = null;
+        if (ex.gate) {
+          const best = getBestCasinoResult(actor.id, ex.gate.game);
+          if (!(best && best.payout > best.wager)) { locked = true; lockReason = ex.gate.reason; }
+        }
+        const best = getBestCasinoResult(actor.id, ex.game);
+        return {
+          id: ex.id, name: ex.name, desc: ex.desc,
+          entry: ex.entry, count: ex.count, tiers: ex.tiers,
+          topics: ex.topics || (ex.fixedMixed ? MathTest.TOPICS.map(t=>t.id) : null),
+          pickTopic: !ex.topics && !ex.fixedMixed,
+          timeSec: ex.timeSec, cooldownMs: ex.cooldownMs, cooldownLeftMs: cdLeft,
+          streakEvery: ex.streakEvery || 0, streakBonus: ex.streakBonus || 0,
+          maxGross: MathTest.maxGross(ex),
+          locked, lockReason,
+          bestNet: best ? Math.round((best.payout - best.wager)*100)/100 : null,
+        };
+      });
+      // Any paper this player left open, so a refresh mid-exam can be resumed
+      // instead of silently costing the entry fee.
+      let open = null;
+      for (const ex of MathTest.EXAMS) {
+        const r = getOpenRoundForGame(actor.id, ex.game);
+        if (r && MATH_PAPERS.has(r.id)) {
+          const paper = MATH_PAPERS.get(r.id);
+          open = { roundId: r.id, examId: paper.examId, answered: paper.idx, total: paper.total, entry: r.wager };
+          break;
+        }
+      }
+      ws.send(JSON.stringify({type:'math_exams_ack',data:{ ok:true, exams, topics: MathTest.TOPICS, grades: MathTest.GRADES, open, cash: actor.cash }}));
+      return;
+    }
+
+    // ── Exams: sit a paper ───────────────────────────────────────────────────
+    if(msg.type==='math_start'){
+      const exam = MathTest.EXAM_BY_ID.get(String(msg.examId||''));
+      if(!exam){ ws.send(JSON.stringify({type:'math_start_ack',data:{ok:false,error:'Unknown exam.'}})); return; }
+      const now = Date.now();
+      const cdLeft = Math.max(0, exam.cooldownMs - (now - getLastCasinoRoundTs(actor.id, exam.game)));
+      if(cdLeft > 0){
+        // Server-side now. The old five minute cooldown was a localStorage key,
+        // which is to say it was advice.
+        ws.send(JSON.stringify({type:'math_start_ack',data:{ok:false,error:'cooldown',cooldownLeftMs:cdLeft}})); return;
+      }
+      if(exam.gate){
+        const best = getBestCasinoResult(actor.id, exam.gate.game);
+        if(!(best && best.payout > best.wager)){
+          ws.send(JSON.stringify({type:'math_start_ack',data:{ok:false,error:'locked',lockReason:exam.gate.reason}})); return;
+        }
+      }
+      if(exam.entry > actor.cash){
+        ws.send(JSON.stringify({type:'math_start_ack',data:{ok:false,error:'funds',need:exam.entry,have:Math.floor(actor.cash)}})); return;
+      }
+      // Abandoning a paper forfeits its entry, exactly like losing it. Auto
+      // forfeiting the old one here is what keeps a stale open round from
+      // locking the player out of the game entirely, which is what the previous
+      // version did for up to fifteen minutes at a time.
+      const stale = getOpenRoundForGame(actor.id, exam.game);
+      if(stale){ resolveCasinoRound(stale.id, 'abandoned', 0, actor.cash, now); MATH_PAPERS.delete(stale.id); }
+
+      const questions = MathTest.buildPaper(exam, String(msg.topic||'mixed'));
+      const roundId = uuidv4();
+      if(exam.entry > 0){
+        safeAddCash(actor, -exam.entry);
+        actor.cash = Math.round(actor.cash*100)/100;
+        savePlayer(actor);
+      }
+      openCasinoRound({ id:roundId, playerId:actor.id, game:exam.game, wager:exam.entry, cashBefore:actor.cash+exam.entry, openedTs:now });
+      const paper = { playerId:actor.id, examId:exam.id, game:exam.game, questions,
+                      idx:0, correct:0, accrued:0, streak:0, bestStreak:0,
+                      total:questions.length, qSentTs:now, openedTs:now };
+      MATH_PAPERS.set(roundId, paper);
+      ws.send(JSON.stringify({type:'math_start_ack',data:{ ok:true, roundId, examId:exam.id, examName:exam.name,
+        total:questions.length, entry:exam.entry, cash:actor.cash,
+        streakEvery:exam.streakEvery||0, streakBonus:exam.streakBonus||0,
+        question: MathTest.publicQuestion(questions[0], questions.length) }}));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      return;
+    }
+
+    // ── Exams: answer the current question ───────────────────────────────────
+    if(msg.type==='math_answer'){
+      const roundId = String(msg.roundId||'');
+      const round   = getOpenCasinoRound(roundId, actor.id);
+      const paper   = MATH_PAPERS.get(roundId);
+      if(!round || !paper || paper.playerId !== actor.id){
+        ws.send(JSON.stringify({type:'math_answer_ack',data:{ok:false,roundId,error:'No open paper.'}})); return;
+      }
+      const idx = Number(msg.i);
+      if(idx !== paper.idx){
+        // Out of order, replayed, or a stale frame after a resume. Never graded:
+        // accepting one would let a client answer the same question twice.
+        ws.send(JSON.stringify({type:'math_answer_ack',data:{ok:false,roundId,error:'Out of sequence.',expect:paper.idx}})); return;
+      }
+      const q       = paper.questions[idx];
+      const now     = Date.now();
+      const elapsed = now - paper.qSentTs;
+      // The clock is the server's. A client that sits on a question and then
+      // claims it answered in time is graded on the wire, not on its own timer.
+      // 1500ms of grace covers a round trip and one render.
+      const late    = elapsed > (q.timeSec * 1000 + 1500);
+      const correct = !late && MathTest.isCorrect(q, msg.value);
+
+      let reward = 0, streakBonus = 0;
+      if(correct){
+        paper.correct++;
+        paper.streak++;
+        if(paper.streak > paper.bestStreak) paper.bestStreak = paper.streak;
+        reward = q.reward;
+        const exam = MathTest.EXAM_BY_ID.get(paper.examId);
+        if(exam && exam.streakEvery && paper.streak % exam.streakEvery === 0){
+          streakBonus = exam.streakBonus;
+        }
+        paper.accrued += reward + streakBonus;
+      } else {
+        paper.streak = 0;
+      }
+      paper.idx++;
+
+      const done = paper.idx >= paper.total;
+      const out = { ok:true, roundId, i:idx, correct, late, answer:q.answer,
+                    reward, streakBonus, accrued:paper.accrued,
+                    score:paper.correct, answered:paper.idx, total:paper.total,
+                    streak:paper.streak, done };
+      if(done){
+        out.result = mathSettle(round, paper, false);
+      } else {
+        paper.qSentTs = Date.now();
+        out.next = MathTest.publicQuestion(paper.questions[paper.idx], paper.total);
+      }
+      ws.send(JSON.stringify({type:'math_answer_ack',data:out}));
+      if(done){
+        ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
+        ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      }
+      return;
+    }
+
+    // ── Exams: resume a paper interrupted by a refresh or a dropped socket ────
+    // The question that was live when the connection went is scored WRONG and
+    // the paper moves on. Re-issuing it with a fresh clock would make refresh a
+    // free re-roll on anything hard, which is a worse bug than the one this
+    // fixes. One question is the price of the interruption.
+    if(msg.type==='math_resume'){
+      const roundId = String(msg.roundId||'');
+      const round   = getOpenCasinoRound(roundId, actor.id);
+      const paper   = MATH_PAPERS.get(roundId);
+      if(!round || !paper || paper.playerId !== actor.id){
+        ws.send(JSON.stringify({type:'math_resume_ack',data:{ok:false,roundId,error:'No open paper.'}})); return;
+      }
+      const lost = paper.questions[paper.idx] || null;
+      paper.idx++;
+      paper.streak = 0;
+      const done = paper.idx >= paper.total;
+      const out = { ok:true, roundId, examId:paper.examId, forfeited: lost ? lost.i : null,
+                    lostAnswer: lost ? lost.answer : null,
+                    score:paper.correct, answered:paper.idx, total:paper.total,
+                    accrued:paper.accrued, done };
+      if(done){ out.result = mathSettle(round, paper, false); }
+      else {
+        paper.qSentTs = Date.now();
+        out.next = MathTest.publicQuestion(paper.questions[paper.idx], paper.total);
+      }
+      ws.send(JSON.stringify({type:'math_resume_ack',data:out}));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      return;
+    }
+
+    // ── Exams: walk out ──────────────────────────────────────────────────────
+    if(msg.type==='math_abandon'){
+      const roundId = String(msg.roundId||'');
+      const round   = getOpenCasinoRound(roundId, actor.id);
+      const paper   = MATH_PAPERS.get(roundId);
+      if(!round || !paper){ ws.send(JSON.stringify({type:'math_abandon_ack',data:{ok:false,roundId,error:'No open paper.'}})); return; }
+      const result = mathSettle(round, paper, true);
+      ws.send(JSON.stringify({type:'math_abandon_ack',data:{ok:true, roundId, result}}));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
       return;
     }
 

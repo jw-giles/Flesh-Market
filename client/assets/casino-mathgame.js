@@ -1,220 +1,408 @@
-
+/**
+ * casino-mathgame.js - Guild Numeracy Exams (client).
+ *
+ * The client no longer generates questions, holds answers, keeps score for
+ * money, or names a payout. It renders what the server sends and posts answers
+ * back. Everything that decides cash lives in server/mathtest.js and the
+ * math_start / math_answer handlers.
+ *
+ * The old version did all of it locally and then told the server what it had
+ * won, which is why it both overpaid anyone who asked and silently paid nothing
+ * to anyone whose previous round was still open. Both failures are gone with the
+ * code that caused them.
+ */
 (function(){
   const pane = document.getElementById('casino-mathgame');
   if (!pane) return;
-  const T=(k,fb)=>window.t?window.t(k,fb):fb;
-  const TF=(k,fb,v)=>window.tf?window.tf(k,fb,v):fb;
-  function mqLvlName(n){var m={'Basic':'casino.math.lvlBasic','Standard':'casino.math.lvlStandard','Advanced':'casino.math.lvlAdvanced','Expert':'casino.math.lvlExpert','Genius':'casino.math.lvlGenius'};return T(m[n]||'',n);}
+  const T  = (k,fb)=>window.t?window.t(k,fb):fb;
+  const TF = (k,fb,v)=>window.tf?window.tf(k,fb,v):fb;
+  const money = n => '\u0192' + Math.round(Number(n)||0).toLocaleString();
 
-  // Each question is randomly drawn from across ALL levels — reward reflects difficulty
-  const LEVELS = [
-    { name:'Basic',    ops:['+','-'],               range:20,  time:18, perQ:2    },
-    { name:'Standard', ops:['+','-','×'],            range:50,  time:22, perQ:6    },
-    { name:'Advanced', ops:['+','-','×','÷'],        range:100, time:26, perQ:15   },
-    { name:'Expert',   ops:['+','-','×','÷','²'],    range:200, time:32, perQ:35   },
-    { name:'Genius',   ops:['+','-','×','÷','²','√'],range:500, time:42, perQ:80   },
-  ];
-  const TOTAL_Q = 10;
-  const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
-  const COOLDOWN_KEY = 'mathgame_cooldown';
+  // ─── Net: promise wrapper over the exam messages ───────────────────────────
+  // Same shape as casino-net.js and for the same reason: the socket is a stream
+  // of unrelated frames, so a call has to say which ack is its own.
+  const PENDING = new Map();
+  let seq = 0;
+  const ACKS = new Set(['math_exams_ack','math_start_ack','math_answer_ack','math_resume_ack','math_abandon_ack']);
 
-  function init() {
-    if (pane.dataset.inited) return; pane.dataset.inited='1';
-    pane.innerHTML = `
-    <style>
-      #mq-wrap{font-family:monospace;padding:12px;max-width:500px}
-      #mq-question{font-size:2.2rem;color:#72e09c;margin:18px 0;min-height:56px;text-align:center}
-      #mq-diff-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.75rem;margin-bottom:4px;background:#06200d;border:1px solid #1f4a1f;color:#aaa;letter-spacing:.05em}
-      #mq-input{font-size:1.5rem;width:160px;text-align:center;background:#0d0d08;border:1px solid #1f4a1f;color:#72e09c;padding:6px;font-family:monospace;border-radius:4px}
-      #mq-timer-bar{height:6px;background:#72e09c;border-radius:3px;transition:width .1s linear;margin:8px 0}
-      #mq-score-row{display:flex;gap:24px;margin:8px 0;font-size:.9rem;color:#aaa}
-      #mq-feedback{font-size:.9rem;min-height:20px;margin:4px 0}
-      #mq-cooldown-bar{height:4px;background:#333;border-radius:2px;margin:6px 0;overflow:hidden}
-      #mq-cooldown-fill{height:4px;background:#1f4a1f;border-radius:2px;transition:width 1s linear}
-      #mq-payout-preview{font-size:.78rem;color:#888;margin:4px 0;min-height:16px}
-    </style>
-    <div id="mq-wrap">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
-        <span style="color:#72e09c;letter-spacing:.1em;font-size:.9rem" data-i18n="casino.math.mathTest">MATH TEST</span>
-        <span style="color:#888;font-size:.78rem" data-i18n="casino.math.across">10 questions across all difficulties</span>
-      </div>
-      <div id="mq-cooldown-bar"><div id="mq-cooldown-fill" style="width:0%"></div></div>
-      <div id="mq-score-row">
-        <span><span data-i18n="casino.math.qLabel">Q:</span> <b id="mq-qnum">-</b>/${TOTAL_Q}</span>
-        <span><span data-i18n="casino.math.scoreLabel">Score:</span> <b id="mq-score">0</b></span>
-        <span><span data-i18n="casino.math.earnedLabel">Earned:</span> <b id="mq-earned">Ƒ0</b></span>
-      </div>
-      <div id="mq-timer-bar" style="width:100%"></div>
-      <div id="mq-diff-badge">-</div>
-      <div id="mq-question" data-i18n="casino.math.pressStart">Press Start Test to begin</div>
-      <div id="mq-payout-preview"></div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-        <input id="mq-input" type="number" placeholder="?" autocomplete="off" disabled>
-        <button class="btn" id="mq-submit" disabled data-i18n="casino.math.answer">Answer</button>
-      </div>
-      <div id="mq-feedback" style="color:#4ecdc4"></div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn" id="mq-start" data-i18n="casino.math.startTest">▶ Start Test</button>
-      </div>
-      <div id="mq-status" class="muted" style="margin-top:8px;min-height:20px"></div>
-    </div>`;
+  function sock(){
+    return window.ws && window.ws.readyState === 1 ? window.ws
+         : (window._ws && window._ws.readyState === 1 ? window._ws : null);
+  }
+  document.addEventListener('fm_ws_msg', (e)=>{
+    const m = e && e.detail;
+    if (!m || !m.type || !ACKS.has(m.type)) return;
+    for (const [key, entry] of PENDING) {
+      let hit = false;
+      try { hit = entry.match(m); } catch(_) { hit = false; }
+      if (hit) { clearTimeout(entry.timer); PENDING.delete(key); entry.resolve(m.data || {}); break; }
+    }
+  });
+  function call(type, payload, ackType, matchRound){
+    const w = sock();
+    if (!w) return Promise.resolve({ ok:false, error:'offline' });
+    return new Promise((resolve)=>{
+      const key = 'm' + (++seq);
+      const timer = setTimeout(()=>{ if(PENDING.has(key)){ PENDING.delete(key); resolve({ok:false,error:'timeout'}); } }, 12000);
+      PENDING.set(key, { timer, resolve,
+        match:(m)=> m.type===ackType && (!matchRound || !m.data || !m.data.roundId || m.data.roundId===matchRound) });
+      try { w.send(JSON.stringify(Object.assign({type}, payload))); }
+      catch(_){ clearTimeout(timer); PENDING.delete(key); resolve({ok:false,error:'offline'}); }
+    });
+  }
+
+  // ─── State ─────────────────────────────────────────────────────────────────
+  let lobby = null;      // last math_exams_ack payload
+  let round = null;      // { roundId, examId, examName, total, entry, streak* }
+  let question = null;   // current public question
+  let tick = null, deadline = 0, lobbyTick = null;
+  let busy = false;
+
+  function fmtMs(ms){
+    const s = Math.max(0, Math.ceil(ms/1000));
+    return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+  }
+  function topicName(id){
+    const found = (lobby && (lobby.topics||[]).find(t=>t.id===id)) || {};
+    return T('casino.math.topic.'+id, found.name || id);
+  }
+  // Word problems ship a template key plus its vars so Jade mode renders them
+  // translated. Symbol-only questions ship text alone and pass straight through.
+  function questionText(q){
+    if (q && q.tk && q.tv) return TF(q.tk, q.text, q.tv);
+    return q ? q.text : '';
+  }
+  function gradeColor(g){
+    return g==='S' ? '#ffd166' : g==='A' ? '#72e09c' : g==='B' ? '#4ecdc4'
+         : g==='C' ? '#9ad1ff' : g==='D' ? '#e9a23b' : '#ff6b6b';
+  }
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  }
+
+  // ─── Views ─────────────────────────────────────────────────────────────────
+  function shell(inner){
+    pane.innerHTML = '<div id="mq-wrap">' + inner + '</div>';
     if(window.applyI18n) window.applyI18n(pane);
+  }
 
-    let qNum=0, score=0, totalEarned=0, playing=false;
-    let current=null, currentLvl=null, timerInterval=null, timeLeft=0;
-    let cooldownInterval=null;
-    let mqRoundId=null; // server round id for the active session
+  function renderLoading(){
+    shell('<div class="mq-note" data-i18n="casino.math.loading">Loading exam board...</div>');
+  }
 
-    function getBalance(){ return (typeof ME==='object'&&ME&&typeof ME.cash==='number')?ME.cash:0; }
-    function setBalance(v){
-      if(typeof ME==='object'&&ME){ME.cash=v;}
-      const c=document.getElementById('cash');if(c)c.textContent='Ƒ'+Math.round(v).toLocaleString();
-      // Legacy {type:'casino',sync} removed — server-authoritative cash.
-    }
+  function renderLobby(){
+    if(!lobby){ renderLoading(); return; }
+    const cards = (lobby.exams||[]).map(ex=>{
+      const cd = ex.cooldownLeftMs > 0;
+      const canPay = ex.entry <= (lobby.cash||0);
+      const blocked = ex.locked || cd || !canPay;
+      let note = '';
+      if (ex.locked)      note = `<div class="mq-lock">${esc(T('casino.math.lockBroker','Locked. Pass the Broker Certification first.'))}</div>`;
+      else if (cd)        note = `<div class="mq-lock">${esc(TF('casino.math.cooldownLeft','Cooldown {t}',{t:fmtMs(ex.cooldownLeftMs)}))}</div>`;
+      else if (!canPay)   note = `<div class="mq-lock">${esc(TF('casino.math.needFunds','Entry is {amt}',{amt:money(ex.entry)}))}</div>`;
+      const topicLine = (ex.topics && ex.topics.length)
+        ? ex.topics.map(topicName).map(esc).join(' \u00b7 ')
+        : esc(T('casino.math.topicAny','Your choice of topic'));
+      const picker = ex.pickTopic ? `
+        <select class="mq-topic" data-exam="${esc(ex.id)}">
+          <option value="mixed">${esc(T('casino.math.topicMixed','Mixed'))}</option>
+          ${(lobby.topics||[]).map(t=>`<option value="${esc(t.id)}">${esc(topicName(t.id))}</option>`).join('')}
+        </select>` : '';
+      return `
+      <div class="mq-card${blocked?' mq-dim':''}">
+        <div class="mq-card-head">
+          <span class="mq-card-name">${esc(ex.name)}</span>
+          <span class="mq-card-entry">${esc(ex.entry>0?TF('casino.math.entryFee','Entry {amt}',{amt:money(ex.entry)}):T('casino.math.free','Free'))}</span>
+        </div>
+        <div class="mq-card-desc">${esc(ex.desc)}</div>
+        <div class="mq-card-meta">
+          <span>${esc(TF('casino.math.qCount','{n} questions',{n:ex.count}))}</span>
+          <span>${esc(TF('casino.math.secEach','{n}s each',{n:ex.timeSec}))}</span>
+          <span>${esc(TF('casino.math.upTo','Up to {amt}',{amt:money(ex.maxGross)}))}</span>
+        </div>
+        <div class="mq-card-topics">${topicLine}</div>
+        ${(ex.bestNet!==null&&ex.bestNet!==undefined)?`<div class="mq-card-best">${esc(TF('casino.math.bestNet','Best result {amt}',{amt:(ex.bestNet>=0?'+':'')+money(ex.bestNet)}))}</div>`:''}
+        ${note}
+        <div class="mq-card-actions">
+          ${picker}
+          <button class="btn mq-sit" data-exam="${esc(ex.id)}"${blocked?' disabled':''}>
+            ${esc(cd ? fmtMs(ex.cooldownLeftMs) : T('casino.math.sit','Sit the paper'))}
+          </button>
+        </div>
+      </div>`;
+    }).join('');
 
-    function randInt(max){ return Math.floor(Math.random()*max)+1; }
+    const gradeRow = (lobby.grades||[]).map(g=>
+      `<span class="mq-grade-chip" style="color:${gradeColor(g.label)}">${esc(g.label)} ${Math.round(g.min*100)}%+ &times;${Number(g.mult).toFixed(2)}</span>`
+    ).join('');
 
-    function genQuestion(lvl){
-      const ops=[...lvl.ops];
-      const op=ops[Math.floor(Math.random()*ops.length)];
-      let a,b,answer,text;
-      const r=lvl.range;
-      if(op==='²'){ a=randInt(Math.floor(Math.sqrt(r))); answer=a*a; text=`${a}²`; }
-      else if(op==='√'){ a=randInt(Math.floor(Math.sqrt(r))); answer=a; text=`√${a*a}`; }
-      else if(op==='÷'){ b=randInt(12); a=b*randInt(Math.floor(r/12)||1); answer=a/b; text=`${a} ÷ ${b}`; }
-      else if(op==='×'){ a=randInt(Math.floor(Math.sqrt(r)));b=randInt(Math.floor(Math.sqrt(r))); answer=a*b; text=`${a} × ${b}`; }
-      else if(op==='+'){ a=randInt(r);b=randInt(r);answer=a+b;text=`${a} + ${b}`; }
-      else { a=randInt(r);b=randInt(a)||1;answer=a-b;text=`${a} − ${b}`; }
-      return{text,answer};
-    }
+    const openExam = lobby.open ? ((lobby.exams||[]).find(e=>e.id===lobby.open.examId)||{}) : null;
+    const resume = lobby.open ? `
+      <div class="mq-resume">
+        <div>${esc(TF('casino.math.resumeFound','You left {exam} unfinished at question {n} of {t}.',{exam:openExam.name||lobby.open.examId,n:lobby.open.answered+1,t:lobby.open.total}))}</div>
+        <div class="mq-resume-note" data-i18n="casino.math.resumeCost">Resuming scores the interrupted question as wrong. Walking out forfeits the entry fee.</div>
+        <div class="mq-card-actions">
+          <button class="btn" id="mq-resume" data-i18n="casino.math.resume">Resume paper</button>
+          <button class="btn mq-ghost" id="mq-walk" data-i18n="casino.math.walkOut">Walk out</button>
+        </div>
+      </div>` : '';
 
-    function updateCooldownBar(){
-      const last=parseInt(localStorage.getItem(COOLDOWN_KEY)||'0');
-      const elapsed=Date.now()-last;
-      const pct=Math.min(100,elapsed/COOLDOWN_MS*100);
-      const fill=document.getElementById('mq-cooldown-fill');
-      if(fill) fill.style.width=pct+'%';
-      const startBtn=document.getElementById('mq-start');
-      if(pct>=100){
-        if(startBtn&&!playing) startBtn.disabled=false;
-      } else {
-        const remSec=Math.ceil((COOLDOWN_MS-elapsed)/1000);
-        const remMin=Math.floor(remSec/60), remS=remSec%60;
-        if(startBtn&&!playing){
-          startBtn.disabled=true;
-          startBtn.textContent=TF('casino.math.cooldown','⏳ {t} cooldown',{t:remMin+':'+String(remS).padStart(2,'0')});
+    shell(`
+      <div class="mq-head">
+        <span class="mq-title" data-i18n="casino.math.title">GUILD NUMERACY EXAMS</span>
+        <span class="mq-sub" data-i18n="casino.math.subtitle">Sit a paper. The grade decides the pay.</span>
+      </div>
+      ${resume}
+      <div class="mq-grades">
+        <span class="mq-grades-label" data-i18n="casino.math.gradeCurve">Grade curve</span>
+        ${gradeRow}
+      </div>
+      <div class="mq-note" data-i18n="casino.math.curveNote">Earnings accrue per correct answer, then multiply by your grade. Below 60 percent the paper pays nothing and the entry fee is lost.</div>
+      <div class="mq-grid">${cards}</div>
+      <div id="mq-status" class="mq-status"></div>
+    `);
+
+    pane.querySelectorAll('.mq-sit').forEach(b=>b.addEventListener('click',()=>{
+      const id = b.dataset.exam;
+      const sel = pane.querySelector('.mq-topic[data-exam="'+id+'"]');
+      startExam(id, sel ? sel.value : 'mixed');
+    }));
+    const rb = pane.querySelector('#mq-resume');
+    if(rb) rb.addEventListener('click', ()=>resumeExam(lobby.open.roundId));
+    const wb = pane.querySelector('#mq-walk');
+    if(wb) wb.addEventListener('click', ()=>abandonExam(lobby.open.roundId));
+
+    // One second repaint so cooldown buttons count down without refetching.
+    if(lobbyTick){ clearInterval(lobbyTick); lobbyTick=null; }
+    if((lobby.exams||[]).some(e=>e.cooldownLeftMs>0)){
+      lobbyTick = setInterval(()=>{
+        if(round){ clearInterval(lobbyTick); lobbyTick=null; return; }
+        let any = false;
+        for(const ex of lobby.exams){
+          if(ex.cooldownLeftMs>0){ ex.cooldownLeftMs = Math.max(0, ex.cooldownLeftMs-1000); any = true; }
         }
-      }
+        renderLobby();
+        if(!any){ clearInterval(lobbyTick); lobbyTick=null; }
+      }, 1000);
     }
+  }
 
-    function startCooldownTick(){
-      if(cooldownInterval) clearInterval(cooldownInterval);
-      cooldownInterval=setInterval(()=>{ updateCooldownBar(); },1000);
-      updateCooldownBar();
+  function renderExam(){
+    shell(`
+      <div class="mq-head">
+        <span class="mq-title">${esc(round.examName||'')}</span>
+        <button class="btn mq-ghost mq-small" id="mq-quit" data-i18n="casino.math.walkOut">Walk out</button>
+      </div>
+      <div class="mq-scorerow">
+        <span><b id="mq-qnum">1</b>/<span id="mq-qtot">${esc(round.total)}</span></span>
+        <span>${esc(T('casino.math.scoreLabel','Score:'))} <b id="mq-score">0</b></span>
+        <span>${esc(T('casino.math.accrued','At risk:'))} <b id="mq-accrued">\u01920</b></span>
+        <span>${esc(T('casino.math.projected','Best case:'))} <b id="mq-proj">-</b></span>
+      </div>
+      <div id="mq-timer-bar"><div id="mq-timer-fill"></div></div>
+      <div class="mq-badgerow">
+        <span id="mq-topic" class="mq-badge">-</span>
+        <span id="mq-tier" class="mq-badge">-</span>
+        <span id="mq-reward" class="mq-badge mq-badge-pay">-</span>
+      </div>
+      <div id="mq-question">-</div>
+      <div class="mq-answerrow">
+        <input id="mq-input" type="text" inputmode="decimal" autocomplete="off" placeholder="?">
+        <button class="btn" id="mq-submit" data-i18n="casino.math.answer">Answer</button>
+      </div>
+      <div id="mq-feedback"></div>
+    `);
+    pane.querySelector('#mq-submit').addEventListener('click', submitAnswer);
+    pane.querySelector('#mq-quit').addEventListener('click', ()=>abandonExam(round.roundId));
+    pane.querySelector('#mq-input').addEventListener('keydown', e=>{ if(e.key==='Enter') submitAnswer(); });
+  }
+
+  function setText(id,v){ const e=pane.querySelector(id); if(e) e.textContent=v; }
+
+  function paintQuestion(q, state){
+    question = q;
+    setText('#mq-qnum', q.i+1);
+    setText('#mq-topic', topicName(q.topic));
+    setText('#mq-tier', TF('casino.math.tier','Tier {n}',{n:q.tier}));
+    setText('#mq-reward', TF('casino.math.pays','Pays {amt}',{amt:money(q.reward)}));
+    setText('#mq-question', questionText(q) + ' = ?');
+    if(state){
+      setText('#mq-score', state.score);
+      setText('#mq-accrued', money(state.accrued));
+      setText('#mq-proj', projected(state.score, q.i));
     }
+    const inp = pane.querySelector('#mq-input');
+    if(inp){ inp.value=''; inp.disabled=false; try{ inp.focus(); }catch(_){} }
+    const sub = pane.querySelector('#mq-submit'); if(sub) sub.disabled=false;
+    startTimer(q.timeSec);
+  }
 
-    function startTimer(lvl){
-      timeLeft=lvl.time;
-      const bar=document.getElementById('mq-timer-bar');
-      if(timerInterval)clearInterval(timerInterval);
-      timerInterval=setInterval(()=>{
-        timeLeft-=0.1;
-        if(bar)bar.style.width=Math.max(0,timeLeft/lvl.time*100)+'%';
-        if(timeLeft<=0){clearInterval(timerInterval);timerInterval=null;handleAnswer(null,'timeout');}
-      },100);
+  // Assumes every remaining question is answered correctly, so this is a
+  // ceiling rather than a forecast. The label says best case for that reason.
+  function projected(score, answered){
+    if(!round || !lobby) return '-';
+    const best = (score + (round.total - answered)) / round.total;
+    const g = (lobby.grades||[]).find(x=>best >= x.min - 1e-9) || {label:'F',mult:0};
+    return g.label + ' \u00d7' + Number(g.mult).toFixed(2);
+  }
+
+  function startTimer(sec){
+    if(tick) clearInterval(tick);
+    deadline = Date.now() + sec*1000;
+    const fill = pane.querySelector('#mq-timer-fill');
+    if(fill) fill.style.width = '100%';
+    tick = setInterval(()=>{
+      const left = deadline - Date.now();
+      if(fill) fill.style.width = Math.max(0, Math.min(100, left/(sec*10))) + '%';
+      if(left <= 0){ clearInterval(tick); tick=null; sendAnswer(null); }
+    }, 100);
+  }
+  function stopTimer(){ if(tick){ clearInterval(tick); tick=null; } }
+
+  // ─── Actions ───────────────────────────────────────────────────────────────
+  async function loadLobby(){
+    renderLoading();
+    const r = await call('math_exams', {}, 'math_exams_ack');
+    if(!r || !r.ok){
+      shell('<div class="mq-note">'+esc(T('casino.math.offline','Exam board unavailable. Check your connection and try again.'))+'</div>');
+      return;
     }
+    lobby = r; round = null; question = null;
+    renderLobby();
+  }
 
-    function nextQuestion(){
-      if(qNum>=TOTAL_Q){endTest();return;}
-      qNum++;
-      // Pick random difficulty — weighted toward middle so test spans full range
-      const weights=[1,2,3,2,1]; // Basic↔Genius, middle-heavy
-      let total=weights.reduce((a,b)=>a+b,0), r=Math.random()*total, pick=0;
-      for(let i=0;i<weights.length;i++){r-=weights[i];if(r<=0){pick=i;break;}}
-      currentLvl=LEVELS[pick];
-      current=genQuestion(currentLvl);
-      document.getElementById('mq-qnum').textContent=qNum;
-      document.getElementById('mq-question').textContent=`${current.text} = ?`;
-      document.getElementById('mq-diff-badge').textContent=TF('casino.math.badge','{lvl} · Ƒ{amt} reward',{lvl:mqLvlName(currentLvl.name),amt:currentLvl.perQ});
-      document.getElementById('mq-payout-preview').textContent=TF('casino.math.payoutPreview','Correct answer pays Ƒ{amt}',{amt:currentLvl.perQ.toLocaleString()});
-      document.getElementById('mq-input').value='';
-      document.getElementById('mq-input').focus();
-      document.getElementById('mq-feedback').textContent='';
-      startTimer(currentLvl);
+  async function startExam(examId, topic){
+    if(busy) return; busy = true;
+    const r = await call('math_start', { examId, topic }, 'math_start_ack');
+    busy = false;
+    if(!r || !r.ok){
+      let m = T('casino.math.startFailed','Could not start that paper.');
+      if(r && r.error==='cooldown')    m = TF('casino.math.errCooldown','Still on cooldown for {t}.',{t:fmtMs(r.cooldownLeftMs||0)});
+      else if(r && r.error==='funds')  m = TF('casino.math.errFunds','You need {amt} to sit this paper.',{amt:money(r.need||0)});
+      else if(r && r.error==='locked') m = T('casino.math.lockBroker','Locked. Pass the Broker Certification first.');
+      else if(r && r.error==='offline')m = T('casino.math.offline','Exam board unavailable. Check your connection and try again.');
+      await loadLobby();
+      setText('#mq-status', m);
+      return;
     }
+    round = { roundId:r.roundId, examId:r.examId, examName:r.examName, total:r.total,
+              entry:r.entry, streakEvery:r.streakEvery, streakBonus:r.streakBonus };
+    renderExam();
+    paintQuestion(r.question, { score:0, accrued:0 });
+  }
 
-    function handleAnswer(val,src){
-      if(!playing)return;
-      if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
-      const correct=Math.abs((val||0)-current.answer)<0.001;
-      if(src==='timeout'||!correct){
-        const fb=document.getElementById('mq-feedback');
-        fb.textContent=src==='timeout'?TF('casino.math.timeUp','⏱ Time up! Answer: {ans}',{ans:current.answer}):TF('casino.math.wrong','✗ Wrong, answer was {ans}',{ans:current.answer});
-        fb.style.color='#ff6b6b';
+  function submitAnswer(){
+    if(!round || !question) return;
+    const raw = (pane.querySelector('#mq-input')||{}).value;
+    const v = parseFloat(String(raw).replace(/,/g,'').trim());
+    if(!Number.isFinite(v)) return;
+    sendAnswer(v);
+  }
+
+  async function sendAnswer(value){
+    if(!round || !question || busy) return;
+    busy = true;
+    stopTimer();
+    const inp = pane.querySelector('#mq-input'); if(inp) inp.disabled = true;
+    const sub = pane.querySelector('#mq-submit'); if(sub) sub.disabled = true;
+    const r = await call('math_answer', { roundId:round.roundId, i:question.i, value }, 'math_answer_ack', round.roundId);
+    busy = false;
+    if(!r || !r.ok){
+      const fb = pane.querySelector('#mq-feedback');
+      if(fb){ fb.textContent = T('casino.math.lostRound','Lost contact with the paper. Returning to the board.'); fb.className='mq-bad'; }
+      setTimeout(loadLobby, 1400);
+      return;
+    }
+    const fb = pane.querySelector('#mq-feedback');
+    if(fb){
+      if(r.correct){
+        fb.textContent = r.streakBonus
+          ? TF('casino.math.correctStreak','Correct. {amt} plus a {bonus} streak bonus.',{amt:money(r.reward),bonus:money(r.streakBonus)})
+          : TF('casino.math.correctPlus','Correct. {amt}.',{amt:money(r.reward)});
+        fb.className = 'mq-good';
+      } else if(r.late){
+        fb.textContent = TF('casino.math.timeUpWas','Time up. The answer was {ans}.',{ans:r.answer});
+        fb.className = 'mq-bad';
       } else {
-        score++;
-        const earned=currentLvl.perQ;
-        totalEarned+=earned;
-        // Accumulate only — the session total is settled server-side at endTest.
-        const fb=document.getElementById('mq-feedback');
-        fb.textContent=TF('casino.math.correct','✓ Correct! +Ƒ{amt}',{amt:earned.toLocaleString()});
-        fb.style.color='#4ecdc4';
+        fb.textContent = TF('casino.math.wrongWas','Wrong. The answer was {ans}.',{ans:r.answer});
+        fb.className = 'mq-bad';
       }
-      document.getElementById('mq-score').textContent=score;
-      document.getElementById('mq-earned').textContent='Ƒ'+totalEarned.toLocaleString();
-      setTimeout(nextQuestion,900);
     }
+    setText('#mq-score', r.score);
+    setText('#mq-accrued', money(r.accrued));
+    if(r.done && r.result){ setTimeout(()=>renderResult(r.result), 1100); return; }
+    setTimeout(()=>{ if(round && r.next) paintQuestion(r.next, { score:r.score, accrued:r.accrued }); }, 1100);
+  }
 
-    function endTest(){
-      playing=false;
-      // Settle the whole session: gross = total earned + the Ƒ1 nominal stake
-      // (returned), netting exactly the earnings. Server caps at mathgame 'flat'.
-      if(mqRoundId){ CasinoNet.result(mqRoundId, totalEarned+1); mqRoundId=null; }
-      document.getElementById('mq-input').disabled=true;
-      document.getElementById('mq-submit').disabled=true;
-      document.getElementById('mq-question').textContent=T('casino.math.complete','Test complete!');
-      document.getElementById('mq-diff-badge').textContent='-';
-      document.getElementById('mq-payout-preview').textContent='';
-      document.getElementById('mq-status').textContent=TF('casino.math.finalScore','Score: {score}/{total}, Total earned: Ƒ{earned}',{score:score,total:TOTAL_Q,earned:totalEarned.toLocaleString()});
-      // Set cooldown
-      localStorage.setItem(COOLDOWN_KEY, Date.now());
-      const startBtn=document.getElementById('mq-start');
-      startBtn.textContent=T('casino.math.startTest','▶ Start Test');
-      startCooldownTick();
+  async function resumeExam(roundId){
+    if(busy) return; busy = true;
+    const r = await call('math_resume', { roundId }, 'math_resume_ack', roundId);
+    busy = false;
+    if(!r || !r.ok){ loadLobby(); return; }
+    const ex = (lobby && (lobby.exams||[]).find(e=>e.id===r.examId)) || {};
+    round = { roundId, examId:r.examId, examName:ex.name||'', total:r.total,
+              entry:ex.entry||0, streakEvery:ex.streakEvery||0, streakBonus:ex.streakBonus||0 };
+    if(r.done && r.result){ renderResult(r.result); return; }
+    renderExam();
+    paintQuestion(r.next, { score:r.score, accrued:r.accrued });
+    const fb = pane.querySelector('#mq-feedback');
+    if(fb && r.forfeited!==null && r.forfeited!==undefined){
+      fb.textContent = TF('casino.math.resumeLost','Question {n} was scored wrong. The answer was {ans}.',{n:r.forfeited+1,ans:r.lostAnswer});
+      fb.className = 'mq-bad';
     }
+  }
 
-    document.getElementById('mq-start').addEventListener('click',()=>{
-      const last=parseInt(localStorage.getItem(COOLDOWN_KEY)||'0');
-      if(Date.now()-last < COOLDOWN_MS){ updateCooldownBar(); return; }
-      qNum=0;score=0;totalEarned=0;playing=true;
-      // Open one server-tracked round for the whole session (nominal Ƒ1 stake).
-      mqRoundId=null;
-      CasinoNet.bet('mathgame', 1).then(r=>{ if(r&&r.ok) mqRoundId=r.roundId; });
-      document.getElementById('mq-status').textContent='';
-      document.getElementById('mq-score').textContent='0';
-      document.getElementById('mq-earned').textContent='Ƒ0';
-      document.getElementById('mq-input').disabled=false;
-      document.getElementById('mq-submit').disabled=false;
-      document.getElementById('mq-start').textContent=T('casino.math.inProgress','In Progress...');
-      document.getElementById('mq-start').disabled=true;
-      nextQuestion();
-    });
+  async function abandonExam(roundId){
+    if(busy) return; busy = true;
+    stopTimer();
+    const r = await call('math_abandon', { roundId }, 'math_abandon_ack', roundId);
+    busy = false;
+    round = null; question = null;
+    if(r && r.ok && r.result) renderResult(r.result);
+    else loadLobby();
+  }
 
-    document.getElementById('mq-submit').addEventListener('click',()=>{
-      if(!playing)return;
-      const v=parseFloat(document.getElementById('mq-input').value);
-      if(isNaN(v))return;
-      handleAnswer(v,'submit');
-    });
+  function renderResult(res){
+    stopTimer();
+    round = null; question = null;
+    const col = gradeColor(res.grade);
+    const netStr = (res.net>=0?'+':'') + money(res.net);
+    shell(`
+      <div class="mq-head">
+        <span class="mq-title">${esc(res.exam||'')}</span>
+      </div>
+      <div class="mq-result">
+        <div class="mq-gradebig" style="color:${col};border-color:${col}">${esc(res.grade)}</div>
+        <div class="mq-resultlines">
+          <div>${esc(TF('casino.math.resScore','Score {s} of {t} ({p} percent)',{s:res.score,t:res.total,p:Math.round(res.pct*100)}))}</div>
+          <div>${esc(TF('casino.math.resAccrued','Accrued {amt}',{amt:money(res.accrued)}))}</div>
+          <div>${esc(TF('casino.math.resMult','Grade multiplier {m}',{m:'\u00d7'+Number(res.mult).toFixed(2)}))}</div>
+          ${res.bestStreak>1?`<div>${esc(TF('casino.math.resStreak','Best run {n} in a row',{n:res.bestStreak}))}</div>`:''}
+          <div class="mq-sep"></div>
+          <div>${esc(TF('casino.math.resEntry','Entry fee {amt}',{amt:money(res.entry)}))}</div>
+          <div>${esc(TF('casino.math.resPaid','Paid out {amt}',{amt:money(res.credited)}))}</div>
+          <div class="mq-net" style="color:${res.net>=0?'#72e09c':'#ff6b6b'}">${esc(TF('casino.math.resNet','Net {amt}',{amt:netStr}))}</div>
+        </div>
+      </div>
+      ${res.abandoned?`<div class="mq-note" data-i18n="casino.math.resWalked">You walked out. An unfinished paper pays nothing and the entry fee stays with the guild.</div>`:''}
+      <div class="mq-card-actions">
+        <button class="btn" id="mq-back" data-i18n="casino.math.backToBoard">Back to the exam board</button>
+      </div>
+    `);
+    pane.querySelector('#mq-back').addEventListener('click', loadLobby);
+  }
 
-    document.getElementById('mq-input').addEventListener('keydown',e=>{
-      if(e.key==='Enter'){
-        const v=parseFloat(document.getElementById('mq-input').value);
-        if(!isNaN(v))handleAnswer(v,'submit');
-      }
-    });
-
-    startCooldownTick();
-  } // end init()
+  function init(){
+    if (pane.dataset.inited) return;
+    pane.dataset.inited = '1';
+    loadLobby();
+  }
   window.__initMathGame = init;
+
+  // Refresh the board when the player comes back to the tab, so cooldowns and
+  // cash are current rather than whatever they were when they last left. Never
+  // fires mid-paper: reloading the lobby there would throw away the sitting.
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && pane.dataset.inited && !round && pane.style.display !== 'none') loadLobby();
+  });
 })();

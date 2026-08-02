@@ -4,6 +4,49 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.5 (2026-08-02) - Guild Numeracy Exams; two payout holes closed (SERVER + CLIENT)
+
+Server and client. Restart required. Hard refresh required.
+
+THE REPORTED BUG WAS NOT ONE BUG. Players said the math quiz was not paying out. Five things were wrong, and the one causing the reports is the second least interesting.
+
+The client opened a server round at Start and closed it at Test Complete. Any refresh, dropped socket or tab-away mid-test left that round `open`. `casino_bet` refuses a second open round for the same game. The client handled that with `.then(r=>{ if(r&&r.ok) mqRoundId=r.roundId })` and no else branch, so `mqRoundId` stayed null, the player answered all ten questions, the score row counted up to "Earned: 800", and `endTest` ran `if(mqRoundId)` and sent nothing. Nothing on screen was wrong. The number was just never real. It stayed that way until the fifteen minute sweep, so every test started in that window paid zero.
+
+The other four: error acks from `casino_result` carried no roundId, so `casino-net.js` could never correlate them and every failed settle in EVERY casino game resolved as a twelve second timeout instead of its actual reason; the math client discarded the settle promise entirely so no failure could ever surface; the nominal 1 stake locked out any player at zero cash, which is exactly the player grinding a quiz for money, silently; and a backgrounded tab throttles setInterval to about 1/s, stretching a test past its round timeout so the sweep expired it mid-play.
+
+AND THE ONE NOBODY REPORTED. The payout was client-declared. `CasinoNet.result(roundId, totalEarned+1)`, capped at flat 900, gated by `minDurMs:5000`, with the cooldown in localStorage. A console one-liner was worth 900 every five seconds, about 648k an hour against a starting balance of 1000, with no arithmetic involved. That is a larger faucet than the drone mining hole.
+
+WHAT REPLACED IT. `server/mathtest.js` generates the paper, holds the answer key, times each question on the server clock, grades every submission and settles the round itself. `publicQuestion` is the only path a question takes to the wire and it strips `answer` and `tol`. The client renders and posts answers; it declares nothing that costs money. Same shape as solitaire.
+
+Ten topics (arithmetic, order of operations, powers and roots, percentages, fractions, algebra, sequences, ratios and rates, interest, trade problems) across five tiers. Five papers: Numeracy Drill (free, topic-selectable, four minute cooldown), Ledger Clerk Paper (150), Speed Reckoning (250, nine second clocks, streak bonuses), Broker Certification (700), Quant Board Exam (2500, gated on a passing Broker result). One CASINO_CFG entry per paper, generated from the exam table, so cooldowns, caps and the gate are per paper and a retune moves the cap with it.
+
+THE PAYOUT MODEL IS NOW A WAGER, NOT A FAUCET. Earnings accrue visibly per correct answer, then multiply by the grade band at settlement. Below 60 percent the multiplier is zero and the entry fee is gone. Break even sits between 65 and 75 percent on every paid paper. Cooldown and the certification gate both derive from the existing `casino_rounds` ledger, so there is no migration and nothing to keep in sync.
+
+A REFRESH NO LONGER COSTS THE ENTRY FEE. The lobby reports any open paper and offers a resume. The question that was live when the connection went is scored WRONG and the paper moves on. Re-issuing it with a fresh clock would make refresh a free re-roll on anything hard, which is a worse bug than the one it fixes. One question is the price of the interruption.
+
+THE WORST FIND, AND IT PREDATES THIS PATCH BY A LONG WAY. `casino_result` looked a round up by id and player and then paid whatever the client asked for, capped at that game's flat. It never checked WHICH game opened the round. So any round opened by a server-authoritative handler could be settled through the client-declared path instead, skipping the code that was supposed to decide the payout. `solitaire_start` followed by `casino_result{payout:999999}` paid 1848 against a 250 buy-in without a card being moved, and solitaire's minDurMs is 0 so there was nothing throttling the loop. That has been live since solitaire shipped. The exams would have inherited it on day one, which is the only reason it was found. `SERVER_SETTLED_GAMES` now names solitaire and all five papers, and both `casino_result` and `casino_bet_addon` refuse them (addon grows the wager, which grows the cap, so it is the same lever).
+
+FOUND BY PLAYING IT, NOT BY READING IT. Every static check passed while that hole was open, and they were right to: each individual handler is correct. The hole is only visible if you ask what ELSE can reach a round after one of them opens it, and that question has no answer in a file. A live socket run against a booted server found it in the first pass.
+
+THE CAP FALLBACK WAS WRONG IN FOUR PLACES. `(cfg.mult||1)` reads 1 for every game declaring 0, because 0 is falsy, so sudoku, minesweeper, solitaire and the exams all had a cap of wager plus flat rather than flat. Harmless while the honest maximum sat under the cap, but a backstop that is not the number you wrote is not a backstop. Two were fixed by reading the file, a third (casino_play) was found by asserting the COUNT of guarded sites rather than the absence of the old pattern, and the fourth was the new exam settle. The check asserts four.
+
+THREE BUGS THE CHECK SUITE FOUND IN THIS PATCH'S OWN CODE:
+1. `maxGross` computed the cap from the unrounded product while `buildPaper` rounds each reward, and rounding up is the common case. Drill: cap 136, flawless paper 140. It would have clamped the best player in the game and logged them to the admin panel as a cheater.
+2. Topic resolution tested `TOPIC_IDS.has('mixed')`, which is false, so every "mixed" drill fell through to arithmetic only. That reads as a run of bad luck, not a bug, which is the worst way for it to fail.
+3. Compound interest carried a tolerance of 1.2 on an answer specified to the nearest 1, so an answer wrong by exactly 1 was paid.
+
+LOCALIZATION. The old five difficulty labels and single payout line are gone with the game that used them. Word problems ship a template key plus its vars alongside the rendered English, so a Jade player reads the question rather than whatever the generator happened to emit; symbol-only questions ship text alone because there is nothing in them to translate. Ten topic names, sixteen question templates, forty five UI strings, all with zh. The casino subtab is now Numeracy Exams. i18n-check: 0 missing keys, 0 missing zh, 0 unsupplied tokens.
+
+`tools/mathtest-check.mjs` is new: 77 assertions over seven groups (PAPER, KEY, CURVE, CAP, WIRE, SERVER, I18N), including a 41,000 question fuzz that asserts every generated answer is finite, typeable at three decimal places, graded correct by its own tolerance and NOT graded correct one off. Source assertions strip comments first, because a comment describing a bug quotes the exact pattern the grep is looking for. Suite total 508 across ten tools, plus a 37 assertion live socket run that is not shipped because it needs a booted server and a throwaway account.
+
+STILL NOT FIXED, AND SAYING SO PLAINLY: none of this makes the exams bot-resistant. The server is asking a question a computer answers instantly and correctly, and no latency floor separates a script from a fast human without punishing the fast human, so none was added. What server authority buys is that earning requires answering, which pins the maximum drain to entry fee times grade curve times cooldown. Botting is now a number to price rather than an unbounded hole. Making it bot-hard means questions that stop being machine-solvable, which is a different feature.
+
+The economics are a proposal, not a finding. Perfect-play ceilings: drill about 1.7k an hour, quant about 11k. `perQ` in the exam table is the single number to move; the cap and the UI both derive from it.
+
+Changed files: server/mathtest.js (new), server/server.js, server/db.js, client/assets/casino-mathgame.js (rewritten), client/assets/casino-mathgame.css (rewritten), client/assets/core.js, client/index.html, client/version.json, tools/mathtest-check.mjs (new), docs/CHANGELOG.md, docs/MANIFEST.txt.
+
+---
+
 ## v1.3.4 (2026-07-30) - Mobile panel audit (CLIENT)
 
 Client only. Hard refresh. No restart needed. CSS only plus one new tool. No change to any panel's own code.
