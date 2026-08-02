@@ -4,6 +4,32 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.6.1 (2026-08-02) - The drawer never rendered (CLIENT)
+
+Client only. No restart. Hard refresh required.
+
+REPORTED BY SCREENSHOT: the menu opens, the scrim dims the screen, the close button appears, and there is no menu.
+
+`#fm-header-user` is not a top level element. It sits at:
+
+    .wrap > .row:first-child > .row > span#fm-header-user
+
+and `body.fm-mobile .wrap > .row:first-child` was `display:none !important`. A `position:fixed` descendant of a `display:none` ancestor generates no box. display:none removes the entire subtree from the box tree and nothing a descendant declares can bring it back, not `position:fixed`, not `!important`, not a z-index of 9995. So the 238px width, the `translateX(100%)` to `translateX(0)` slide, the border, the overflow scroll and every child rule in that block were applied to boxes that were never generated.
+
+This has been true since the shell shipped in 1.3.0. The file's own design rule reads "the drawer is #fm-header-user repositioned by CSS, not relocated, so all of its listeners, ids and data-i18n attributes survive untouched", and that is a good rule, but it was never checked against the one thing that makes repositioning impossible.
+
+IT IS ALSO THE FIRST CAUSE OF THE FREEZE. 1.3.6 closed four gaps around the drawer: a scrim that could not be tapped on iOS, a menu button that opened but never toggled, that button being buried under the scrim, and no close control. Those four are what made the state unrecoverable. This is what made it empty. Both were needed to produce "tap the menu and the game is gone".
+
+THE FIX. The chain stays in the box tree at zero height, and the row's other contents are hidden instead. `#name` and `#helloBtn` are already inline `display:none`, so the only sibling group that needed hiding is the wordmark and EOD block. `mirror()` still reads `#eod-timer.textContent`, which `display:none` does not affect, so the top bar clock is unchanged.
+
+`#fm-header-user` also now carries `display:flex !important` on mobile. index.html ships it as inline `display:none` and funds.js sets it to flex on the auth event; on mobile it IS the drawer, so it has to exist whether or not that event has landed. A guest still needs Bugs, Jade, Tutorial and Discord.
+
+WHY THE 1.3.6 CHECK DID NOT CATCH IT. It asserted the drawer rules were present and correctly shaped. They were. It never asserted that the element those rules target can render, because that is a computed style question and the suite is static. Six new assertions cover the shape of the chain and the DOM position it depends on, which is the part that silently rots. Verified non-vacuous: restoring the exact 1.3.6 rule fires five of them. 61 assertions total.
+
+client/mobile-mockup.html now ships `#fm-header-user` as inline `display:none`, matching production, so the harness exercises the override rather than papering over it. The harness reproduced this defect faithfully and would have shown it on first open. It was not opened before shipping 1.3.6.
+
+---
+
 ## v1.3.6 (2026-08-02) - Mobile: drawer lockup, touch incompatible systems, casino widths (CLIENT)
 
 Client only. No restart. Hard refresh required.

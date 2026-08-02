@@ -57,8 +57,43 @@ body.fm-mobile .wrap {
   display: block;
 }
 
-/* The desktop header row and the bottom ticker strip are replaced by chrome. */
-body.fm-mobile .wrap > .row:first-child { display: none !important; }
+/* The desktop header row and the bottom ticker strip are replaced by chrome.
+ *
+ * v1.3.6.1: this rule USED to be `display:none !important` on the whole row,
+ * and that is why the drawer was always empty. #fm-header-user is a descendant
+ * of this row:
+ *
+ *     .wrap > .row:first-child > .row > span#fm-header-user
+ *
+ * A `position:fixed` descendant of a `display:none` ancestor does not render.
+ * display:none removes the entire subtree from the box tree; nothing a
+ * descendant declares can bring it back. So the drawer transform, the width,
+ * the z-index and the translateX(100%) to translateX(0) slide were all applied
+ * to boxes that were never generated. Tapping the menu produced a scrim over
+ * an invisible panel, which on iOS could not then be dismissed. This is the
+ * real first cause of the reported freeze; the four gaps closed in 1.3.6 are
+ * what made it unrecoverable rather than merely empty.
+ *
+ * The fix keeps the CHAIN rendered and zero sized, and hides the row's other
+ * contents instead. #name and #helloBtn are already inline display:none, so the
+ * only sibling group that needs hiding is the wordmark and EOD block. mirror()
+ * still reads #eod-timer.textContent, which is unaffected by display:none.
+ *
+ * The chain is height:0 and out of flow for the drawer's purposes: the drawer
+ * itself is position:fixed and its containing block is the viewport, because
+ * nothing on the chain declares transform, filter or contain. .wrap having
+ * overflow:hidden does not clip it for the same reason. */
+body.fm-mobile .wrap > .row:first-child,
+body.fm-mobile .wrap > .row:first-child > .row {
+  display: block !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: visible !important;
+}
+body.fm-mobile .wrap > .row:first-child > div:not(.row) { display: none !important; }
 body.fm-mobile #bottomRow { display: none !important; }
 
 /* THE scroll region. Everything the player reads lives in here. */
@@ -222,7 +257,14 @@ body.fm-mobile #contacts-chat-tab { margin-left: 8px !important; }
 }
 
 /* ── Drawer. This IS #fm-header-user, repositioned. No DOM move. ──────────── */
+/* index.html ships #fm-header-user as inline display:none and funds.js sets it
+   to flex on the auth event. On mobile it IS the drawer, so it has to exist
+   whether or not that event has landed: a guest still needs Bugs, Jade,
+   Tutorial and Discord, and an empty drawer is the bug 1.3.6.1 exists to fix.
+   Overriding the inline style needs !important. Kept outside the block so the
+   window mobile-check.mjs greps for position:fixed stays short. */
 body.fm-mobile #fm-header-user {
+  display: flex !important;
   position: fixed !important;
   top: 0; right: 0; bottom: 0;
   width: 238px;

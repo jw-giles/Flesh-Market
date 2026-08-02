@@ -1,4 +1,20 @@
-# FleshMarket v1.3.6 - MANIFEST
+# FleshMarket v1.3.6.1 - MANIFEST
+
+## 1.3.6.1 changes (The drawer never rendered; CLIENT ONLY)
+- CLIENT ONLY. No restart. Hard refresh required. Files touched: client/assets/mobile.css, client/mobile-mockup.html, tools/mobile-136-check.mjs.
+- REPORTED BY SCREENSHOT: menu opens, scrim dims, close button appears, NO MENU. 1.3.6 made the state escapable. It did not make the drawer exist.
+- ROOT CAUSE: `#fm-header-user` sits at `.wrap > .row:first-child > .row > span`, and `body.fm-mobile .wrap > .row:first-child` was `display:none !important`. A `position:fixed` descendant of a `display:none` ancestor GENERATES NO BOX. display:none removes the whole subtree from the box tree; nothing a descendant declares brings it back, not position:fixed, not !important, not z-index 9995.
+- SO EVERY DRAWER RULE IN mobile.css WAS DECORATING BOXES THAT WERE NEVER GENERATED: the 238px width, the translateX(100%) to translateX(0) slide, the border-left, overflow-y:auto, and the whole `> *` child block. Since 1.3.0.
+- THIS IS THE FIRST CAUSE OF THE REPORTED FREEZE. The four gaps closed in 1.3.6 (untappable scrim on iOS, open-only button, button buried under the scrim, no close control) are what made the state UNRECOVERABLE. This is what made it EMPTY. Both were needed to produce "tap the menu and the game is gone". Neither alone explains the report.
+- FIX: keep the CHAIN in the box tree at zero height (`display:block; height:0; margin/padding/border 0; overflow:visible` on the row AND the nested row), hide the row's other contents instead via `> div:not(.row)`. `#name` and `#helloBtn` are already inline display:none, so the wordmark and EOD block is the only sibling group needing it.
+- `mirror()` reads `#eod-timer.textContent`, which display:none does not affect, so the top bar clock is unchanged by either the old rule or the new one. Verified rather than assumed.
+- CONTAINING BLOCK VERIFIED: nothing on the chain declares transform, filter or contain, so the drawer's containing block is the viewport. `.wrap` having `overflow:hidden` does not clip it, because overflow only clips descendants whose containing block is inside the scroller.
+- `#fm-header-user` now carries `display:flex !important` on mobile. index.html ships it inline `display:none`; funds.js sets flex on the auth event. On mobile it IS the drawer and must exist regardless, or a guest gets an empty menu, which is the bug this release exists to fix.
+- WHY THE 1.3.6 SUITE MISSED IT: it asserted the drawer rules were present and correctly shaped. They were. It never asserted the element those rules target can RENDER, because that is a computed style question and the suite is static. The gap was real and the check was passing honestly.
+- SIX NEW ASSERTIONS, 61 total: two ANCHORs on the DOM position (drawer still nested inside the first header row, still inside a nested .row rather than a direct child), a guard that no rule sets display:none on a selector ending at `.row:first-child`, three on the shape of the replacement, and one that no rule hides the drawer itself.
+- NEGATIVE ASSERTIONS NOW RUN AGAINST A COMMENT-STRIPPED COPY OF mobile.css. Same trap mathtest-check hit: the comments explaining this bug quote the exact patterns the guards grep for, and the first draft failed two of its own checks.
+- VERIFIED NON-VACUOUS: restoring the exact 1.3.6 rule fires five of the six.
+- client/mobile-mockup.html now ships `#fm-header-user` as inline `display:none`, matching production, so the harness exercises the override. THE HARNESS REPRODUCED THIS DEFECT FAITHFULLY AND WOULD HAVE SHOWN IT ON FIRST OPEN. It was not opened before 1.3.6 shipped. That is the process lesson, not the CSS.
 
 ## 1.3.6 changes (Mobile: drawer lockup, touch incompatible systems, casino widths; CLIENT ONLY)
 - CLIENT ONLY. No restart. Hard refresh required. Files touched: client/assets/mobile.js, client/assets/mobile.css. Files added: client/mobile-mockup.html, tools/mobile-136-check.mjs.

@@ -35,6 +35,11 @@ function hasNot(label, text, needle) {
 
 const mjs = read('client/assets/mobile.js');
 const mcss = read('client/assets/mobile.css');
+// Negative assertions run against a comment-stripped copy. The comments in this
+// release quote the exact patterns the guards look for, which is the same trap
+// mathtest-check fell into: the first draft failed two of its own checks
+// because the prose explaining a bug contained the bug's signature.
+const mcssNC = mcss.replace(/\/\*[\s\S]*?\*\//g, '');
 const core = read('client/assets/core.js');
 const chess = read('client/assets/casino-chess.js');
 const sol = read('client/assets/casino-solitaire.js');
@@ -76,6 +81,37 @@ has('raw .tab clicks resync the shell', mjs, 'bridgeTabClicks');
 has('tab bridge is wired in enter()', mjs, /enter\(\)[\s\S]{0,400}bridgeTabClicks\(\)/);
 has('tab bridge respects the syncing guard so shell clicks do not recurse',
   mjs, /bridgeTabClicks[\s\S]{0,600}if \(!active \|\| syncing\) return;/);
+
+/* ── FIX 1c: the drawer never rendered at all ───────────────────────────
+   #fm-header-user sits at .wrap > .row:first-child > .row > span, and that
+   row used to be display:none !important. A position:fixed descendant of a
+   display:none ancestor generates no box, so every drawer rule in this file
+   was decorating something that did not exist. The four 1.3.6 gaps made that
+   unrecoverable; this is what made it empty.
+
+   Static CSS cannot prove a computed display, so these assert the shape of
+   the rules and the DOM position they depend on, which is the part that
+   silently rots. */
+
+has('ANCHOR drawer is still nested inside the first header row',
+  html, /<div class="wrap">[\s\S]{0,3000}?id="fm-header-user"/);
+has('ANCHOR drawer is still inside a nested .row, not a direct child',
+  html, /<div class="row">[\s\S]{0,400}?id="fm-header-user"/);
+
+hasNot('header row is NOT display:none, which would erase the drawer',
+  mcssNC, /\.row:first-child\s*(,|\{)[^}]*display:\s*none/);
+has('header row and its nested row are kept in the box tree',
+  mcss, /body\.fm-mobile \.wrap > \.row:first-child,\s*\n\s*body\.fm-mobile \.wrap > \.row:first-child > \.row \{[\s\S]{0,120}display: block !important/);
+has('the chain is collapsed to zero height rather than hidden',
+  mcss, /\.row:first-child > \.row \{[\s\S]{0,160}height: 0 !important/);
+has('the wordmark and eod block are the thing actually hidden',
+  mcss, 'body.fm-mobile .wrap > .row:first-child > div:not(.row) { display: none !important; }');
+has('drawer overrides the pre-login inline display:none',
+  mcss, /body\.fm-mobile #fm-header-user \{[\s\S]{0,600}display: flex !important;/);
+hasNot('no rule hides the drawer itself on mobile',
+  mcssNC, /#fm-header-user\s*\{[^}]*display:\s*none/);
+has('mirror still reads the eod clock by textContent, which display:none does not affect',
+  mjs, /var eod = el\('eod-timer'\)/);
 
 /* ── FIX 2: touch-only system locks ─────────────────────────────────────── */
 
