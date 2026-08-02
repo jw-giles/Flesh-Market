@@ -390,6 +390,28 @@ function hx(what) { log('tapped <b>' + what + '</b>'); }
 
 /* ═══ Readout ═══════════════════════════════════════════════════════════ */
 
+/* Live hit test on the drawer.
+ *
+ * This is the assertion no static check can make. The drawer being VISIBLE and
+ * the drawer being TAPPABLE are different facts: in 1.3.6.1 it rendered and
+ * still ate nothing, because .wrap is position:fixed and therefore a stacking
+ * context, so the drawer's z-index of 9995 was resolved inside .wrap and never
+ * compared with the scrim's 9994. elementFromPoint asks the browser what is
+ * actually on top, which is the only thing that settles it. */
+function drawerHitTest() {
+  var hu = document.getElementById('fm-header-user');
+  if (!hu || !document.body.classList.contains('fm-drawer')) return null;
+  var r = hu.getBoundingClientRect();
+  if (!r.width || !r.height) return { state: 'no box', el: '-' };
+  var hit = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(r.height / 2, 200));
+  if (!hit) return { state: 'nothing', el: '-' };
+  var inside = hu === hit || hu.contains(hit);
+  return {
+    state: inside ? 'tappable' : 'BLOCKED',
+    el: '#' + (hit.id || hit.tagName.toLowerCase())
+  };
+}
+
 var lines = [];
 function log(msg) {
   lines.unshift(msg);
@@ -421,6 +443,13 @@ setInterval(function () {
             '  touchOnly <b class="' + (M.touchOnly() ? 'ok' : 'bad') + '">' + M.touchOnly() + '</b>');
   rows.push('view <b>' + M.view() + '</b> tab <b>' + M.tab() + '</b>' +
             ' game <b>' + M.game() + '</b> drawer <b>' + M.isDrawerOpen() + '</b>');
+  var hoisted = M.drawerHoisted ? M.drawerHoisted() : null;
+  var ht = drawerHitTest();
+  rows.push('drawer parent <b class="' + (hoisted ? 'ok' : 'bad') + '">' +
+            (hoisted ? 'BODY' : 'nested') + '</b>' +
+            (ht ? '  hit <b class="' + (ht.state === 'tappable' ? 'ok' : 'bad') + '">' +
+                  ht.state + '</b> ' + ht.el
+                : '  hit <span style="opacity:.5">open the drawer to test</span>'));
   rows.push('locked <b>' + M.locked().join(', ') + '</b>' +
             '  page overflow <b class="' + (over ? 'bad' : 'ok') + '">' + (over ? 'YES' : 'no') + '</b>');
 

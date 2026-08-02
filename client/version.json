@@ -1,7 +1,7 @@
 {
-  "version": "1.3.6.1",
+  "version": "1.3.6.2",
   "built": "2026-08-02T00:00:00Z",
   "min_supported_build": "2025-09-12T17:03:43Z",
-  "patch": "1.3.6.1",
-  "notes": "The drawer was empty because it never rendered. #fm-header-user is a descendant of .wrap > .row:first-child, and that row was display:none, which removes the whole subtree from the box tree. Every drawer rule in mobile.css was therefore decorating boxes that were never generated, since 1.3.0. The header chain is now kept in the box tree at zero height and the wordmark block is hidden instead. This is the first cause of the reported freeze; the four gaps closed in 1.3.6 are what made it unrecoverable rather than merely empty. CLIENT ONLY, no restart, hard refresh required."
+  "patch": "1.3.6.2",
+  "notes": "The drawer rendered but nothing in it responded, because it painted underneath the scrim. .wrap is position:fixed, a fixed element always creates a stacking context, and the drawer lives inside .wrap while the scrim, the top bar, the nav and the close button are all body children. So the drawer's z-index of 9995 was resolved inside .wrap and never compared with the scrim's 9994; what actually competed with the scrim was .wrap at z-index auto, which loses. mobile.js now hoists the drawer to body on enter and restores it on leave, which also retires the zero height ancestor chain added in 1.3.6.1. The harness now hit tests the drawer with elementFromPoint, which is the only way this class of bug can be observed. CLIENT ONLY, no restart, hard refresh required."
 }

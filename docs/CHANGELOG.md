@@ -4,6 +4,30 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.6.2 (2026-08-02) - The drawer painted under the scrim (CLIENT)
+
+Client only. No restart. Hard refresh required.
+
+REPORTED BY SCREENSHOT: "pops but no button works." The drawer renders. Every row in it is dimmed to exactly the same degree as the grid behind it, while the close button and the menu button are not. That is the tell. It is under the scrim.
+
+THE DRAWER IS z-index 9995. THE SCRIM IS 9994. THOSE TWO NUMBERS WERE NEVER COMPARED.
+
+`#fmTop`, `#fmNav`, `#fmScrim` and `#fmDrawerClose` are all created with `body.appendChild`, so they sit in the root stacking context. The drawer does not. It is `#fm-header-user`, which lives at `.wrap > .row:first-child > .row > span`, and `body.fm-mobile .wrap` is `position: fixed`. A fixed position element always creates a stacking context, with or without a z-index. So 9995 was resolved inside `.wrap`, and what actually competed with the scrim was `.wrap` itself at z-index auto, which loses to 9994. The entire subtree painted underneath the scrim, and the scrim ate every tap in it.
+
+This was true before 1.3.6.1 as well. It was invisible then because the drawer was also `display:none` and generated no box at all. Fixing the first bug exposed the second.
+
+THE FIX RETIRES THE PREVIOUS ONE. mobile.js hoists `#fm-header-user` to `body` on enter and restores it to its original parent and next sibling on leave. That puts it in the same stacking context as the rest of the chrome, where every existing z-index in this file finally means what it says, and it makes the ancestor `display:none` irrelevant. So the zero height chain added in 1.3.6.1 is gone and the header row is plain `display:none` again.
+
+MOVING THE NODE IS NOT WHAT DESIGN RULE 1 FORBIDS. That rule exists so the drawer's listeners, ids and data-i18n attributes survive; `appendChild` relocates the same node and preserves all three. Rebuilding it is what would break them.
+
+WHY NEITHER CHECK SUITE CAUGHT THIS. A stacking context is not a property of any one rule, it is a consequence of `.wrap` being fixed and the drawer being nested. No grep over CSS can compute it and jsdom does not lay out. The 1.3.6.1 assertions were true and useless: they confirmed the drawer was rendered, which was never the question.
+
+client/mobile-mockup.html now hit tests it. With the drawer open it calls `document.elementFromPoint` at the drawer's centre and reports `tappable` or `BLOCKED` along with whatever is actually on top. Asking the browser what is on top is the only thing that settles this, and it is the assertion the static suite structurally cannot make. It also reports whether the drawer is hoisted.
+
+The static suite still covers what it can: the hoist exists, is wired into enter and leave, records the next sibling as well as the parent, is idempotent, and the four other chrome elements are still body children. Plus two anchors on the facts the reasoning rests on: the drawer is still nested in the markup, and `.wrap` is still `position: fixed`. 71 assertions. Verified non-vacuous by mutation.
+
+---
+
 ## v1.3.6.1 (2026-08-02) - The drawer never rendered (CLIENT)
 
 Client only. No restart. Hard refresh required.

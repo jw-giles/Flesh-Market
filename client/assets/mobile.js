@@ -709,6 +709,49 @@ function drawer(on) {
   body.classList.toggle('fm-drawer', !!on);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Drawer hoist
+//
+// The drawer is z-index 9995 and the scrim is 9994, and the scrim still won,
+// because those two numbers were never being compared.
+//
+// #fmTop, #fmNav, #fmScrim and #fmDrawerClose are all created with
+// body.appendChild, so they live in the root stacking context. The drawer does
+// not: it is #fm-header-user, which sits at
+//
+//     .wrap > .row:first-child > .row > span
+//
+// and `body.fm-mobile .wrap` is position:fixed. A fixed position element ALWAYS
+// creates a stacking context, with or without a z-index. So 9995 was being
+// resolved inside .wrap, and what actually competed with the scrim was .wrap
+// itself at z-index auto, which loses to 9994. The whole subtree, drawer
+// included, painted underneath the scrim and the scrim ate every tap.
+//
+// Moving the node fixes it, and moving is not the thing design rule 1 forbids.
+// That rule exists so the drawer's listeners, ids and data-i18n attributes
+// survive; appendChild preserves all three, because it relocates the same node
+// rather than rebuilding it. Recreating it is what would break them.
+//
+// This also retires the zero height ancestor chain from 1.3.6.1. Once the
+// drawer is a body child, the header row can go back to plain display:none.
+// ═══════════════════════════════════════════════════════════════════════════
+
+var drawerHome = null;
+
+function hoistDrawer() {
+  var hu = el('fm-header-user');
+  if (!hu || hu.parentNode === body) return;
+  drawerHome = { parent: hu.parentNode, next: hu.nextSibling };
+  body.appendChild(hu);
+}
+
+function returnDrawer() {
+  var hu = el('fm-header-user');
+  if (!hu || !drawerHome || hu.parentNode !== body) return;
+  drawerHome.parent.insertBefore(hu, drawerHome.next);
+  drawerHome = null;
+}
+
 // Two more ways out, because the scrim being the only exit is how this became
 // a lockup in the first place. A hardware back press or an Escape from a
 // bluetooth keyboard should never be the thing that cannot dismiss a menu.
@@ -825,6 +868,7 @@ function enter() {
   active = true;
   body.classList.add('fm-mobile');
   body.classList.toggle('fm-touchonly', TOUCH_ONLY);
+  hoistDrawer();
   var t = el('fmTop'), n = el('fmNav');
   if (t) t.style.display = '';
   if (n) n.style.display = '';
@@ -840,6 +884,7 @@ function enter() {
 function leave() {
   active = false;
   drawer(false);
+  returnDrawer();
   body.classList.remove('fm-mobile', 'fm-kbd', 'fm-touchonly');
   ['data-fmv', 'data-fmctx', 'data-fmdepth', 'data-fmfill', 'data-fmtab', 'data-fmgame']
     .forEach(function (a) { body.removeAttribute(a); });
@@ -905,6 +950,10 @@ function init() {
     back: goBack,
     drawer: drawer,
     isDrawerOpen: function () { return body.classList.contains('fm-drawer'); },
+    drawerHoisted: function () {
+      var hu = el('fm-header-user');
+      return !!hu && hu.parentNode === body;
+    },
     touchOnly: function () { return TOUCH_ONLY; },
     locked: function () { return Object.keys(LOCKED); },
     fitBoards: fitBoards

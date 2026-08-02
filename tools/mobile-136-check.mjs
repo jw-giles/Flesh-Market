@@ -45,6 +45,7 @@ const chess = read('client/assets/casino-chess.js');
 const sol = read('client/assets/casino-solitaire.js');
 const mine = read('client/assets/casino-minesweeper.js');
 const html = read('client/index.html');
+const mock = read('client/mobile-mockup.html');
 
 /* ── FIX 1: drawer lockup ───────────────────────────────────────────────── */
 
@@ -82,36 +83,58 @@ has('tab bridge is wired in enter()', mjs, /enter\(\)[\s\S]{0,400}bridgeTabClick
 has('tab bridge respects the syncing guard so shell clicks do not recurse',
   mjs, /bridgeTabClicks[\s\S]{0,600}if \(!active \|\| syncing\) return;/);
 
-/* ── FIX 1c: the drawer never rendered at all ───────────────────────────
-   #fm-header-user sits at .wrap > .row:first-child > .row > span, and that
-   row used to be display:none !important. A position:fixed descendant of a
-   display:none ancestor generates no box, so every drawer rule in this file
-   was decorating something that did not exist. The four 1.3.6 gaps made that
-   unrecoverable; this is what made it empty.
+/* ── FIX 1c: the drawer did not render, then rendered under the scrim ───
+   Two bugs, one element, both from the same fact: #fm-header-user is NOT a
+   top level node. It sits at .wrap > .row:first-child > .row > span.
 
-   Static CSS cannot prove a computed display, so these assert the shape of
-   the rules and the DOM position they depend on, which is the part that
-   silently rots. */
+   1.3.6.1: that row was display:none, so the drawer generated no box at all.
+   1.3.6.2: keeping the row in the box tree made it render UNDERNEATH the
+   scrim, because `body.fm-mobile .wrap` is position:fixed and a fixed element
+   always creates a stacking context. The drawer's z-index 9995 was therefore
+   resolved inside .wrap and never compared with the scrim's 9994; what
+   competed with the scrim was .wrap itself at z-index auto, which loses.
 
-has('ANCHOR drawer is still nested inside the first header row',
-  html, /<div class="wrap">[\s\S]{0,3000}?id="fm-header-user"/);
-has('ANCHOR drawer is still inside a nested .row, not a direct child',
+   Both go away by hoisting the drawer to body, where the rest of the chrome
+   already lives. These assert the hoist and the two facts it depends on.
+   Neither a static check nor jsdom can compute a stacking context, so the
+   real proof is the elementFromPoint readout in client/mobile-mockup.html. */
+
+has('drawer is hoisted to body on enter', mjs, 'function hoistDrawer()');
+has('hoist is wired into enter()', mjs, /enter\(\)[\s\S]{0,400}hoistDrawer\(\)/);
+has('drawer is returned to its original parent on leave', mjs, 'function returnDrawer()');
+has('return is wired into leave()', mjs, /function leave\(\)[\s\S]{0,120}returnDrawer\(\)/);
+has('hoist records the original parent AND next sibling, not just the parent',
+  mjs, /drawerHome = \{ parent: hu\.parentNode, next: hu\.nextSibling \}/);
+has('hoist is idempotent', mjs, 'if (!hu || hu.parentNode === body) return;');
+has('hoist state is observable', mjs, 'drawerHoisted:');
+
+// ANCHOR. If either of these moves, the reasoning above stops holding and the
+// hoist may be unnecessary or insufficient. Both are load bearing.
+has('ANCHOR drawer is still nested rather than a top level node in the markup',
   html, /<div class="row">[\s\S]{0,400}?id="fm-header-user"/);
+has('ANCHOR .wrap is still position:fixed, which is what makes it a stacking context',
+  mcssNC, /body\.fm-mobile \.wrap \{[\s\S]{0,80}position: fixed/);
 
-hasNot('header row is NOT display:none, which would erase the drawer',
-  mcssNC, /\.row:first-child\s*(,|\{)[^}]*display:\s*none/);
-has('header row and its nested row are kept in the box tree',
-  mcss, /body\.fm-mobile \.wrap > \.row:first-child,\s*\n\s*body\.fm-mobile \.wrap > \.row:first-child > \.row \{[\s\S]{0,120}display: block !important/);
-has('the chain is collapsed to zero height rather than hidden',
-  mcss, /\.row:first-child > \.row \{[\s\S]{0,160}height: 0 !important/);
-has('the wordmark and eod block are the thing actually hidden',
-  mcss, 'body.fm-mobile .wrap > .row:first-child > div:not(.row) { display: none !important; }');
+// The rest of the chrome was always in the root stacking context. The drawer
+// being the one exception is the whole bug, so assert the others stay that way.
+has('scrim is a body child', mjs, 'body.appendChild(scrim)');
+has('close button is a body child', mjs, 'body.appendChild(xb)');
+has('top bar is a body child', mjs, 'body.appendChild(top)');
+has('nav is a body child', mjs, 'body.appendChild(nav)');
+
 has('drawer overrides the pre-login inline display:none',
-  mcss, /body\.fm-mobile #fm-header-user \{[\s\S]{0,600}display: flex !important;/);
+  mcss, /body\.fm-mobile #fm-header-user \{[\s\S]{0,120}display: flex !important;/);
 hasNot('no rule hides the drawer itself on mobile',
   mcssNC, /#fm-header-user\s*\{[^}]*display:\s*none/);
 has('mirror still reads the eod clock by textContent, which display:none does not affect',
   mjs, /var eod = el\('eod-timer'\)/);
+
+// The harness is the only place the stacking question can actually be settled,
+// so assert it still asks.
+has('harness hit tests the drawer with elementFromPoint', mock, 'function drawerHitTest()');
+has('harness reports BLOCKED when something else is on top', mock, "'BLOCKED'");
+has('harness ships the drawer as inline display:none, matching production',
+  mock, /id="fm-header-user" style="display:none/);
 
 /* ── FIX 2: touch-only system locks ─────────────────────────────────────── */
 

@@ -59,41 +59,21 @@ body.fm-mobile .wrap {
 
 /* The desktop header row and the bottom ticker strip are replaced by chrome.
  *
- * v1.3.6.1: this rule USED to be `display:none !important` on the whole row,
- * and that is why the drawer was always empty. #fm-header-user is a descendant
- * of this row:
+ * This is plain display:none again, as it was before 1.3.6.1. That release
+ * kept the row in the box tree at zero height, because #fm-header-user is a
+ * descendant of it and a display:none ancestor generates no box for the
+ * drawer. Correct diagnosis, wrong fix: it made the drawer render, and it
+ * rendered underneath the scrim, because .wrap is position:fixed and therefore
+ * a stacking context, so the drawer's z-index of 9995 was never being compared
+ * with the scrim's 9994 at all.
  *
- *     .wrap > .row:first-child > .row > span#fm-header-user
+ * mobile.js now hoists the drawer to body on enter and puts it back on leave,
+ * which puts it in the same stacking context as the rest of the chrome and
+ * makes both problems go away at once. See hoistDrawer(). With the drawer out
+ * of this row, the row can simply be hidden.
  *
- * A `position:fixed` descendant of a `display:none` ancestor does not render.
- * display:none removes the entire subtree from the box tree; nothing a
- * descendant declares can bring it back. So the drawer transform, the width,
- * the z-index and the translateX(100%) to translateX(0) slide were all applied
- * to boxes that were never generated. Tapping the menu produced a scrim over
- * an invisible panel, which on iOS could not then be dismissed. This is the
- * real first cause of the reported freeze; the four gaps closed in 1.3.6 are
- * what made it unrecoverable rather than merely empty.
- *
- * The fix keeps the CHAIN rendered and zero sized, and hides the row's other
- * contents instead. #name and #helloBtn are already inline display:none, so the
- * only sibling group that needs hiding is the wordmark and EOD block. mirror()
- * still reads #eod-timer.textContent, which is unaffected by display:none.
- *
- * The chain is height:0 and out of flow for the drawer's purposes: the drawer
- * itself is position:fixed and its containing block is the viewport, because
- * nothing on the chain declares transform, filter or contain. .wrap having
- * overflow:hidden does not clip it for the same reason. */
-body.fm-mobile .wrap > .row:first-child,
-body.fm-mobile .wrap > .row:first-child > .row {
-  display: block !important;
-  height: 0 !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 0 !important;
-  overflow: visible !important;
-}
-body.fm-mobile .wrap > .row:first-child > div:not(.row) { display: none !important; }
+ * mirror() reads #eod-timer.textContent, which display:none does not affect. */
+body.fm-mobile .wrap > .row:first-child { display: none !important; }
 body.fm-mobile #bottomRow { display: none !important; }
 
 /* THE scroll region. Everything the player reads lives in here. */
