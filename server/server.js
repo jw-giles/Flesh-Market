@@ -120,6 +120,10 @@ import {
   buyMiningShip, equipMiningShip,
   // FRS (Flesh Revenue Service) + Gifted Titles — 1.1.8.0
   initFRSTables,
+  initClearanceTables, setupClearanceTransactions, recordValueFlowFn, recordFundFlowFn,
+  getClearanceRow, bumpPeakNetWorth, setClearanceExempt,
+  getValueFlowsFor, getRecentValueFlows, getFarmSignals, getInboundSenders,
+  getMarketListing, getLastWireAt, setLastWireAt,
   addGiftedTitle, removeGiftedTitle, getGiftedTitles, getGiftedTitleByLabel, transferGiftedTitle,
   listTitleForSale, buyTitle, cancelTitleListing, getTitleListings, getMyTitleListings,
   addPlaySecondsBulk, getPlaySeconds,
@@ -173,6 +177,7 @@ import {
 import {
   tcgGetCollection, tcgGrantCards, tcgGetDecks, tcgSaveDeck, tcgDeleteDeck,
   tcgListCard, tcgGetCardListings, tcgGetMyCardListings, tcgBuyCard, tcgCancelCardListing,
+  tcgGetCardListing,
 } from './tcg/tcg-db.js';
 import { PACKS, rollPack, packPrice, packInfo } from './tcg/packs.js';
 
@@ -189,6 +194,8 @@ initItemTables();
 initQuestTables();
 initMarketUpgradeTables();
 initFRSTables();
+initClearanceTables();
+setupClearanceTransactions();
 seedAllCityStates(seedColonyMeta);
 // The city commerce model needs to know who is in the Circuit to apply the
 // Jade export bonus. Installed once rather than threaded through every caller.
@@ -1083,9 +1090,23 @@ const ONESHOT_GAMES = new Set(Object.keys(CASINO_ONESHOT));
 // This closes the old unbounded faucet (a client set any balance via mining_bank
 // sync) while never clamping a real run. Over-reports are clamped and logged as a
 // fraud signal, the same way the casino cap surfaces impossible claims.
-const MINING_MAX_YIELD_PER_SEC = parseFloat(process.env.MINING_MAX_YIELD_PER_SEC || '5000');     // Ƒ/sec ceiling on run time
+// Derived from the game's own numbers rather than picked. LASER_MINE_RATE is
+// 1.6 per frame against a threshold of 100, the best hull in MINING_SHIP_CATALOG
+// has drillMul 1.75, and each drill completion yields ONE unit. That is 100/2.8
+// = 35.7 frames, about 0.60s per unit at 60fps. The most valuable mineral is
+// musgravite at 250. Heat is the real governor: firing adds 0.9 per frame and
+// cooling removes 0.55, so sustained duty is 0.55/(0.9+0.55) = 38%.
+//
+//   250 / 0.60 * 0.38 = about 160 Ƒ/sec
+//
+// and that assumes EVERY rock is musgravite with zero travel, zero scanning and
+// perfect aim, which the flat 30% depleted rate makes impossible. 400 leaves
+// 2.5x headroom over a ceiling no honest run can reach, so it never clamps real
+// play, while cutting a forged claim by 12.5x from the old 5000. The old value
+// was roughly 31x the physically impossible maximum and bounded nothing.
+const MINING_MAX_YIELD_PER_SEC = parseFloat(process.env.MINING_MAX_YIELD_PER_SEC || '400');       // Ƒ/sec ceiling on run time
 const MINING_RUN_FALLBACK_SEC  = parseFloat(process.env.MINING_RUN_FALLBACK_SEC  || '90');       // assumed length if run-start wasn't seen
-const MINING_MAX_RUN_BANK      = parseFloat(process.env.MINING_MAX_RUN_BANK      || '10000000');  // hard per-run credit ceiling
+const MINING_MAX_RUN_BANK      = parseFloat(process.env.MINING_MAX_RUN_BANK      || '500000');    // hard per-run credit ceiling
 const _miningRuns = new Map(); // playerId -> { startTs } for the open run, to bound the banked credit
 
 const SECTOR_NAMES          = ['Finance','Biotech','Insurance','Manufacturing','Energy','Logistics','Tech','Misc'];
@@ -3974,6 +3995,100 @@ function playerNetWorth(player, priceMap) {
   return v;
 }
 
+// ─── Guild Clearance ──────────────────────────────────────────────────────────
+// An account may only move value it has demonstrably created. See the block
+// comment above initClearanceTables in db.js for why this is the gate rather
+// than IP, email or an account-age timer.
+//
+//   allowance = peak net worth - seed grant - lifetime received
+//   remaining = allowance - lifetime sent
+//
+// Enforced at EVERY player-to-player value route, not just the wire. Gating one
+// route while the others stay open makes the whole thing decorative, which is
+// exactly the state this shipped to fix.
+const CLEARANCE_ENABLED = process.env.CLEARANCE_ENABLED !== '0';
+const CLEARANCE_GRANT   = parseFloat(process.env.CLEARANCE_GRANT || '1000');
+
+function clearanceExempt(playerId, row) {
+  if (!CLEARANCE_ENABLED) return true;
+  if (row && row.clearance_exempt) return true;
+  try {
+    if (isOwnerAccount(playerId) || isDevAccount(playerId) || isAdminAccount(playerId)) return true;
+  } catch(_) {}
+  return false;
+}
+
+function clearanceFor(player) {
+  if (!player) {
+    return { enabled: CLEARANCE_ENABLED, exempt: false, peak: 0, grant: CLEARANCE_GRANT,
+             received: 0, sent: 0, fundOut: 0, allowance: 0, remaining: 0, sendable: 0 };
+  }
+  const row    = getClearanceRow(player.id);
+  const exempt = clearanceExempt(player.id, row);
+  const cash   = Math.max(0, Number(player.cash || 0));
+
+  // The stored peak is maintained by recordNetWorth, which only fires on trade
+  // paths. Re-max against live net worth here so a player who earned through a
+  // route that never records history is not penalised for it, and persist the
+  // raise so it survives a restart.
+  let netNow = cash;
+  try { netNow = playerNetWorth(player); } catch(_) {}
+  const stored = Number(row?.peak_net_worth || 0);
+  const peak   = Math.max(stored, netNow, cash);
+  if (peak > stored) bumpPeakNetWorth(player.id, peak);
+
+  const received  = Number(row?.lifetime_received || 0);
+  const sent      = Number(row?.lifetime_sent || 0);
+  const fundOut   = Number(row?.fund_out || 0);
+  const allowance = Math.max(0, peak - CLEARANCE_GRANT - received);
+  const remaining = exempt ? Infinity : Math.max(0, allowance - sent);
+  const sendable  = exempt ? cash : Math.max(0, Math.min(remaining, cash));
+
+  return { enabled: CLEARANCE_ENABLED, exempt, peak, grant: CLEARANCE_GRANT,
+           received, sent, fundOut, allowance, remaining, sendable };
+}
+
+// Wire-safe view for the client. Infinity does not survive JSON.
+function clearanceSnapshot(player) {
+  const c = clearanceFor(player);
+  return {
+    enabled: c.enabled, exempt: c.exempt,
+    peak: Math.floor(c.peak), grant: c.grant,
+    received: Math.floor(c.received), sent: Math.floor(c.sent),
+    allowance: Math.floor(c.allowance),
+    remaining: c.exempt ? null : Math.floor(c.remaining),
+    sendable:  c.exempt ? Math.floor(c.sendable) : Math.floor(c.sendable),
+  };
+}
+
+function clearanceDenialMsg(c) {
+  const left = Math.floor(Math.max(0, c.remaining));
+  return `Guild clearance denied. You may move Ƒ${left.toLocaleString()} off this account. `
+       + `Clearance is earned, not issued: it is your highest recorded net worth, less the `
+       + `Ƒ${Math.floor(c.grant).toLocaleString()} seed advance, less credits wired to you, less what you have already sent. `
+       + `Trade, gamble, mine, complete tests. The Guild does not clear what it gave you.`;
+}
+
+// The single gate. amount is the value leaving this player toward another.
+function canSendValue(player, amount) {
+  const c   = clearanceFor(player);
+  const amt = Number(amount) || 0;
+  if (c.exempt) return { ok: true, clearance: c };
+  if (!(amt > 0)) return { ok: true, clearance: c };
+  if (amt <= c.remaining) return { ok: true, clearance: c };
+  return { ok: false, clearance: c, msg: clearanceDenialMsg(c) };
+}
+
+function commitValueFlow(fromId, toId, amount, kind, note) {
+  try { recordValueFlowFn(fromId || null, toId || null, amount, kind, note || null); }
+  catch(e) { console.error('[Clearance] flow record failed:', e); }
+}
+
+function commitFundFlow(playerId, delta, fundId, note) {
+  try { return recordFundFlowFn(playerId, delta, fundId, note || null) || 0; }
+  catch(e) { console.error('[Clearance] fund flow record failed:', e); return 0; }
+}
+
 function fundDetailSnapshot(fundId, playerId) {
   const fund       = getFund(fundId); if (!fund) return null;
   const priceMap   = buildPriceMap();
@@ -4214,7 +4329,17 @@ app.post('/api/funds/:id/deposit', (req, res) => {
     if (!fund) return res.status(404).json({ ok:false, error:'not_found' });
     if (fund.type==='flsh' && !isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
     const amount = Math.max(1, Math.floor(Number(req.body?.amount)||0));
+    // Guild Clearance. A deposit moves value out of sole control and into a pool
+    // that an owner or treasurer can withdraw against fund cash rather than
+    // against the depositor's own stake (model B). That makes it a send.
+    // No owner exemption: an alt that owns its own house and appoints the main
+    // as treasurer is the same laundering route wearing a hat.
+    {
+      const _cl = canSendValue(actor, amount);
+      if (!_cl.ok) return res.status(403).json({ ok:false, error:'clearance_denied', message:_cl.msg });
+    }
     const shares = fundDepositFn(fund.id, actor.id, amount);
+    commitFundFlow(actor.id, amount, fund.id, `deposit ${fund.name||fund.id}`);
     // FRS: depositing into a fund is income-tax-neutral (fund stake is excluded from
     // taxable net worth). Lower the basis so the weekly engine doesn't read it as a loss.
     frsOnFundDeposit(actor.id, amount);
@@ -4245,6 +4370,11 @@ app.post('/api/funds/:id/withdraw', (req, res) => {
     const priceMap = buildPriceMap();
     const nav = getFundNAVById(fund.id, priceMap);
     const cashOut = fundWithdrawFn(fund.id, actor.id, amount, nav);
+    // Guild Clearance ledger. The part of the withdrawal that repays this
+    // player's own deposits is return of capital and books nothing. Anything
+    // beyond that is other members' money and counts as received, which is how
+    // a treasurer drain shows up on the drainer's clearance instead of nowhere.
+    commitFundFlow(actor.id, -Math.max(0, Number(cashOut)||0), fund.id, `withdraw ${fund.name||fund.id}`);
     // FRS withdrawal tax: capital-house money is taxed on the way out, not weekly.
     // Taxes the gross cash-out, routes it to the treasury, and bumps the income-tax
     // basis by the net so the weekly engine doesn't re-tax the same money. No-op when
@@ -6337,8 +6467,16 @@ app.post('/api/items/market/buy', requirePlayer, (req, res) => {
   try {
     const { listingId } = req.body;
     if (!listingId) return res.status(400).json({ ok: false, error: 'missing_listing' });
+    // Guild Clearance. Same shape as the card market: full price to the seller,
+    // no fee, no cooldown, so it is a wire route and is gated as one.
+    const _L = getMarketListing(listingId);
+    if (_L && _L.seller_id !== req.player.id) {
+      const _cl = canSendValue(req.player, Number(_L.price)||0);
+      if (!_cl.ok) return res.status(403).json({ ok:false, error:'clearance_denied', message:_cl.msg });
+    }
     const result = buyMarketItem(req.player.id, listingId);
     if (!result.ok) return res.status(400).json(result);
+    if (_L) commitValueFlow(req.player.id, _L.seller_id, Number(_L.price)||0, 'item_market', String(_L.item_id||''));
     const p = getPlayer(req.player.id);
     if (p) broadcastToPlayer(p.id, { type:'portfolio', data: snapshotPortfolio(p) });
     res.json(result);
@@ -6469,6 +6607,54 @@ app.get('/api/admin/online', requireAdmin, (req, res) => {
     }
     res.json({ ok: true, online, count: online.length });
   } catch(e) { res.status(500).json({ ok: false, error: String(e) }); }
+});
+
+// ─── Admin: Guild Clearance forensics ─────────────────────────────────────────
+// Reporting only. Nothing here punishes anyone: the GM reads the shape and
+// decides. Automatic action on a heuristic is how you ban a household.
+
+app.get('/api/admin/clearance/flows/recent', requireAdmin, (req, res) => {
+  try { res.json({ ok:true, flows: getRecentValueFlows(Math.min(500, Number(req.query.limit)||200)) }); }
+  catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Farm signature: one receiver fed by many accounts that were young when they
+// sent. Legitimate play does not make this shape.
+app.get('/api/admin/clearance/farms', requireAdmin, (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(90, Number(req.query.days) || 7));
+    const min  = Math.max(2, Math.min(50, Number(req.query.minSenders) || 3));
+    res.json({ ok:true, days, minSenders: min,
+               signals: getFarmSignals(days * 24 * 3600 * 1000, min, 50) });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Registered AFTER the literal paths above: ':name' is a single path segment and
+// would otherwise swallow /farms.
+app.get('/api/admin/clearance/:name', requireAdmin, (req, res) => {
+  try {
+    const p = getPlayerByName(String(req.params.name||'').trim());
+    if (!p) return res.status(404).json({ ok:false, error:'player_not_found' });
+    res.json({
+      ok: true,
+      player: { id: p.id, name: p.name, cash: p.cash, createdAt: p.createdAt },
+      clearance: clearanceSnapshot(p),
+      flows: getValueFlowsFor(p.id, 200),
+      inbound: getInboundSenders(p.id, 200),
+    });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Manual override, both directions. For the case the model gets wrong.
+app.post('/api/admin/clearance/exempt', requireAdmin, (req, res) => {
+  try {
+    const p = getPlayerByName(String(req.body?.name||'').trim());
+    if (!p) return res.status(404).json({ ok:false, error:'player_not_found' });
+    const flag = !!req.body?.exempt;
+    setClearanceExempt(p.id, flag);
+    console.log(`[Clearance] ${req.admin.name} set clearance_exempt=${flag?1:0} on ${p.name}`);
+    res.json({ ok:true, name: p.name, exempt: flag });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
 
 function broadcastToAdmins(msg) {
@@ -7195,6 +7381,7 @@ function snapshotPortfolio(player){
     chatColor: _snapColor, transferFree: !tier?.transferFee,
     faction: playerFaction, passiveIncome,
     dayTradesRemaining: _dtRemaining(player.id),
+    clearance: (() => { try { return clearanceSnapshot(player); } catch(_) { return null; } })(),
   };
 }
 
@@ -7380,6 +7567,16 @@ wss.on('connection',(ws,req)=>{
     }
     if(msg.type==='tcg_buy_card'){
       const listingId=String(msg.listing||'');
+      // Guild Clearance. A card purchase is a full-price, zero-fee, no-cooldown
+      // transfer to the seller, which made Ƒbay a better wire than the wire.
+      // Priced before the buy transaction because value movement cannot be un-run.
+      {
+        const _L = tcgGetCardListing(listingId);
+        if (_L && _L.seller_id !== actor.id) {
+          const _cl = canSendValue(actor, Number(_L.price)||0);
+          if (!_cl.ok) { ws.send(JSON.stringify({type:'tcg_error',data:{msg:_cl.msg}})); return; }
+        }
+      }
       const r=tcgBuyCard(actor.id, listingId);
       if(!r.ok){
         const m = r.error==='insufficient_funds' ? 'Insufficient funds.'
@@ -7387,6 +7584,7 @@ wss.on('connection',(ws,req)=>{
           : r.error==='not_found' ? 'That listing is no longer available.' : 'Could not buy that card.';
         ws.send(JSON.stringify({type:'tcg_error',data:{msg:m}})); return;
       }
+      commitValueFlow(actor.id, r.sellerId, Number(r.price)||0, 'tcg_card', String(r.cardId||''));
       actor.cash = Number(actor.cash||0) - r.price;   // DB already debited in the txn; sync in-memory for response/snapshot only, never re-save
       ws.send(JSON.stringify({type:'tcg_card_bought',data:{
         card: r.cardId, variant: r.variant, price: r.price, cash: actor.cash,
@@ -8578,22 +8776,34 @@ wss.on('connection',(ws,req)=>{
         safeAddCash(actor, -cost);
         actor.cash = Math.round(actor.cash * 100) / 100;
         savePlayer(actor);
-        _miningRuns.set(actor.id, { startTs: now });
+        _miningRuns.set(actor.id, { startTs: now, banked: 0 });
         ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
         ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
         return;
       }
 
-      // Run end (positive): bound the credit to a plausible yield for the elapsed
-      // run time (never clamps a real run; caps a fabricated one), then a hard
-      // per-run ceiling as a final backstop. Fall back to an assumed run length if
-      // the run-start wasn't recorded (e.g. a restart landed mid-run).
-      const run     = _miningRuns.get(actor.id);
-      const elapsed = run ? Math.max(1, (now - run.startTs) / 1000) : MINING_RUN_FALLBACK_SEC;
-      const cap      = Math.min(MINING_MAX_YIELD_PER_SEC * elapsed, MINING_MAX_RUN_BANK);
+      // Run end or mid-run ferry (positive): bound the credit to a plausible
+      // yield for the elapsed run time, minus what this run has already banked.
+      //
+      // THE BUDGET IS PER RUN, NOT PER MESSAGE. Cargo drones bank mid-run and
+      // there can be many per run. Deleting the run window on the first positive
+      // delta closed the run, so every later message fell through to the
+      // MINING_RUN_FALLBACK_SEC branch and was handed a FRESH FULL CAP. The
+      // ceiling was therefore not the cap, it was the cap times however many
+      // bank messages a client chose to send. Only the end of run settlement
+      // closes the window now.
+      const run      = _miningRuns.get(actor.id);
+      const elapsed  = run ? Math.max(1, (now - run.startTs) / 1000) : MINING_RUN_FALLBACK_SEC;
+      const already  = run ? Number(run.banked || 0) : 0;
+      const runCap   = Math.min(MINING_MAX_YIELD_PER_SEC * elapsed, MINING_MAX_RUN_BANK);
+      const cap      = Math.max(0, runCap - already);
       const credited = Math.round(Math.min(delta, cap) * 100) / 100;
       const clamped  = delta > cap + 0.005;
-      _miningRuns.delete(actor.id);
+      // A claim sitting just under the ceiling is the shape a tuned forgery
+      // makes, and the old log only fired ABOVE the cap, so it was silent.
+      const nearCap  = !clamped && cap > 0 && delta > cap * 0.75;
+      if (reason === 'cargo_drone' && run) run.banked = already + credited;
+      else _miningRuns.delete(actor.id);
 
       safeAddCash(actor, credited);
       actor.cash = Math.round(actor.cash * 100) / 100;
@@ -8608,6 +8818,8 @@ wss.on('connection',(ws,req)=>{
       ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
       if (clamped) {
         broadcastToAdmins({ type:'admin_log', data:{ action:'mining_clamped', by:actor.name, reported:delta, paid:credited, elapsedSec:Math.round(elapsed) } });
+      } else if (nearCap) {
+        broadcastToAdmins({ type:'admin_log', data:{ action:'mining_near_cap', by:actor.name, reported:delta, cap:Math.round(cap), elapsedSec:Math.round(elapsed), reason } });
       }
       return;
     }
@@ -8625,15 +8837,28 @@ wss.on('connection',(ws,req)=>{
       }
     }
 
+    // ── Guild Clearance status ───────────────────────────────────────────────
+    if(msg.type==='clearance_status'){
+      try { ws.send(JSON.stringify({type:'clearance_status',data:clearanceSnapshot(actor)})); }
+      catch(_) { ws.send(JSON.stringify({type:'clearance_status',data:null})); }
+      return;
+    }
+
     // ── Transfer ─────────────────────────────────────────────────────────────
     if(msg.type==='transfer'){
       const{toName,amount}=msg;
       const amt=Math.max(1,Math.floor(Number(amount)||0));
       if(!toName||!amt)return;
-      // 12-hour cooldown
+      // 12-hour cooldown. Was a bare in-memory Map, which meant every PM2
+      // restart handed everyone a fresh wire. Now read from the players row and
+      // seeded from the in-memory value on first use so a running process does
+      // not forget a cooldown mid-flight.
       const WIRE_COOLDOWN_MS = 12 * 60 * 60 * 1000;
       if (!global._lastWire) global._lastWire = new Map();
-      const lastWire = global._lastWire.get(actor.id) || 0;
+      const lastWire = Math.max(
+        Number(getLastWireAt(actor.id) || 0),
+        Number(global._lastWire.get(actor.id) || 0)
+      );
       if (Date.now() - lastWire < WIRE_COOLDOWN_MS) {
         const remaining = WIRE_COOLDOWN_MS - (Date.now() - lastWire);
         const hrs = Math.floor(remaining / 3600000);
@@ -8644,6 +8869,12 @@ wss.on('connection',(ws,req)=>{
       if(!recipient)return ws.send(JSON.stringify({type:'error',data:{msg:`Player "${toName}" not found.`}}));
       // Block self-transfers
       if(recipient.id===actor.id)return ws.send(JSON.stringify({type:'error',data:{msg:`You cannot wire credits to yourself.`}}));
+      // Guild Clearance. Checked on the delivered amount, not amount+fee: the
+      // fee is a sink, it does not reach another account.
+      {
+        const _cl = canSendValue(actor, amt);
+        if (!_cl.ok) return ws.send(JSON.stringify({type:'error',data:{msg:_cl.msg}}));
+      }
       const _effectiveTaxRate = global._godTaxOverride != null ? global._godTaxOverride/10000 : TAX_RATE;
       // Standard 2% tax on the full amount
       let baseFee = tier?.transferFee ? Math.ceil(amt*_effectiveTaxRate) : 0;
@@ -8658,7 +8889,9 @@ wss.on('connection',(ws,req)=>{
       actor.cash-=total; recipient.cash+=amt; actor.xp+=2;
       actor.level=calcLevel(actor.xp);
       savePlayer(actor); savePlayer(recipient);
+      commitValueFlow(actor.id, recipient.id, amt, 'wire', `fee ${Math.floor(fee)}`);
       global._lastWire.set(actor.id, Date.now());
+      setLastWireAt(actor.id, Date.now());
       // Update sender portfolio
       ws.send(JSON.stringify({type:'portfolio',data:snapshotPortfolio(actor)}));
       const feeNote=guildTax>0?` (Ƒ${baseFee.toLocaleString()} tax + Ƒ${guildTax.toLocaleString()} Guild surcharge)`:baseFee>0?` (Ƒ${baseFee.toLocaleString()} tax sink)`:' (no fee, CEO tier)';

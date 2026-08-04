@@ -4440,8 +4440,47 @@ el('#buy').onclick = ()=>{ try{ window.marketAPI && window.marketAPI.buy && wind
 
 // overridden by Sell Modal
 
+// ─── Guild Clearance (1.3.7.0) ──────────────────────────────────────
+// Credits an account has EARNED can leave it. The seed advance cannot, and
+// neither can credits somebody else wired in. The readout exists so a blocked
+// wire is legible before the player presses the button, not after.
+window.__FM_CLEARANCE = null;
+
+function renderClearance(c) {
+  window.__FM_CLEARANCE = c || null;
+  var box = document.getElementById('clearanceNote');
+  if (!box) return;
+  if (!c || c.enabled === false) { box.textContent = ''; box.style.display = 'none'; return; }
+  box.style.display = '';
+  if (c.exempt) {
+    box.style.color = '#c8a24a';
+    box.textContent = 'Guild clearance: unrestricted.';
+    return;
+  }
+  var left = Number(c.remaining) || 0;
+  var fmt  = function(n){ return '\u0192' + Math.floor(n).toLocaleString(); };
+  if (left <= 0) {
+    box.style.color = '#c0392b';
+    box.textContent = 'Guild clearance: ' + fmt(0) + '. Clearance is earned, not issued. '
+      + 'Your seed advance and credits wired to you cannot be sent on. Trade, gamble, mine, complete tests.';
+  } else {
+    box.style.color = '#3a5f3a';
+    box.textContent = 'Guild clearance: ' + fmt(left) + ' may leave this account. '
+      + 'Peak net worth ' + fmt(c.peak) + ', less the ' + fmt(c.grant) + ' seed advance'
+      + (c.received > 0 ? ', less ' + fmt(c.received) + ' wired to you' : '')
+      + (c.sent > 0 ? ', less ' + fmt(c.sent) + ' already sent' : '') + '.';
+  }
+}
+
 el('#xfer').onclick = ()=>{
-  ws.send(JSON.stringify({type:'transfer', toName:el('#toName').value, amount:Number(el('#amt').value||0)}));
+  var amt = Number(el('#amt').value||0);
+  var c = window.__FM_CLEARANCE;
+  if (c && c.enabled !== false && !c.exempt && amt > (Number(c.remaining)||0)) {
+    try { (window.gToast||window.toast||alert)('Guild clearance denied. You may move \u0192'
+      + Math.floor(Number(c.remaining)||0).toLocaleString() + ' off this account.'); } catch(e){}
+    return;
+  }
+  ws.send(JSON.stringify({type:'transfer', toName:el('#toName').value, amount:amt}));
 };
 
 // Chat wiring handled by unified chat system below
@@ -4697,6 +4736,8 @@ ws.addEventListener('message', (ev)=>{
     renderBoard(msg.data);
   }
   if (msg.type === 'portfolio') {
+    // Guild Clearance readout on the wire panel.
+    try { if (msg.data && msg.data.clearance) renderClearance(msg.data.clearance); } catch(e){}
     // Cache clean position data (qty + avg cost only — no stale price)
     try {
       window.__MY_POSITIONS = {};

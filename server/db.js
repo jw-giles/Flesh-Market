@@ -462,6 +462,14 @@ export function setupTransactions() {
   recordNetWorthFn = transaction((playerId, net, cash, equity) => {
     stmt('INSERT INTO net_worth_history(player_id,net_worth,cash,equity,ts) VALUES(?,?,?,?,?)')
       .run(playerId, net, cash, equity, Date.now());
+    // Guild Clearance: the high-water mark rides along with the history write so
+    // every existing call site maintains it without being touched. Monotone by
+    // the WHERE clause; a drawdown never lowers earned clearance.
+    try {
+      const n = Number(net);
+      if (Number.isFinite(n) && n > 0)
+        stmt('UPDATE players SET peak_net_worth=? WHERE id=? AND peak_net_worth < ?').run(n, playerId, n);
+    } catch(_) {}
     stmt(`DELETE FROM net_worth_history WHERE player_id=? AND id NOT IN
           (SELECT id FROM net_worth_history WHERE player_id=? ORDER BY ts DESC LIMIT 1000)`)
       .run(playerId, playerId);
@@ -4093,4 +4101,224 @@ export function getAllOpenCasinoRounds() {
 export function getCasinoActivity(playerId, limit = 100) {
   return stmt('SELECT * FROM casino_rounds WHERE player_id=? ORDER BY opened_ts DESC LIMIT ?')
     .all(playerId, Math.max(1, Math.min(500, limit | 0)));
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  GUILD CLEARANCE  -  added 1.3.7.0
+//
+//  The alt-account problem is not an identity problem, it is a faucet problem.
+//  Every new account is handed a seed advance (1000). Nothing stopped that
+//  advance from being pushed straight back out to a main account, so an
+//  unthrottled /api/register turned into an unbounded money printer at roughly
+//  980 per registration.
+//
+//  Rather than gate on identity (IP, email, device) which is both bypassable
+//  and hostile to real players sharing a household or a carrier NAT, we gate on
+//  PROVENANCE: an account may only move value it has demonstrably created.
+//
+//      allowance = peak_net_worth - seed_grant - lifetime_received
+//      remaining = allowance - lifetime_sent
+//
+//  A fresh account has peak 1000, grant 1000, received 0, so its allowance is
+//  zero forever. No timer to wait out, so pre-registering a farm buys nothing.
+//  A real player who turned the seed into 200k has ~199k of clearance and will
+//  never notice the ceiling exists.
+//
+//  Subtracting lifetime_received is what kills laundering chains: value that
+//  arrived from another player raises peak net worth and is subtracted right
+//  back out, so it cannot be forwarded on to mint clearance downstream.
+//
+//  fund_out is tracked separately and deliberately NOT subtracted from the
+//  allowance. Peak net worth already includes fund stake, so a deposit is not a
+//  loss of value; fund_out exists only so a withdrawal can tell return-of-own-
+//  capital apart from a drain of somebody else's deposits. The excess is the
+//  part that counts as received.
+// ══════════════════════════════════════════════════════════════════════════════
+
+export function initClearanceTables() {
+  try { db.exec('ALTER TABLE players ADD COLUMN peak_net_worth    REAL    NOT NULL DEFAULT 0'); } catch(_) {}
+  try { db.exec('ALTER TABLE players ADD COLUMN lifetime_sent     REAL    NOT NULL DEFAULT 0'); } catch(_) {}
+  try { db.exec('ALTER TABLE players ADD COLUMN lifetime_received REAL    NOT NULL DEFAULT 0'); } catch(_) {}
+  try { db.exec('ALTER TABLE players ADD COLUMN fund_out          REAL    NOT NULL DEFAULT 0'); } catch(_) {}
+  try { db.exec('ALTER TABLE players ADD COLUMN clearance_exempt  INTEGER NOT NULL DEFAULT 0'); } catch(_) {}
+  try { db.exec('ALTER TABLE players ADD COLUMN last_wire_at      INTEGER NOT NULL DEFAULT 0'); } catch(_) {}
+
+  db.exec(`
+    -- Every player-to-player movement of value, whatever the route. This is the
+    -- forensic trail that did not exist before: without it a farm cannot be
+    -- sized, attributed or unwound after the fact.
+    CREATE TABLE IF NOT EXISTS value_flow_log (
+      id      INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts      INTEGER NOT NULL,
+      kind    TEXT    NOT NULL,
+      from_id TEXT,
+      to_id   TEXT,
+      amount  REAL    NOT NULL,
+      note    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_vfl_from ON value_flow_log(from_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_vfl_to   ON value_flow_log(to_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_vfl_ts   ON value_flow_log(ts);
+    CREATE TABLE IF NOT EXISTS clearance_meta (
+      key TEXT PRIMARY KEY,
+      val TEXT
+    );
+  `);
+
+  // One-time backfill. Existing players are granted the clearance their history
+  // already earned them, so nobody established wakes up locked out. Past
+  // transfers are amnestied: lifetime_sent and lifetime_received both start at
+  // zero because there is no record to reconstruct them from.
+  const done = stmt('SELECT val FROM clearance_meta WHERE key=?').get('backfill_v1');
+  if (!done) {
+    const n = stmt(`
+      UPDATE players SET peak_net_worth = MAX(
+        COALESCE((SELECT MAX(h.net_worth) FROM net_worth_history h WHERE h.player_id = players.id), 0),
+        COALESCE(cash, 0)
+      )
+    `).run();
+    stmt('INSERT OR REPLACE INTO clearance_meta(key,val) VALUES(?,?)')
+      .run('backfill_v1', String(Date.now()));
+    console.log(`[Clearance] Backfilled peak net worth for ${n.changes|0} player(s)`);
+  }
+}
+
+export let recordValueFlowFn;
+export let recordFundFlowFn;
+
+export function setupClearanceTransactions() {
+  // A player-to-player movement. Either side may be null when the counterparty
+  // is not a player (a fund pool, a sink, the treasury).
+  recordValueFlowFn = transaction((fromId, toId, amount, kind, note) => {
+    const amt = Number(amount) || 0;
+    if (!(amt > 0)) return;
+    if (fromId) stmt('UPDATE players SET lifetime_sent=lifetime_sent+? WHERE id=?').run(amt, fromId);
+    if (toId)   stmt('UPDATE players SET lifetime_received=lifetime_received+? WHERE id=?').run(amt, toId);
+    stmt('INSERT INTO value_flow_log(ts,kind,from_id,to_id,amount,note) VALUES(?,?,?,?,?,?)')
+      .run(Date.now(), String(kind || 'unknown'), fromId || null, toId || null, amt, note || null);
+  });
+
+  // Fund deposits and withdrawals. delta > 0 is value going into the pool,
+  // delta < 0 is value coming back out. A withdrawal first repays this player's
+  // own fund_out; anything beyond that is somebody else's capital and is booked
+  // as received, which is what catches an owner or treasurer draining member
+  // deposits (model B withdrawals are capped by fund cash, not by own stake).
+  recordFundFlowFn = transaction((playerId, delta, fundId, note) => {
+    const d = Number(delta) || 0;
+    if (d === 0 || !playerId) return 0;
+    const row = stmt('SELECT fund_out, lifetime_received FROM players WHERE id=?').get(playerId);
+    if (!row) return 0;
+    let fundOut = Number(row.fund_out || 0);
+    let recv    = Number(row.lifetime_received || 0);
+    let booked  = 0;
+    if (d > 0) {
+      fundOut += d;
+    } else {
+      const back = -d;
+      const off  = Math.min(fundOut, back);
+      fundOut -= off;
+      booked   = back - off;
+      recv    += booked;
+    }
+    stmt('UPDATE players SET fund_out=?, lifetime_received=? WHERE id=?')
+      .run(Math.max(0, fundOut), recv, playerId);
+    stmt('INSERT INTO value_flow_log(ts,kind,from_id,to_id,amount,note) VALUES(?,?,?,?,?,?)')
+      .run(Date.now(), d > 0 ? 'fund_deposit' : 'fund_withdraw',
+           d > 0 ? playerId : null, d > 0 ? null : playerId,
+           Math.abs(d), note || (fundId ? `fund:${fundId}` : null));
+    return booked;
+  });
+}
+
+export function getClearanceRow(playerId) {
+  try {
+    return stmt(`SELECT peak_net_worth, lifetime_sent, lifetime_received, fund_out,
+                        clearance_exempt, cash, created_at
+                 FROM players WHERE id=?`).get(playerId) || null;
+  } catch(_) { return null; }
+}
+
+// Monotone. Only ever raises the stored peak, never lowers it.
+export function bumpPeakNetWorth(playerId, net) {
+  const n = Number(net);
+  if (!playerId || !Number.isFinite(n) || n <= 0) return;
+  try {
+    stmt('UPDATE players SET peak_net_worth=? WHERE id=? AND peak_net_worth < ?')
+      .run(n, playerId, n);
+  } catch(_) {}
+}
+
+export function setClearanceExempt(playerId, flag) {
+  stmt('UPDATE players SET clearance_exempt=? WHERE id=?').run(flag ? 1 : 0, playerId);
+}
+
+// ─── Forensics ────────────────────────────────────────────────────────────────
+
+export function getValueFlowsFor(playerId, limit = 200) {
+  return stmt(`SELECT v.*, pf.name AS from_name, pt.name AS to_name
+               FROM value_flow_log v
+               LEFT JOIN players pf ON pf.id = v.from_id
+               LEFT JOIN players pt ON pt.id = v.to_id
+               WHERE v.from_id=? OR v.to_id=?
+               ORDER BY v.ts DESC LIMIT ?`)
+    .all(playerId, playerId, Math.max(1, Math.min(1000, limit | 0)));
+}
+
+export function getRecentValueFlows(limit = 200) {
+  return stmt(`SELECT v.*, pf.name AS from_name, pt.name AS to_name
+               FROM value_flow_log v
+               LEFT JOIN players pf ON pf.id = v.from_id
+               LEFT JOIN players pt ON pt.id = v.to_id
+               ORDER BY v.ts DESC LIMIT ?`)
+    .all(Math.max(1, Math.min(1000, limit | 0)));
+}
+
+// Farm signature: one receiver, many senders, each sender young at the moment
+// it sent. Legitimate play does not produce this shape. Reported, never acted
+// on automatically: the GM decides.
+export function getFarmSignals(maxSenderAgeMs = 7 * 24 * 3600 * 1000, minSenders = 3, limit = 50) {
+  return stmt(`SELECT v.to_id,
+                      pt.name              AS to_name,
+                      COUNT(DISTINCT v.from_id) AS senders,
+                      COUNT(*)             AS flows,
+                      SUM(v.amount)        AS total,
+                      MAX(v.ts)            AS last_ts
+               FROM value_flow_log v
+               JOIN players s  ON s.id  = v.from_id
+               LEFT JOIN players pt ON pt.id = v.to_id
+               WHERE v.from_id IS NOT NULL AND v.to_id IS NOT NULL
+                 AND (v.ts - s.created_at) < ?
+               GROUP BY v.to_id
+               HAVING senders >= ?
+               ORDER BY total DESC
+               LIMIT ?`)
+    .all(Math.max(0, maxSenderAgeMs | 0), Math.max(2, minSenders | 0), Math.max(1, Math.min(200, limit | 0)));
+}
+
+// Accounts sharing an inbound edge with a known receiver, newest first. Used to
+// eyeball a suspected cluster before touching anything.
+export function getInboundSenders(playerId, limit = 200) {
+  return stmt(`SELECT v.from_id, p.name, p.created_at, SUM(v.amount) AS total, COUNT(*) AS flows
+               FROM value_flow_log v
+               LEFT JOIN players p ON p.id = v.from_id
+               WHERE v.to_id=? AND v.from_id IS NOT NULL
+               GROUP BY v.from_id
+               ORDER BY total DESC LIMIT ?`)
+    .all(playerId, Math.max(1, Math.min(500, limit | 0)));
+}
+
+// Single listing lookups, so a clearance check can price a purchase before the
+// purchase transaction runs.
+export function getMarketListing(listingId) {
+  try { return stmt('SELECT * FROM item_market WHERE id=? AND sold=0').get(listingId) || null; }
+  catch(_) { return null; }
+}
+
+// Wire cooldown, moved off an in-memory Map so it survives a process restart.
+export function getLastWireAt(playerId) {
+  try { return Number(stmt('SELECT last_wire_at FROM players WHERE id=?').get(playerId)?.last_wire_at || 0); }
+  catch(_) { return 0; }
+}
+export function setLastWireAt(playerId, ts) {
+  try { stmt('UPDATE players SET last_wire_at=? WHERE id=?').run(Number(ts) || Date.now(), playerId); } catch(_) {}
 }

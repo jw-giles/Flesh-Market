@@ -4,6 +4,76 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.7.1 (2026-08-04) - The mining budget was per message (SERVER)
+
+Server restart required. No schema change beyond 1.3.7.0.
+
+THIS STARTED AS A TUNING QUESTION AND TURNED UP TWO BUGS. The 1.3.7.0 notes flagged `MINING_MAX_YIELD_PER_SEC` at 5000 as a number that needed checking against real yields. Reading the mining code to set it properly found that the cargo drone path was broken in two separate ways.
+
+CARGO DRONES DO NOT ADD CAPACITY. They ferry value already in the hold: `state.cargoValue -= takeVal` and the drone carries it to the mothership. `CARGO_DRONE_CAP` of 300 is value per ferry trip, not extra storage. So the honest ceiling on a run is a RATE, not a hold size, which is the right shape for the existing per-second bound.
+
+BUG ONE, DOUBLE CREDIT. On docking, the drone ran `state.runBanked += cd.carryingValue` AND sent `bank_delta` with that same value. The server credited it there. Then at end of run, `fmBridgeSend('bank_delta', { delta: state.runBanked })` sent a total that still contained it. Every cargo drone haul was paid twice. `dockDrone()` does it correctly by comparison: it only accumulates to `runBanked` and lets the end of run settlement send once. Ferried value now goes to `state.runFerried` for the summary and straight to `state.bank` for the display, and never rides in `runBanked`.
+
+BUG TWO, THE BUDGET WAS PER MESSAGE. The handler called `_miningRuns.delete(actor.id)` on the first positive delta. Cargo drones bank MID RUN and there can be many. So the first ferry closed the run, and every subsequent message found no open run, fell through to the `MINING_RUN_FALLBACK_SEC` branch, and was handed a fresh full cap. The real ceiling was never 450k per run, it was 450k times however many bank messages a client chose to send. Unbounded in count.
+
+The budget is now cumulative: the window carries `banked`, each credit subtracts from the run's total allowance, and only the end of run settlement closes it. Measured: five forged claims of 1,000,000 each now credit 897 in total, against roughly 2.25M before.
+
+THE CEILING WAS 31x THE PHYSICALLY IMPOSSIBLE MAXIMUM. Derived rather than picked this time. `LASER_MINE_RATE` is 1.6 per frame against a threshold of 100, the best hull in `MINING_SHIP_CATALOG` has `drillMul` 1.75, and each drill completion yields ONE unit, so 100/2.8 = 35.7 frames, about 0.60s per unit at 60fps. The richest mineral is musgravite at 250. Heat is the real governor: firing adds 0.9 per frame and cooling removes 0.55, so sustained duty is 38%. That is roughly 160 F/sec, and only if every rock in the field is musgravite with zero travel, zero scanning and perfect aim, which the flat 30% depleted rate makes impossible.
+
+`MINING_MAX_YIELD_PER_SEC` 5000 to 400, which leaves 2.5x headroom over a ceiling no honest run can reach. `MINING_MAX_RUN_BANK` 10,000,000 to 500,000. A forged orphan claim drops from 450,000 to 36,000.
+
+NEAR CAP CLAIMS NOW LOG. The old admin signal only fired ABOVE the cap, so a forgery tuned to sit just under the ceiling was completely silent. Anything over 75% of the remaining budget now raises `mining_near_cap` alongside the existing `mining_clamped`.
+
+WHY THIS MATTERS MORE AFTER 1.3.7.0. `recordNetWorth` is called inside the mining handler, so banked mining raises `peak_net_worth`. Forged mining was therefore the cheapest available way to MANUFACTURE Guild Clearance, and clearance made the vector more attractive than it was before. This does not close client authority over mining, which still needs the server to derive yield rather than bound it, and remains the top item on the backlog.
+
+CLEARANCE PROMPT REWORDED. The zero clearance line pointed new players at Capital Houses, which they will not touch for a long time. Now reads "Trade, gamble, mine, complete tests." on both the client readout and the server denial.
+
+TESTED, 47 assertions across three suites, 0 failures, on a clean boot with zero errors. The 1.3.7.0 clearance suites still pass unchanged (24 and 15). New mining suite of 8: the loadout deduction opens a run, five forged ferry claims share one budget instead of each getting a fresh cap, the end of run claim is bounded by what the run has left, an orphan claim is capped at the new fallback, and an honest 900 yield is credited in full and never clamped. VERIFIED NON-VACUOUS by mutation: re-running with `MINING_MAX_YIELD_PER_SEC=5000` fires four assertions and the orphan claim credits exactly 450,000.
+
+---
+
+## v1.3.7.0 (2026-08-04) - Guild Clearance (SERVER)
+
+Server restart required. Schema migration runs on boot.
+
+THE PROBLEM WAS NEVER ALT ACCOUNTS. Every new account is handed a 1000 seed advance and `/api/register` takes a name and a four character password with no email, no captcha and no throttle of any kind: `ratelimit.js` is websocket only and `express-rate-limit` is not a dependency. Nothing stopped that advance from being wired straight back out. At the 2% transfer tax that is exactly 980 per registration, and the whole loop is a twenty line script against an unthrottled endpoint. Not theoretical.
+
+IP LIMITING WAS CONSIDERED AND REJECTED AS A GATE. Mobile carriers put thousands of users behind one CGNAT address, households and offices share an address, and a farmer buys a proxy pool for pennies or toggles airplane mode. High false positive rate against real players, near zero true block rate against the one person motivated enough to script it. IP is a signal, not a gate.
+
+AN ACCOUNT AGE TIMER WAS ALSO REJECTED. Registration is free and instant, so a 30 day lock is a delay and not a cost: script 500 accounts tonight, harvest on day 31. A delay only defends if somebody is watching the window, and nothing was logged.
+
+THE GATE IS PROVENANCE. An account may only move value it has demonstrably created.
+
+    allowance = peak_net_worth - seed_grant - lifetime_received
+    remaining = allowance - lifetime_sent
+
+A fresh account has peak 1000, grant 1000, received 0. Allowance zero, forever. No timer to outwait, so pre-registering a farm buys nothing. A player who turned the seed into 200k has 199k of clearance on their first afternoon and will never see the ceiling. Farming an alt now requires playing the alt until it has earnings, at which point it is not an exploit, it is labour.
+
+SUBTRACTING lifetime_received IS WHAT KILLS LAUNDERING CHAINS. Value that arrives from another player raises peak net worth and is subtracted straight back out, so it cannot be forwarded on to mint clearance downstream. A -> B -> C terminates at B.
+
+GATING ONLY THE WIRE WOULD HAVE BEEN DECORATIVE. Three other routes moved cash between players and two of them were strictly better than the wire.
+
+- `tcgBuyCard` and `buyMarketItem` both debit the buyer and credit the seller at full price. No fee, no cooldown, no age check, price ceilings of 1e15 and 999,999,999. A main lists a junk common for 980, the alt buys it, and 980 moves at 100% efficiency against the wire's 98%, with no 12 hour cooldown and no per account limit. Ƒbay was a better wire than the wire.
+- Fund deposits reach a pool that `fundWithdrawFn` lets an owner or treasurer draw against FUND CASH, not against the withdrawer's own stake (model B, deliberate and unchanged). Deposit is therefore a send. No owner exemption: an alt that owns its own house and appoints the main as treasurer is the same route wearing a hat.
+
+fund_out IS TRACKED SEPARATELY AND DELIBERATELY NOT SUBTRACTED FROM THE ALLOWANCE. Peak net worth already includes fund stake, so a deposit is not a loss of value. fund_out exists only so a withdrawal can tell return of own capital apart from a drain of other members' deposits; the excess is what books as received. Without this, a whale round tripping their own money through their own house would burn allowance permanently.
+
+THE PEAK IS MONOTONE AND RIDES ON THE EXISTING HISTORY WRITE. `recordNetWorthFn` raises `peak_net_worth` in the same transaction, so all eleven existing `recordNetWorth` call sites maintain it untouched. A drawdown never destroys earned clearance. Live net worth is re-maxed against the stored peak at check time and the raise persisted, so a player who earned through a route that never writes history is not penalised.
+
+BACKFILL. One time, guarded by a `clearance_meta` key: every existing player's peak seeded from `MAX(net_worth)` in `net_worth_history`, floored at current cash. Nobody established wakes up locked out. Past transfers are amnestied because there is no record to reconstruct them from, which is the second reason this shipped.
+
+value_flow_log IS THE TRAIL THAT DID NOT EXIST. Every player to player movement, whatever the route, with both counterparties and a kind. Before this, a farm could not be sized, attributed or unwound after the fact. Four admin endpoints read it: per player clearance and flow history, recent flows, a farm signature report (one receiver, several senders who were young at the moment they sent, a shape legitimate play does not produce), and a two way manual exemption. Reporting only. Nothing acts automatically on a heuristic, because that is how you ban a household.
+
+WIRE COOLDOWN WAS SILENTLY NON FUNCTIONAL. It lived in `global._lastWire`, a plain in memory Map, so every PM2 restart handed everyone a fresh wire. Moved to `last_wire_at` on the players row and max'd against the in memory value so a running process does not forget one mid flight. Independent of the alt question and broken since it was written.
+
+KNOWN COSTS, ACCEPTED. Gifted credits are spendable but not forwardable: a player who receives 100k can trade, gamble, mine and spend at NPC sinks, but cannot buy on Ƒbay or deposit into a house until they have earned clearance of their own. Card and item sales mint no allowance, since proceeds raise peak and received by the same amount, which is also what stops wash trading. `clearance_exempt` per player and `CLEARANCE_ENABLED=0` globally are the escape hatches.
+
+CLIENT. The wire panel shows the clearance figure and its derivation before the button is pressed, and the button pre-checks it. Item market and fund deposit surface the server's message instead of a raw error code.
+
+TESTED AGAINST A LIVE SERVER, 39 assertions across two suites: the seed advance cannot leave a fresh account, an earned account wires normally, gifted value cannot be forwarded, all four routes reject and none of them record a ledger entry when they do, own capital round trips through a house book nothing, a drain books the excess as received, the peak survives a wipeout, the cooldown persists, and the farm report fires on a synthetic farm. Route ordering bug caught in test: `/api/admin/clearance/farms` was being swallowed by `/:name`.
+
+---
+
 ## v1.3.6.2 (2026-08-02) - The drawer painted under the scrim (CLIENT)
 
 Client only. No restart. Hard refresh required.

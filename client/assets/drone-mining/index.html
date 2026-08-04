@@ -1584,6 +1584,7 @@ function startRun() {
   state.escorts = [];
   state.escortBullets = [];
   state.cargoDrones = [];    // built-in courier drones (ship perk)
+  state.runFerried = 0;      // cargo drone hauls, already credited server side
 
   deployNextDrone(true);
 
@@ -1766,7 +1767,7 @@ function endRun(title, line1, line2) {
   // Record run on server for leaderboard + upgrade gating stats
   fmBridgeSend('run_complete', {
     profit: net,
-    banked: state.runBanked,
+    banked: state.runBanked + (state.runFerried || 0),
     deepestBand: state.runStats.deepestBand,
   });
 
@@ -2463,7 +2464,12 @@ function update() {
       const dd = Math.hypot(cd.x - state.mothership.x, cd.y - state.mothership.y);
       if (dd < DOCK_RADIUS) {
         // Deposit!
-        state.runBanked += cd.carryingValue;
+        // The server credits this the moment the drone docks. It must NOT also
+        // ride in state.runBanked, because the end of run settlement sends
+        // runBanked as its own delta and the ferried value would be PAID TWICE.
+        // Tracked separately so the run summary and leaderboard still count it.
+        state.runFerried = (state.runFerried || 0) + cd.carryingValue;
+        state.bank += cd.carryingValue;
         fmBridgeSend('bank_delta', { delta: cd.carryingValue, reason: 'cargo_drone', amount: state.bank + state.runBanked });
         showMsg(`CARGO DRONE +Ƒ${cd.carryingValue.toLocaleString()}`, 1400, '#60c8ff');
         cd.carryingValue = 0;

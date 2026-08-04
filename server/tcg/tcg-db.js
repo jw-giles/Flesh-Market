@@ -110,6 +110,13 @@ export function tcgListCard(sellerId, cardId, variant, price) {
   });
 }
 
+// One live listing by id. Guild Clearance needs the price and the seller before
+// the buy transaction runs, because a value movement cannot be un-run.
+export function tcgGetCardListing(listingId) {
+  try { return S('SELECT * FROM tcg_card_market WHERE id=? AND sold=0').get(listingId) || null; }
+  catch(_) { return null; }
+}
+
 // Active listings, newest first, with seller name.
 export function tcgGetCardListings(limit = 200) {
   return S(`SELECT m.id, m.seller_id, m.card_id, m.variant, m.price, m.listed_at, p.name AS seller_name

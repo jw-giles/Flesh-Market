@@ -782,6 +782,7 @@ window.buyItem = async function(listingId, price){
     const r = await fetch('/api/items/market/buy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,listingId})});
     const d = await r.json();
     if(d.ok){ try{showToast(TF('inv.purchased','Purchased: {name}',{name:d.item?.name}),'#1D9E75');}catch(_){} loadMarket(); loadInventory(); }
+    else if(d.error==='clearance_denied'){ try{showToast(d.message||'Guild clearance denied.','#ff4444');}catch(_){} }
     else{ try{showToast(TF('inv.purchaseFailed','Purchase failed: {err}',{err:d.error}),'#ff4444');}catch(_){} }
   }catch(e){}
 };

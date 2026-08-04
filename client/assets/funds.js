@@ -817,7 +817,7 @@ async function guildPost(path, body, hintId, successMsg) {
     });
     const d = await r.json();
     if (hint) {
-      hint.textContent = d.ok ? (successMsg||'✓ Done') : ('✗ ' + (d.msg || d.error || 'Error'));
+      hint.textContent = d.ok ? (successMsg||'✓ Done') : ('✗ ' + (d.message || d.msg || d.error || 'Error'));
       hint.style.color = d.ok ? '#86ff6a' : '#ff6b6b';
     }
     return d;
