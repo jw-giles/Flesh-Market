@@ -853,4 +853,73 @@ window.godSetCommodities = function(open){
   }).catch(() => _godGateHint('Network error.', false));
 };
 
+// ─── Patreon audit (1.3.7.3) ──────────────────────────────────────────────────
+// The webhook is the fast path and it is not reliable on its own: a cancellation
+// that never arrives, or arrives with an email that does not match what the
+// player linked, leaves a lapsed patron holding a paid tier. This checks against
+// Patreon itself. Opens in preview because a commit removes tiers from real
+// paying accounts and that should never be one unlabelled click away.
+function _godPatOut(html, color) {
+  const el = document.getElementById('god-patreon-out');
+  if (el) { el.style.color = color || '#9ab'; el.innerHTML = html; }
+}
+
+window.godPatreonAudit = function(commit, force) {
+  if (commit && !force && !confirm('Commit the Patreon audit? This removes tiers from accounts that cannot be verified.')) return;
+  _godPatOut(commit ? 'Running audit\u2026' : 'Previewing\u2026', '#888');
+  fetch('/api/admin/patreon/audit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-auth-token': _godTok() },
+    body: JSON.stringify({ commit: !!commit, force: !!force }),
+  }).then(r => r.json()).then(d => {
+    if (d && d.error === 'needs_confirmation') {
+      _godPatOut('BLOCKED: ' + (d.message || '') + '\n\n'
+        + '<button class="god-btn god-btn-red" onclick="godPatreonAudit(true,true)">Override and commit anyway</button>', '#ff9900');
+      return;
+    }
+    if (!d || !d.ok) { _godPatOut('\u2717 ' + ((d && (d.message || d.error)) || 'Audit failed'), '#ff6b6b'); return; }
+    const head = (d.dryRun ? 'PREVIEW' : 'COMMITTED') + ': ' + d.patrons + ' patron(s) on Patreon, '
+      + d.checked + ' holder(s) checked, ' + d.held + ' verified, ' + d.adjusted + ' adjusted, '
+      + d.downgraded + ' to revoke, ' + d.exempt + ' exempt';
+    const lines = (d.rows || []).map(r => {
+      const c = r.action === 'revoke' ? '#ff6b6b' : r.action === 'adjust' ? '#f0b454'
+              : r.action === 'exempt' ? '#3498db' : '#4f8a64';
+      return '<span style="color:' + c + '">' + r.action.toUpperCase() + '</span> '
+           + r.name + ' (tier ' + r.tier + (r.toTier != null ? ' to ' + r.toTier : '') + ') '
+           + '<span style="color:#666">' + r.reason + '</span>';
+    }).join('\n');
+    _godPatOut(head + '\n' + lines, d.dryRun ? '#9ab' : '#86ff6a');
+  }).catch(() => _godPatOut('\u2717 Network error', '#ff6b6b'));
+};
+
+window.godPatreonHolders = function() {
+  _godPatOut('Loading\u2026', '#888');
+  fetch('/api/admin/patreon/holders', { headers: { 'x-auth-token': _godTok() } })
+    .then(r => r.json()).then(d => {
+      if (!d || !d.ok) { _godPatOut('\u2717 Could not load holders', '#ff6b6b'); return; }
+      const cfg = d.configured
+        ? '<span style="color:#4f8a64">Patreon API configured</span>'
+        : '<span style="color:#ff9900">Patreon API NOT configured: set PATREON_ACCESS_TOKEN and PATREON_CAMPAIGN_ID. Audits will do nothing until you do.</span>';
+      const lines = (d.holders || []).map(h => {
+        const ex = h.exemptReason ? ' <span style="color:#3498db">[' + h.exemptReason + ']</span>' : '';
+        const exp = h.expiresAt ? new Date(h.expiresAt).toISOString().slice(0, 10) : 'none';
+        return h.name + ', ' + h.tierName + ex + ' <span style="color:#666">exp ' + exp + '</span>';
+      }).join('\n');
+      _godPatOut(cfg + '\n' + (d.holders || []).length + ' holder(s)\n' + lines, '#9ab');
+    }).catch(() => _godPatOut('\u2717 Network error', '#ff6b6b'));
+};
+
+window.godPatreonExempt = function(flag) {
+  const name = document.getElementById('god-patreon-exempt-name')?.value?.trim();
+  if (!name) { _godPatOut('Enter a player name', '#ff9900'); return; }
+  fetch('/api/admin/patreon/exempt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-auth-token': _godTok() },
+    body: JSON.stringify({ name, exempt: !!flag }),
+  }).then(r => r.json()).then(d => {
+    if (d && d.ok) _godPatOut('\u2713 ' + d.name + (d.exempt ? ' is now exempt from Patreon audits' : ' is no longer exempt'), '#86ff6a');
+    else _godPatOut('\u2717 ' + ((d && (d.message || d.error)) || 'Failed'), '#ff6b6b');
+  }).catch(() => _godPatOut('\u2717 Network error', '#ff6b6b'));
+};
+
 })();

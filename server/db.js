@@ -373,6 +373,7 @@ export function initDB() {
     ['tutorial_seen',         'INTEGER NOT NULL DEFAULT 0'],
     ['ship_class',            "TEXT NOT NULL DEFAULT ''"],
     ['portrait',              'TEXT'],
+    ['patreon_exempt',        'INTEGER NOT NULL DEFAULT 0'],
   ];
   for (const [col, def] of _migrations) {
     if (!_existingCols.has(col)) {
@@ -616,7 +617,16 @@ export function getPriceCycles(companyId, sinceTs, untilTs, limit = 8000) {
 // Revoke expired Patreon tiers (call periodically)
 export function revokeExpiredPatreon() {
   const now = Date.now();
-  const expired = stmt(`SELECT id FROM players WHERE patreon_tier>0 AND patreon_expires_at IS NOT NULL AND patreon_expires_at<?`).all(now);
+  // Three standing exemptions, applied here as well as in the monthly audit so
+  // the timer sweep and the reconciliation cannot disagree about who is safe:
+  //   tier 3      CEO is lifetime, it does not lapse with a billing cycle
+  //   dev_grant_  tiers the GM issued by hand, which have no Patreon behind them
+  //   patreon_exempt  anything bespoke, set from the dev panel
+  const expired = stmt(`SELECT id FROM players
+                        WHERE patreon_tier>0 AND patreon_tier<3
+                          AND COALESCE(patreon_exempt,0)=0
+                          AND COALESCE(patreon_member_id,'') NOT LIKE 'dev_grant_%'
+                          AND patreon_expires_at IS NOT NULL AND patreon_expires_at<?`).all(now);
   for (const row of expired) {
     stmt('UPDATE players SET patreon_tier=0,patreon_member_id=null,patreon_expires_at=null,updated_at=? WHERE id=?')
       .run(now, row.id);
@@ -4499,4 +4509,21 @@ export function setWarehouseMeta(key, val) {
 // on arrival, whatever the price does in between.
 export function setCargoShipmentStoreUnitVal(id, unitVal) {
   try { stmt('UPDATE cargo_shipments SET store_unit_val=? WHERE id=?').run(Math.max(0, Number(unitVal) || 0), id); } catch(_) {}
+}
+
+
+// ─── Patreon audit support (1.3.7.3) ─────────────────────────────────────────
+// Everyone currently holding a paid tier, with the fields the reconciliation
+// needs to decide whether they are still entitled to it.
+export function getPatreonHolders() {
+  try {
+    return stmt(`SELECT id, name, patreon_tier, patreon_email, patreon_member_id,
+                        patreon_expires_at, COALESCE(patreon_exempt,0) AS patreon_exempt
+                 FROM players WHERE patreon_tier > 0 ORDER BY patreon_tier DESC, name`).all();
+  } catch(_) { return []; }
+}
+
+export function setPatreonExempt(playerId, flag) {
+  try { stmt('UPDATE players SET patreon_exempt=?, updated_at=? WHERE id=?')
+    .run(flag ? 1 : 0, Date.now(), playerId); } catch(_) {}
 }

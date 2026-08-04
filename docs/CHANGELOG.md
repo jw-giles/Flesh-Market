@@ -4,6 +4,59 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.7.4 (2026-08-04) - _godTok is not defined (CLIENT)
+
+Client only. No restart. Hard refresh required.
+
+REPORTED FROM THE CONSOLE: `Uncaught ReferenceError: _godTok is not defined` at `window.godPatreonHolders` and `window.godPatreonAudit`. Every Patreon button in the dev panel failed on click.
+
+THE 1.3.7.3 CODE WAS APPENDED TO THE END OF THE FILE. god-panel.js is a single IIFE opening at line 2 and closing at line 856. `_godTok` is declared at line 803, INSIDE it. The new functions landed at 858 and after, OUTSIDE it. An inner declaration is not visible to an outer reference, so the token helper resolved to nothing the moment a button was pressed.
+
+`node --check` PASSES ON THIS. It is a scope error, not a syntax error, and the file parses perfectly. Nothing in the build validates identifier resolution, so the only thing that catches this class is either clicking the button or a scope checker. This is the second time this pattern has shipped, after the comZ regression in 1.6.2.1, which is what `tools/scopecheck.py` was written for and which was not run.
+
+FIX: the block moved inside the IIFE, where every other god function already lives and where `window.godX = ...` assignments still export correctly.
+
+RUNNING scopecheck.py THEN FOUND THE SAME SHAPE IN galaxy.js. The 1.3.7.2 warehouse helpers had been appended after the last IIFE closed, and `renderWarehousePanel()` is called from inside one at line 2644. That one was a FALSE POSITIVE: a top level function declaration hoists into global scope and an inner reference resolves outward, confirmed with a direct repro of both shapes. The asymmetry is the whole point: outer declaration with inner reference works, inner declaration with outer reference does not, and only the second was ever broken.
+
+The helpers were moved inside the calling IIFE regardless. A checker that reports a known-benign hit on every run trains you to skip its output, which is exactly how the real one would be missed next time.
+
+THE FIRST RELOCATION ATTEMPT WAS WRONG AND THE CHECKER CAUGHT IT. It targeted the LAST `})();` in the file rather than the one closing the IIFE that contains the call site, which put the helpers in a sibling IIFE and broke `renderWarehousePanel`, `gToast` and `renderMarketsTab` for real. Re-run reported five cross-scope risks where there had been one. Corrected to select the first top level close after `renderMarketsTab`, then clean: 171 changed lines across 3 IIFEs.
+
+Also removes an em dash that survived into dev panel output.
+
+TESTED, 117 assertions across six suites, 0 failures, clean boot with 0 errors. Server behaviour is unchanged by this patch; the suites confirm nothing regressed.
+
+---
+
+## v1.3.7.3 (2026-08-04) - Patreon membership audit (SERVER)
+
+Server restart required. One column migration. Hard refresh for the dev panel.
+
+THE CODEBASE COULD NOT ASK PATREON ANYTHING. The only credential that existed was `PATREON_WEBHOOK_SECRET`, which verifies inbound webhook signatures. There was no access token and no campaign id, so nothing could query the member list. Every tier in the game rested on webhooks arriving and matching correctly, and there was no way to check whether they had.
+
+WHY A PATRON KEPT THEIR TIER AFTER QUITTING. `members:pledge:delete` resolves a player by `patreon_member_id` first and `patreon_email` second. If the webhook never arrived, or arrived with an email Patreon reports differently from the one the player linked, nothing happened at all. `revokeExpiredPatreon` is the backstop and it already ran HOURLY, not monthly, so cadence was never the problem. The problem is that every `members:update` sets `patreon_expires_at` to now plus 40 days, so a live-but-cancelling member keeps refreshing the buffer and a missed cancellation sits for up to 40 days after the last event.
+
+WHAT THIS ADDS IS VERIFICATION, NOT FREQUENCY. `auditPatreonMemberships` pulls the campaign member list from the Patreon v2 API, paginated, and reconciles it against every account holding a paid tier. Members are keyed by BOTH member id and lowercased email because the webhook path matches on either and the audit has to resolve the same players. Tier is derived through `parseTierFromPatreon` so the audit and the webhook cannot drift on where the tier lines sit.
+
+Outcomes per account: verified and expiry renewed, adjusted to the tier actually entitled, or revoked. An upgrade to tier 3 discovered by the audit still goes through `grantPatreonTier`, so `CEO_MAX` binds the same way it does on a webhook.
+
+THREE STANDING EXEMPTIONS, applied in `revokeExpiredPatreon` as well as the audit so the timer sweep and the reconciliation cannot disagree about who is safe:
+- tier 3, because CEO is lifetime and does not lapse with a billing cycle
+- `patreon_member_id` beginning `dev_grant_`, which `set_patreon` already writes for GM-issued tiers, so custom grants were self-identifying before this patch and needed no new marker
+- `patreon_exempt`, a new column, toggled from the dev panel for anything bespoke
+
+CEO BEING LIFETIME HAS A CONSEQUENCE. `CEO_MAX` is 10. A lifetime CEO holds their slot permanently whether or not they keep paying, so the ten slots are now a finite one-time allocation rather than a rolling one. That is a deliberate choice and worth revisiting if the slots fill with lapsed patrons.
+
+THE CIRCUIT BREAKER IS THE IMPORTANT PART. A campaign id typo, or a token missing the `campaigns.members` scope, returns a perfectly valid 200 with an empty list. Read literally that means nobody is subscribed, and a naive audit would strip every paying account in the game in one pass. So the audit decides in one pass and applies in a second, and refuses to commit when Patreon reports zero members while accounts hold paid tiers, or when a run would revoke more than `PATREON_AUDIT_MAX_REVOKE_FRAC` (default half) of non-exempt tiers. Blocked runs return the full plan so the GM can read it, and an explicit force overrides. Caught in testing that the first version of this condition let `wipe` short-circuit the force check, so the override could never actually fire.
+
+DEV PANEL. Preview, List holders, Commit, and an exempt/un-exempt control by player name. Preview is the default and Commit asks for confirmation, because a run removes tiers from real paying accounts and that should not be one unlabelled click away. The holders list flags whether the API is configured at all, so a silently inert audit is visible rather than assumed working.
+
+TESTED, 117 assertions across six suites, 0 failures, clean boot with 0 errors. The new Patreon suite of 22 runs against a mock Patreon v2 API on a local port via `PATREON_API_BASE`, covering: a patron who quit and is absent from the campaign loses the tier (the motivating case), a `former_patron` still listed loses it, a still-paying patron keeps it, a downgrade adjusts rather than revokes, all three exemption classes survive, dry run touches nothing, the breaker blocks an empty campaign, force overrides it, and a non-admin gets 403. The 1.3.7.0 clearance suites (24 and 15), the 1.3.7.1 mining suite (8) and the 1.3.7.2 warehouse suites (24 and 24) all pass unchanged.
+
+CANNOT BE TESTED HERE: the live Patreon endpoint. The container cannot reach patreon.com and there is no real token, so the request shape, scopes and pagination are written from the v2 API contract and verified only against a mock. First real run must be a Preview.
+
+---
+
 ## v1.3.7.2 (2026-08-04) - Warehouses (SERVER)
 
 Server restart required. Schema migration on boot. Hard refresh for the Markets tab.

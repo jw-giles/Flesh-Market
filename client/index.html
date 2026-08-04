@@ -1996,6 +1996,23 @@ ws.addEventListener('message', function(ev){
         <button class="god-btn god-btn-gold" onclick="godSetPatreon(3)">♛ CEO (3)</button>
       </div>
 
+      <div class="god-section-title">Patreon Audit</div>
+      <div style="font-size:.68rem;color:#888;margin-bottom:6px;line-height:1.5">
+        Verifies every paid tier against Patreon itself. CEO, dev-granted and manually exempted
+        accounts are never touched. Preview first: a commit strips tiers.
+      </div>
+      <div class="god-row">
+        <button class="god-btn god-btn-teal" onclick="godPatreonAudit(false)">Preview (dry run)</button>
+        <button class="god-btn" onclick="godPatreonHolders()">List holders</button>
+        <button class="god-btn god-btn-red" onclick="godPatreonAudit(true)">Commit</button>
+      </div>
+      <div class="god-row">
+        <input id="god-patreon-exempt-name" class="god-input" placeholder="Player name" style="flex:1">
+        <button class="god-btn" onclick="godPatreonExempt(true)">Exempt</button>
+        <button class="god-btn" onclick="godPatreonExempt(false)">Un-exempt</button>
+      </div>
+      <div id="god-patreon-out" style="font-size:.68rem;color:#9ab;margin-top:6px;max-height:220px;overflow-y:auto;white-space:pre-wrap"></div>
+
       <div class="god-section-title">Set XP</div>
       <div style="display:flex;gap:6px;margin-bottom:6px">
         <input id="god-xp-amount" type="number" placeholder="XP amount" class="god-input" style="flex:1">

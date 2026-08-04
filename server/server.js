@@ -40,6 +40,7 @@ import {
   insertPriceCycle, getPriceCycles,
   revokeExpiredPatreon, creditPassiveIncome, DEV_INCOME_EVERY30,
   countCEOs, TIERS, CEO_MAX,
+  getPatreonHolders, setPatreonExempt,
   initHedgeFund, setupFundTransactions,
   getFundCash, setFundCash, getFundHoldings, setFundHolding,
   getTotalFundShares, getFundMembers, getFundMember, isFundMember,
@@ -6842,6 +6843,43 @@ app.post('/api/admin/warehouses/sweep', requireAdmin, (req, res) => {
   catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
 
+// ─── Admin: Patreon reconciliation ────────────────────────────────────────────
+// Defaults to a DRY RUN. Committing requires an explicit flag, because a run
+// against a misconfigured token would otherwise strip every tier in the game.
+app.post('/api/admin/patreon/audit', requireAdmin, async (req, res) => {
+  try {
+    const dryRun = req.body?.commit !== true;
+    const out = await auditPatreonMemberships({ dryRun, force: req.body?.force === true, by: req.admin.name });
+    res.json(out);
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Manual exemption toggle for bespoke tiers that have no Patreon behind them.
+app.post('/api/admin/patreon/exempt', requireAdmin, (req, res) => {
+  try {
+    const p = getPlayerByName(String(req.body?.name || '').trim());
+    if (!p) return res.status(404).json({ ok:false, error:'player_not_found' });
+    const flag = !!req.body?.exempt;
+    setPatreonExempt(p.id, flag);
+    console.log(`[Patreon] ${req.admin.name} set patreon_exempt=${flag?1:0} on ${p.name}`);
+    res.json({ ok:true, name:p.name, exempt:flag });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Current holders with their exemption status, so the panel can show the roster
+// without running an audit against the API.
+app.get('/api/admin/patreon/holders', requireAdmin, (req, res) => {
+  try {
+    res.json({ ok:true, configured: !!(PATREON_ACCESS_TOKEN && PATREON_CAMPAIGN_ID),
+      holders: getPatreonHolders().map(r => ({
+        name: r.name, tier: r.patreon_tier, tierName: TIERS[r.patreon_tier]?.name || '?',
+        email: r.patreon_email || null, memberId: r.patreon_member_id || null,
+        expiresAt: r.patreon_expires_at || null,
+        exemptReason: patreonExemptReason(r),
+      })) });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
 function broadcastToAdmins(msg) {
   const data = JSON.stringify(msg);
   for (const [pid] of playerSockets) {
@@ -7892,6 +7930,191 @@ function sweepWarehouseCalls() {
         colony:call.colony_id, cashTaken:fromCash, unitsSold:sold.reduce((a,s)=>a+s.qty,0), stillOwed:owed }});
     } catch(e) { console.error('[Warehouse] sweep', call.player_id, call.colony_id, e); }
   }
+}
+
+// ─── PATREON RECONCILIATION ───────────────────────────────────────────────────
+// The webhook is the fast path and it is not reliable on its own: a
+// members:pledge:delete that never arrives, or arrives with an email that does
+// not match what /api/patreon/link stored, leaves a lapsed patron holding a paid
+// tier forever. revokeExpiredPatreon covers the case where the expiry actually
+// lapses, but every members:update pushes patreon_expires_at another 40 days
+// out, so a missed cancellation can sit for a full billing buffer.
+//
+// This reconciles against Patreon itself, which is the only source of truth.
+// REQUIRES PATREON_ACCESS_TOKEN AND PATREON_CAMPAIGN_ID. Without them the audit
+// reports 'not configured' and changes nothing, rather than reading an empty
+// member list as "nobody is subscribed" and clearing every tier in the game.
+// That failure mode is the whole reason for the guard.
+const PATREON_ACCESS_TOKEN = process.env.PATREON_ACCESS_TOKEN || '';
+const PATREON_CAMPAIGN_ID  = process.env.PATREON_CAMPAIGN_ID  || '';
+const PATREON_API_BASE     = process.env.PATREON_API_BASE || 'https://www.patreon.com';
+// Refuse to commit a run that revokes more than this share of non-exempt tiers.
+const PATREON_AUDIT_MAX_REVOKE_FRAC = parseFloat(process.env.PATREON_AUDIT_MAX_REVOKE_FRAC || '0.5');
+
+// Standing exemptions. Returns a reason string, or null if the account is
+// subject to the audit.
+function patreonExemptReason(row) {
+  if (!row) return null;
+  if (Number(row.patreon_tier) === 3) return 'ceo_lifetime';
+  if (Number(row.patreon_exempt) === 1) return 'manual_exempt';
+  if (String(row.patreon_member_id || '').startsWith('dev_grant_')) return 'dev_grant';
+  return null;
+}
+
+// Every active member of the campaign, paginated. Returns a map keyed by BOTH
+// member id and lowercased email, because the webhook path matches on either and
+// the audit has to resolve the same players it did.
+async function fetchPatreonMembers() {
+  if (!PATREON_ACCESS_TOKEN || !PATREON_CAMPAIGN_ID) {
+    return { ok: false, error: 'not_configured' };
+  }
+  const byId = new Map(), byEmail = new Map();
+  let url = `${PATREON_API_BASE}/api/oauth2/v2/campaigns/${encodeURIComponent(PATREON_CAMPAIGN_ID)}/members`
+          + `?include=user`
+          + `&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents,email,last_charge_status`
+          + `&page%5Bcount%5D=200`;
+  let pages = 0;
+  while (url && pages < 25) {
+    pages++;
+    let res;
+    try {
+      res = await fetch(url, { headers: { Authorization: `Bearer ${PATREON_ACCESS_TOKEN}` } });
+    } catch (e) {
+      return { ok: false, error: 'network_error', detail: String(e) };
+    }
+    if (!res.ok) return { ok: false, error: 'api_error', status: res.status };
+    let body;
+    try { body = await res.json(); } catch (e) { return { ok: false, error: 'bad_json' }; }
+    const included = body?.included || [];
+    for (const m of (body?.data || [])) {
+      const a = m?.attributes || {};
+      const userId = m?.relationships?.user?.data?.id;
+      const user = included.find(i => i.type === 'user' && i.id === userId);
+      const email = String(a.email || user?.attributes?.email || '').trim().toLowerCase();
+      const entry = {
+        memberId: m.id,
+        email: email || null,
+        status: a.patron_status || null,
+        cents: Number(a.currently_entitled_amount_cents || 0),
+        lastCharge: a.last_charge_status || null,
+      };
+      // parseTierFromPatreon reads amount_cents or currently_entitled_amount_cents,
+      // so the audit and the webhook cannot drift on where the tier line sits.
+      entry.tier = parseTierFromPatreon({ attributes: { currently_entitled_amount_cents: entry.cents } });
+      entry.active = entry.status === 'active_patron' && entry.tier > 0;
+      byId.set(entry.memberId, entry);
+      if (entry.email) byEmail.set(entry.email, entry);
+    }
+    url = body?.links?.next || null;
+  }
+  return { ok: true, byId, byEmail, count: byId.size, pages };
+}
+
+// The reconciliation. dryRun reports what it would do and touches nothing, which
+// is the mode the dev panel opens in: a run that silently strips tiers is not
+// something anyone should trigger without seeing the list first.
+async function auditPatreonMemberships(opts) {
+  const dryRun = !!(opts && opts.dryRun);
+  const force  = !!(opts && opts.force);
+  const injected = opts && opts.members;   // tests point PATREON_API_BASE at a mock
+  const fetched = injected ? { ok: true, ...injected } : await fetchPatreonMembers();
+  if (!fetched.ok) {
+    return { ok: false, error: fetched.error, status: fetched.status || null, dryRun,
+             message: fetched.error === 'not_configured'
+               ? 'PATREON_ACCESS_TOKEN and PATREON_CAMPAIGN_ID are not set. Nothing was checked and nothing was changed.'
+               : `Patreon API unreachable (${fetched.error}). Nothing was changed.` };
+  }
+  const holders = getPatreonHolders();
+  const rows = [];
+  let downgraded = 0, adjusted = 0, exempt = 0, held = 0;
+  const plan = [];
+
+  // PASS ONE decides, PASS TWO applies. Split deliberately so the blast radius
+  // can be measured before a single tier is touched.
+  for (const row of holders) {
+    const reason = patreonExemptReason(row);
+    if (reason) {
+      exempt++;
+      rows.push({ name: row.name, tier: row.patreon_tier, action: 'exempt', reason });
+      continue;
+    }
+    const memberId = row.patreon_member_id || null;
+    const email = String(row.patreon_email || '').trim().toLowerCase() || null;
+    const m = (memberId && fetched.byId.get(memberId)) || (email && fetched.byEmail.get(email)) || null;
+
+    if (!m || !m.active) {
+      rows.push({ name: row.name, tier: row.patreon_tier, action: 'revoke',
+                  reason: !m ? 'no_matching_patron' : `status_${m.status || 'unknown'}` });
+      plan.push({ id: row.id, to: 0 });
+      downgraded++;
+      continue;
+    }
+    if (m.tier !== row.patreon_tier) {
+      rows.push({ name: row.name, tier: row.patreon_tier, action: 'adjust', toTier: m.tier,
+                  reason: `entitled_${m.cents}c` });
+      plan.push({ id: row.id, to: m.tier, memberId: m.memberId });
+      adjusted++;
+      continue;
+    }
+    // Still good: push the expiry out so the hourly sweep does not catch them.
+    plan.push({ id: row.id, to: row.patreon_tier, memberId: m.memberId, renew: true });
+    held++;
+    rows.push({ name: row.name, tier: row.patreon_tier, action: 'hold', reason: 'verified' });
+  }
+
+  // CIRCUIT BREAKER. A campaign id typo or a token missing the campaigns.members
+  // scope returns a perfectly valid 200 with an empty list, which reads as
+  // "nobody is subscribed" and would strip every paying account in the game. A
+  // wrong config must not be able to do that silently, so a run that would clear
+  // the board refuses to commit and demands an explicit override.
+  const auditable = holders.length - exempt;
+  const wipe = fetched.count === 0 && auditable > 0;
+  const mass = auditable > 0 && (downgraded / auditable) >= PATREON_AUDIT_MAX_REVOKE_FRAC && downgraded > 2;
+  if (!dryRun && force !== true && (wipe || mass)) {
+    console.warn(`[Patreon] Audit BLOCKED: would revoke ${downgraded} of ${auditable} (patrons seen: ${fetched.count})`);
+    return { ok:false, error:'needs_confirmation', dryRun:true, blocked:true,
+             patrons: fetched.count, checked: holders.length, held, adjusted, downgraded, exempt, rows,
+             message: wipe
+               ? `Patreon returned ZERO members while ${auditable} account(s) hold a paid tier. `
+                 + `That is far more likely to be a bad campaign id or a token missing the campaigns.members scope `
+                 + `than every patron quitting at once. Nothing was changed. Re-run with force to override.`
+               : `This run would revoke ${downgraded} of ${auditable} non-exempt tiers. `
+                 + `Nothing was changed. Re-run with force to override.` };
+  }
+
+  if (!dryRun) {
+    for (const step of plan) {
+      try {
+        if (step.to === 0) {
+          setPatreonTier(step.id, 0, null, null);
+          broadcastToPlayer(step.id, { type:'patreon', data:{ tier:0,
+            message:'Your Patreon membership could not be verified and your tier has been removed.' }});
+        } else if (step.renew) {
+          setPatreonTier(step.id, step.to, step.memberId, Date.now() + 40*24*60*60*1000);
+        } else if (step.to === 3) {
+          // Through grantPatreonTier so CEO_MAX still binds on an upgrade the
+          // audit discovers rather than a webhook.
+          const pl = getPlayer(step.id);
+          if (pl) grantPatreonTier(pl, 3, step.memberId, Date.now() + 40*24*60*60*1000);
+        } else {
+          setPatreonTier(step.id, step.to, step.memberId, Date.now() + 40*24*60*60*1000);
+          broadcastToPlayer(step.id, { type:'patreon', data:{ tier:step.to, tierName:TIERS[step.to]?.name,
+            message:`Patreon tier updated to ${TIERS[step.to]?.name}.` }});
+        }
+      } catch(e) { console.error('[Patreon] apply', step.id, e); }
+    }
+  }
+
+  if (!dryRun && (downgraded || adjusted)) {
+    try { syncFundMembership(); broadcastFundUpdate(); } catch(_) {}
+  }
+  const summary = { ok:true, dryRun, patrons: fetched.count, checked: holders.length,
+                    held, adjusted, downgraded, exempt, rows };
+  console.log(`[Patreon] Audit${dryRun?' (dry run)':''}: ${holders.length} holder(s), `
+            + `${held} verified, ${adjusted} adjusted, ${downgraded} revoked, ${exempt} exempt`);
+  if (!dryRun) broadcastToAdmins({ type:'admin_log', data:{ action:'patreon_audit',
+    by:(opts&&opts.by)||'scheduler', held, adjusted, downgraded, exempt }});
+  return summary;
 }
 
 // ─── Leaderboard ─────────────────────────────────────────────────────────────
@@ -11822,6 +12045,15 @@ function msUntilNextMidnightPST() {
 
 function runDailyTasks() {
   console.log(`[Daily] Running daily tasks at ${new Date().toISOString()}`);
+
+  // Monthly Patreon reconciliation, on the 1st. Verifies every paid tier against
+  // Patreon itself rather than trusting that every cancellation webhook landed.
+  try {
+    const _pd = new Date(new Date().toLocaleString('en-US', { timeZone:'America/Los_Angeles' }));
+    if (_pd.getDate() === 1) {
+      auditPatreonMemberships({ by:'monthly' }).catch(e => console.error('[Patreon] monthly audit', e));
+    }
+  } catch(e) { console.error('[Patreon] monthly schedule', e); }
 
   // Warehouse rent. Runs before anything else in the daily block so a shed that
   // tips into arrears is called on the same pass that created the debt.

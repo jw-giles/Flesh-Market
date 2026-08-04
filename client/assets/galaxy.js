@@ -4777,6 +4777,166 @@ window._galaxy = {
   meta: COLONY_META,
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  WAREHOUSES (1.3.7.2)
+//  Storage is metered per colony. Capacity is denominated in Ƒ rather than
+//  crates, because the storage problem is the value under roof: a unit of nano
+//  filament and a unit of frayed wiring are not the same risk to the Guild.
+//  Rent is linear in capacity, so there is no tier to hide free marginal
+//  storage inside.
+// ═══════════════════════════════════════════════════════════════════════════════
+window._gWh = window._gWh || { sheds: [] };
+function whFmt(n){ return '\u0192' + Math.floor(Number(n)||0).toLocaleString(); }
+function whFactionColor(f){
+  return ({coalition:'#4ecdc4', syndicate:'#e74c3c', void:'#9b59b6',
+           guild:'#f0b454', jade:'#86ff6a', contested:'#ff9a4a'})[f] || '#888';
+}
+function whCountdown(ms){
+  if(ms<=0) return '0m';
+  var h=Math.floor(ms/3600000), m=Math.ceil((ms%3600000)/60000);
+  return h>0 ? (h+'h '+m+'m') : (m+'m');
+}
+function renderWarehousePanel(wh, grid, nameOf){
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  if(!wh || !wh.ok){ return ''; }
+  var sheds = wh.sheds || [];
+  var h='<div style="background:#0a0a14;border:1px solid #1a1a2e;border-radius:4px;padding:10px 12px;margin-bottom:14px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    +'<div style="font-size:.78rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase">'+T('galx.warehouses','Warehouses')+'</div>'
+    +'<div style="font-size:.66rem;color:#666">'+T('galx.whRentNote','Rent charged daily on leased capacity')+'</div>'
+    +'</div>';
+  if(!wh.meterActive){
+    var left = Math.max(0, (wh.meterStartsAt||0) - Date.now());
+    h+='<div style="font-size:.72rem;color:#f0b454;background:#1a1408;border:1px solid #4a3a10;border-radius:3px;padding:6px 8px;margin-bottom:8px">'
+      +T('galx.whGrandfather','Grandfather window: stock you already hold is rent free and cannot be liquidated for another ')
+      +whCountdown(left)+'.</div>';
+  }
+  if(sheds.length){
+    h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;margin-bottom:8px">';
+    h+='<tr style="color:#666;text-align:left">'
+      +'<th style="padding:4px 6px">'+T('galx.whColony','Colony')+'</th>'
+      +'<th style="padding:4px 6px;text-align:right">'+T('galx.whUsed','Used')+'</th>'
+      +'<th style="padding:4px 6px;text-align:right">'+T('galx.whCapacity','Capacity')+'</th>'
+      +'<th style="padding:4px 6px;text-align:right">'+T('galx.whRent','Rent/day')+'</th>'
+      +'<th style="padding:4px 6px;text-align:right">'+T('galx.whStatus','Status')+'</th>'
+      +'<th style="padding:4px 6px;text-align:right">'+T('galx.act','Act')+'</th></tr>';
+    sheds.forEach(function(sd){
+      var used = Number(sd.stored||0) + Number(sd.reserved||0);
+      var pct  = sd.capacity>0 ? Math.min(100, Math.round(used/sd.capacity*100)) : 0;
+      var bar  = '<div style="height:4px;background:#14141f;border-radius:2px;margin-top:3px">'
+               + '<div style="height:4px;width:'+pct+'%;background:'+(pct>90?'#e74c3c':pct>70?'#f0b454':'#2ecc71')+';border-radius:2px"></div></div>';
+      var status, sc;
+      if(sd.lockedUntil > Date.now()){
+        sc='#e74c3c'; status=T('galx.whLocked','LOCKED ')+whCountdown(sd.lockedUntil-Date.now());
+      } else if(sd.call){
+        sc='#e74c3c'; status=T('galx.whCall','ARREARS ')+whCountdown(sd.call.msLeft);
+      } else if(sd.arrears>0){
+        sc='#f0b454'; status=T('galx.whOwing','OWING ')+whFmt(sd.arrears);
+      } else { sc='#4f8a64'; status=T('galx.whOk','Current'); }
+      h+='<tr style="border-top:1px solid #14141f">'
+        +'<td style="padding:5px 6px"><span style="color:'+whFactionColor(sd.faction)+'">'+nameOf(sd.colonyId)+'</span>'
+          +'<div style="font-size:.62rem;color:#555">'+(sd.storedUnits||0).toLocaleString()+'u'
+          +(sd.reserved>0?(' + '+whFmt(sd.reserved)+' '+T('galx.whInFlight','in flight')):'')+'</div></td>'
+        +'<td style="padding:5px 6px;text-align:right;color:#aaa">'+whFmt(used)+bar+'</td>'
+        +'<td style="padding:5px 6px;text-align:right;color:#ccc">'+whFmt(sd.capacity)+'</td>'
+        +'<td style="padding:5px 6px;text-align:right;color:#f0b454">'+whFmt(sd.rentPerDay)+'</td>'
+        +'<td style="padding:5px 6px;text-align:right;color:'+sc+';font-size:.7rem">'+status+'</td>'
+        +'<td style="padding:5px 6px;text-align:right;white-space:nowrap">'
+          +'<button onclick="window.gWhEdit(\''+sd.colonyId+'\')" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:2px 7px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px">'+T('galx.whAdjust','ADJUST')+'</button>'
+          +(sd.arrears>0?'<button onclick="window.gWhPay(\''+sd.colonyId+'\')" style="background:#2d1414;border:1px solid #e74c3c;color:#ff6b6b;padding:2px 7px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px;margin-left:3px">'+T('galx.whPay','PAY')+'</button>':'')
+        +'</td></tr>';
+    });
+    h+='</table>';
+  } else {
+    h+='<div style="font-size:.76rem;color:#4f8a64;margin-bottom:8px">'
+      +T('galx.whNone','No leases. You cannot hold commodities on a colony without warehouse space there.')+'</div>';
+  }
+  // Lease control. One control for lease, resize and release, because they are
+  // the same action at different values.
+  var opts = (grid.colonies||[]).slice().sort(function(a,b){ return nameOf(a.id).localeCompare(nameOf(b.id)); })
+    .map(function(c){ return '<option value="'+c.id+'">'+nameOf(c.id)+'</option>'; }).join('');
+  h+='<div style="border-top:1px solid #14141f;padding-top:8px">';
+  h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+    +'<select id="gWhColony" onchange="window.gWhQuote()" style="background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px 8px;font-size:.72rem;font-family:inherit;border-radius:2px">'+opts+'</select>'
+    +'<input id="gWhCap" type="range" min="0" max="'+(wh.maxCapacity||5000000000)+'" step="10000" value="0" oninput="window.gWhQuote()" style="flex:1;min-width:160px;accent-color:#3498db">'
+    +'<input id="gWhCapNum" type="number" min="0" value="0" oninput="window.gWhSyncSlider()" style="width:130px;background:#0a0a14;border:1px solid #333;color:#ccc;padding:4px 6px;font-size:.72rem;font-family:inherit;border-radius:2px">'
+    +'<button onclick="window.gWhSet()" style="background:#0d2818;border:1px solid #2ecc71;color:#2ecc71;padding:4px 12px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">'+T('galx.whLease','SET LEASE')+'</button>'
+    +'</div>';
+  h+='<div id="gWhQuote" style="font-size:.72rem;color:#888;margin-top:6px;min-height:16px"></div>';
+  h+='<div id="gWhHint" style="font-size:.72rem;color:#888;margin-top:4px;min-height:14px"></div>';
+  h+='<div style="font-size:.68rem;color:#555;margin-top:6px;line-height:1.6">'
+    +T('galx.whHelp','Capacity is measured in \u0192 of goods, valued when they enter the shed and never re-valued after. Rent is charged daily whether the space is used or not. Fall far enough behind and the Guild sells stock at that colony to cover the debt; default and it will not lease to you there for 30 days.')
+    +'</div>';
+  h+='</div></div>';
+  return h;
+}
+window.gWhSyncSlider = function(){
+  var n=document.getElementById('gWhCapNum'), r=document.getElementById('gWhCap');
+  if(n&&r){ r.value = Math.max(0, Number(n.value)||0); window.gWhQuote(true); }
+};
+window.gWhQuote = function(skipNum){
+  var sel=document.getElementById('gWhColony'), r=document.getElementById('gWhCap'),
+      n=document.getElementById('gWhCapNum'), out=document.getElementById('gWhQuote');
+  if(!sel||!r||!out) return;
+  if(!skipNum && n) n.value = r.value;
+  var cap=Math.max(0, Number(r.value)||0);
+  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
+  fetch('/api/warehouses/quote?colonyId='+encodeURIComponent(sel.value)+'&capacity='+cap)
+    .then(function(x){return x.json();}).then(function(d){
+      if(!d||!d.ok){ out.textContent=''; return; }
+      var shed=(window._gWh.sheds||[]).filter(function(s){return s.colonyId===sel.value;})[0];
+      var cur = shed ? whFmt(shed.capacity) : whFmt(0);
+      out.innerHTML = '<span style="color:'+whFactionColor(d.faction)+'">'+(d.faction||'')+'</span> '
+        + T('galx.whQuoteRent',' lease of ')+whFmt(cap)+T('galx.whQuoteCosts',' costs ')
+        + '<span style="color:#f0b454">'+whFmt(d.rentPerDay)+'</span>'+T('galx.whPerDay','/day')
+        + ' <span style="color:#555">('+T('galx.whCurrent','currently ')+cur+')</span>';
+    }).catch(function(){ out.textContent=''; });
+};
+// Prefill the control from an existing shed rather than making the player
+// re-find it in the dropdown.
+window.gWhEdit = function(colonyId){
+  var sel=document.getElementById('gWhColony'); if(sel) sel.value=colonyId;
+  var shed=(window._gWh.sheds||[]).filter(function(s){return s.colonyId===colonyId;})[0];
+  var r=document.getElementById('gWhCap'), n=document.getElementById('gWhCapNum');
+  if(r&&shed){ r.value=Math.floor(shed.capacity); }
+  if(n&&shed){ n.value=Math.floor(shed.capacity); }
+  window.gWhQuote(true);
+  if(r) r.scrollIntoView({behavior:'smooth', block:'center'});
+};
+window.gWhSet = function(){
+  var sel=document.getElementById('gWhColony'), r=document.getElementById('gWhCap'),
+      hint=document.getElementById('gWhHint');
+  if(!gToken){ gToast('Log in to lease warehouse space','#e74c3c'); return; }
+  if(!sel||!r) return;
+  var cap=Math.max(0, Number(r.value)||0);
+  fetch('/api/warehouses/set',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:gToken, colonyId:sel.value, capacity:cap})})
+    .then(function(x){return x.json();}).then(function(d){
+      if(d&&d.ok){
+        if(hint){ hint.style.color='#86ff6a'; hint.textContent='Lease set: '+whFmt(cap); }
+        renderMarketsTab();
+      } else if(hint){
+        hint.style.color='#ff6b6b';
+        hint.textContent = (d&&(d.message||d.error)) || 'Could not set lease';
+      }
+    }).catch(function(){ if(hint){ hint.style.color='#ff6b6b'; hint.textContent='Network error'; } });
+};
+window.gWhPay = function(colonyId){
+  var hint=document.getElementById('gWhHint');
+  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
+  fetch('/api/warehouses/pay',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:gToken, colonyId:colonyId})})
+    .then(function(x){return x.json();}).then(function(d){
+      if(d&&d.ok){
+        if(hint){ hint.style.color='#86ff6a'; hint.textContent='Paid '+whFmt(d.paid||0)+', arrears now '+whFmt(d.arrears||0); }
+        renderMarketsTab();
+      } else if(hint){
+        hint.style.color='#ff6b6b';
+        hint.textContent=(d&&(d.message||d.error))||'Payment failed';
+      }
+    }).catch(function(){ if(hint){ hint.style.color='#ff6b6b'; hint.textContent='Network error'; } });
+};
+
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -6068,176 +6228,3 @@ window._gStartSmuggling2 = function(){
 
 
 })();
-
-// ═══════════════════════════════════════════════════════════════════════════════
-//  WAREHOUSES (1.3.7.2)
-//  Storage is metered per colony. Capacity is denominated in Ƒ rather than
-//  crates, because the storage problem is the value under roof: a unit of nano
-//  filament and a unit of frayed wiring are not the same risk to the Guild.
-//  Rent is linear in capacity, so there is no tier to hide free marginal
-//  storage inside.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-window._gWh = window._gWh || { sheds: [] };
-
-function whFmt(n){ return '\u0192' + Math.floor(Number(n)||0).toLocaleString(); }
-
-function whFactionColor(f){
-  return ({coalition:'#4ecdc4', syndicate:'#e74c3c', void:'#9b59b6',
-           guild:'#f0b454', jade:'#86ff6a', contested:'#ff9a4a'})[f] || '#888';
-}
-
-function whCountdown(ms){
-  if(ms<=0) return '0m';
-  var h=Math.floor(ms/3600000), m=Math.ceil((ms%3600000)/60000);
-  return h>0 ? (h+'h '+m+'m') : (m+'m');
-}
-
-function renderWarehousePanel(wh, grid, nameOf){
-  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
-  if(!wh || !wh.ok){ return ''; }
-  var sheds = wh.sheds || [];
-  var h='<div style="background:#0a0a14;border:1px solid #1a1a2e;border-radius:4px;padding:10px 12px;margin-bottom:14px">';
-  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-    +'<div style="font-size:.78rem;color:#3498db;letter-spacing:.1em;text-transform:uppercase">'+T('galx.warehouses','Warehouses')+'</div>'
-    +'<div style="font-size:.66rem;color:#666">'+T('galx.whRentNote','Rent charged daily on leased capacity')+'</div>'
-    +'</div>';
-
-  if(!wh.meterActive){
-    var left = Math.max(0, (wh.meterStartsAt||0) - Date.now());
-    h+='<div style="font-size:.72rem;color:#f0b454;background:#1a1408;border:1px solid #4a3a10;border-radius:3px;padding:6px 8px;margin-bottom:8px">'
-      +T('galx.whGrandfather','Grandfather window: stock you already hold is rent free and cannot be liquidated for another ')
-      +whCountdown(left)+'.</div>';
-  }
-
-  if(sheds.length){
-    h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;margin-bottom:8px">';
-    h+='<tr style="color:#666;text-align:left">'
-      +'<th style="padding:4px 6px">'+T('galx.whColony','Colony')+'</th>'
-      +'<th style="padding:4px 6px;text-align:right">'+T('galx.whUsed','Used')+'</th>'
-      +'<th style="padding:4px 6px;text-align:right">'+T('galx.whCapacity','Capacity')+'</th>'
-      +'<th style="padding:4px 6px;text-align:right">'+T('galx.whRent','Rent/day')+'</th>'
-      +'<th style="padding:4px 6px;text-align:right">'+T('galx.whStatus','Status')+'</th>'
-      +'<th style="padding:4px 6px;text-align:right">'+T('galx.act','Act')+'</th></tr>';
-    sheds.forEach(function(sd){
-      var used = Number(sd.stored||0) + Number(sd.reserved||0);
-      var pct  = sd.capacity>0 ? Math.min(100, Math.round(used/sd.capacity*100)) : 0;
-      var bar  = '<div style="height:4px;background:#14141f;border-radius:2px;margin-top:3px">'
-               + '<div style="height:4px;width:'+pct+'%;background:'+(pct>90?'#e74c3c':pct>70?'#f0b454':'#2ecc71')+';border-radius:2px"></div></div>';
-      var status, sc;
-      if(sd.lockedUntil > Date.now()){
-        sc='#e74c3c'; status=T('galx.whLocked','LOCKED ')+whCountdown(sd.lockedUntil-Date.now());
-      } else if(sd.call){
-        sc='#e74c3c'; status=T('galx.whCall','ARREARS ')+whCountdown(sd.call.msLeft);
-      } else if(sd.arrears>0){
-        sc='#f0b454'; status=T('galx.whOwing','OWING ')+whFmt(sd.arrears);
-      } else { sc='#4f8a64'; status=T('galx.whOk','Current'); }
-      h+='<tr style="border-top:1px solid #14141f">'
-        +'<td style="padding:5px 6px"><span style="color:'+whFactionColor(sd.faction)+'">'+nameOf(sd.colonyId)+'</span>'
-          +'<div style="font-size:.62rem;color:#555">'+(sd.storedUnits||0).toLocaleString()+'u'
-          +(sd.reserved>0?(' + '+whFmt(sd.reserved)+' '+T('galx.whInFlight','in flight')):'')+'</div></td>'
-        +'<td style="padding:5px 6px;text-align:right;color:#aaa">'+whFmt(used)+bar+'</td>'
-        +'<td style="padding:5px 6px;text-align:right;color:#ccc">'+whFmt(sd.capacity)+'</td>'
-        +'<td style="padding:5px 6px;text-align:right;color:#f0b454">'+whFmt(sd.rentPerDay)+'</td>'
-        +'<td style="padding:5px 6px;text-align:right;color:'+sc+';font-size:.7rem">'+status+'</td>'
-        +'<td style="padding:5px 6px;text-align:right;white-space:nowrap">'
-          +'<button onclick="window.gWhEdit(\''+sd.colonyId+'\')" style="background:#0a1a2d;border:1px solid #3498db;color:#3498db;padding:2px 7px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px">'+T('galx.whAdjust','ADJUST')+'</button>'
-          +(sd.arrears>0?'<button onclick="window.gWhPay(\''+sd.colonyId+'\')" style="background:#2d1414;border:1px solid #e74c3c;color:#ff6b6b;padding:2px 7px;cursor:pointer;font-size:.68rem;font-family:inherit;border-radius:2px;margin-left:3px">'+T('galx.whPay','PAY')+'</button>':'')
-        +'</td></tr>';
-    });
-    h+='</table>';
-  } else {
-    h+='<div style="font-size:.76rem;color:#4f8a64;margin-bottom:8px">'
-      +T('galx.whNone','No leases. You cannot hold commodities on a colony without warehouse space there.')+'</div>';
-  }
-
-  // Lease control. One control for lease, resize and release, because they are
-  // the same action at different values.
-  var opts = (grid.colonies||[]).slice().sort(function(a,b){ return nameOf(a.id).localeCompare(nameOf(b.id)); })
-    .map(function(c){ return '<option value="'+c.id+'">'+nameOf(c.id)+'</option>'; }).join('');
-  h+='<div style="border-top:1px solid #14141f;padding-top:8px">';
-  h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
-    +'<select id="gWhColony" onchange="window.gWhQuote()" style="background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px 8px;font-size:.72rem;font-family:inherit;border-radius:2px">'+opts+'</select>'
-    +'<input id="gWhCap" type="range" min="0" max="'+(wh.maxCapacity||5000000000)+'" step="10000" value="0" oninput="window.gWhQuote()" style="flex:1;min-width:160px;accent-color:#3498db">'
-    +'<input id="gWhCapNum" type="number" min="0" value="0" oninput="window.gWhSyncSlider()" style="width:130px;background:#0a0a14;border:1px solid #333;color:#ccc;padding:4px 6px;font-size:.72rem;font-family:inherit;border-radius:2px">'
-    +'<button onclick="window.gWhSet()" style="background:#0d2818;border:1px solid #2ecc71;color:#2ecc71;padding:4px 12px;cursor:pointer;font-size:.72rem;font-family:inherit;border-radius:2px">'+T('galx.whLease','SET LEASE')+'</button>'
-    +'</div>';
-  h+='<div id="gWhQuote" style="font-size:.72rem;color:#888;margin-top:6px;min-height:16px"></div>';
-  h+='<div id="gWhHint" style="font-size:.72rem;color:#888;margin-top:4px;min-height:14px"></div>';
-  h+='<div style="font-size:.68rem;color:#555;margin-top:6px;line-height:1.6">'
-    +T('galx.whHelp','Capacity is measured in \u0192 of goods, valued when they enter the shed and never re-valued after. Rent is charged daily whether the space is used or not. Fall far enough behind and the Guild sells stock at that colony to cover the debt; default and it will not lease to you there for 30 days.')
-    +'</div>';
-  h+='</div></div>';
-  return h;
-}
-
-window.gWhSyncSlider = function(){
-  var n=document.getElementById('gWhCapNum'), r=document.getElementById('gWhCap');
-  if(n&&r){ r.value = Math.max(0, Number(n.value)||0); window.gWhQuote(true); }
-};
-
-window.gWhQuote = function(skipNum){
-  var sel=document.getElementById('gWhColony'), r=document.getElementById('gWhCap'),
-      n=document.getElementById('gWhCapNum'), out=document.getElementById('gWhQuote');
-  if(!sel||!r||!out) return;
-  if(!skipNum && n) n.value = r.value;
-  var cap=Math.max(0, Number(r.value)||0);
-  var T=function(k,fb){return window.t?window.t(k,fb):fb;};
-  fetch('/api/warehouses/quote?colonyId='+encodeURIComponent(sel.value)+'&capacity='+cap)
-    .then(function(x){return x.json();}).then(function(d){
-      if(!d||!d.ok){ out.textContent=''; return; }
-      var shed=(window._gWh.sheds||[]).filter(function(s){return s.colonyId===sel.value;})[0];
-      var cur = shed ? whFmt(shed.capacity) : whFmt(0);
-      out.innerHTML = '<span style="color:'+whFactionColor(d.faction)+'">'+(d.faction||'')+'</span> '
-        + T('galx.whQuoteRent',' lease of ')+whFmt(cap)+T('galx.whQuoteCosts',' costs ')
-        + '<span style="color:#f0b454">'+whFmt(d.rentPerDay)+'</span>'+T('galx.whPerDay','/day')
-        + ' <span style="color:#555">('+T('galx.whCurrent','currently ')+cur+')</span>';
-    }).catch(function(){ out.textContent=''; });
-};
-
-// Prefill the control from an existing shed rather than making the player
-// re-find it in the dropdown.
-window.gWhEdit = function(colonyId){
-  var sel=document.getElementById('gWhColony'); if(sel) sel.value=colonyId;
-  var shed=(window._gWh.sheds||[]).filter(function(s){return s.colonyId===colonyId;})[0];
-  var r=document.getElementById('gWhCap'), n=document.getElementById('gWhCapNum');
-  if(r&&shed){ r.value=Math.floor(shed.capacity); }
-  if(n&&shed){ n.value=Math.floor(shed.capacity); }
-  window.gWhQuote(true);
-  if(r) r.scrollIntoView({behavior:'smooth', block:'center'});
-};
-
-window.gWhSet = function(){
-  var sel=document.getElementById('gWhColony'), r=document.getElementById('gWhCap'),
-      hint=document.getElementById('gWhHint');
-  if(!gToken){ gToast('Log in to lease warehouse space','#e74c3c'); return; }
-  if(!sel||!r) return;
-  var cap=Math.max(0, Number(r.value)||0);
-  fetch('/api/warehouses/set',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({token:gToken, colonyId:sel.value, capacity:cap})})
-    .then(function(x){return x.json();}).then(function(d){
-      if(d&&d.ok){
-        if(hint){ hint.style.color='#86ff6a'; hint.textContent='Lease set: '+whFmt(cap); }
-        renderMarketsTab();
-      } else if(hint){
-        hint.style.color='#ff6b6b';
-        hint.textContent = (d&&(d.message||d.error)) || 'Could not set lease';
-      }
-    }).catch(function(){ if(hint){ hint.style.color='#ff6b6b'; hint.textContent='Network error'; } });
-};
-
-window.gWhPay = function(colonyId){
-  var hint=document.getElementById('gWhHint');
-  if(!gToken){ gToast('Log in first','#e74c3c'); return; }
-  fetch('/api/warehouses/pay',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({token:gToken, colonyId:colonyId})})
-    .then(function(x){return x.json();}).then(function(d){
-      if(d&&d.ok){
-        if(hint){ hint.style.color='#86ff6a'; hint.textContent='Paid '+whFmt(d.paid||0)+', arrears now '+whFmt(d.arrears||0); }
-        renderMarketsTab();
-      } else if(hint){
-        hint.style.color='#ff6b6b';
-        hint.textContent=(d&&(d.message||d.error))||'Payment failed';
-      }
-    }).catch(function(){ if(hint){ hint.style.color='#ff6b6b'; hint.textContent='Network error'; } });
-};
