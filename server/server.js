@@ -68,6 +68,7 @@ import {
   getColonyCommodityPrices, getAllCommodityPrices, getCommodityPrice, upsertCommodityPrice,
   getPlayerCargo, getCargoQty, getCargoTotal, addCargo, removeCargo,
   createCargoShipment, getCargoShipment, getPlayerCargoShipments, getDueCargoShipments, setCargoShipmentStatus,
+  setCargoShipmentStoreUnitVal,
   getActiveCargoShipments, setCargoShipmentPhase, setPlayerShipClass, getPlayerShipClass, setPlayerPortrait,
   createShippingContract, getShippingContract, getPlayerShippingContracts, getExpiredOpenContracts, settleShippingContract,
   kickFundMember, deleteFund, updateFundInfo,
@@ -124,6 +125,11 @@ import {
   getClearanceRow, bumpPeakNetWorth, setClearanceExempt,
   getValueFlowsFor, getRecentValueFlows, getFarmSignals, getInboundSenders,
   getMarketListing, getLastWireAt, setLastWireAt,
+  initWarehouseTables, getWarehouse, getPlayerWarehouses, getAllWarehouses,
+  upsertWarehouse, setWarehouseArrears, deleteWarehouse, addWarehouseReserved,
+  setWarehouseCall, getWarehouseCall, clearWarehouseCall, getActiveWarehouseCalls,
+  getCargoTotalAtColony, getCargoRowsAtColony, getWarehouseMeta, setWarehouseMeta,
+  getCargoStoredValueAtColony, setWarehouseLockout,
   addGiftedTitle, removeGiftedTitle, getGiftedTitles, getGiftedTitleByLabel, transferGiftedTitle,
   listTitleForSale, buyTitle, cancelTitleListing, getTitleListings, getMyTitleListings,
   addPlaySecondsBulk, getPlaySeconds,
@@ -196,6 +202,13 @@ initMarketUpgradeTables();
 initFRSTables();
 initClearanceTables();
 setupClearanceTransactions();
+initWarehouseTables();
+try {
+  if (!getWarehouseMeta('meter_start')) {
+    setWarehouseMeta('meter_start', String(Date.now()));
+    console.log('[Warehouse] Meter anchored; grandfather window open');
+  }
+} catch(e) { console.error('[Warehouse] meter anchor', e); }
 seedAllCityStates(seedColonyMeta);
 // The city commerce model needs to know who is in the Circuit to apply the
 // Jade export bonus. Installed once rather than threaded through every caller.
@@ -2266,6 +2279,12 @@ function applyCargoInterception(s) {
     send('cargo_ship_result', { success:false, insured:false, id:s.id, commodity:com?com.name:s.commodity_id,
       qty:s.qty, from:s.from_colony, to:s.to_colony, cash:p?p.cash:0 });
   }
+  // The berth reserved at the destination is released: this load never lands.
+  // Leaving it booked would silently shrink the shed for the rest of its life.
+  try {
+    const _sv = Number(s.store_unit_val) > 0 ? Number(s.store_unit_val) : (s.buy_cost / Math.max(1, s.qty));
+    addWarehouseReserved(s.player_id, s.to_colony, -(_sv * s.qty));
+  } catch(_) {}
   // Ship survives — mark intercepted but let it finish the return phase empty.
   setCargoShipmentStatus(s.id, 'intercepted');
 }
@@ -2273,7 +2292,12 @@ function applyCargoInterception(s) {
 function deliverCargoShipment(s) {
   const p = getPlayer(s.player_id);
   const com = COMMODITY_BY_ID[s.commodity_id];
-  addCargo(s.player_id, s.commodity_id, s.qty, Math.round((s.buy_cost / s.qty) * 100) / 100, s.to_colony);
+  // Reservation converts into stored units. Released BEFORE addCargo so the two
+  // never double count against the same capacity.
+  const _sv = Number(s.store_unit_val) > 0 ? Number(s.store_unit_val)
+            : (Number(getCommodityPrice(s.to_colony, s.commodity_id)?.price) || (s.buy_cost / Math.max(1, s.qty)));
+  try { addWarehouseReserved(s.player_id, s.to_colony, -(_sv * s.qty)); } catch(_) {}
+  addCargo(s.player_id, s.commodity_id, s.qty, Math.round((s.buy_cost / s.qty) * 100) / 100, s.to_colony, _sv);
   setCargoShipmentStatus(s.id, 'delivered');
   pushHeadline(`Cargo delivered: ${s.qty}× ${com?com.name:s.commodity_id} reached ${s.to_colony.replace(/_/g,' ')}`, 'good', '📦', null, {k:'evt',t:'cargo_del',qty:s.qty,com:(com?com.name:s.commodity_id),to:s.to_colony});
   const sockets = playerSockets.get(s.player_id);
@@ -5568,10 +5592,18 @@ app.post('/api/commodities/buy', (req, res) => {
     const unitBuy = Math.round(projected.price * (1 + tithe) * 100) / 100;
     const cost = Math.round(unitBuy * qty * 100) / 100;
     if ((p.cash || 0) < cost) return res.status(400).json({ ok:false, error:'insufficient_funds', need:cost, have:p.cash });
+    // Bought goods land in the local shed, so the lease is checked before the
+    // cash moves. Checked here rather than in addCargo because addCargo is also
+    // the delivery path, where the units have already left their origin.
+    const _wh = warehouseCanAccept(p.id, colonyId, cost);
+    if (!_wh.ok) return res.status(403).json({ ok:false, error:_wh.error, message:_wh.message, free:_wh.free });
 
     p.cash = Math.round((p.cash - cost) * 100) / 100;
     savePlayer(p);
-    addCargo(p.id, commodityId, qty, unitBuy, colonyId);
+    // Storage valuation locks at the price actually paid, and never marks to
+    // market: a crash must not silently free shelf, a spike must not blow a
+    // lease the player set in good faith.
+    addCargo(p.id, commodityId, qty, unitBuy, colonyId, unitBuy);
     // Buying tightens local supply (price drifts up). Scale impact by lot size.
     const newPrice = nudgeAndBroadcast(colony, commodityId, deltaSupply, 'player_buy');
 
@@ -5625,6 +5657,126 @@ app.post('/api/commodities/sell', (req, res) => {
     try { broadcastToPlayer(p.id, { type:'portfolio', data:snapshotPortfolio(getPlayer(p.id)) }); } catch(_){}
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
+
+// ─── WAREHOUSES (player routes) ───────────────────────────────────────────────
+
+app.get('/api/warehouses', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const p   = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    res.json({ ok:true, ...warehouseSnapshot(p.id) });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Quote a capacity without committing to it, so the slider can show live rent.
+app.get('/api/warehouses/quote', (req, res) => {
+  try {
+    const colonyId = String(req.query.colonyId || '');
+    const capacity = Math.max(0, Math.floor(Number(req.query.capacity) || 0));
+    const colony = getColonyState(colonyId);
+    if (!colony) return res.status(404).json({ ok:false, error:'colony_not_found' });
+    if (!isMarketColony(colony)) return res.status(403).json({ ok:false, error:'no_market_here' });
+    res.json({ ok:true, colonyId, capacity,
+               faction: colonyLeadingFaction(colony),
+               rentPerDay: warehouseRentPerDay(colony, capacity),
+               maxCapacity: WAREHOUSE_MAX_CAPACITY });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// The slider. One route for lease, resize and release, because they are the same
+// action at different values and splitting them invites the three to drift.
+app.post('/api/warehouses/set', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const p   = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const colonyId = String(req.body?.colonyId || '');
+    const want = Math.max(0, Math.floor(Number(req.body?.capacity) || 0));
+    if (want > WAREHOUSE_MAX_CAPACITY) {
+      return res.status(400).json({ ok:false, error:'over_max', max:WAREHOUSE_MAX_CAPACITY });
+    }
+    const colony = getColonyState(colonyId);
+    if (!colony) return res.status(404).json({ ok:false, error:'colony_not_found' });
+    if (!isMarketColony(colony)) return res.status(403).json({ ok:false, error:'no_market_here' });
+
+    const existing = getWarehouse(p.id, colonyId);
+    const lockUntil = Math.max(0, Number(existing?.locked_until || 0));
+    if (lockUntil > Date.now() && want > Number(existing?.capacity || 0)) {
+      return res.status(403).json({ ok:false, error:'colony_locked', lockedUntil:lockUntil,
+        message: `The Guild will not rent to you on ${String(colonyId).replace(/_/g,' ')} for another `
+               + `${fmtLockout(lockUntil - Date.now())} after your default.` });
+    }
+    // The floor is in ƒ, matching the capacity it guards. Comparing a ƒ capacity
+    // against a UNIT count would let a player shelve ƒ366,000 of goods inside a
+    // ƒ1,100 lease, which is the whole meter defeated by a unit mismatch.
+    const stored   = getCargoStoredValueAtColony(p.id, colonyId);
+    const reserved = Math.max(0, Number(existing?.reserved || 0));
+    const floor    = Math.ceil(stored + reserved);
+
+    // The slider cannot be dragged under what is already inside, or under what
+    // is already in flight toward it. Silently liquidating on a UI drag is the
+    // kind of behaviour that generates bug reports which are not bugs, so the
+    // player is told to sell down first instead.
+    if (want < floor) {
+      return res.status(400).json({ ok:false, error:'below_stored', floor, stored, reserved,
+        message: `Cannot shrink below what the shed is holding. ƒ${Math.floor(stored).toLocaleString()} on the shelf`
+               + (reserved > 0 ? ` and ƒ${Math.floor(reserved).toLocaleString()} in flight` : '')
+               + `. Sell down or ship out first.` });
+    }
+    // Arrears must be settled before a lease is enlarged, or a player in default
+    // could keep expanding on credit and outrun the meter indefinitely.
+    if (existing && Number(existing.arrears || 0) > 0 && want > Number(existing.capacity || 0)) {
+      return res.status(403).json({ ok:false, error:'arrears_outstanding',
+        arrears: Math.round(Number(existing.arrears) * 100) / 100,
+        message: `Settle Ƒ${Math.round(Number(existing.arrears)).toLocaleString()} of arrears before enlarging this lease.` });
+    }
+
+    if (want === 0 && floor === 0) {
+      deleteWarehouse(p.id, colonyId);
+      return res.json({ ok:true, released:true, ...warehouseSnapshot(p.id) });
+    }
+    upsertWarehouse(p.id, colonyId, want);
+    res.json({ ok:true, rentPerDay: warehouseRentPerDay(colony, want), ...warehouseSnapshot(p.id) });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// Pay down arrears early, which is the only way to clear a call before the
+// deadline other than selling stock.
+app.post('/api/warehouses/pay', (req, res) => {
+  try {
+    const tok = tokenFrom(req);
+    const p   = tok ? getPlayer(tok) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const colonyId = String(req.body?.colonyId || '');
+    const wh = getWarehouse(p.id, colonyId);
+    if (!wh) return res.status(404).json({ ok:false, error:'no_warehouse' });
+    const owed = Number(wh.arrears || 0);
+    if (owed <= 0) return res.json({ ok:true, paid:0, ...warehouseSnapshot(p.id) });
+    const want = req.body?.amount != null ? Math.max(0, Number(req.body.amount)) : owed;
+    const pay  = Math.round(Math.min(want, owed, Math.max(0, Number(p.cash || 0))) * 100) / 100;
+    if (pay <= 0) return res.status(400).json({ ok:false, error:'insufficient_funds', owed, have:p.cash });
+    p.cash = Math.round((p.cash - pay) * 100) / 100;
+    savePlayer(p);
+    FMI.treasury += pay;
+    const left = Math.round((owed - pay) * 100) / 100;
+    setWarehouseArrears(p.id, colonyId, left, null);
+    if (left <= 0) {
+      clearWarehouseCall(p.id, colonyId);
+      // Settling in full lifts a default lockout immediately. The 30 days is the
+      // penalty for NOT paying, not a sentence that runs regardless.
+      if (Number(wh.locked_until || 0) > Date.now()) {
+        setWarehouseLockout(p.id, colonyId, 0);
+        try { broadcastToPlayer(p.id, { type:'chat_system', data:{
+          text: `Arrears settled on ${String(colonyId).replace(/_/g,' ')}. Your lease standing is restored.` }}); } catch(_) {}
+      }
+    }
+    try { broadcastToPlayer(p.id, { type:'portfolio', data:snapshotPortfolio(getPlayer(p.id)) }); } catch(_) {}
+    res.json({ ok:true, paid:pay, arrears:left, cash:p.cash, ...warehouseSnapshot(p.id) });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
+// ─── WAREHOUSES (player routes) end ───────────────────────────────────────────
 
 // Current player's cargo hold.
 app.get('/api/cargo/me', (req, res) => {
@@ -5857,6 +6009,21 @@ app.post('/api/cargo/ship', (req, res) => {
     if (!ship) return res.status(403).json({ ok:false, error:'no_ship' });
     if (qty > ship.capacity) return res.status(400).json({ ok:false, error:'over_capacity', capacity:ship.capacity, shipName:ship.name });
 
+    // Destination space is RESERVED NOW, not checked on arrival. removeCargo below
+    // takes the units out of the origin hold, so a capacity check at delivery
+    // would have nowhere to put a rejected load. Booking the berth up front turns
+    // a lost cargo into a clean rejection before launch.
+    // Valued off the DESTINATION's price at ship time, not the origin's cost.
+    // Origin cost would let a player buy cheap on a poor colony and shelve it on
+    // a rich one at the cheap valuation, which is an arbitrage on rent. Locking
+    // it here also means the berth booked is exactly the berth consumed on
+    // arrival, so price drift in flight can never overflow the destination shed.
+    const _destPx = Number(getCommodityPrice(to, commodityId)?.price
+                    || commodityTargetPrice(com, colonyLeadingFaction(toColony), toColony.tension, 0, to)) || 0;
+    const _storeVal = Math.round(_destPx * qty * 100) / 100;
+    const _whDest = warehouseCanAccept(p.id, to, _storeVal);
+    if (!_whDest.ok) return res.status(403).json({ ok:false, error:_whDest.error, message:_whDest.message, free:_whDest.free });
+
     // Value the escrowed goods at the player's weighted avg cost for insurance/refund.
     const cargoRow = getPlayerCargo(p.id).find(r => r.commodity_id === commodityId && r.colony_id === from);
     const unitCost = cargoRow ? cargoRow.avg_cost : (getCommodityPrice(from, commodityId)?.price || com.basePrice);
@@ -5882,6 +6049,7 @@ app.post('/api/cargo/ship', (req, res) => {
 
     // Escrow the units out of the origin colony's hold now.
     removeCargo(p.id, commodityId, qty, from);
+    addWarehouseReserved(p.id, to, _storeVal);
 
     // Interception chance, plus the ship-class risk modifier. Multi-hop adds a small
     // fly-by risk per extra hop (2.5% each) for skipping past colonies without docking.
@@ -5901,6 +6069,9 @@ app.post('/api/cargo/ship', (req, res) => {
       from, to, laneType:routeLaneType, insured:wantInsurance, insurancePaid,
       interceptChance, createdAt:now, resolveTs,
       phase:'loading', phaseIdx:0, shipClass:ship.id, sellValue:0, totalMs, hops });
+    // Persist the locked per unit shelf valuation so delivery consumes exactly
+    // the berth that was reserved, regardless of price drift in flight.
+    try { setCargoShipmentStoreUnitVal(id, _storeVal / Math.max(1, qty)); } catch(_) {}
     // No per-shipment setTimeout — stepCargoShipments() advances phases on its tick.
 
     res.json({ ok:true, id, qty, from, to, laneType:routeLaneType, hops,
@@ -6657,6 +6828,20 @@ app.post('/api/admin/clearance/exempt', requireAdmin, (req, res) => {
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
 
+// Force a rent run / arrears sweep. Rent is daily, so without this the only way
+// to observe the meter is to wait for midnight PST.
+app.post('/api/admin/warehouses/run-rent', requireAdmin, (req, res) => {
+  try {
+    if (req.body?.endGrandfather) setWarehouseMeta('meter_start', String(Date.now() - WAREHOUSE_GRANDFATHER_MS - 1000));
+    const n = chargeWarehouseRent();
+    res.json({ ok:true, charged:n, meterActive:warehouseMeterActive() });
+  } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+app.post('/api/admin/warehouses/sweep', requireAdmin, (req, res) => {
+  try { sweepWarehouseCalls(); res.json({ ok:true }); }
+  catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
+});
+
 function broadcastToAdmins(msg) {
   const data = JSON.stringify(msg);
   for (const [pid] of playerSockets) {
@@ -7383,6 +7568,330 @@ function snapshotPortfolio(player){
     dayTradesRemaining: _dtRemaining(player.id),
     clearance: (() => { try { return clearanceSnapshot(player); } catch(_) { return null; } })(),
   };
+}
+
+// ─── WAREHOUSES ───────────────────────────────────────────────────────────────
+// Storage is metered per colony against a continuous capacity slider. Rent is
+// linear in capacity and charged daily. See the block comment above
+// initWarehouseTables in db.js for why daily rather than per commodity tick.
+//
+// Rent is priced off colony control, which until now drove exactly one thing
+// (price). A Syndicate shed is cheap and unbonded; a Coalition shed is dear and
+// safe. That gives the cheap-goods colonies a real downside and makes a control
+// flip something an inventory holder has to react to.
+// Capacity is ƒ, so rent is a RATE on the value under roof rather than a price
+// per unit. Per unit pricing charged the same to store frayed wiring (basePrice
+// 210) as nano filament (4100), which had it backwards: the storage problem is
+// the value at risk, not the crate count.
+//
+// 0.8%/day puts a week of holding at ~5.6% of position value, against roughly
+// 30 to 60% for correctly calling a faction control flip (COMMODITY_FACTION_MOD
+// spans 0.82 to 1.30 on med). That makes holding a bet with a price rather than
+// a free option, which was the whole point.
+const WAREHOUSE_RENT_RATE          = parseFloat(process.env.WAREHOUSE_RENT_RATE || '0.008'); // per ƒ of capacity per day
+const WAREHOUSE_MIN_RENT           = parseFloat(process.env.WAREHOUSE_MIN_RENT || '250');  // floor per shed per day
+const WAREHOUSE_MAX_CAPACITY       = parseFloat(process.env.WAREHOUSE_MAX_CAPACITY || '5000000000'); // ƒ
+// A default costs the colony for 30 days, not forever. Long enough to hurt,
+// short enough that it is a sentence and not an exile.
+const WAREHOUSE_LOCKOUT_MS         = parseInt(process.env.WAREHOUSE_LOCKOUT_MS || String(30 * 24 * 3600 * 1000), 10);
+const WAREHOUSE_GRACE_MS           = parseInt(process.env.WAREHOUSE_GRACE_MS || String(36 * 3600 * 1000), 10);
+const WAREHOUSE_CALL_DAYS          = parseFloat(process.env.WAREHOUSE_CALL_DAYS || '2');   // days of rent owed before a call
+// Existing stock predates the meter. Rent and liquidation are both suspended
+// until this passes so nobody is called for inventory bought under free storage.
+const WAREHOUSE_GRANDFATHER_MS     = parseInt(process.env.WAREHOUSE_GRANDFATHER_MS || String(7 * 24 * 3600 * 1000), 10);
+
+const WAREHOUSE_FACTION_RENT = {
+  coalition: 1.30,   // regulated, bonded, expensive
+  guild:     1.15,   // efficient but they take their cut
+  jade:      1.00,   // state directed
+  fleshstation: 1.00,
+  void:      0.85,   // nobody is checking
+  contested: 0.75,   // cheap and nobody is liable
+  syndicate: 0.70,   // cheapest, least protected
+};
+
+function warehouseRentPerDay(colony, capacity) {
+  const cap = Math.max(0, Number(capacity) || 0);
+  if (cap <= 0) return 0;
+  let mod = 1.0;
+  try { mod = WAREHOUSE_FACTION_RENT[colonyLeadingFaction(colony)] || 1.0; } catch(_) {}
+  // Tension makes space scarce: a colony coming apart charges more to hold goods.
+  const tensionMod = 1 + (Math.max(0, Math.min(100, colony?.tension || 0)) / 100) * 0.35;
+  const raw = cap * WAREHOUSE_RENT_RATE * mod * tensionMod;
+  return Math.round(Math.max(WAREHOUSE_MIN_RENT, raw) * 100) / 100;
+}
+
+function warehouseGrandfatherUntil() {
+  const v = getWarehouseMeta('meter_start');
+  if (!v) return 0;
+  return Number(v) + WAREHOUSE_GRANDFATHER_MS;
+}
+function warehouseMeterActive() {
+  return Date.now() >= warehouseGrandfatherUntil();
+}
+
+// Free space at a colony: capacity, less what is already stored, less what is
+// promised to shipments already in flight toward it.
+function warehouseFreeSpace(playerId, colonyId) {
+  const wh = getWarehouse(playerId, colonyId);
+  if (!wh) return 0;
+  const stored   = getCargoStoredValueAtColony(playerId, colonyId);
+  const reserved = Math.max(0, Number(wh.reserved || 0));
+  return Math.max(0, Number(wh.capacity || 0) - stored - reserved);
+}
+
+function fmtLockout(ms) {
+  const d = Math.ceil(ms / 86400000);
+  return d > 1 ? `${d} days` : `${Math.max(1, Math.ceil(ms / 3600000))} hours`;
+}
+
+// Single gate for anything that would put units INTO a colony's shed.
+// Grandfathered stock is exempt from the meter but not from the ceiling: a
+// player with no shed simply cannot take on new units anywhere.
+// value is the ƒ of shelf the incoming goods will consume, priced at entry.
+function warehouseCanAccept(playerId, colonyId, value) {
+  const v = Math.max(0, Number(value) || 0);
+  if (v <= 0) return { ok: true, free: 0 };
+  const where = String(colonyId).replace(/_/g,' ');
+  const wh = getWarehouse(playerId, colonyId);
+  const lock = Math.max(0, Number(wh?.locked_until || 0));
+  if (lock > Date.now()) {
+    return { ok: false, free: 0, error: 'colony_locked',
+             message: `The Guild will not rent to you on ${where} for another ${fmtLockout(lock - Date.now())} after your default.` };
+  }
+  if (!wh || Number(wh.capacity || 0) <= 0) {
+    return { ok: false, free: 0, error: 'no_warehouse',
+             message: `You hold no warehouse lease on ${where}. Lease space before taking on goods there.` };
+  }
+  const free = warehouseFreeSpace(playerId, colonyId);
+  if (v > free) {
+    return { ok: false, free, error: 'warehouse_full',
+             message: `Warehouse full on ${where}. ƒ${Math.floor(free).toLocaleString()} of free shelf, ƒ${Math.floor(v).toLocaleString()} requested.` };
+  }
+  return { ok: true, free };
+}
+
+
+function warehouseSnapshot(playerId) {
+  const rows = getPlayerWarehouses(playerId);
+  const now = Date.now();
+  return {
+    meterActive: warehouseMeterActive(),
+    meterStartsAt: warehouseGrandfatherUntil(),
+    rentRate: WAREHOUSE_RENT_RATE,
+    minRent: WAREHOUSE_MIN_RENT,
+    maxCapacity: WAREHOUSE_MAX_CAPACITY,
+    sheds: rows.map(w => {
+      const colony = getColonyState(w.colony_id);
+      const storedVal = getCargoStoredValueAtColony(playerId, w.colony_id);
+      const storedQty = getCargoTotalAtColony(playerId, w.colony_id);
+      const call   = getWarehouseCall(playerId, w.colony_id);
+      return {
+        colonyId: w.colony_id,
+        colonyName: String(w.colony_id).replace(/_/g,' '),
+        faction: colony ? colonyLeadingFaction(colony) : null,
+        capacity: Number(w.capacity || 0),
+        stored: storedVal,
+        storedUnits: storedQty,
+        reserved: Number(w.reserved || 0),
+        free: Math.max(0, Number(w.capacity||0) - storedVal - Number(w.reserved||0)),
+        lockedUntil: Number(w.locked_until || 0),
+        rentPerDay: colony ? warehouseRentPerDay(colony, w.capacity) : 0,
+        arrears: Math.round(Number(w.arrears || 0) * 100) / 100,
+        call: call ? { calledAt: call.called_at, deadline: call.deadline, msLeft: Math.max(0, call.deadline - now) } : null,
+      };
+    }),
+  };
+}
+
+// Daily rent run. Charges every shed, banks the take to the treasury, and opens
+// an arrears call once a player is far enough behind. Never destroys anything
+// here: liquidation only happens at a deadline, in sweepWarehouseCalls.
+function chargeWarehouseRent() {
+  if (!warehouseMeterActive()) {
+    console.log('[Warehouse] Meter still in grandfather window, no rent charged');
+    return 0;
+  }
+  const now = Date.now();
+  let charged = 0, calls = 0, take = 0;
+  for (const w of getAllWarehouses()) {
+    try {
+      const p = getPlayer(w.player_id);
+      if (!p) continue;
+      if (isOwnerAccount(p.id) || isDevAccount(p.id) || isAdminAccount(p.id)) continue;
+      const colony = getColonyState(w.colony_id);
+      if (!colony) continue;
+      const rent = warehouseRentPerDay(colony, w.capacity);
+      if (rent <= 0) continue;
+
+      let owed = Number(w.arrears || 0) + rent;
+      // Cash first. Partial payment is fine: whatever cannot be paid rolls into
+      // arrears rather than pushing the balance negative, because nothing else
+      // in this codebase handles a negative cash state.
+      const pay = Math.min(Math.max(0, Number(p.cash || 0)), owed);
+      if (pay > 0) {
+        p.cash = Math.round((p.cash - pay) * 100) / 100;
+        savePlayer(p);
+        FMI.treasury += pay;
+        take += pay;
+        owed -= pay;
+      }
+      owed = Math.round(Math.max(0, owed) * 100) / 100;
+      setWarehouseArrears(w.player_id, w.colony_id, owed, now);
+      charged++;
+
+      const callThreshold = rent * WAREHOUSE_CALL_DAYS;
+      const existing = getWarehouseCall(w.player_id, w.colony_id);
+      if (owed >= callThreshold && !existing) {
+        setWarehouseCall(w.player_id, w.colony_id, now, now + WAREHOUSE_GRACE_MS);
+        calls++;
+        try {
+          broadcastToPlayer(w.player_id, { type:'chat_system', data:{
+            text: `Warehouse arrears on ${String(w.colony_id).replace(/_/g,' ')}: Ƒ${Math.round(owed).toLocaleString()} owed. `
+                + `Settle or sell down within ${Math.round(WAREHOUSE_GRACE_MS/3600000)}h or the Guild will sell stock to cover it.` }});
+        } catch(_) {}
+      } else if (owed <= 0 && existing) {
+        // Hysteresis is unnecessary here: arrears is a level, not a ratio, so it
+        // cannot flap around a threshold the way a short's cover cost does.
+        clearWarehouseCall(w.player_id, w.colony_id);
+      }
+    } catch(e) { console.error('[Warehouse] rent', w.player_id, w.colony_id, e); }
+  }
+  if (charged) console.log(`[Warehouse] Rent run: ${charged} shed(s), Ƒ${Math.round(take).toLocaleString()} collected, ${calls} new call(s)`);
+  return charged;
+}
+
+// Deadline enforcement. Mirrors sweepMarginCalls: runs for every open call
+// whether or not the player is connected, and re-reads live state at the
+// deadline so anyone who paid or sold down in time is never touched.
+//
+// CONTAINMENT IS THE POINT. A shed in arrears settles from its OWN stock at its
+// OWN colony's price. It never reaches cash earmarked elsewhere, another
+// colony's shed, equities, or fund stake. That is what makes this a lease
+// enforcement and not a confiscation.
+function sweepWarehouseCalls() {
+  if (!warehouseMeterActive()) return;
+  const now = Date.now();
+  // Expire lapsed lockouts and write off whatever residual debt they carried.
+  // A default costs a colony for 30 days; it does not follow a player forever.
+  for (const w of getAllWarehouses()) {
+    try {
+      const until = Number(w.locked_until || 0);
+      if (until > 0 && until <= now) {
+        setWarehouseLockout(w.player_id, w.colony_id, 0);
+        if (Number(w.arrears || 0) > 0) {
+          setWarehouseArrears(w.player_id, w.colony_id, 0, now);
+          try { broadcastToPlayer(w.player_id, { type:'chat_system', data:{
+            text: `Your default on ${String(w.colony_id).replace(/_/g,' ')} has lapsed. `
+                + `The arrears are written off and the Guild will lease to you there again.` }}); } catch(_) {}
+        }
+      }
+    } catch(_) {}
+  }
+  for (const call of getActiveWarehouseCalls()) {
+    try {
+      if (now < call.deadline) continue;
+      const p = getPlayer(call.player_id);
+      if (!p) { clearWarehouseCall(call.player_id, call.colony_id); continue; }
+      if (isOwnerAccount(p.id) || isDevAccount(p.id) || isAdminAccount(p.id)) {
+        clearWarehouseCall(p.id, call.colony_id); continue;
+      }
+      const wh = getWarehouse(p.id, call.colony_id);
+      if (!wh) { clearWarehouseCall(p.id, call.colony_id); continue; }
+      let owed = Number(wh.arrears || 0);
+      if (owed <= 0) { clearWarehouseCall(p.id, call.colony_id); continue; }
+
+      // Cash first, same order as settleMarginCall.
+      const fromCash = Math.min(Math.max(0, Number(p.cash || 0)), owed);
+      if (fromCash > 0) {
+        p.cash = Math.round((p.cash - fromCash) * 100) / 100;
+        savePlayer(p);
+        FMI.treasury += fromCash;
+        owed = Math.round((owed - fromCash) * 100) / 100;
+      }
+
+      const colony = getColonyState(call.colony_id);
+      const sold = [];
+      if (owed > 0 && colony) {
+        // Dearest first, so the fewest units are liquidated to clear the debt.
+        const rows = getCargoRowsAtColony(p.id, call.colony_id).map(r => {
+          const px = getCommodityPrice(call.colony_id, r.commodity_id)?.price || 0;
+          return { ...r, px };
+        }).filter(r => r.px > 0).sort((a,b) => b.px - a.px);
+
+        for (const r of rows) {
+          if (owed <= 0) break;
+          const needUnits = Math.ceil(owed / r.px);
+          const take = Math.min(r.qty, needUnits);
+          if (take <= 0) continue;
+          // Priced through the same impact path a player sale uses, so a forced
+          // sale eats its own slippage instead of dumping into a stale mid.
+          const newPrice = nudgeAndBroadcast(colony, r.commodity_id, 0.012 * Math.log10(1 + take), 'warehouse_liquidation');
+          const unit = Math.round(newPrice * 100) / 100;
+          const proceeds = Math.round(unit * take * 100) / 100;
+          removeCargo(p.id, r.commodity_id, take, call.colony_id);
+          const applied = Math.min(proceeds, owed);
+          FMI.treasury += applied;
+          owed = Math.round((owed - applied) * 100) / 100;
+          // Overshoot goes back to the player. They lost price control, not value.
+          const refund = Math.round((proceeds - applied) * 100) / 100;
+          if (refund > 0) { p.cash = Math.round((p.cash + refund) * 100) / 100; savePlayer(p); }
+          sold.push({ commodity: r.commodity_id, qty: take, unit, proceeds });
+        }
+      }
+
+      setWarehouseArrears(p.id, call.colony_id, owed, now);
+      // Still owing with nothing left to sell. The lease is CUT TO ITS RESERVED
+      // BERTH, not deleted, and the arrears stay on the row.
+      //
+      // Deleting it was an exploit: a player could let arrears build, sell the
+      // stock voluntarily at a price of their choosing, move the proceeds into
+      // equities before the deadline, and the settlement would find neither cash
+      // nor stock and tear up the lease along with the debt. Free storage on a
+      // loop. Keeping the row means /api/warehouses/set blocks any enlargement
+      // while arrears stand, so the colony is closed to them until they settle.
+      //
+      // Capacity floors at `reserved` rather than 0 so cargo already in flight
+      // toward this colony still has a berth to land in. Containment is intact:
+      // the debt never follows them to another colony or to any other asset.
+      if (owed > 0) {
+        const stillIn = getCargoTotalAtColony(p.id, call.colony_id);
+        if (stillIn <= 0) {
+          // DEFAULT. The lease is cut to its reserved berth and the colony is
+          // closed to this player for 30 days.
+          //
+          // Deleting the row outright was an exploit: a player could let arrears
+          // build, sell the stock voluntarily at a price of their choosing, move
+          // the proceeds into equities before the deadline, and settlement would
+          // find neither cash nor stock and tear up the lease along with the
+          // debt. Free storage on a loop.
+          //
+          // The lockout is the sentence and it EXPIRES. Arrears stay on the row
+          // so a player can buy their way out early; if they do not, the debt is
+          // written off when the lockout lapses. Either way it ends, and it never
+          // follows them to another colony or to any other asset.
+          const wh2 = getWarehouse(p.id, call.colony_id);
+          upsertWarehouse(p.id, call.colony_id, Math.max(0, Number(wh2?.reserved || 0)));
+          setWarehouseArrears(p.id, call.colony_id, owed, now);
+          setWarehouseLockout(p.id, call.colony_id, now + WAREHOUSE_LOCKOUT_MS);
+          try { broadcastToPlayer(p.id, { type:'chat_system', data:{
+            text: `Lease forfeited on ${String(call.colony_id).replace(/_/g,' ')}. `
+                + `ƒ${Math.round(owed).toLocaleString()} unpaid. The Guild will not rent to you there for `
+                + `${Math.round(WAREHOUSE_LOCKOUT_MS/86400000)} days, or until the arrears are settled.` }}); } catch(_) {}
+        }
+      }
+      clearWarehouseCall(p.id, call.colony_id);
+
+      const where = String(call.colony_id).replace(/_/g,' ');
+      const line = sold.length
+        ? `Warehouse arrears settled on ${where}: the Guild sold ${sold.reduce((a,s)=>a+s.qty,0).toLocaleString()} units to cover the lease.`
+        : `Warehouse arrears settled on ${where}.`;
+      try { broadcastToPlayer(p.id, { type:'chat_system', data:{ text: line }}); } catch(_) {}
+      try { broadcastToPlayer(p.id, { type:'portfolio', data:snapshotPortfolio(getPlayer(p.id)) }); } catch(_) {}
+      broadcastToAdmins({ type:'admin_log', data:{ action:'warehouse_liquidation', by:p.name,
+        colony:call.colony_id, cashTaken:fromCash, unitsSold:sold.reduce((a,s)=>a+s.qty,0), stillOwed:owed }});
+    } catch(e) { console.error('[Warehouse] sweep', call.player_id, call.colony_id, e); }
+  }
 }
 
 // ─── Leaderboard ─────────────────────────────────────────────────────────────
@@ -11314,6 +11823,10 @@ function msUntilNextMidnightPST() {
 function runDailyTasks() {
   console.log(`[Daily] Running daily tasks at ${new Date().toISOString()}`);
 
+  // Warehouse rent. Runs before anything else in the daily block so a shed that
+  // tips into arrears is called on the same pass that created the debt.
+  try { chargeWarehouseRent(); } catch(e) { console.error('[Warehouse] rent run', e); }
+
   // 1. Monthly Patreon spin grants (calendar-month, no double-grant)
   try {
     const now = new Date();
@@ -11730,6 +12243,10 @@ setInterval(runCityTick, CITY_TICK_MS);
 // Commodity price grid: float prices on control every 5 min, and seed once on boot.
 try { const n = tickCommodityPrices(); console.log(`[Commodities] Seeded/updated ${n} colony×commodity prices`); } catch(e) { console.error('[Commodities] seed', e); }
 setInterval(() => { try { tickCommodityPrices(); } catch(e) { console.error('[Commodities]', e); } }, COMMODITY_TICK_MS);
+// Warehouse arrears deadlines. Same shape as sweepMarginCalls: runs for every
+// open call whether or not the player is connected, and re-reads live state at
+// the deadline so anyone who paid or sold down in time is never touched.
+setInterval(() => { try { sweepWarehouseCalls(); } catch(e) { console.error('[Warehouse] sweep', e); } }, 60 * 1000);
 // Light live drift: nudge a handful of random colony×commodity prices every 12s and
 // push them, so the board visibly breathes between NPC/player events. Small moves;
 // the 5-min control tick still does the real mean-reverting work.

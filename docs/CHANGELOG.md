@@ -4,6 +4,42 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.7.2 (2026-08-04) - Warehouses (SERVER)
+
+Server restart required. Schema migration on boot. Hard refresh for the Markets tab.
+
+STORAGE WAS FREE AND UNBOUNDED. `addCargo` just incremented a row. Ship capacity (2,500 / 10,000 / 35,000 / 70,000) is checked only in `/api/cargo/ship`, so it gated how much moved in one run and never gated buying or holding. Holding was therefore not a decision: every real choice sat at buy and at ship, and "should I sit on this" had no cost on either side of it. A player could accumulate a colony's entire supply through many small buys and park it forever at zero carrying cost.
+
+WHAT WAS PROPOSED ALREADY EXISTED. `player_cargo` has been keyed `(player_id, commodity_id, colony_id)` since a migration off a global table, `/api/commodities/sell` clamps to the colony passed in, and `/api/cargo/ship` checks holdings at the origin. Cargo already lived at a specific colony and already had to be shipped to be sold elsewhere. The gap was never storage location. It was that storage cost nothing.
+
+CAPACITY IS DENOMINATED IN F, NOT CRATES. Per unit pricing charged the same to shelve frayed wiring (basePrice 210) as nano filament (4100) while the position is twenty times the value, which is backwards: the storage problem is the value at risk. New `store_unit_val` on `player_cargo`, blended on merge exactly the way `avg_cost` is so a partial sale releases shelf at the blend without per lot bookkeeping. Backfilled from `avg_cost`.
+
+THE VALUATION LOCKS AT ENTRY AND IS NEVER MARKED TO MARKET. A price crash must not silently free shelf, and a spike must not blow a lease a player set in good faith. Shipments lock theirs AT SHIP TIME off the destination's price, persisted on `cargo_shipments.store_unit_val`, for two reasons: origin cost would let a player buy cheap on a poor colony and shelve it on a rich one at the cheap valuation, which is an arbitrage on rent; and locking it means the berth reserved is exactly the berth consumed on arrival, so price drift in flight can never overflow the destination shed.
+
+RENT IS DAILY, NOT PER TICK. `tickCommodityPrices` reverts 0.25 toward target every 5 minutes, so a dislocation half lives in roughly 12 minutes and no amount of waiting beats reversion. The only durable reason to hold is a change in the TARGET, and `commodityTargetPrice` moves on faction control, tension and civic demand, which run over hours and days. Charging per tick would have taxed ordinary buy-ship-sell flow while barely touching the behaviour being priced. 0.8% of capacity per day puts a week of holding at about 5.6% of position value against roughly 30 to 60% for correctly calling a control flip, which makes holding a bet with a price rather than a free option.
+
+RENT IS PRICED BY COLONY CONTROL, which until now drove exactly one thing. Syndicate 0.70 and contested 0.75 are cheap and unbonded; Coalition 1.30 and Guild 1.15 are dear and safe. Tension adds up to 35%. Cheap-goods colonies now carry a real downside and a control flip is something an inventory holder has to react to.
+
+RESERVATION HAPPENS AT SHIP TIME. `/api/cargo/ship` escrows units out of the origin with `removeCargo`, so a capacity check at DELIVERY would have no state to fall back on and a full destination shed would orphan the cargo. Booking the berth up front turns that into a clean rejection before launch. Released on delivery and on interception alike.
+
+ARREARS FOLLOW THE MARGIN CALL MODEL rather than inventing a second one. Unpayable rent rolls into arrears instead of pushing cash negative, because nothing else in this codebase handles a negative balance. A call opens at two days owed with 36h grace. The sweep runs every 60s for every open call whether or not the player is connected and re-reads live state at the deadline, so anyone who paid or sold down in time is never touched. Settlement takes cash first, then sells stock at that colony's price, DEAREST FIRST so the fewest units go, priced through `nudgeAndBroadcast` so a forced sale eats its own slippage. Overshoot is refunded: the player loses price control, not value.
+
+CONTAINMENT IS THE POINT. A shed in arrears settles from its own stock at its own colony. It never reaches cash held for anything else, another colony's shed, equities, or fund stake, the same way `settleMarginCall` never touches fund stake. That is what makes this lease enforcement rather than confiscation.
+
+THREE EXPLOITS FOUND IN TESTING, ALL BY WRITING THE ADVERSARIAL CASE FIRST.
+
+THE DODGE. The first design deleted the shed when settlement found no cash and no stock, on the reasoning that a debt should not follow a player around. That was wrong. A player could let arrears build, sell the stock VOLUNTARILY at a price of their choosing, move the proceeds into equities before the deadline, and settlement would find nothing to take and tear up the lease along with the debt. Free storage on a loop, arbitrage profit kept. The lease is now cut to its reserved berth with the arrears intact, and the colony is closed for 30 days.
+
+THE UNIT MISMATCH. One patch script hit an assertion and aborted before writing, and the set route never received its F conversion, so the slider floor compared a F CAPACITY AGAINST A UNIT COUNT. A player holding F366,630 of goods in 1,100 units could have shrunk their lease to F1,100 and paid 0.3% of the rent owed: the entire meter defeated by a unit mismatch. The pre-existing "cannot shrink below stored" assertion passed the whole time because units happened to exceed the value under test, which is the failure mode of an assertion that is true and proves nothing.
+
+THE UNLIFTED LOCKOUT. The settlement comment claimed a player could buy their way out early. Nothing ever cleared `locked_until`, so paying cleared the debt and left the 30 day bar standing. Settling in full now lifts it immediately; an expired lockout writes off whatever residual debt it carried.
+
+CLIENT. Warehouse panel in the Markets tab: per shed usage bars, capacity, daily rent, arrears and lockout countdowns, a live rent quote as the slider moves, and PAY. Buy and ship failures now surface the server's written message instead of a raw error code.
+
+TESTED, 95 assertions across five suites, 0 failures, clean boot with 0 errors. The 1.3.7.0 clearance suites (24 and 15) and the 1.3.7.1 mining suite (8) still pass unchanged. New warehouse suites of 24 and 24 cover F cap creep through many small buys, per commodity cap splitting, the unit count floor bypass, shrinking under stored or in flight value, buying into reserved shelf, negative payments and capacities, leasing on another player's behalf, unauthenticated calls, containment against other colonies and equities, the sell out dodge, and lockout expiry.
+
+---
+
 ## v1.3.7.1 (2026-08-04) - The mining budget was per message (SERVER)
 
 Server restart required. No schema change beyond 1.3.7.0.

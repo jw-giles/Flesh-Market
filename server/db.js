@@ -1714,18 +1714,24 @@ export function getCargoTotal(playerId) {
   return r ? r.t : 0;
 }
 // Add qty at a given unit cost AT A COLONY, updating weighted average cost there.
-export function addCargo(playerId, commodityId, qty, unitCost, colonyId) {
+export function addCargo(playerId, commodityId, qty, unitCost, colonyId, storeUnitVal) {
   const loc = colonyId || '';
-  const cur = stmt('SELECT qty, avg_cost FROM player_cargo WHERE player_id=? AND commodity_id=? AND colony_id=?').get(playerId, commodityId, loc);
+  // Storage valuation defaults to the acquisition cost when a caller does not
+  // supply one, so legacy call sites keep working.
+  const sv = Number(storeUnitVal) > 0 ? Number(storeUnitVal) : Number(unitCost) || 0;
+  const cur = stmt('SELECT qty, avg_cost, store_unit_val FROM player_cargo WHERE player_id=? AND commodity_id=? AND colony_id=?').get(playerId, commodityId, loc);
   if (cur && cur.qty > 0) {
     const newQty = cur.qty + qty;
     const newAvg = (cur.qty * cur.avg_cost + qty * unitCost) / newQty;
-    stmt('UPDATE player_cargo SET qty=?, avg_cost=? WHERE player_id=? AND commodity_id=? AND colony_id=?')
-      .run(newQty, Math.round(newAvg * 100) / 100, playerId, commodityId, loc);
+    // Blended the same way as cost basis: a partial sale later releases capacity
+    // at the blend rather than needing per-lot bookkeeping.
+    const newSV  = (cur.qty * (cur.store_unit_val || cur.avg_cost) + qty * sv) / newQty;
+    stmt('UPDATE player_cargo SET qty=?, avg_cost=?, store_unit_val=? WHERE player_id=? AND commodity_id=? AND colony_id=?')
+      .run(newQty, Math.round(newAvg * 100) / 100, Math.round(newSV * 100) / 100, playerId, commodityId, loc);
   } else {
-    stmt(`INSERT INTO player_cargo(player_id,commodity_id,colony_id,qty,avg_cost) VALUES(?,?,?,?,?)
-          ON CONFLICT(player_id,commodity_id,colony_id) DO UPDATE SET qty=excluded.qty, avg_cost=excluded.avg_cost`)
-      .run(playerId, commodityId, loc, qty, Math.round(unitCost * 100) / 100);
+    stmt(`INSERT INTO player_cargo(player_id,commodity_id,colony_id,qty,avg_cost,store_unit_val) VALUES(?,?,?,?,?,?)
+          ON CONFLICT(player_id,commodity_id,colony_id) DO UPDATE SET qty=excluded.qty, avg_cost=excluded.avg_cost, store_unit_val=excluded.store_unit_val`)
+      .run(playerId, commodityId, loc, qty, Math.round(unitCost * 100) / 100, Math.round(sv * 100) / 100);
   }
 }
 // Remove qty AT A COLONY (clamped to held there). Returns qty actually removed.
@@ -4321,4 +4327,176 @@ export function getLastWireAt(playerId) {
 }
 export function setLastWireAt(playerId, ts) {
   try { stmt('UPDATE players SET last_wire_at=? WHERE id=?').run(Number(ts) || Date.now(), playerId); } catch(_) {}
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  WAREHOUSES  -  added 1.3.7.2
+//
+//  Commodity storage was free and unbounded: player_cargo just incremented and
+//  ship capacity gated only /api/cargo/ship, never buying or holding. So holding
+//  was never a decision, and cornering a colony's supply cost nothing to sustain.
+//
+//  Capacity is a CONTINUOUS SLIDER, not a tier. Rent is linear in capacity, so
+//  there is no step to hide inside: a large holder pays proportionally and never
+//  gets free marginal storage the way a tiered slot would have allowed.
+//
+//  Rent is charged DAILY, not on the commodity tick. tickCommodityPrices reverts
+//  0.25 toward target every 5 minutes, so a dislocation half-lives in about 12
+//  minutes and no amount of waiting beats it. The only durable reason to hold is
+//  a change in the TARGET (faction control, tension, civic demand), which moves
+//  over hours and days. Charging per tick would tax ordinary buy-ship-sell flow
+//  and barely touch the behaviour being priced.
+//
+//  Arrears follow the margin call model rather than inventing a second one.
+//  Containment is the important part: a warehouse in arrears liquidates its own
+//  stock at its own colony's price and never reaches cash held for anything
+//  else, another colony's shed, equities or fund stake.
+// ══════════════════════════════════════════════════════════════════════════════
+
+export function initWarehouseTables() {
+  // Capacity is denominated in Ƒ, not units. A unit of nano filament (basePrice
+  // 4100) and a unit of frayed wiring (210) are not the same storage problem,
+  // and charging per unit made them identical. The value is LOCKED WHEN THE
+  // UNITS ENTER the shed and never marked to market: a price crash must not
+  // silently free capacity, and a spike must not blow a lease the player set in
+  // good faith. store_unit_val is the locked per unit Ƒ figure; consumed
+  // capacity at a colony is SUM(qty * store_unit_val).
+  try { db.exec('ALTER TABLE player_cargo ADD COLUMN store_unit_val REAL NOT NULL DEFAULT 0'); } catch(_) {}
+  // Backfill: pre-warehouse rows are valued at what the player paid.
+  try { db.exec('UPDATE player_cargo SET store_unit_val = avg_cost WHERE store_unit_val <= 0'); } catch(_) {}
+  // Shipments lock their storage valuation AT SHIP TIME off the destination's
+  // price then, so the berth booked is exactly the berth consumed on arrival and
+  // price drift in flight can never overflow the destination shed.
+  try { db.exec('ALTER TABLE cargo_shipments ADD COLUMN store_unit_val REAL NOT NULL DEFAULT 0'); } catch(_) {}
+  try { db.exec('ALTER TABLE warehouses ADD COLUMN locked_until INTEGER NOT NULL DEFAULT 0'); } catch(_) {}
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS warehouses (
+      player_id   TEXT    NOT NULL,
+      colony_id   TEXT    NOT NULL,
+      capacity    INTEGER NOT NULL DEFAULT 0,
+      reserved    INTEGER NOT NULL DEFAULT 0,   -- units promised to in-flight shipments
+      arrears     REAL    NOT NULL DEFAULT 0,
+      last_billed INTEGER NOT NULL DEFAULT 0,
+      locked_until INTEGER NOT NULL DEFAULT 0,
+      created_at  INTEGER NOT NULL,
+      PRIMARY KEY (player_id, colony_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_wh_player ON warehouses(player_id);
+    CREATE INDEX IF NOT EXISTS idx_wh_arrears ON warehouses(arrears);
+
+    -- Arrears calls. One row per player+colony, mirroring margin_calls.
+    CREATE TABLE IF NOT EXISTS warehouse_calls (
+      player_id TEXT    NOT NULL,
+      colony_id TEXT    NOT NULL,
+      called_at INTEGER NOT NULL,
+      deadline  INTEGER NOT NULL,
+      PRIMARY KEY (player_id, colony_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS warehouse_meta (
+      key TEXT PRIMARY KEY,
+      val TEXT
+    );
+  `);
+}
+
+export function getWarehouse(playerId, colonyId) {
+  try { return stmt('SELECT * FROM warehouses WHERE player_id=? AND colony_id=?').get(playerId, colonyId) || null; }
+  catch(_) { return null; }
+}
+export function getPlayerWarehouses(playerId) {
+  try { return stmt('SELECT * FROM warehouses WHERE player_id=? ORDER BY colony_id').all(playerId); }
+  catch(_) { return []; }
+}
+export function getAllWarehouses() {
+  try { return stmt('SELECT * FROM warehouses WHERE capacity > 0 OR arrears > 0 OR locked_until > 0').all(); }
+  catch(_) { return []; }
+}
+export function upsertWarehouse(playerId, colonyId, capacity) {
+  const now = Date.now();
+  stmt(`INSERT INTO warehouses(player_id,colony_id,capacity,reserved,arrears,last_billed,created_at)
+        VALUES(?,?,?,0,0,?,?)
+        ON CONFLICT(player_id,colony_id) DO UPDATE SET capacity=excluded.capacity`)
+    .run(playerId, colonyId, Math.max(0, Math.floor(capacity)), now, now);
+  return getWarehouse(playerId, colonyId);
+}
+export function setWarehouseArrears(playerId, colonyId, arrears, lastBilled) {
+  stmt('UPDATE warehouses SET arrears=?, last_billed=COALESCE(?,last_billed) WHERE player_id=? AND colony_id=?')
+    .run(Math.max(0, Number(arrears) || 0), lastBilled || null, playerId, colonyId);
+}
+export function deleteWarehouse(playerId, colonyId) {
+  try { stmt('DELETE FROM warehouses WHERE player_id=? AND colony_id=?').run(playerId, colonyId); } catch(_) {}
+}
+
+// Reserved space is capacity promised to cargo that has already left its origin.
+// Booked at ship time so a delivery can never arrive with nowhere to land: the
+// units are gone from the origin hold the moment /api/cargo/ship escrows them,
+// so a capacity check at DELIVERY time would have no state to fall back to.
+export function addWarehouseReserved(playerId, colonyId, delta) {
+  stmt('UPDATE warehouses SET reserved = MAX(0, reserved + ?) WHERE player_id=? AND colony_id=?')
+    .run(Math.floor(delta), playerId, colonyId);
+}
+
+export function setWarehouseCall(playerId, colonyId, calledAt, deadline) {
+  stmt(`INSERT INTO warehouse_calls(player_id,colony_id,called_at,deadline) VALUES(?,?,?,?)
+        ON CONFLICT(player_id,colony_id) DO UPDATE SET called_at=excluded.called_at, deadline=excluded.deadline`)
+    .run(playerId, colonyId, calledAt, deadline);
+}
+export function getWarehouseCall(playerId, colonyId) {
+  try { return stmt('SELECT * FROM warehouse_calls WHERE player_id=? AND colony_id=?').get(playerId, colonyId) || null; }
+  catch(_) { return null; }
+}
+export function clearWarehouseCall(playerId, colonyId) {
+  try { stmt('DELETE FROM warehouse_calls WHERE player_id=? AND colony_id=?').run(playerId, colonyId); } catch(_) {}
+}
+export function getActiveWarehouseCalls() {
+  try { return stmt('SELECT * FROM warehouse_calls').all(); }
+  catch(_) { return []; }
+}
+
+// Units this player holds at one colony, across every commodity. This is the
+// floor the capacity slider cannot be dragged below.
+// Ƒ of shed capacity consumed at one colony: qty x the value locked at entry.
+export function getCargoStoredValueAtColony(playerId, colonyId) {
+  try {
+    const r = stmt(`SELECT COALESCE(SUM(qty * COALESCE(NULLIF(store_unit_val,0), avg_cost)),0) AS v
+                    FROM player_cargo WHERE player_id=? AND colony_id=?`).get(playerId, colonyId);
+    return Math.round(Number(r?.v || 0) * 100) / 100;
+  } catch(_) { return 0; }
+}
+
+export function setWarehouseLockout(playerId, colonyId, until) {
+  try { stmt('UPDATE warehouses SET locked_until=? WHERE player_id=? AND colony_id=?').run(Number(until)||0, playerId, colonyId); } catch(_) {}
+}
+
+export function getCargoTotalAtColony(playerId, colonyId) {
+  try {
+    const r = stmt('SELECT COALESCE(SUM(qty),0) AS n FROM player_cargo WHERE player_id=? AND colony_id=?')
+      .get(playerId, colonyId);
+    return Number(r?.n || 0);
+  } catch(_) { return 0; }
+}
+
+// Stock at one colony, dearest first. Liquidation sells the most valuable units
+// first so the fewest units are destroyed to clear a given debt.
+export function getCargoRowsAtColony(playerId, colonyId) {
+  try {
+    return stmt('SELECT commodity_id, qty, avg_cost, store_unit_val FROM player_cargo WHERE player_id=? AND colony_id=? AND qty > 0')
+      .all(playerId, colonyId);
+  } catch(_) { return []; }
+}
+
+export function getWarehouseMeta(key) {
+  try { return stmt('SELECT val FROM warehouse_meta WHERE key=?').get(key)?.val || null; }
+  catch(_) { return null; }
+}
+export function setWarehouseMeta(key, val) {
+  stmt('INSERT OR REPLACE INTO warehouse_meta(key,val) VALUES(?,?)').run(key, String(val));
+}
+
+// Locked per-unit shelf valuation for an in-flight shipment. Written at ship
+// time so the berth reserved at the destination is exactly the berth consumed
+// on arrival, whatever the price does in between.
+export function setCargoShipmentStoreUnitVal(id, unitVal) {
+  try { stmt('UPDATE cargo_shipments SET store_unit_val=? WHERE id=?').run(Math.max(0, Number(unitVal) || 0), id); } catch(_) {}
 }
