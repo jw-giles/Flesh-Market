@@ -4,6 +4,42 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.7.5 (2026-08-08) - Codec story mode: three reps written and brought online (CLIENT)
+
+Client only. No restart. Hard refresh required. Files touched: client/assets/codec-data.js, client/version.json.
+
+THREE OF FIVE CODEC CONTACTS WERE UNREACHABLE. Mr. Flesh and Father Xen had branching lore trees and played. Captain Trisha McHallan, Rahtan and Jaquet had no tree, and none of the three was callable at all.
+
+WHY THEY WERE OFFLINE. `repEnabled()` requires `enabled === true`. McHallan was explicitly `enabled:false`. Rahtan and Jaquet had no `enabled` key whatsoever, which fails the identity check exactly as hard as false does, so both rendered with the red Offline button and refused the call. All three are now `enabled:true`.
+
+WHY A TREE ALONE WOULD NOT HAVE BEEN ENOUGH. `connect()` calls `selectCurrentQuest(qlist)` first and only falls through to `rep.tree` when the list is empty or every quest is completed. McHallan carried COLD OPEN inside `quests[]`. Rahtan and Jaquet used the legacy `rep.quest` shape, which the engine wraps into a one item qlist at call time. In all three cases the quest pitch wins and the tree never renders. Each rep now carries `quests:[]`, the same parking pattern Father Xen already used for COMMUNION.
+
+NOTHING WAS DELETED. McHallan's COLD OPEN moved to `parkedQuests`, a key the engine does not read. Rahtan's CREDIT CHECK and Jaquet's BEAR RAID stay on `rep.quest`, now shadowed by the empty `quests` array. Every script is intact and each questline restores by renaming one key or removing one empty array.
+
+presidentLock REMOVED FROM McHALLAN. `if (st.locked) { presidentBlock(); return; }` fires in `connect()` before the tree branch is ever reached, so with the lock on, the President would call the Coalition liaison, receive a single line and never see a word of the lore. The `{name}` token already resolves to President for the seat holder, so the writing addresses that player correctly without an engine change. Restore the lock together with a president router node when COLD OPEN ships.
+
+NEW CONTENT. 24 nodes each for McHallan, Rahtan and Jaquet, matching the depth of the two trees already live. Six topics per rep plus a `work` stub in the idle slot. One faction router each, mirroring Father Xen's augment recognition: McHallan and Jaquet route on the proprietor question, Rahtan routes on Guild ownership, which is where his secret sits.
+
+McHALLAN AND RAHTAN WERE REWRITTEN BEFORE RELEASE. Their first draft read as machine written and the first draft was measured rather than argued about. The tic was antithesis, the sentence shape "it is not X, it is Y" with a closing aphorism on nearly every node: McHallan 17 percent of nodes, Rahtan 26 percent, Jaquet 9 percent. Mr. Flesh, written by the GM, scores zero. The seed lines each carry one epigram, which is right; the error was promoting it from a rare punch to the default sentence shape. Second tell, contractions: Rahtan used none at all, McHallan 13 percent, against Mr. Flesh at 38 and Father Xen at 15. Third tell, uniform node length: the draft trees sat at a 37 to 41 word median with a narrow spread, so every answer came out the same size regardless of the question, where Mr. Flesh runs from one word to ninety six. After the rewrite: McHallan antithesis 13 percent, contractions 74 percent, length 1/31/55. Rahtan antithesis 13 percent, contractions 83 percent, length 11/42/63.
+
+McHALLAN ALREADY HAD A VOICE IN THIS FILE. Her COLD OPEN script reads "You're late. Doesn't matter, it's slow today" and "I don't lose couriers over cargo." Clipped, contracted, plain. The final tree is checked line by line against that script rather than written from scratch.
+
+REGISTER. McHallan is an officer on a bad posting: fragments, contractions, requisitions New Anchor has been sitting on, two ice moon transfers she signed herself, a predecessor who lasted eleven months. She refuses questions rather than philosophising about why she cannot answer them. Rahtan is a merchant priest with a guest in the room: long winded, asks questions back, offers the player a plate, cites the third book of the Reckoning instead of minting his own proverbs, digresses about vintages. He keeps exactly one aphorism, at the end of the wine thread. Jaquet was written last and needed no pass; he digresses, corrects himself mid thought, uses filler, never summarises his own point and never lands a mic drop, which is the standard the other two were measured against.
+
+CROSS REFERENCES ARE DELIBERATE. McHallan files a complaint about Jaquet every quarter and waves at him in the corridor; Jaquet says three parties who agree on nothing all agree on Jaquet. Jaquet claims the Coalition manufactures the Syndicate on schedule and in writing, and McHallan never contradicts it. Rahtan goes exactly as far as capital that has never asked for a vote and stops, which is the closest a factor can stand to Mr. Flesh's own admission that he sponsors the Guild without confirming it. Jaquet knows a unit sits at the base of his neck and was told it is medical, which leaves the proprietor's account of the implant true and Jaquet neither ignorant nor informed.
+
+NEW CANON INTRODUCED, PENDING GM RATIFICATION. Nine Coalition council seats. Jaquet aboard eleven years. Rahtan forty years in the seat. McHallan's predecessor lasted eleven months. The Guild worships the Balance and reads the Reckoning, kept deliberately distinct from Void's Abraxas so the two religions are not the same religion twice. Guild chapter members can enter through debt tenure. The Limbosis firing corridor maintained to specification for sixty years and never test fired. McHallan's account of how corporate wars begin: nobody declares one, somebody misses a payment, somebody seizes cargo to cover the hole, an escort fires on the seizure.
+
+DATA ONLY. codec.js is untouched.
+
+VALIDATED. A tree walker resolved every `next` and both destinations of every `branch` node across all five reps: 184 options, 0 dangling references, 0 unreachable nodes, 0 nodes with zero options. `node --check` clean. `tools/lore-check.mjs` 38 passed, 0 failed. Zero em dashes in the file.
+
+KNOWN GAPS. Codec text has no `zh` path, the same as the two trees already shipped, so this is an English only surface. The Jade Circuit does not appear in Rahtan's lanes, which is the obvious next Guild topic once the Jade faction copy is settled. Layer 3 is still a stub: `quest_accept` fires and nothing tracks, which is the gate on unparking COLD OPEN, CREDIT CHECK and BEAR RAID.
+
+PROCESS NOTE. Before writing dialogue for any rep, read that rep's existing lines in the same file first. Voice drift is invisible to `node --check`, to the tree walker and to `lore-check.mjs`.
+
+---
+
 ## v1.3.7.4 (2026-08-04) - _godTok is not defined (CLIENT)
 
 Client only. No restart. Hard refresh required.

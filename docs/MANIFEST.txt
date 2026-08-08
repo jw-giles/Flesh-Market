@@ -1,4 +1,29 @@
-# FleshMarket v1.3.7.4 - MANIFEST
+# FleshMarket v1.3.7.5 - MANIFEST
+
+## 1.3.7.5 changes (Codec story mode: three reps written and brought online; CLIENT ONLY)
+- CLIENT ONLY. No restart. HARD REFRESH REQUIRED. Files touched: client/assets/codec-data.js, client/version.json.
+- DATA ONLY. client/assets/codec.js IS NOT TOUCHED. Every change is inside window.FM_CODEC.
+- THREE OF FIVE CONTACTS WERE UNREACHABLE. Mr. Flesh and Father Xen played. McHallan, Rahtan and Jaquet had no tree and none of the three was callable.
+- OFFLINE CAUSE: repEnabled() requires `enabled === true`. McHallan was `enabled:false`. Rahtan and Jaquet HAD NO `enabled` KEY AT ALL, which fails the identity check exactly as hard as false. All three now `enabled:true`.
+- A TREE ALONE WOULD NOT HAVE RENDERED. connect() runs selectCurrentQuest(qlist) FIRST and only falls through to rep.tree when the list is empty or all completed. McHallan carried COLD OPEN in quests[]; Rahtan and Jaquet used the legacy rep.quest shape, which the engine WRAPS INTO A ONE ITEM QLIST at call time. Quest pitch wins, tree never plays.
+- FIX: `quests:[]` on all three, the same parking pattern Father Xen already used for COMMUNION.
+- NOTHING DELETED: McHallan's COLD OPEN moved to `parkedQuests` (a key the engine does not read). Rahtan's CREDIT CHECK and Jaquet's BEAR RAID remain on rep.quest, shadowed by the empty quests array. Restore any questline by renaming one key or removing one empty array.
+- presidentLock REMOVED FROM McHALLAN. `if (st.locked) { presidentBlock(); return; }` fires BEFORE the tree branch in connect(), so the seat holder would have got one line and no lore. The {name} token already resolves to President for that player, so the writing covers it with NO engine change. Restore the lock alongside a president router node when COLD OPEN ships.
+- CONTENT: 24 nodes each for mchallan, rahtan and jaquet. Six topics per rep plus a `work` stub for the idle slot. One faction router each (McHallan and Jaquet on the proprietor question, Rahtan on Guild ownership).
+- McHALLAN AND RAHTAN WERE REWRITTEN BEFORE RELEASE. First draft read as machine written and was MEASURED rather than argued about.
+  - TIC 1, ANTITHESIS ("it is not X, it is Y" plus a closing aphorism per node). DRAFT: mchallan 17%, rahtan 26%, jaquet 9%. MR. FLESH, WRITTEN BY THE GM, SCORES 0%.
+  - TIC 2, NO CONTRACTIONS. DRAFT: rahtan 0%, mchallan 13%. Mr. Flesh 38%, Xen 15%.
+  - TIC 3, UNIFORM NODE LENGTH. DRAFT sat at a 37-41 word median with a narrow spread: every answer the same size regardless of the question. Mr. Flesh runs 1 to 96 words.
+  - SHIPPED: mchallan antithesis 13%, contractions 74%, length 1/31/55. rahtan antithesis 13%, contractions 83%, length 11/42/63. jaquet unchanged from first draft; he was right the first time.
+- McHALLAN ALREADY HAD A VOICE IN THIS FILE AND THE DRAFT DID NOT READ IT. Her COLD OPEN script sits EIGHT LINES ABOVE the tree: "You're late. Doesn't matter, it's slow today." / "I don't lose couriers over cargo." Final tree checked line by line against COLD OPEN.
+- REGISTER mchallan: officer on a bad posting. Fragments, requisitions New Anchor is sitting on, ice moon transfers she signed, a predecessor who lasted eleven months. She REFUSES questions instead of philosophising about why she cannot answer.
+- REGISTER rahtan: merchant priest with a guest in the room. Long winded, asks questions back, offers a plate, cites the third book of the Reckoning instead of minting proverbs, digresses about vintages. ONE aphorism retained, end of the wine thread.
+- WHAT MAKES JAQUET WORK, for reference on any future rep: he digresses, self corrects mid thought, uses filler, does not summarise his own point, never lands a mic drop.
+- VALIDATED: tree walker across five reps. 184 options, 0 dangling refs, 0 unreachable nodes, 0 zero option nodes. node --check clean. tools/lore-check.mjs 38 passed 0 failed. 0 em dashes in the file.
+- NEW CANON PENDING GM RATIFICATION: nine Coalition council seats; Jaquet aboard eleven years; Rahtan forty years in the seat; McHallan's predecessor lasted eleven months; the Balance and the Reckoning as Guild scripture, kept distinct from Void's Abraxas; Guild chapter entry via debt tenure; Limbosis firing corridor never test fired; corporate wars begin as settlement failures rather than declarations.
+- KNOWN GAPS: no `zh` path for codec text (same as the two trees already shipped). No Jade Circuit topic in Rahtan's lanes, pending the Jade faction copy. Layer 3 is still a stub, quest_accept fires and nothing tracks, which is the gate on unparking COLD OPEN, CREDIT CHECK and BEAR RAID.
+- PROCESS NOTE 1: when adding a tree to any rep, check the quest list first. rep.quest ALONE is enough to hide a tree forever, and it fails silently with the idle line looking correct.
+- PROCESS NOTE 2: before writing dialogue for any rep, read that rep's EXISTING lines in the same file. Voice drift is invisible to node --check, to the tree walker and to lore-check.
 
 ## 1.3.7.4 changes (_godTok is not defined; CLIENT ONLY)
 - CLIENT ONLY. No restart. HARD REFRESH REQUIRED. Files touched: client/assets/god-panel.js, client/assets/galaxy.js, client/version.json.

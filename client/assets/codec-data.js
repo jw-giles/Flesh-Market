@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// FM_CODEC — faction rep contacts + conversations (GM-authored DATA, layer 2).
+// FM_CODEC - faction rep contacts + conversations (GM-authored DATA, layer 2).
 // The codec engine (codec.js) plays these; it knows nothing about quests.
 // Player-visible text: NO em dashes. Portraits are filenames in assets/portraits/.
 // Rep portraits assigned from the selectable set; swap freely.
@@ -16,12 +16,17 @@ window.FM_CODEC = {
   reps: [
     {
       id:'mchallan', name:'Captain Trisha McHallan', faction:'coalition',
-      portrait:'corpo2', role:'Coalition Liaison', enabled:false,
-      presidentLock:true, presidentLine:"President, I have nothing for you at this time.",
+      portrait:'corpo2', role:'Coalition Liaison', enabled:true,
+      // presidentLock short-circuits BEFORE the tree, so it is off while the tree is
+      // the only content. Restore it (with a president router node) when COLD OPEN ships.
+      presidentLine:"President, I have nothing for you at this time.",
       allDoneLine:"The cores did their work. Nothing new from me right now. Stay close.",
       blurb:"A Coalition officer posted to FLSH station. Our treaty requires one assigned to us at all times. Security is their business, and as the galaxy's government, their rules are the rules we follow. She runs hard, so stay polite if you can manage it.",
       ver:'v3.00',
-      quests:[
+      // Tree plays in the idle slot; COLD OPEN is parked (dormant data) until the
+      // Coalition questline ships. Restore by renaming parkedQuests back to quests.
+      quests:[],
+      parkedQuests:[
         {
           id:'coalition_cold_open', title:'COLD OPEN',
           activeLine:"You're still running that crate to The Hollow. Finish the job, then we talk.",
@@ -38,11 +43,111 @@ window.FM_CODEC = {
             desc:'Smuggle Encrypted Data Cores from New Anchor to The Hollow.',
             reward:'Coalition standing. Slot spins. Cargo loss reimbursed.' }
         },
-      ]
+      ],
+      // Branching lore dialogue (GM-authored). Node shape mirrors Mr. Flesh's tree.
+      // Faction-router node on the proprietor question: Coalition members get the
+      // candid answer, everyone else gets the official position.
+      tree:{
+        start:'open',
+        nodes:{
+          open:{ text:"McHallan. Line's clean on my end. What do you need, {name}?", options:[
+            { text:"I have some questions.", next:'root' },
+            { text:"Any work for me?", next:'work' },
+          ]},
+          work:{ text:"Nothing on the board for you. New Anchor's been sitting on three requisitions since last month, so don't hold your breath.", options:[
+            { text:"Questions, then.", next:'root' },
+            { text:"Copy that.", end:true },
+          ]},
+          root:{ text:"Go ahead.", options:[
+            { text:"What is the Coalition, exactly?", next:'co1' },
+            { text:"Why does the Coalition keep an officer on this station?", next:'post1' },
+            { text:"There is a Syndicate broker walking these decks. How is that allowed?", next:'jaq1' },
+            { text:"The fifteenth war was twenty nine years ago. Is there a sixteenth?", next:'war1' },
+            { text:"What happened at Limbosis?", next:'lim1' },
+            { text:"What do you make of Mr. Flesh?", next:'flesh1' },
+            { text:"Any work for me?", next:'work' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Coalition --
+          co1:{ text:"Nine corporations that still had a board when the fourteenth ended. They pushed some tables together and called it a council. That's the founding story. That's all of it.", options:[
+            { text:"That is a government by attrition.", next:'co2' },
+          ]},
+          co2:{ text:"Sure. Won the fifteenth, kept the chair. Somebody wins the sixteenth, they get the chair. Everything else we publish is commentary.", options:[
+            { text:"Do the colonies actually accept that?", next:'co3' },
+          ]},
+          co3:{ text:"They accept the lanes. They accept arbitration because the other way of settling it involves guns. Whether they'd accept us if you asked them straight, I don't know. Nobody's asked and I'm not volunteering to be first.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Why a liaison --
+          post1:{ text:"Treaty. One Coalition officer aboard at all times, ever since the station got recognised as neutral ground.", options:[
+            { text:"Neutral ground with a permanent government presence.", next:'post2' },
+          ]},
+          post2:{ text:"Yeah. I know. Write that one down, it's the most useful thing you'll hear today. Officially I'm here to guarantee the treaty. What actually happened is New Anchor can't sleep unless somebody with a rank can see the floor.", options:[
+            { text:"So you're a watchman.", next:'post3' },
+          ]},
+          post3:{ text:"Watchman implies I'd stop something. Mostly I just have to have been present. If this place ever does something the council can't survive, the inquiry asks what the liaison saw, then it asks why she didn't stop it. I'd like both answers short.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Jaquet --
+          jaq1:{ text:"Jaquet. Yeah. I file on him every quarter and it gets denied every quarter. Honestly I'd be put out if it ever went through. I'd have to find a new hobby.", options:[
+            { text:"Then why keep filing?", next:'jaq2' },
+          ]},
+          jaq2:{ text:"Because the file has to exist. And because he's the only clean read anybody has on Syndicate movement. We don't own an asset that deep. FLSH does. So we buy it secondhand and write cooperation on the line item.", options:[
+            { text:"Would you arrest him if you could?", next:'jaq3' },
+          ]},
+          jaq3:{ text:"In a heartbeat, and he knows it. He waves at me in the corridor. I wave back. My predecessor thought that was disgraceful. My predecessor lasted eleven months.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- The sixteenth war --
+          war1:{ text:"You did the subtraction. Most people don't.", options:[
+            { text:"Fourteen, fifteen, about thirty years apart. It is late.", next:'war2' },
+          ]},
+          war2:{ text:"It's an average, not a timetable. Analysts who treat it like a timetable end up on ice moons, I've signed two of those transfers myself. But yeah. We're inside the window. Everybody knows we're inside the window, and that alone is moving more money right now than anything I could put in a threat assessment.", options:[
+            { text:"So who starts it?", next:'war3' },
+          ]},
+          war3:{ text:"Nobody. That's the part the histories get wrong. Somebody misses a payment. Somebody else grabs cargo to cover the hole. An escort fires on the grab. Three lanes are dead before a council votes on anything, and then we write it up afterwards like it was a decision somebody made.", options:[
+            { text:"Then what stops it?", next:'war4' },
+          ]},
+          war4:{ text:"Liquidity. I know how that sounds coming from a uniform. But if everyone can cover their positions then nobody has to take anything by force. Took me about six years aboard to stop rolling my eyes at the proprietor's mandate. Bear that in mind next time you decide to break something on my floor.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Limbosis --
+          lim1:{ text:"Limbosis. Weapons lab. Stopped being a lab the day we agreed to build what was on the drawings.", options:[
+            { text:"A laser aimed at the binary black holes at Abaddon.", next:'lim2' },
+          ]},
+          lim2:{ text:"You've been talking to the proprietor. Yeah, that was the price of the seat. Council delivered the instrument, he delivered the mandate. Neither half is in any record you can pull.", options:[
+            { text:"What is it for?", next:'lim3' },
+          ]},
+          lim3:{ text:"Above my clearance and I've made my peace with it. I'll tell you what I've actually seen, which is a firing corridor kept to spec for sixty years and never once test fired. You don't service a thing that long out of sentiment.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Mr. Flesh (faction router) --
+          flesh1:{ text:"Carefully.", options:[
+            { text:"That is not an answer.", next:'flesh2' },
+          ]},
+          flesh2:{ text:"It's most of one. He predates the council. He allowed the council. Sixty years back a brain in a tank decided we could be the face of human government, and every rank I hold traces to that. I work for a government that exists because somebody let it.", options:[
+            { text:"Does that bother you?", next:'flesh_faction' },
+          ]},
+          flesh_faction:{ branch:{ faction:'coalition', match:'flesh_co', other:'flesh_other' } },
+          flesh_co:{ text:"Same colours, so I'll say it once. Yeah. Every day. The council can dissolve a corporation, sanction a colony, end a war. It can't open a door on this station that he wants shut. Keep that between us and keep your filings clean.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"Understood, Captain.", end:true },
+          ]},
+          flesh_other:{ text:"You're not Coalition, so you get the position. The proprietor is a valued partner of the council, the arrangement has held sixty years, and it continues to serve the stability of all member colonies. Next.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+        }
+      }
     },
     {
       id:'rahtan', name:'Rahtan', faction:'guild',
-      portrait:'corpo7', role:'Merchant Guild Factor',
+      portrait:'corpo7', role:'Merchant Guild Factor', enabled:true,
       blurb:"A religious representative of the Merchant Guild, posted here under our lane shipping agreements and the debts that come with them. He preaches, but the Guild holds our contracts, so we listen. Bring him S'weet wine when you get the chance.",
       ver:'v3.40',
       lines:[
@@ -53,11 +158,111 @@ window.FM_CODEC = {
       ],
       quest:{ id:'guild_credit_check', title:'CREDIT CHECK',
         desc:'Complete a three hop smuggling route without an interception.',
-        reward:'Guild standing +1, reduced wire fees (placeholder).' }
+        reward:'Guild standing +1, reduced wire fees (placeholder).' },
+      // quests:[] parks CREDIT CHECK (dormant data) and hands the idle slot to the
+      // tree. Restore the questline by removing this empty array.
+      quests:[],
+      tree:{
+        start:'open',
+        nodes:{
+          open:{ text:"Ah, {name}. Sit, sit. You've caught me between manifests and I would much rather talk than count. What is it?", options:[
+            { text:"I have some questions.", next:'root' },
+            { text:"Any work for me?", next:'work' },
+          ]},
+          work:{ text:"Nothing on the lane today worth your hull. Come back when the ledger opens up and I'll find you something. Bring the wine either way.", options:[
+            { text:"A few questions, then.", next:'root' },
+            { text:"Balance keep you.", end:true },
+          ]},
+          root:{ text:"Ask. The Guild has never charged for an answer, only for what you do with it.", options:[
+            { text:"What is the Merchants Guild?", next:'gu1' },
+            { text:"Why can no colony simply trade around you?", next:'lane1' },
+            { text:"You are called a religious representative. What do you worship?", next:'faith1' },
+            { text:"What does the Guild believe about debt?", next:'debt1' },
+            { text:"Who owns the Guild?", next:'own1' },
+            { text:"I hear you drink S'weet wine.", next:'wine1' },
+            { text:"Any work for me?", next:'work' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- What the Guild is --
+          gu1:{ text:"A clearing house that outlived the men who built it. Look. Every colony you can name hates two others, and every one of them still wants grain off the people they hate. Fuel. Medicine. Parts. Somebody has to stand in the middle and get hated evenly, and we've been very good at that for a very long time.", options:[
+            { text:"And that is you.", next:'gu2' },
+          ]},
+          gu2:{ text:"That's us. We don't keep a fleet worth fearing, never needed one. We hold the arbitration, the escrow and the record. Break a Guild contract and no lane prices you again. You can shoot a man once. A closed ledger keeps working.", options:[
+            { text:"Has nobody ever tried to break you?", next:'gu3' },
+          ]},
+          gu3:{ text:"Constantly. It runs the same every time. They form a compact, they trade among friends, and then somebody needs a drug that only three worlds make. Second year they're back at the counter paying reinstatement. We keep that fee ugly so the lesson stays where we put it.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- The lane --
+          lane1:{ text:"They can. For a while. A lane isn't a road, understand, nobody owns the vacuum. What we own is the agreement about who gets paid when the cargo lands. Move goods without us all you like. Getting paid twice is the trick.", options:[
+            { text:"Smugglers seem to manage.", next:'lane2' },
+          ]},
+          lane2:{ text:"Smugglers are ours. Not on the roll, but ours. We price interception into every honest freight rate, so the risk you're carrying out there is the margin we're collecting in here. No judgement in that, I mean it. The lane wants both kinds of hand. I've stamped paper for men who'd have been shot on New Anchor and I slept fine.", options:[
+            { text:"That is convenient for you.", next:'lane3' },
+          ]},
+          lane3:{ text:"It is, isn't it. That part came later, as a gift.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Faith --
+          faith1:{ text:"The Balance. Not a god with a face, before you ask. Everyone asks.", options:[
+            { text:"Then what is it?", next:'faith2' },
+          ]},
+          faith2:{ text:"A condition. Every account closes. What's owed gets answered, in coin or in kind or in the ruin of the man who owed it, and nothing is ever forgiven, it only moves. Your people call that accounting because the word is smaller and you can sleep after saying it.", options:[
+            { text:"That is a bleak religion.", next:'faith3' },
+          ]},
+          faith3:{ text:"You think so? There's a line in the third book of the Reckoning, on the closing of accounts. Nobody arrives at the scale carrying a surprise. That's the comfort, and it's a real one. Your faiths promise the ledger gets torn up at the end. Ours promises it gets read out loud. I know which one I'd rather have time to prepare for.", options:[
+            { text:"What about a man who dies owing?", next:'faith4' },
+          ]},
+          faith4:{ text:"Then it seats itself on whoever ate well off him. Widow, partner, colony, station. People hear that and decide we're cruel. We're not doing anything to him, he's dead. We're declining to pretend the value went up in smoke because the man did.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Debt --
+          debt1:{ text:"Best relationship two men can have, and I mean that plainly. Friendship has no price on it, so you never know what you're holding. A debt tells you the amount, the date, and what happens if you miss. Where else in your life do you get that?", options:[
+            { text:"It also ruins people.", next:'debt2' },
+          ]},
+          debt2:{ text:"So does weather. Nobody sermonises at weather, they build for it. A debt only ruins the man who arranged his life pretending it would never come due, and we have never once collected a surprise.", options:[
+            { text:"And when he cannot pay?", next:'debt3' },
+          ]},
+          debt3:{ text:"Then he pays in time instead of coin. Labour. Lane hours. A seat on his colony board. His name on our roll for three generations, which sounds worse than it is, half our chapter came in that way. There's always a price that clears. Men are frightened of insolvency because nobody ever sat down and showed them the rate.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Ownership (faction router) --
+          own1:{ text:"The Guild owns the Guild. Factors hold seats, factors answer to the chapter, the chapter answers to the lane.", options:[
+            { text:"That is a circle, not an answer.", next:'own2' },
+          ]},
+          own2:{ text:"You noticed. Good, I like you. Here's what a factor is allowed to say. There is capital behind us that has never appeared on a chapter roll and has never once asked for a vote. It asks for stability. It gets stability. Forty years I've held this seat and it has not put a single request to me I'd have turned down.", options:[
+            { text:"You are describing a silent partner.", next:'own_faction' },
+          ]},
+          own_faction:{ branch:{ faction:'guild', match:'own_guild', other:'own_other' } },
+          own_guild:{ text:"You wear the mark, so one more step and not a second one. When you're stood on this station wondering why the proprietor has never asked to see our books, don't read that as a man who isn't interested. Ask who'd be auditing whom. Then don't ask it out loud again.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"Balance keep you, factor.", end:true },
+          ]},
+          own_other:{ text:"I'm describing a factor who likes his posting. Have you eaten? No. Of course not. Ask me something else and let me get you a plate.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Wine --
+          wine1:{ text:"Somebody's been talking. Yes. S'weet, off the low terraces, and the vintage matters a great deal more than the sellers will admit to you. They'll swear it all comes off one hill. It does not come off one hill.", options:[
+            { text:"A priest with a vice.", next:'wine2' },
+          ]},
+          wine2:{ text:"A factor with an account. I've carried cargo I wouldn't name to you and stamped contracts I wouldn't sign under my own name, and at the end of a lane I sit down with a glass and let the day close. The Balance has never once objected to pleasure. It objects to pretending it came free.", options:[
+            { text:"I will remember that.", next:'wine3' },
+          ]},
+          wine3:{ text:"Do. A factor who's had wine off you reads your contract twice before he stamps it. That isn't corruption, {name}. That's the discount for being remembered.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+        }
+      }
     },
     {
       id:'jaquet', name:'Jaquet', faction:'syndicate',
-      portrait:'hacker1', role:'Syndicate Broker',
+      portrait:'hacker1', role:'Syndicate Broker', enabled:true,
       blurb:"The Coalition hates having him here, but without him its read on Syndicate operations goes dark. He is a mole, a rat, a criminal. Pay a shady man well enough and he turns into an indispensable asset. Keep him on a need-to-know basis, for our sake.",
       ver:'v1.88',
       lines:[
@@ -68,7 +273,107 @@ window.FM_CODEC = {
       ],
       quest:{ id:'syndicate_bear_raid', title:'BEAR RAID',
         desc:'Hold an open FLSH short position through the next end of day reset.',
-        reward:'Syndicate standing +1, Bear Betrayer title (placeholder).' }
+        reward:'Syndicate standing +1, Bear Betrayer title (placeholder).' },
+      // quests:[] parks BEAR RAID (dormant data) and hands the idle slot to the tree.
+      // Restore the questline by removing this empty array.
+      quests:[],
+      tree:{
+        start:'open',
+        nodes:{
+          open:{ text:"You called ME? Hah. Nobody calls me first. Sit down, sit down, this is already a good day.", options:[
+            { text:"I have some questions.", next:'root' },
+            { text:"Any work for me?", next:'work' },
+          ]},
+          work:{ text:"Nothing yet. When the Syndicate wants something moved they do not send a calendar invite. Keep the line open and stay boring for a while.", options:[
+            { text:"A few questions, then.", next:'root' },
+            { text:"Later, Jaquet.", end:true },
+          ]},
+          root:{ text:"Ask me anything. Seriously. Almost nothing gets me in trouble any more.", options:[
+            { text:"Who do you actually work for?", next:'loyal1' },
+            { text:"What is the Syndicate, really?", next:'syn1' },
+            { text:"How are you still walking around this station?", next:'free1' },
+            { text:"Is there something in your spine?", next:'spine1' },
+            { text:"What happens to you if the sixteenth war starts?", next:'war1' },
+            { text:"What do you think of Mr. Flesh?", next:'flesh1' },
+            { text:"Any work for me?", next:'work' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Loyalty --
+          loyal1:{ text:"Everybody. That is not a joke, that is the business model.", options:[
+            { text:"Pick one.", next:'loyal2' },
+          ]},
+          loyal2:{ text:"Fine. The Syndicate pays me to sit here and watch the money. FLSH pays me more to say what I saw. The Coalition pays me nothing at all, they just read what FLSH writes down and feel very clean about it. Three employers, one chair. I am the most efficient man on this station.", options:[
+            { text:"Your bosses have not noticed?", next:'loyal3' },
+          ]},
+          loyal3:{ text:"My bosses budgeted for an informant betraying them a little. What they did not budget for is that the proprietor pays better than the crime, so I have no reason to lie to him and every reason to lie to them. Loyalty is just the highest bid, friend. Nobody outbids a brain in a jar.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- The Syndicate --
+          syn1:{ text:"Not what you think. There is no throne. No boss of bosses waiting for you at the end of the level.", options:[
+            { text:"Then what is it?", next:'syn2' },
+          ]},
+          syn2:{ text:"A price. Anything the Coalition makes illegal earns a premium, and the premium organises people. That is all we are. Take away the law and the Syndicate evaporates inside a month, and the same men sell the same crates with a licence and a slightly worse margin.", options:[
+            { text:"So the Coalition creates you.", next:'syn3' },
+          ]},
+          syn3:{ text:"Every year, on schedule, in writing. And they know it. I have sat across from Coalition officers who understand the mechanism better than I do. They keep the law anyway, because a market they cannot see frightens them more than one they can price.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Why he is free --
+          free1:{ text:"Because I am useful, I am cheap, and I have never once been ambitious. Ambition is what gets people spaced.", options:[
+            { text:"That is it?", next:'free2' },
+          ]},
+          free2:{ text:"That is most of it. The rest is that everyone here has a reason to keep me. The Coalition needs the read. The proprietor needs the leverage. My own people need somebody on the floor who can tell them which way the wind blew today. Three parties who agree on nothing all agree on Jaquet. No honest man will ever have job security like it.", options:[
+            { text:"It sounds exhausting.", next:'free3' },
+          ]},
+          free3:{ text:"It is the most restful life I have had. I stopped choosing sides and my sleep improved that same week. You should try it. No, actually, do not try it. Two of me and the whole arrangement collapses.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- The implant --
+          spine1:{ text:"Ah.", options:[
+            { text:"You went quiet.", next:'spine2' },
+          ]},
+          spine2:{ text:"There is a unit at the base of my neck. Medical, they told me. Monitors the heart, flags a stroke, calls for help if I go down somewhere stupid. I signed for it the week I came aboard and I did not read all of it.", options:[
+            { text:"Do you believe that?", next:'spine3' },
+          ]},
+          spine3:{ text:"On good days. On bad days I notice it has never needed a battery in eleven years, and that the technician who fitted it was not a medic, and that nobody has ever once called me in for a check up.", options:[
+            { text:"You could have it removed.", next:'spine4' },
+          ]},
+          spine4:{ text:"I could. And then I would be a man who used to be trusted, standing in a corridor, carrying nothing anybody wants kept alive. No. Whatever it is, it is the reason I still get paid. Leave it in. Ask me something lighter.", options:[
+            { text:"Something lighter, then.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- The war --
+          war1:{ text:"Then I get very rich or very dead, and I have never once been able to work out the odds.", options:[
+            { text:"Explain.", next:'war2' },
+          ]},
+          war2:{ text:"In a war, information stops being gossip and becomes ordnance. My price goes up tenfold overnight. So does the number of people who would prefer I stopped talking permanently. Those two lines cross somewhere and I do not know which side of the crossing I am standing on.", options:[
+            { text:"You could leave first.", next:'war3' },
+          ]},
+          war3:{ text:"And go where. This station is the only place in the galaxy where all three of my problems sit in one building watching each other. The moment I am somewhere with only one of them, there is nobody left to object when they take me. My safety is that everyone can see me. It is a strange way to live and I do recommend it.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          // -- Mr. Flesh (faction router) --
+          flesh1:{ text:"I love him. Say that back to whoever asks. Write it down, spell it correctly.", options:[
+            { text:"That was quick.", next:'flesh2' },
+          ]},
+          flesh2:{ text:"It was rehearsed. Look. The man has kept his word to me for eleven years and nobody else ever has. He pays on time, he does not moralise, and he has never once asked me to hurt anybody. Next to my last three employers he is a saint in a fish tank.", options:[
+            { text:"And when he stops needing you?", next:'flesh_faction' },
+          ]},
+          flesh_faction:{ branch:{ faction:'syndicate', match:'flesh_syn', other:'flesh_other' } },
+          flesh_syn:{ text:"You are one of ours, so listen properly. Do not run product through this station thinking I will look the other way, because I will not, and it will not be personal. And if you ever hear my name spoken in a room back home, you tell me. That is not a favour, that is a trade, and I will pay for it.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"Understood.", end:true },
+          ]},
+          flesh_other:{ text:"Then I stop. Everybody on this station is rented, friend. The traders, the officers, the priest, me. The only difference is that I got my terms in writing and they did not.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+        }
+      }
     },
     {
       id:'xen', name:'Father Xen', faction:'void',
