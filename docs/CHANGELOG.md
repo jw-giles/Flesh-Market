@@ -4,6 +4,30 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.7.6 (2026-08-12) - Dev account decommission: four retirements, two rotations (SERVER)
+
+Server side. Requires a `.env` edit on the VPS and a restart. Files touched: server/seed_devaccounts.mjs, server/.env.example, server/server.js (comment), docs/README_LOCAL.md, deploy/DEPLOY_README.md, client/version.json.
+
+WHY. Four former collaborators hold the plaintext passwords for DEV-FIXER, DEV-SLUT, DEV-GURU and DEV-PEAK and no longer work on the project. Every dev account is also an admin account, so an unrotated credential is a live admin session for anyone who kept it.
+
+RETIRED, NOT DELETED. `PRAGMA foreign_keys = ON` is set in db.js, and three references to `players(id)` carry no `ON DELETE CASCADE`: `fund_proposals.proposer_id`, `fund_votes.player_id` and `funds.owner_id`. A `DELETE FROM players` would therefore fail outright for any retired dev who had ever filed a fund proposal or voted on one, and succeed for the rest, which is the worse outcome of the two: a partial purge that looks finished. Deleting would also orphan their trade history and cascade away their chat. The player rows stay; the privileges do not.
+
+LOGIN SEALED, NOT ROTATED. The four retired accounts do not receive new passwords. `password_hash` is set to 64 bytes of random data, which is not the hash of any string, and `verifyPassword` compares a 64 byte attempt against a 64 byte stored value and can never match it. There is no plaintext to leak because none was ever generated. Reviving an account means re-issuing a real hash, which is a deliberate act rather than an oversight.
+
+THE NON-OBVIOUS PART: DEMOTION ALONE WOULD HAVE PROMOTED THEM. Three behaviours interact. `seed_devaccounts.mjs` sets `patreon_tier=3` on every dev. `revokeExpiredPatreon()` skips `patreon_tier=3` entirely, because tier 3 is CEO and treated as lifetime, so the tier never lapses on its own. `syncFundMembership()` auto-enrols every player at `patreon_tier>=2` into MERCHANTS_GUILD. Today those accounts are held out of the guild only by the sweep that deletes memberships where `(is_dev=1 OR is_admin=1) AND is_prime=0`. Clear `is_dev` and `is_admin` without clearing the tier and that sweep stops matching them, the patron sweep enrols them on the next tick, and four retired accounts acquire deposit, withdraw and proposal rights on the guild hedge fund that they do not have while they are still devs. Removing a name from `DEV_ACCOUNTS` and stopping there would have widened access rather than narrowed it.
+
+WHAT RETIREMENT ACTUALLY CLEARS. `is_dev`, `is_admin`, `is_prime` to 0. `patreon_tier` to 0 with `patreon_member_id` and `patreon_expires_at` nulled, so the tier cannot be inferred back. The dev-only `fleshstation` faction dropped, since `syncDevAccounts()` sets that faction on promotion but never removes it on demotion and `/api/faction/join` rejects `fleshstation` as dev-only, leaving a non-dev holding a faction they could not join. Memberships in both FLSH and MERCHANTS_GUILD deleted. Order matters: the tier is zeroed before membership is pruned, otherwise the patron sweep re-adds what the prune removed.
+
+BOTH HALVES ARE REQUIRED. `DEV_ACCOUNTS` in `.env` governs role flags at boot, since `syncDevAccounts()` resets `is_dev` and `is_admin` for every non-prime player and then re-flags only the listed names. It does not touch passwords, tiers or fund membership. The `RETIRED_ACCOUNTS` block in the seed script covers those. Doing only the env half leaves four working logins; doing only the script half means the next boot is clean but nothing enforces it thereafter.
+
+ROTATED. MrFlesh and DEV-SMASHER keep dev status with new 144 bit passwords and new salts. The old hashes are replaced, so the previously distributed plaintexts stop working for these two as well.
+
+AUDIT LINE. The seed script now prints every account still carrying `is_dev`, `is_admin` or `is_prime`, and prints a `[WARN]` if any of them is not in `DEV_ACCOUNTS`. This is the check to read after running it; a silent success is not evidence that the set is correct.
+
+IDEMPOTENT. Re-running the script is safe and converges on the same state.
+
+---
+
 ## v1.3.7.5 (2026-08-08) - Codec story mode: three reps written and brought online (CLIENT)
 
 Client only. No restart. Hard refresh required. Files touched: client/assets/codec-data.js, client/version.json.

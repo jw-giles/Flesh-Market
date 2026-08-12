@@ -1,4 +1,17 @@
-# FleshMarket v1.3.7.5 - MANIFEST
+# FleshMarket v1.3.7.6 - MANIFEST
+
+## 1.3.7.6 changes (Dev account decommission; SERVER SIDE)
+- SERVER SIDE. Requires a .env edit on the VPS and a restart. Files touched: server/seed_devaccounts.mjs, server/.env.example, server/server.js (comment only), docs/README_LOCAL.md, deploy/DEPLOY_README.md, docs/CHANGELOG.md, docs/MANIFEST.txt, client/version.json.
+- RETIRED: DEV-FIXER, DEV-SLUT, DEV-GURU, DEV-PEAK. KEPT: MrFlesh (owner), DEV-SMASHER. Both kept accounts get new passwords and new salts.
+- ROWS ARE KEPT, NOT DELETED. PRAGMA foreign_keys=ON is set in db.js and three references to players(id) have NO ON DELETE CASCADE: fund_proposals.proposer_id, fund_votes.player_id, funds.owner_id. DELETE FROM players would hard-fail for any retired dev who ever filed or voted on a fund proposal and succeed for the others, leaving a partial purge that looks complete. It would also orphan trade history and cascade away chat.
+- LOGIN SEALED, NOT ROTATED. The four retired accounts get 64 bytes of RANDOM DATA in password_hash. That is not the hash of any string, so no plaintext can ever satisfy verifyPassword. No plaintext was generated for them at all. Reviving one requires re-issuing a real hash by hand.
+- CRITICAL: DEMOTION ALONE WOULD HAVE *PROMOTED* THEM. seed sets patreon_tier=3 on every dev. revokeExpiredPatreon() skips tier 3 entirely (lifetime CEO), so the tier never lapses. syncFundMembership() auto-enrols patreon_tier>=2 into MERCHANTS_GUILD. They are currently held out ONLY by the sweep deleting memberships where (is_dev=1 OR is_admin=1) AND is_prime=0. Clear is_dev without clearing the tier and that sweep stops matching, the patron sweep enrols them next tick, and they GAIN deposit/withdraw/propose on the guild hedge fund. Removing names from DEV_ACCOUNTS and stopping there widens access.
+- RETIREMENT CLEARS: is_dev, is_admin, is_prime -> 0. patreon_tier -> 0 with patreon_member_id and patreon_expires_at nulled. faction 'fleshstation' -> NULL (syncDevAccounts sets it on promote, never removes it on demote, and /api/faction/join rejects fleshstation as dev-only). fund_memberships rows for FLSH and MERCHANTS_GUILD deleted.
+- ORDER MATTERS: patreon_tier is zeroed BEFORE membership is pruned, or the patron sweep re-adds what the prune removed.
+- BOTH HALVES REQUIRED. DEV_ACCOUNTS in .env governs role flags at boot (syncDevAccounts resets is_dev/is_admin for all non-prime, then re-flags listed names). It does NOT touch passwords, tiers or fund membership; the RETIRED_ACCOUNTS block does. Env-only leaves four working logins. Script-only means the next boot is clean but nothing enforces it after.
+- NEW AUDIT LINE. Seed script prints every account still carrying is_dev/is_admin/is_prime, and a [WARN] if any is not in DEV_ACCOUNTS. Read it after running.
+- IDEMPOTENT. Safe to re-run; converges on the same state.
+- VPS .env MUST BE EDITED BY HAND: DEV_ACCOUNTS=MrFlesh,DEV-SMASHER. It is not in the repo, so apply.sh/ship.sh will not change it.
 
 ## 1.3.7.5 changes (Codec story mode: three reps written and brought online; CLIENT ONLY)
 - CLIENT ONLY. No restart. HARD REFRESH REQUIRED. Files touched: client/assets/codec-data.js, client/version.json.

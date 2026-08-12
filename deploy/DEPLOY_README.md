@@ -60,7 +60,7 @@ TRADE_TAX_BPS=25
 PATREON_WEBHOOK_SECRET=
 
 # Dev accounts — MrFlesh must be first (owner account)
-DEV_ACCOUNTS=MrFlesh,DEV-FIXER,DEV-SLUT,DEV-SMASHER,DEV-GURU,DEV-PEAK
+DEV_ACCOUNTS=MrFlesh,DEV-SMASHER
 
 # DB is stored in the server folder by default
 # DB_PATH=./fleshmarket.db
@@ -72,9 +72,10 @@ After editing:
 pm2 restart fleshmarket
 ```
 
-### Seed dev accounts (first time only)
+### Seed dev accounts
 
-This creates all dev accounts with proper password hashes:
+Creates or refreshes the active dev accounts and applies any retirements.
+Idempotent, so it is safe to re-run after a credential rotation:
 
 ```bash
 cd /opt/fleshmarket/server
@@ -83,12 +84,21 @@ node seed_devaccounts.mjs
 
 You should see output like:
 ```
-[create] MrFlesh (OWNER ★)
-[create] DEV-FIXER
+[update] MrFlesh — hash + flags refreshed (OWNER ★)
+[update] DEV-SMASHER — hash + flags refreshed
+[retire] DEV-FIXER — login sealed, dev/admin/tier stripped, funds cleared
 ...
 [guild] MERCHANTS_GUILD owner set to MrFlesh
-All dev accounts seeded.
+[audit] Privileged accounts: MrFlesh, DEV-SMASHER
 ```
+
+The `[audit]` line is the check that matters. If it names an account you did not
+authorise, or prints a `[WARN]`, stop and reconcile `DEV_ACCOUNTS` in `.env`
+before restarting.
+
+Retiring a dev requires BOTH halves: removing the name from `DEV_ACCOUNTS`
+strips the role flags at boot, but only the `RETIRED_ACCOUNTS` block in
+`seed_devaccounts.mjs` seals the login and zeroes the Patreon tier.
 
 ---
 

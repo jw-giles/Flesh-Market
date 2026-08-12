@@ -1126,7 +1126,7 @@ const _miningRuns = new Map(); // playerId -> { startTs } for the open run, to b
 const SECTOR_NAMES          = ['Finance','Biotech','Insurance','Manufacturing','Energy','Logistics','Tech','Misc'];
 
 // DEV_ACCOUNTS env: comma-separated list of dev account names.
-// Must include 'MrFlesh' — e.g. DEV_ACCOUNTS=MrFlesh,DEV-FIXER,DEV-SLUT,DEV-SMASHER,DEV-GURU,DEV-PEAK
+// Must include 'MrFlesh' — e.g. DEV_ACCOUNTS=MrFlesh,DEV-SMASHER
 // MrFlesh is the prime/owner account (is_prime=1 set by seed_devaccounts.mjs).
 const DEV_ACCOUNTS = (process.env.DEV_ACCOUNTS || '').split(',').map(s=>s.trim()).filter(Boolean);
 

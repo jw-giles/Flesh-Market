@@ -51,7 +51,7 @@ On first run, `server/.env` is created from `.env.example`. Edit it to configure
 |---|---|---|
 | `PORT` | 7777 | Port the server listens on |
 | `TRADE_TAX_BPS` | 25 | Transfer tax in basis points (25 = 0.25%) |
-| `DEV_ACCOUNTS` | (empty) | Comma-separated dev account names. Must include `MrFlesh` — e.g. `MrFlesh,DEV-FIXER` |
+| `DEV_ACCOUNTS` | (empty) | Comma-separated dev account names. Must include `MrFlesh` — e.g. `MrFlesh,DEV-SMASHER` |
 | `PATREON_WEBHOOK_SECRET` | (empty) | Leave blank for local dev |
 
 ---
