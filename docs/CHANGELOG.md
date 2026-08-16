@@ -4,6 +4,26 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.8.1 (2026-08-16) - Mr. Flesh takes the room (SERVER + CLIENT)
+
+Server side. Requires a restart. Hard refresh. Files touched: server/server.js, client/assets/council.js, client/version.json.
+
+THE BRAIN PORTRAIT DID NOT RENDER, AND THE REASON IS WORTH RECORDING. Mr. Flesh's portrait is not a file. codec-data.js gives him 'item:jarred_brain', the Preserved Brain item art, resolved out of ITEM_CATALOG_CLIENT as a base64 data URI. The chamber's resolver only understood bare stems, so it stripped the colon, built assets/portraits/itemjarred_brain.png and rendered a broken image. It now handles all three shapes codec.js:103 already handled: a data URI used as is, an item reference resolved from the catalog, and a bare stem from the portraits directory. Same id, same result, in both places.
+
+ITEM_CATALOG_CLIENT LIVES IN THE LAZY LOADED inventory.js, so the chamber pulls it in on demand and re-renders once, guarded by a flag rather than queuing a load per message in a room full of his lines.
+
+THE ART IS A 32 BY 32 SPRITE. It renders image-rendering:pixelated, because upscaling a brain in a jar smoothly turns it into a smear. Portraits-dir images are full resolution and are left smooth, which is the same split codec.js makes.
+
+PINNED TO THE HOUSE. The owner account now renders fleshstation gold and the brain portrait in the chamber whatever the players row says. syncDevAccounts sets faction='fleshstation' on promotion, but it only runs at boot from a .env that is not present on the VPS, so the row is unreliable and the proprietor was rendering as an unaligned nobody in his own chamber. This is a DISPLAY pin and deliberately does not write the row: it is a fact about who he is, not a claim of faction membership, and writing it would start paying him a faction colony bonus.
+
+THE PROPRIETOR VOICE. Mr. Flesh joins the GM voice picker on the floor, listed first because he is always available. He is A VOICE AND NOT A CHAIR: his seat is null, he cannot table, sign, decline or pull anything, and he does not appear in the seat roster. Giving the house a vote would make every other chair decorative. He owns the building; he does not need a seat at the table.
+
+The record still knows who typed it. council_posts.author_id holds the real account and speaking_as holds the persona, exactly as it does for the regents, and author_id is still never sent to any client.
+
+TESTED, 19 NEW ASSERTIONS. The owner pinned to fleshstation over a NULL faction row, the brain portrait overriding his own picked portrait, the players row confirmed NOT rewritten, the voice offered only to the GM, a normal player refused it, the persona carrying the brain and the npc flag with no seat, the proprietor refused when tabling an Accord, the seat roster confirmed to contain no proprietor chair, and the typing indicator naming him. The 176 assertions from 1.3.8.0 pass unchanged.
+
+---
+
 ## v1.3.8.0 (2026-08-16) - The Council Chamber (SERVER + CLIENT)
 
 Server side. Requires a restart. Hard refresh for the Store and Galactic tabs. Files touched: server/db_council.js (new), server/db.js, server/server.js, client/assets/council.js (new), client/assets/galaxy.js, client/assets/core.js, client/assets/market-state.js, client/assets/sound.js, client/index.html, client/version.json.

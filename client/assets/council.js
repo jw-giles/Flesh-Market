@@ -41,7 +41,7 @@
   var st = { seats: [], accords: [], colonies: [], log: [], mySeat: null, isGM: false,
              cfg: null, loaded: false,
              // Chamber rooms. `active` is which pane the player is reading.
-             active: 'gallery', rooms: {}, canPost: {}, gmRegents: null,
+             active: 'gallery', rooms: {}, canPost: {}, gmRegents: null, gmVoices: null, proprietor: null,
              myFaction: null, typing: {}, gmAsSeat: null, treasury: null };
 
   function tok(){ return window.__fmToken || window.FM_TOKEN || localStorage.getItem('fm_token') || ''; }
@@ -249,9 +249,40 @@
 
   // Portrait ids are sanitised the same way codec.js and player-profile.js do it,
   // because the id reaches an src attribute and it arrives over the wire.
+  //
+  // THREE SHAPES, matching codec.js:103 so the same id renders identically in
+  // both places:
+  //   data:...      used as is
+  //   item:<id>     the client item catalog, a data URI. Mr. Flesh IS one of
+  //                 these: his portrait is the Preserved Brain item art rather
+  //                 than a file in the portraits directory.
+  //   bare stem     the portraits directory
   function portraitSrc(id){
-    var clean = String(id || '').replace(/[^a-z0-9_]/gi, '');
+    var sid = String(id || '');
+    if (!sid) return null;
+    if (/^data:/.test(sid)) return sid;
+    var m = /^item:(.+)$/.exec(sid);
+    if (m) { var it = (window.ITEM_CATALOG_CLIENT || {})[m[1]]; return (it && it.img) || null; }
+    var clean = sid.replace(/[^a-z0-9_]/gi, '');
     return clean ? ('assets/portraits/' + clean + '.png') : null;
+  }
+
+  // Item art is low res pixel sprites. Upscaling them smoothly turns a brain in a
+  // jar into a smear, so they get nearest-neighbour. Portraits-dir images are
+  // full res and are left alone.
+  function isPixelArt(id){ return /^item:/.test(String(id || '')); }
+  function portraitStyle(id){
+    return isPixelArt(id) ? 'image-rendering:pixelated;image-rendering:crisp-edges;' : '';
+  }
+
+  // ITEM_CATALOG_CLIENT lives in the lazy-loaded inventory.js. If a post needs it
+  // and it is not loaded, pull it in and re-render once. Guarded by a flag so a
+  // room full of Mr. Flesh lines does not queue a load per message.
+  var _itemArtPending = false;
+  function ensureItemArt(){
+    if (window.ITEM_CATALOG_CLIENT || _itemArtPending || !window.lazyLoad) return;
+    _itemArtPending = true;
+    window.lazyLoad('assets/inventory.js', function(){ renderRooms(); renderTreasury(); });
   }
 
   function trunc(v, n){ v = String(v||''); return v.length > n ? v.slice(0, n-1) + '\u2026' : v; }
@@ -277,13 +308,14 @@
 
       // Face and identity on one row. The portrait is the fastest read on the
       // card, so it leads.
+      if (isPixelArt(v.portrait)) ensureItemArt();
       var psrc = portraitSrc(v.portrait);
       h += '<div style="display:flex;gap:11px;align-items:flex-start">';
       if (psrc) {
         h += '<div style="flex:0 0 auto;width:52px;height:52px;border-radius:50%;overflow:hidden;'
            + 'border:2px solid '+col+(v.regent?'55':'');
         h += ';background:#04070b">';
-        h += '<img src="'+esc(psrc)+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block;'
+        h += '<img src="'+esc(psrc)+'" alt="" style="'+portraitStyle(v.portrait)+'width:100%;height:100%;object-fit:cover;display:block;'
            + 'opacity:'+(v.regent?'0.62':'1')+'"/>';
         h += '</div>';
       }
@@ -778,6 +810,8 @@
       st.rooms[id] = d.posts || [];
       st.canPost[id] = !!d.canPost;
       if (d.gmRegents) st.gmRegents = d.gmRegents;
+      if (d.gmVoices)  st.gmVoices  = d.gmVoices;
+      if (d.proprietor) st.proprietor = d.proprietor;
       if (d.myFaction !== undefined) st.myFaction = d.myFaction;
       renderRooms(); scrollRoomToEnd(); if (cb) cb();
     }).catch(function(){});
@@ -803,6 +837,7 @@
   function postView(m){
     var col = speakerColor(m);
     var isDelegate = !!m.seat;
+    if (isPixelArt(m.portrait)) ensureItemArt();
     var psrc = portraitSrc(m.portrait);
     var t = new Date(m.ts);
     // The name is scaled by the SAME --chat-font-scale the main chat uses, so the
@@ -812,7 +847,7 @@
     if (psrc) {
       h += '<div style="flex:0 0 auto;width:30px;height:30px;border-radius:50%;overflow:hidden;'
          + 'border:'+(isDelegate?'2px solid '+col:'1px solid '+col+'88')+';background:#04070b">'
-         + '<img src="'+esc(psrc)+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block"/></div>';
+         + '<img src="'+esc(psrc)+'" alt="" style="'+portraitStyle(m.portrait)+'width:100%;height:100%;object-fit:cover;display:block"/></div>';
     } else {
       // No portrait picked. Render the speaker's initial in their faction colour
       // rather than an empty dashed ring, which reads as a broken avatar.
@@ -891,8 +926,16 @@
       h += '<div style="display:flex;gap:7px;padding:9px 13px 11px;border-top:1px solid '+CO.line+'">';
       // A GM addressing the floor picks which regent is speaking. The chair is
       // named on the control so nobody sends a line from the wrong mouth.
-      if (active === 'floor' && !st.mySeat && st.gmRegents && st.gmRegents.length) {
-        var opts = st.gmRegents.map(function(sd){
+      if (active === 'floor' && !st.mySeat && ((st.gmRegents && st.gmRegents.length) || st.proprietor)) {
+        var opts = '';
+        // The proprietor leads the list. He holds no chair, so he is always
+        // available and is the voice most likely to be wanted.
+        if (st.proprietor) {
+          opts += '<option value="'+esc(st.proprietor.id)+'"'
+               + (st.gmAsSeat===st.proprietor.id?' selected':'')
+               + '>as '+esc(st.proprietor.name)+' (house)</option>';
+        }
+        opts += (st.gmRegents || []).map(function(sd){
           var sv = null; st.seats.forEach(function(x){ if (x.seat === sd) sv = x; });
           return '<option value="'+sd+'"'+(st.gmAsSeat===sd?' selected':'')+'>as '+esc(sv?sv.holderName:sd)+'</option>';
         }).join('');

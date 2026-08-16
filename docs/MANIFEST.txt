@@ -1,4 +1,16 @@
-# FleshMarket v1.3.8.0 - MANIFEST
+# FleshMarket v1.3.8.1 - MANIFEST
+
+## 1.3.8.1 changes (Mr. Flesh takes the room; SERVER + CLIENT)
+- SERVER SIDE. RESTART REQUIRED. HARD REFRESH. Files touched: server/server.js, client/assets/council.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.
+- NO .env CHANGE. No new dependency. No schema change. No new art asset.
+- WHY THE BRAIN DID NOT RENDER: his portrait IS NOT A FILE. codec-data.js gives him 'item:jarred_brain', the Preserved Brain item art, a base64 data URI in ITEM_CATALOG_CLIENT. The chamber resolver only understood bare stems, stripped the colon, and built assets/portraits/itemjarred_brain.png. Resolver now handles ALL THREE shapes codec.js:103 does: data:, item:<id>, bare stem.
+- ITEM_CATALOG_CLIENT lives in LAZY-LOADED inventory.js. Chamber pulls it in on demand and re-renders once, GUARDED BY A FLAG so a room full of his lines does not queue one load per message.
+- ART IS 32x32. Renders image-rendering:pixelated. Smooth upscaling turns a brain in a jar into a smear. Portraits-dir images stay smooth; same split codec.js makes.
+- OWNER PINNED TO THE HOUSE: renders fleshstation gold (#ffce4d) + brain portrait in the chamber WHATEVER the players row says. syncDevAccounts sets faction='fleshstation' on promotion but only runs at boot from a .env NOT PRESENT ON THE VPS, so the row is unreliable and the proprietor showed as an unaligned nobody in his own chamber. DISPLAY PIN ONLY, the row is NOT written: it is a fact about who he is, not faction membership, and writing it would start paying him a faction colony bonus. Asserted in the suite.
+- PROPRIETOR VOICE added to the GM floor picker, listed FIRST (always available, not tied to a chair). A VOICE AND NOT A CHAIR: seat is null, CANNOT table/sign/decline/pull, does NOT appear in the seat roster. Giving the house a vote makes every other chair decorative.
+- councilPostView: an NPC persona takes its colour from the chair it speaks for; the ONLY seatless persona is the proprietor, who resolves to fleshstation.
+- Record unchanged in shape: author_id = real account, speaking_as = persona, author_id NEVER sent to clients.
+- TESTED, +19 ASSERTIONS: owner pinned over a NULL faction row, brain overriding his own picked portrait, players row NOT rewritten, voice offered only to the GM, normal player refused it, persona carries brain + npc flag + null seat, proprietor refused when tabling, no proprietor chair in the roster, typing indicator names him. 176 from 1.3.8.0 UNCHANGED.
 
 ## 1.3.8.0 changes (The Council Chamber; SERVER + CLIENT)
 - SERVER SIDE. RESTART REQUIRED. HARD REFRESH for the Store and Galactic tabs. Files touched: server/db_council.js (NEW), server/db.js, server/server.js, client/assets/council.js (NEW), client/assets/galaxy.js, client/assets/core.js, client/assets/market-state.js, client/assets/sound.js, client/index.html, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.

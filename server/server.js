@@ -6363,6 +6363,18 @@ for (const k of Object.keys(SEAT_TITLE)) SEAT_TITLE_BY_LABEL[SEAT_TITLE[k].title
 // shades a Syndicate fixer would, cyborg8 is machine rather than human because a
 // thing called Node 7 should not have a face, and corpo4's visor over a notary's
 // eyes is the joke the Guild deserves.
+// THE PROPRIETOR. Mr. Flesh does not hold a chair and should not: he owns the
+// building. This is a VOICE, not a seat. It can address the floor and it cannot
+// table, sign, decline or pull anything, because giving the house a vote would
+// make every other chair decorative.
+//
+// The portrait is the Preserved Brain item art, the same 'item:<id>' reference
+// the codec uses, resolved client side out of ITEM_CATALOG_CLIENT.
+const PROPRIETOR_VOICE = {
+  id: 'proprietor', name: 'Mr. Flesh', portrait: 'item:jarred_brain',
+  faction: 'fleshstation', color: '#ffce4d',
+};
+
 const SEAT_META = {
   coalition: { label: 'The Coalition',      color: '#4ecdc4', regent: 'Acting Administrator Pell', portrait: 'corpo6'  },
   syndicate: { label: 'The Syndicate',      color: '#ff2e63', regent: 'Syndicate Proxy Vasari',    portrait: 'corpo7'  },
@@ -7450,7 +7462,9 @@ function councilCanPost(player, room) {
     // is the same rule that governs tabling and signing.
     if (councilIsGM(player.id)) {
       const regents = COUNCIL_SEATS.filter(sd => seatView(sd).regent);
-      if (regents.length) return { ok: true, gmRegents: regents };
+      // The proprietor voice is always available to the GM, even when every chair
+      // is player held, because it is not a chair.
+      return { ok: true, gmRegents: regents, gmVoices: [PROPRIETOR_VOICE.id] };
     }
     return { ok: false, error: 'Only a seated delegate may speak on the floor.' };
   }
@@ -7486,12 +7500,28 @@ function councilPostView(r) {
   // NPC has no live account to resolve against.
   let portrait = r.portrait || null;
   let faction = null;
-  if (!r.speaking_as && r.author_id) {
+  if (r.speaking_as) {
+    // An NPC persona takes its colour from the chair it speaks for. The ONLY
+    // seatless persona is the proprietor, who is house rather than faction, so a
+    // seatless NPC resolves to fleshstation gold.
+    faction = r.seat || PROPRIETOR_VOICE.faction;
+  } else if (r.author_id) {
     try {
       const au = getPlayer(r.author_id);
       if (au) {
         if (au.portrait) portrait = au.portrait;
         faction = au.faction || null;
+      }
+      // THE OWNER IS THE HOUSE, WHATEVER THE PLAYERS ROW SAYS. syncDevAccounts
+      // sets faction='fleshstation' on promotion but only runs at boot from a
+      // .env that is not present on the VPS, so the row is unreliable and the
+      // proprietor was rendering as an unaligned nobody in his own chamber.
+      // Pinned here rather than patched into the row, because this is a display
+      // fact about who he is and not a claim about faction membership: he must
+      // not start collecting a faction's colony bonus for it.
+      if (isOwnerAccount(r.author_id)) {
+        faction  = PROPRIETOR_VOICE.faction;
+        portrait = PROPRIETOR_VOICE.portrait;
       }
     } catch(_) {}
   }
@@ -7521,6 +7551,8 @@ app.post('/api/council/room', (req, res) => {
     const write = p ? councilCanPost(p, rm) : { ok: false };
     res.json({ ok: true, room: rm, posts, canPost: !!write.ok,
                gmRegents: write.gmRegents || null,
+               gmVoices: write.gmVoices || null,
+               proprietor: write.gmVoices ? { id: PROPRIETOR_VOICE.id, name: PROPRIETOR_VOICE.name } : null,
                myFaction: p ? (() => { try { return getPlayerFaction(p.id); } catch(_) { return null; } })() : null });
   } catch(e) {
     console.error('[Council] room error:', e);
@@ -10152,16 +10184,23 @@ wss.on('connection',(ws,req)=>{
       if (room === 'floor') {
         if (perm.seat) {
           seat = perm.seat;
-        } else if (perm.gmRegents) {
-          const want = String(msg.asSeat || perm.gmRegents[0]);
-          if (!perm.gmRegents.includes(want)) {
+        } else if (perm.gmRegents || perm.gmVoices) {
+          const want = String(msg.asSeat || (perm.gmRegents && perm.gmRegents[0]) || PROPRIETOR_VOICE.id);
+          if (want === PROPRIETOR_VOICE.id) {
+            // Seatless on purpose. seat stays null so nothing downstream reads
+            // this as a delegate speaking for a faction.
+            speakingAs = PROPRIETOR_VOICE.name;
+            name = speakingAs;
+            portrait = PROPRIETOR_VOICE.portrait;
+          } else if ((perm.gmRegents || []).includes(want)) {
+            seat = want;
+            speakingAs = SEAT_META[want].regent;
+            name = speakingAs;
+            portrait = SEAT_META[want].portrait;
+          } else {
             ws.send(JSON.stringify({ type:'error', data:{ msg:'That chair is held by a player. You cannot speak for it.' } }));
             return;
           }
-          seat = want;
-          speakingAs = SEAT_META[want].regent;
-          name = speakingAs;
-          portrait = SEAT_META[want].portrait;
         }
       }
 
@@ -10195,10 +10234,11 @@ wss.on('connection',(ws,req)=>{
       const perm = councilCanPost(actor, room);
       if (!perm.ok) return;
       let who = actor.name, seat = perm.seat || null, npc = false;
-      if (room === 'floor' && !perm.seat && perm.gmRegents) {
-        const want = String(msg.asSeat || perm.gmRegents[0]);
-        if (!perm.gmRegents.includes(want)) return;
-        seat = want; who = SEAT_META[want].regent; npc = true;
+      if (room === 'floor' && !perm.seat && (perm.gmRegents || perm.gmVoices)) {
+        const want = String(msg.asSeat || (perm.gmRegents && perm.gmRegents[0]) || PROPRIETOR_VOICE.id);
+        if (want === PROPRIETOR_VOICE.id) { who = PROPRIETOR_VOICE.name; npc = true; seat = null; }
+        else if ((perm.gmRegents || []).includes(want)) { seat = want; who = SEAT_META[want].regent; npc = true; }
+        else return;
       }
       wss.clients.forEach(c => {
         if (c.readyState !== 1) return;
