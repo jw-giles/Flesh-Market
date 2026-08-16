@@ -774,6 +774,7 @@ window.storeSubTab=storeSubTab;
     <div class="galaxy-stab" data-gstab="shipping" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit" data-i18n="gstab.shipping">💀 Smuggling</div>
     <div class="galaxy-stab" data-gstab="contracts" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit" data-i18n="gstab.contracts">📋 Contracts</div>
     <div class="galaxy-stab" data-gstab="factions" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit" data-i18n="gstab.factions">◈ Factions</div>
+    <div class="galaxy-stab" data-gstab="council" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit" data-i18n="gstab.council">⬡ Council</div>
     <div class="galaxy-stab" data-gstab="cities" style="padding:7px 18px;font-size:.7rem;letter-spacing:.14em;cursor:pointer;border-bottom:2px solid transparent;color:#555;text-transform:uppercase;font-family:inherit" data-i18n="gstab.cities">🏙 Cities</div>
   </div>
   <!-- Map pane -->
@@ -852,6 +853,10 @@ window.storeSubTab=storeSubTab;
   <div id="gCitiesPane" style="display:none;padding:8px 10px;overflow:hidden;flex:1;min-height:0;
        font-family:'Share Tech Mono',ui-monospace,Menlo,Consolas,monospace;font-size:14px;line-height:1.45;color:#42ff7e">
     <div id="citiesTabInner" class="fmcity" style="height:100%"></div>
+  </div>
+  <!-- Council Chamber pane -->
+  <div id="gCouncilPane" style="display:none;padding:14px 16px;overflow-y:auto;flex:1;min-height:0">
+    <div id="gCouncilInner"></div>
   </div>
   <!-- Contracts pane -->
   <div id="gContractsPane" style="display:none;padding:14px 16px;overflow-y:auto;flex:1;min-height:0">
@@ -1905,6 +1910,9 @@ ws.addEventListener('message', function(ev){
       lazyLoad('assets/galaxy.js', function(){
         if(window.__galaxyOpen) window.__galaxyOpen();
       });
+      // Council Chamber rides in with the galaxy bundle. It is a view over
+      // colony_state, so it is never needed before the galactic tab is opened.
+      lazyLoad('assets/council.js');
     }
     if(tab === 'inventory') lazyLoad('assets/inventory.js');
     if(tab === 'store')     lazyLoad('assets/inventory.js');

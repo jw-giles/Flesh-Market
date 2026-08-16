@@ -187,6 +187,20 @@ import {
   tcgGetCardListing,
 } from './tcg/tcg-db.js';
 import { PACKS, rollPack, packPrice, packInfo } from './tcg/packs.js';
+import {
+  COUNCIL_SEATS, PURCHASABLE_SEATS,
+  getSeatRow, getAllSeatRows, setSeatHolder, clearSeatHolder, seatHeldBy,
+  createAccord, addClause, getAccord, getAccordClauses,
+  getOpenAccords, getRecentAccords, getExpiredOpenAccords, getOpenAccordsByProposer,
+  setAccordStatus, setCounterEscrow, markClauseExecuted,
+  setAccordPending, getDuePendingAccords, getAllPendingAccords,
+  createPendingSpend, getPendingSpend, getPendingSpendsFor,
+  getDuePendingSpends, setPendingSpendStatus,
+  logCouncil, getCouncilLog,
+  addCouncilPost, getCouncilPosts, pruneCouncilPosts,
+  getTreasury, getAllTreasuries, treasuryCredit, treasuryDebit, treasuryRefund,
+  logTreasury, getTreasuryLedger, getTreasuryContributors,
+} from './db_council.js';
 
 initDB();
 setupTransactions();
@@ -784,9 +798,22 @@ function _dtRemaining(pid) { return Math.max(0, DAY_TRADE_CAP - _dtGet(pid).roun
 function _dtResetAll() { _dtState.clear(); }
 
 // ─── President of The Coalition — singular contested title ────────────────────
-let president = null; // { id, name } or null
+let president = null; // { id, name, acquiredAt } or null
 const PRESIDENT_PASSIVE = 15_000;
 const PRESIDENT_COST    = 1_000_000_000;
+// PROTECTED TERM, added 1.4.1.0. Before this the Presidency could be taken the
+// instant somebody outbid it, which made the office a live readout of who had
+// the most cash rather than a position anyone held. It is now the longest term
+// in the game at seven days, because the Coalition chair is also one of the four
+// Council seats and a counterparty who can vanish mid negotiation is not worth
+// signing an Accord with.
+//
+// THE SIDE EFFECT, stated rather than discovered later: a protected term also
+// guarantees the holder the passive for its whole length. Seven days at
+// Ƒ15,000 per 30 minutes is a floor of Ƒ5,040,000 that nobody can interrupt,
+// and election market rallies become rarer because the office turns over less.
+// Both are accepted; the alternative is an office nobody can rely on.
+const PRESIDENT_TERM_MS = 7 * 24 * 60 * 60 * 1000;
 // Roll the gravity spawn reference every 6 hours so it tracks recent prices, not server-start prices
 const GRAVITY_REFERENCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 // 6-hour spawn re-home DISABLED (v1.1.6). Re-anchoring the gravity reference to the
@@ -2750,8 +2777,15 @@ try {
   if (savedPres && savedPres.id) {
     const presPlayer = getPlayer(savedPres.id);
     if (presPlayer) {
-      president = { id: presPlayer.id, name: presPlayer.name };
-      console.log(`[President] Restored: ${president.name}`);
+      // Backfill for databases written before 1.4.1.0, which stored no
+      // acquisition time. A missing stamp is treated as "acquired now", so the
+      // sitting holder gets one full protected term from the deploy rather than
+      // being instantly seizable or retroactively immune for a week they never
+      // served. This runs once; the stamp is persisted immediately.
+      const _acq = Number(savedPres.acquiredAt || 0) || Date.now();
+      president = { id: presPlayer.id, name: presPlayer.name, acquiredAt: _acq };
+      if (!savedPres.acquiredAt) { try { savePresidentState(president); } catch(_) {} }
+      console.log(`[President] Restored: ${president.name} (term ends ${new Date(_acq + PRESIDENT_TERM_MS).toISOString()})`);
     }
   }
 } catch(e) { console.error('[President restore]', e); }
@@ -5708,9 +5742,9 @@ app.post('/api/warehouses/set', (req, res) => {
         message: `The Guild will not rent to you on ${String(colonyId).replace(/_/g,' ')} for another `
                + `${fmtLockout(lockUntil - Date.now())} after your default.` });
     }
-    // The floor is in ƒ, matching the capacity it guards. Comparing a ƒ capacity
-    // against a UNIT count would let a player shelve ƒ366,000 of goods inside a
-    // ƒ1,100 lease, which is the whole meter defeated by a unit mismatch.
+    // The floor is in Ƒ, matching the capacity it guards. Comparing a Ƒ capacity
+    // against a UNIT count would let a player shelve Ƒ366,000 of goods inside a
+    // Ƒ1,100 lease, which is the whole meter defeated by a unit mismatch.
     const stored   = getCargoStoredValueAtColony(p.id, colonyId);
     const reserved = Math.max(0, Number(existing?.reserved || 0));
     const floor    = Math.ceil(stored + reserved);
@@ -5721,8 +5755,8 @@ app.post('/api/warehouses/set', (req, res) => {
     // player is told to sell down first instead.
     if (want < floor) {
       return res.status(400).json({ ok:false, error:'below_stored', floor, stored, reserved,
-        message: `Cannot shrink below what the shed is holding. ƒ${Math.floor(stored).toLocaleString()} on the shelf`
-               + (reserved > 0 ? ` and ƒ${Math.floor(reserved).toLocaleString()} in flight` : '')
+        message: `Cannot shrink below what the shed is holding. Ƒ${Math.floor(stored).toLocaleString()} on the shelf`
+               + (reserved > 0 ? ` and Ƒ${Math.floor(reserved).toLocaleString()} in flight` : '')
                + `. Sell down or ship out first.` });
     }
     // Arrears must be settled before a lease is enlarged, or a player in default
@@ -6083,22 +6117,30 @@ app.post('/api/cargo/ship', (req, res) => {
   } catch(e) { res.status(500).json({ ok:false, error:String(e) }); }
 });
 
-app.post('/api/galaxy/fund', (req, res) => {
-  try {
-    const { token, colonyId, factionId, amount } = req.body || {};
-    const p = token ? getPlayer(token) : null;
-    if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
-    const amt = Number(amount);
-    if (!amt || amt < 1000) return res.status(400).json({ ok: false, error: 'min_1000' });
-    if (p.cash < amt) return res.status(400).json({ ok: false, error: 'insufficient_funds' });
+// Colony funding, extracted from the /api/galaxy/fund route body in 1.4.0.0 so
+// the Council Chamber accord executor can call exactly the same code path. The
+// route below is now a thin auth wrapper around this. Nothing about the maths
+// changed in the extraction; if funding ever behaves differently through an
+// Accord than through the colony panel, that is a bug in the caller, not here.
+//
+// PRECONDITIONS, checked by the caller, not here: the player exists, holds the
+// cash, the colony exists and the faction is fundable. This function debits and
+// applies. It does not validate.
+//
+// `alreadyDebited` exists because an Accord escrows the credits at proposal or
+// signature time, hours before this runs. Passing true skips the debit and
+// applies the control shift only, so escrowed money is never taken twice.
+const FUNDABLE_FACTIONS = ['coalition','syndicate','void','guild'];
+
+function applyColonyFunding(p, colonyId, factionId, amt, alreadyDebited) {
     const colony = getColonyState(colonyId);
-    if (!colony) return res.status(404).json({ ok: false, error: 'colony_not_found' });
-    const VALID = ['coalition','syndicate','void','guild'];
-    if (!VALID.includes(factionId)) return res.status(400).json({ ok: false, error: 'invalid_faction' });
+    if (!colony) return { ok: false, error: 'colony_not_found' };
 
     // Deduct cash
-    p.cash = Math.round((p.cash - amt) * 100) / 100;
-    savePlayer(p);
+    if (!alreadyDebited) {
+      p.cash = Math.round((p.cash - amt) * 100) / 100;
+      savePlayer(p);
+    }
 
     // Record funding
     recordFactionFunding(p.id, colonyId, factionId, amt);
@@ -6112,6 +6154,7 @@ app.post('/api/galaxy/fund', (req, res) => {
     // costs warRate(book) = 4.42 x book^0.75 extra per control point, so the
     // take cost scales with what stands on the ground. This is the number
     // that keeps stripping at 1/20 a net loss for a raider at every book.
+    const VALID = FUNDABLE_FACTIONS;
     const WAR_FUND_BASE_PER_PCT = 10_000_000;
     const _cityWarBook = isCityColony(colonyId) ? cityBook(colonyId) : 0;
     const WAR_FUND_PER_PCT = WAR_FUND_BASE_PER_PCT + Math.round(warRate(_cityWarBook));
@@ -6205,14 +6248,1313 @@ app.post('/api/galaxy/fund', (req, res) => {
       broadcastToPlayer(p.id, { type:'portfolio', data: snapshotPortfolio(p) });
     } catch(_) {}
 
-    res.json({ ok: true, cash: p.cash, colonyId, factionId,
+    return { ok: true, cash: p.cash, colonyId, factionId,
       pctGained: actualBoost, pending: Math.round(pending), pctToNext: Math.round(pctToNext),
-      boost: actualBoost, newControl: ctrl });
+      boost: actualBoost, newControl: ctrl,
+      conquestFaction: conquestFaction || null, conquestTimer: conquestTimer || null };
+}
+
+app.post('/api/galaxy/fund', (req, res) => {
+  try {
+    const { token, colonyId, factionId, amount } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
+    const amt = Number(amount);
+    if (!amt || amt < 1000) return res.status(400).json({ ok: false, error: 'min_1000' });
+    if (p.cash < amt) return res.status(400).json({ ok: false, error: 'insufficient_funds' });
+    if (!FUNDABLE_FACTIONS.includes(factionId)) return res.status(400).json({ ok: false, error: 'invalid_faction' });
+    const out = applyColonyFunding(p, colonyId, factionId, amt, false);
+    if (!out.ok) return res.status(404).json(out);
+    res.json(out);
   } catch(e) {
     console.error('[Galaxy] fund error:', e);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COUNCIL CHAMBER (1.4.0.0)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Four chairs. One Accord primitive. The Accord is the feature; the chamber is a
+// view over it.
+//
+// THE CHAIRS.
+//   coalition  The existing Presidency. NOT a new title and NOT separately for
+//              sale. Resolved live from `president`, so there is exactly one
+//              source of truth for who sits there and buy_president stays the
+//              only way in. Cost is unchanged at PRESIDENT_COST.
+//   syndicate  Purchasable, SEAT_COST.
+//   void       Purchasable, SEAT_COST. Buying it requires you to ALREADY be Void
+//              aligned, which means you already took the permanent cybernetic
+//              conversion through /api/faction/join. The seat does not grant a
+//              second route into the faction and therefore cannot be used to
+//              dodge the 30 day allegiance lock.
+//   guild      NEVER purchasable. The Guild is the notary and the house. A house
+//              that can be bought is not a house, and the Guild holding
+//              territory it can conquer while sitting outside the negotiating
+//              room would make it the one bloc nobody can bargain with.
+//
+// WHAT A SEAT GRANTS: authority, not income. The right to propose an Accord and
+// the right to sign one. No passive. A second Ƒ15k/30min faucet next to the
+// Presidency would just be a worse copy of a title that already exists.
+//
+// TERM PROTECTION. Unlike the Presidency, a council seat cannot be taken within
+// SEAT_TERM_MS of being acquired. Buy-to-oust with no cooldown turns an office
+// into a live readout of who has the most cash, which is not politics. A
+// guaranteed term is what makes a counterparty worth signing with: you need to
+// believe the person across the table will still be there tomorrow.
+//
+// REGENTS. A vacant chair is held by an NPC regent, so the chamber has four
+// occupied seats from the first boot instead of being an empty graphic until
+// somebody spends half a billion credits. Regents are operated by the GM: a dev
+// or owner account may propose and sign on behalf of any REGENT HELD seat, and
+// on behalf of no other. This is deliberate. An NPC that auto accepts would need
+// an acceptance policy nobody has written yet, and one that auto declines makes
+// the chamber dead until two chairs sell.
+//
+// BONDED vs RIDER, the thing that must never blur. An Accord carries typed
+// clauses the server executes, and an optional free text rider it stores and
+// never reads. The rider is the good part: broken riders are public, permanent,
+// on the record betrayals. But the composer, the ledger and the signature panel
+// must all say which is which, because the day a player signs an unenforceable
+// clause believing the server was holding it, the guarantee is dead and it does
+// not come back. See the header of db_council.js for why v1 has exactly one
+// bonded clause kind and why it is not a cash transfer.
+
+const SEAT_COST      = 500_000_000;
+const SEAT_TERM_MS   = 72 * 60 * 60 * 1000;   // 72h before an occupied chair can be taken
+const NOTARY_RATE    = 0.02;                  // Guild cut on escrow, burned, not paid to anyone
+const ACCORD_MIN_MS  = 6  * 60 * 60 * 1000;
+const ACCORD_MAX_MS  = 168 * 60 * 60 * 1000;  // 7 days
+const ACCORD_DEF_MS  = 48 * 60 * 60 * 1000;
+const CLAUSE_MIN     = 1_000;                 // matches the colony panel funding floor
+const CLAUSES_PER_SIDE_MAX = 4;
+
+// THE CHAIR IS THE TITLE. Each purchasable seat has a Legendary title that is
+// granted on acquisition and stripped on loss, and it is the title a player
+// actually sees: in the Title Market rack beside the Presidency, on their name
+// plate, and in the colour their chat renders in.
+//
+// WHICH ONE IS AUTHORITATIVE, because two stores that can disagree is a bug
+// factory. council_seats is, for one reason: it carries acquired_at and a title
+// has no timestamp, so protected terms cannot live in ownedTitles. The title is
+// a strict MIRROR, written on grant and cleared on loss. This is exactly the
+// relationship the Presidency already has: `president` is the truth and
+// actor.title follows it. buildAvailableTitles re-derives both from the seat
+// state rather than trusting ownedTitles, so a drifted row self corrects.
+//
+// COLOURS ARE CHOSEN AGAINST THE EXISTING CHAT CHAIN, NOT AGAINST THE FACTION
+// PALETTE. The obvious picks were the faction colours, #e74c3c and #9b59b6, and
+// both are already taken: #e74c3c is the escaped-cyborg Syndicate colour and
+// #9b59b6 is the plain cyborg colour. A delegate rendering in either would be
+// telling every reader the wrong thing about who they are.
+const SEAT_TITLE = {
+  syndicate: { title: 'Overseer of The Syndicate',      color: '#ff2e63' },
+  void:      { title: 'Prime Node of The Void Collective', color: '#c77dff' },
+};
+const SEAT_TITLE_BY_LABEL = {};
+for (const k of Object.keys(SEAT_TITLE)) SEAT_TITLE_BY_LABEL[SEAT_TITLE[k].title] = { seat: k, color: SEAT_TITLE[k].color };
+
+// Regent portraits are drawn from the same portrait set players pick from, so a
+// regent and a seated player render identically in the chamber and nothing about
+// the room says "this one is real and that one is furniture". Picked for read at
+// 44px rather than for detail: corpo6 is a worn administrator, corpo7 wears the
+// shades a Syndicate fixer would, cyborg8 is machine rather than human because a
+// thing called Node 7 should not have a face, and corpo4's visor over a notary's
+// eyes is the joke the Guild deserves.
+const SEAT_META = {
+  coalition: { label: 'The Coalition',      color: '#4ecdc4', regent: 'Acting Administrator Pell', portrait: 'corpo6'  },
+  syndicate: { label: 'The Syndicate',      color: '#ff2e63', regent: 'Syndicate Proxy Vasari',    portrait: 'corpo7'  },
+  void:      { label: 'The Void Collective',color: '#c77dff', regent: 'Void Proxy Node 7',         portrait: 'cyborg8' },
+  guild:     { label: 'Merchant Guild',     color: '#42ff7e', regent: 'Guild Notary Ostrow',       portrait: 'corpo4'  },
+};
+
+// The colour a seated delegate's chat renders in, or null. Read by the chat,
+// whisper and portfolio colour chains so all three agree.
+function councilSeatChatColor(playerId) {
+  try {
+    const seat = seatHeldBy(playerId);
+    return seat && SEAT_TITLE[seat] ? SEAT_TITLE[seat].color : null;
+  } catch(_) { return null; }
+}
+
+function grantSeatTitle(player, seat) {
+  const t = SEAT_TITLE[seat]; if (!t || !player) return;
+  player.ownedTitles = player.ownedTitles || [];
+  if (!player.ownedTitles.includes(t.title)) player.ownedTitles.push(t.title);
+  player.title = t.title;
+  savePlayer(player);
+}
+
+// Stripped on loss, same as the Presidency. The title IS the office, so keeping
+// it after the chair is gone would put two Overseers of The Syndicate in chat.
+function stripSeatTitle(player, seat) {
+  const t = SEAT_TITLE[seat]; if (!t || !player) return;
+  player.ownedTitles = (player.ownedTitles || []).filter(x => x !== t.title);
+  if (player.title === t.title) player.title = '';
+  savePlayer(player);
+}
+
+function councilIsGM(playerId) {
+  try { return !!(isOwnerAccount(playerId) || isDevAccount(playerId) || isAdminAccount(playerId)); }
+  catch(_) { return false; }
+}
+
+// One resolved chair. holderId null means the regent has it.
+function seatView(seatId) {
+  const meta = SEAT_META[seatId];
+  if (seatId === 'coalition') {
+    const _pAcq = president ? Number(president.acquiredAt || 0) : 0;
+    const _pPortrait = (() => {
+      if (!president) return meta.portrait;
+      try { const pp = getPlayer(president.id); return (pp && pp.portrait) || meta.portrait; } catch(_) { return meta.portrait; }
+    })();
+    return { seat: seatId, label: meta.label, color: meta.color,
+             holderId: president ? president.id : null,
+             holderName: president ? president.name : meta.regent,
+             portrait: _pPortrait,
+             regent: !president, regentName: meta.regent,
+             purchasable: false, cost: PRESIDENT_COST,
+             title: 'President of The Coalition',
+             acquiredAt: _pAcq,
+             termEndsAt: _pAcq ? (_pAcq + PRESIDENT_TERM_MS) : 0,
+             termMs: PRESIDENT_TERM_MS,
+             note: 'Seven day protected term, the longest in the chamber.' };
+  }
+  if (seatId === 'guild') {
+    return { seat: seatId, label: meta.label, color: meta.color,
+             holderId: null, holderName: meta.regent,
+             portrait: meta.portrait,
+             regent: true, regentName: meta.regent,
+             purchasable: false, cost: 0, acquiredAt: 0, termEndsAt: 0, termMs: 0, title: null,
+             note: 'The Guild notarises. The Guild does not sell its chair.' };
+  }
+  const row = getSeatRow(seatId);
+  const held = !!(row && row.holder_id);
+  // A seated player shows their OWN portrait. Falling back to the regent's when
+  // they have not picked one keeps every chair occupied by a face rather than
+  // leaving one empty socket in the middle of the room.
+  const portrait = (() => {
+    if (!held) return meta.portrait;
+    try { const hp = getPlayer(row.holder_id); return (hp && hp.portrait) || meta.portrait; } catch(_) { return meta.portrait; }
+  })();
+  return { seat: seatId, label: meta.label, color: meta.color,
+           holderId: held ? row.holder_id : null,
+           holderName: held ? row.holder_name : meta.regent,
+           portrait,
+           regent: !held, regentName: meta.regent,
+           purchasable: true, cost: SEAT_COST,
+           acquiredAt: held ? row.acquired_at : 0,
+           termEndsAt: held ? (row.acquired_at + SEAT_TERM_MS) : 0,
+           termMs: SEAT_TERM_MS,
+           title: SEAT_TITLE[seatId] ? SEAT_TITLE[seatId].title : null,
+           note: null };
+}
+
+function councilSeatViews() { return COUNCIL_SEATS.map(seatView); }
+
+// Which chair this player occupies, if any. Checked before a purchase so nobody
+// can hold two chairs and sign an Accord with themselves.
+function councilSeatOf(playerId) {
+  if (president && president.id === playerId) return 'coalition';
+  try { return seatHeldBy(playerId); } catch(_) { return null; }
+}
+
+// May this player speak and sign for this chair right now? Either they hold it,
+// or it is regent held and they are the GM.
+function canActForSeat(playerId, seatId) {
+  const v = seatView(seatId);
+  if (v.holderId && v.holderId === playerId) return true;
+  if (v.regent && councilIsGM(playerId)) return true;
+  return false;
+}
+
+function accordView(row, viewerId) {
+  const clauses = getAccordClauses(row.id);
+  const shape = (side) => clauses.filter(c => c.side === side).map(c => ({
+    id: c.id, kind: c.kind, colonyId: c.colony_id, factionId: c.faction_id,
+    amount: c.amount, executed: !!c.executed, result: c.result || null,
+  }));
+  return {
+    id: row.id, title: row.title, status: row.status,
+    proposerSeat: row.proposer_seat, proposerName: row.proposer_name,
+    counterSeat: row.counter_seat,
+    createdAt: row.created_at, expiresAt: row.expires_at,
+    executesAt: row.executes_at || null,
+    resolvedAt: row.resolved_at || null, resolvedByName: row.resolved_by_name || null,
+    escrowProposer: row.escrow_proposer, escrowCounter: row.escrow_counter,
+    notaryProposer: row.notary_proposer, notaryCounter: row.notary_counter,
+    rider: row.rider || null,
+    bonded: { proposer: shape('proposer'), counter: shape('counter') },
+    canSign: !!(viewerId && row.status === 'open' && canActForSeat(viewerId, row.counter_seat)),
+    canWithdraw: !!(viewerId && row.status === 'open' && row.proposer_id === viewerId),
+    ceding: row.status === 'pending' ? accordCedingFactions(row, clauses) : [],
+    canCancel: !!(viewerId && row.status === 'pending'
+                  && canCancelPending(viewerId, accordCedingFactions(row, clauses))),
+  };
+}
+
+function councilSnapshot(viewerId) {
+  const seats = councilSeatViews();
+  const accords = getRecentAccords(40).map(r => accordView(r, viewerId));
+  // The colony list is served from here rather than read out of galaxy.js:
+  // that file is IIFE wrapped, so COLONY_META is not reachable from another
+  // script, and the chamber must not depend on a private scope it cannot see.
+  // Names stay client side (they are display strings and already localised);
+  // this ships the authoritative id set and who currently holds each one.
+  let colonies = [];
+  try {
+    colonies = getAllColonyStates()
+      .filter(c => c.id !== 'flesh_station')
+      .map(c => ({ id: c.id, faction: c.faction }));
+  } catch(_) {}
+  return {
+    seats, accords, colonies,
+    log: getCouncilLog(40).map(l => ({ ts: l.ts, event: l.event, actor: l.actor_name,
+                                       seat: l.seat_id, accordId: l.accord_id, detail: l.detail })),
+    mySeat: viewerId ? councilSeatOf(viewerId) : null,
+    // Shipped in the state payload rather than discovered from the room endpoint,
+    // because the client needs to know which faction room to open BEFORE it opens
+    // one, and asking the room which room to ask for is circular.
+    myFaction: viewerId ? (() => { try { return getPlayerFaction(viewerId); } catch(_) { return null; } })() : null,
+    isGM: viewerId ? councilIsGM(viewerId) : false,
+    cfg: { seatCost: SEAT_COST, notaryRate: NOTARY_RATE, clauseMin: CLAUSE_MIN,
+           clausesPerSide: CLAUSES_PER_SIDE_MAX, termMs: SEAT_TERM_MS,
+           presidentTermMs: PRESIDENT_TERM_MS, presidentCost: PRESIDENT_COST,
+           minMs: ACCORD_MIN_MS, maxMs: ACCORD_MAX_MS, defMs: ACCORD_DEF_MS },
+  };
+}
+
+function broadcastCouncil() {
+  try { broadcast({ type: 'council_dirty', data: { t: Date.now() } }); } catch(_) {}
+}
+
+// Validate and price one side's clause list. Returns { ok, clauses, escrow } or
+// { ok:false, error }. Nothing is written and no cash moves here.
+function parseClauses(raw) {
+  if (!Array.isArray(raw)) return { ok: false, error: 'clauses_not_array' };
+  if (raw.length > CLAUSES_PER_SIDE_MAX) return { ok: false, error: 'too_many_clauses' };
+  const out = [];
+  let escrow = 0;
+  for (const c of raw) {
+    const kind = String(c && c.kind || '');
+    if (kind !== 'fund_colony') return { ok: false, error: 'unknown_clause_kind' };
+    const colonyId  = String(c.colonyId || '');
+    const factionId = String(c.factionId || '');
+    const amount    = Math.floor(Number(c.amount) || 0);
+    if (!getColonyState(colonyId)) return { ok: false, error: 'colony_not_found' };
+    if (!FUNDABLE_FACTIONS.includes(factionId)) return { ok: false, error: 'invalid_faction' };
+    if (amount < CLAUSE_MIN) return { ok: false, error: 'clause_below_min' };
+    out.push({ kind, colonyId, factionId, amount });
+    escrow += amount;
+  }
+  return { ok: true, clauses: out, escrow };
+}
+
+// ─── Council: read ────────────────────────────────────────────────────────────
+app.post('/api/council/state', (req, res) => {
+  try {
+    const { token } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    res.json({ ok: true, ...councilSnapshot(p ? p.id : null) });
+  } catch(e) {
+    console.error('[Council] state error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── Council: buy a chair ─────────────────────────────────────────────────────
+app.post('/api/council/seat/buy', (req, res) => {
+  try {
+    const { token, seatId } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
+    const seat = String(seatId || '');
+    if (!PURCHASABLE_SEATS.includes(seat)) {
+      return res.status(400).json({ ok: false, error: 'not_purchasable',
+        msg: seat === 'coalition'
+          ? 'The Coalition chair is the Presidency. Seize it from the title market, not the chamber.'
+          : 'The Guild does not sell its chair.' });
+    }
+
+    // One chair per person. Two chairs means one person signing both sides.
+    const already = councilSeatOf(p.id);
+    if (already === seat) return res.status(400).json({ ok: false, error: 'already_seated' });
+    if (already) return res.status(403).json({ ok: false, error: 'holds_other_seat',
+      msg: `You already hold the ${SEAT_META[already].label} chair. Nobody sits twice in this room.` });
+
+    // Allegiance gate. The seat is not a second route into a faction, so it can
+    // never be used to sidestep the 30 day switch lock or to acquire Void
+    // membership without the permanent conversion.
+    const myFaction = (() => { try { return getPlayerFaction(p.id); } catch(_) { return null; } })();
+    if (myFaction !== seat) {
+      return res.status(403).json({ ok: false, error: 'wrong_allegiance',
+        msg: `Only a ${SEAT_META[seat].label} member may take that chair. Align first, on the Factions panel.` });
+    }
+
+    if (p.cash < SEAT_COST) {
+      return res.status(400).json({ ok: false, error: 'insufficient_funds',
+        msg: `The chair costs Ƒ${SEAT_COST.toLocaleString()}.` });
+    }
+
+    const row = getSeatRow(seat);
+    const occupied = !!(row && row.holder_id);
+    if (occupied) {
+      const termLeft = (row.acquired_at + SEAT_TERM_MS) - Date.now();
+      if (termLeft > 0) {
+        const hrs = Math.ceil(termLeft / 3600000);
+        return res.status(403).json({ ok: false, error: 'term_protected',
+          msg: `${row.holder_name} is ${hrs}h into a protected term. The chair cannot be taken yet.` });
+      }
+    }
+
+    safeAddCash(p, -SEAT_COST);
+    savePlayer(p);
+
+    // Ousting. The previous holder keeps nothing, but their money is their money:
+    // any Accord they proposed is withdrawn and their escrow is refunded in full,
+    // including the notary fee, because the Guild does not keep a fee on a deal it
+    // never notarised. The RIGHT TO SIGN follows the chair; the ESCROW follows the
+    // person. Accords addressed TO this chair stay open, so the incoming holder
+    // inherits every obligation aimed at the office. That inheritance is the point:
+    // taking an indebted chair should be a real risk.
+    if (occupied) {
+      // ORDER IS LOAD BEARING AND THIS WAS A REAL BUG. refundProposerAccords
+      // fetches its OWN player row, credits it and saves. Any player object read
+      // BEFORE that call is stale by exactly the refund, so saving it afterwards
+      // silently reverses the credit. Caught by the escrow conservation assertion
+      // in the harness, which is the only reason it was not shipped. Re-read the
+      // row after the refund and mutate that one.
+      const refunded = refundProposerAccords(row.holder_id, 'seat_lost');
+      const prev = getPlayer(row.holder_id);
+      if (prev) {
+        stripSeatTitle(prev, seat);
+        broadcastToPlayer(prev.id, { type: 'council_seat_lost', data: { seat, by: p.name, refunded } });
+        broadcastToPlayer(prev.id, { type: 'title_updated', data: { title: prev.title, owned: prev.ownedTitles } });
+        broadcastToPlayer(prev.id, { type: 'portfolio', data: snapshotPortfolio(getPlayer(prev.id)) });
+      }
+      logCouncil('seat_taken', { seatId: seat, actorName: p.name, detail: `from ${row.holder_name}` });
+      pushHeadline(`⬢ ${p.name} TAKES THE ${SEAT_META[seat].label.toUpperCase()} CHAIR FROM ${String(row.holder_name).toUpperCase()}`, 'bad', null);
+    } else {
+      logCouncil('seat_claimed', { seatId: seat, actorName: p.name, detail: 'from regent' });
+      pushHeadline(`⬢ ${p.name} CLAIMS THE ${SEAT_META[seat].label.toUpperCase()} CHAIR IN COUNCIL`, 'good', null);
+    }
+
+    setSeatHolder(seat, p.id, p.name, SEAT_COST);
+    grantSeatTitle(p, seat);
+    ws_broadcastTitle(p);
+    broadcast({ type: 'chat', data: { id: uuidv4(), t: Date.now(), user: 'SYSTEM',
+      text: `⬢ ${p.name} is seated for ${SEAT_META[seat].label} in the Council Chamber.`,
+      badge: '⬢', color: SEAT_META[seat].color } });
+    broadcastCouncil();
+    res.json({ ok: true, seat, cash: p.cash, seats: councilSeatViews() });
+  } catch(e) {
+    console.error('[Council] seat buy error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+function ws_broadcastTitle(player) {
+  try {
+    broadcastToPlayer(player.id, { type: 'title_updated', data: { title: player.title, owned: player.ownedTitles } });
+    broadcastToPlayer(player.id, { type: 'portfolio', data: snapshotPortfolio(player) });
+  } catch(_) {}
+}
+
+// THE SINGLE REFUND ROUTER. Every path that returns escrow goes through this,
+// because there are four of them (decline, withdraw, expiry sweep, seat loss) and
+// four independent implementations is four chances to send treasury credits into
+// a personal wallet. Doing that once turns the treasury into a withdraw button
+// and every alt-farming defence in the codebase gets routed around it.
+//
+// Money goes back where it came from. payer_proposer / payer_counter record that
+// at escrow time precisely so this function can read it rather than guess.
+function refundAccordSide(accord, side) {
+  const escrow = Number(side === 'proposer' ? accord.escrow_proposer : accord.escrow_counter) || 0;
+  const notary = Number(side === 'proposer' ? accord.notary_proposer : accord.notary_counter) || 0;
+  const back   = escrow + notary;
+  if (back <= 0) return { amount: 0, to: 'none' };
+  const payer  = String(side === 'proposer' ? (accord.payer_proposer || 'self') : (accord.payer_counter || 'self'));
+  const seat   = side === 'proposer' ? accord.proposer_seat : accord.counter_seat;
+
+  if (payer === 'treasury') {
+    treasuryRefund(seat, back);
+    try {
+      logTreasury(seat, 'accord_refund', back, { detail: `${accord.id} ${accord.status || 'closed'}` });
+      broadcast({ type: 'treasury_dirty', data: { faction: seat } });
+    } catch(_) {}
+    return { amount: back, to: 'treasury', faction: seat };
+  }
+
+  // Which person paid this side. counter_id is written at signature time
+  // precisely so a pending Accord that never executes can find its way home.
+  const ownerId = side === 'proposer' ? accord.proposer_id : accord.counter_id;
+  const owner = ownerId ? getPlayer(ownerId) : null;
+  if (owner) {
+    safeAddCash(owner, back); savePlayer(owner);
+    try { broadcastToPlayer(owner.id, { type: 'portfolio', data: snapshotPortfolio(getPlayer(owner.id)) }); } catch(_) {}
+    return { amount: back, to: 'player', playerId: owner.id };
+  }
+  return { amount: back, to: 'unresolved' };
+}
+
+// Withdraw and refund every open Accord a given player proposed. Returns a count.
+function refundProposerAccords(playerId, reason) {
+  let n = 0;
+  try {
+    for (const a of getOpenAccordsByProposer(playerId)) {
+      const r = refundAccordSide(a, 'proposer');
+      const back = r.amount;
+      setAccordStatus(a.id, reason === 'expired' ? 'expired' : 'withdrawn', null, null);
+      logCouncil(reason === 'expired' ? 'accord_expired' : 'accord_withdrawn',
+        { accordId: a.id, seatId: a.proposer_seat, actorName: a.proposer_name,
+          detail: `refunded Ƒ${Math.floor(back).toLocaleString()} (${reason})` });
+      n++;
+    }
+  } catch(e) { console.error('[Council] refund sweep:', e); }
+  return n;
+}
+
+// ─── Council: propose an Accord ───────────────────────────────────────────────
+app.post('/api/council/accord/propose', (req, res) => {
+  try {
+    const { token, counterSeat, title, rider, expiresInMs } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
+
+    const mySeat = councilSeatOf(p.id);
+    // The GM may table an Accord from any regent held chair. A seated player may
+    // only table from their own.
+    const fromSeat = String(req.body.fromSeat || mySeat || '');
+    if (!COUNCIL_SEATS.includes(fromSeat) || !canActForSeat(p.id, fromSeat)) {
+      return res.status(403).json({ ok: false, error: 'no_seat',
+        msg: 'Only a seated delegate may table an Accord.' });
+    }
+    const toSeat = String(counterSeat || '');
+    if (!COUNCIL_SEATS.includes(toSeat)) return res.status(400).json({ ok: false, error: 'bad_counter_seat' });
+    if (toSeat === fromSeat) return res.status(400).json({ ok: false, error: 'self_accord',
+      msg: 'A chair cannot treat with itself.' });
+
+    const ttl = Math.min(ACCORD_MAX_MS, Math.max(ACCORD_MIN_MS, Number(expiresInMs) || ACCORD_DEF_MS));
+    const t = String(title || '').trim().slice(0, 90);
+    if (!t) return res.status(400).json({ ok: false, error: 'no_title' });
+
+    const mine  = parseClauses(req.body.myClauses);
+    if (!mine.ok) return res.status(400).json({ ok: false, error: mine.error });
+    const theirs = parseClauses(req.body.theirClauses);
+    if (!theirs.ok) return res.status(400).json({ ok: false, error: theirs.error });
+
+    // An Accord with nothing bonded on either side is a promise, and promises do
+    // not need a contract table. Say so plainly rather than storing an empty one.
+    if (mine.clauses.length + theirs.clauses.length === 0) {
+      return res.status(400).json({ ok: false, error: 'no_bonded_clause',
+        msg: 'An Accord needs at least one bonded clause. With only a rider, this is a message, not a contract. Say it in the chamber floor instead.' });
+    }
+
+    const notary = Math.ceil(mine.escrow * NOTARY_RATE);
+    const due    = mine.escrow + notary;
+
+    // PAYER. 'treasury' is only available to the seated leader of the faction
+    // whose chair is tabling, and only for that faction's own pot. A leader
+    // cannot spend a rival's treasury and cannot spend their own faction's pot
+    // from a chair they do not hold.
+    const wantTreasury = String(req.body.payer || 'self') === 'treasury';
+    let payerProposer = 'self';
+    if (wantTreasury) {
+      if (!treasuryFactions().includes(fromSeat) || !isFactionLeader(p.id, fromSeat)) {
+        return res.status(403).json({ ok: false, error: 'not_leader',
+          msg: 'Only the seated leader may commit the treasury.' });
+      }
+      if (!treasuryDebit(fromSeat, due)) {
+        return res.status(400).json({ ok: false, error: 'insufficient_treasury',
+          msg: `Tabling this escrows ${fmtF(mine.escrow)} plus a ${fmtF(notary)} notary fee. The treasury holds ${fmtF(getTreasury(fromSeat).balance)}.` });
+      }
+      payerProposer = 'treasury';
+      logTreasury(fromSeat, 'accord_escrow', -due, { actorId: p.id, actorName: p.name,
+        detail: `tabled against ${toSeat}` });
+    } else {
+      if (p.cash < due) {
+        return res.status(400).json({ ok: false, error: 'insufficient_funds',
+          msg: `Tabling this Accord escrows Ƒ${mine.escrow.toLocaleString()} plus a Ƒ${notary.toLocaleString()} Guild notary fee. You need Ƒ${due.toLocaleString()}.` });
+      }
+      // Escrow now. The proposer's obligations are held by the Guild from this
+      // moment, which is what makes the offer credible to read.
+      safeAddCash(p, -due);
+      savePlayer(p);
+    }
+
+    const id = 'AC' + Math.random().toString(36).slice(2, 10).toUpperCase();
+    const now = Date.now();
+    createAccord({ id, proposerSeat: fromSeat, proposerId: p.id, proposerName: p.name,
+      counterSeat: toSeat, title: t, createdAt: now, expiresAt: now + ttl,
+      escrowProposer: mine.escrow, notaryProposer: notary,
+      payerProposer,
+      rider: String(rider || '').trim().slice(0, 600) || null });
+    for (const c of mine.clauses)   addClause(id, 'proposer', c);
+    for (const c of theirs.clauses) addClause(id, 'counter',  c);
+
+    logCouncil('accord_tabled', { accordId: id, seatId: fromSeat, actorName: p.name,
+      detail: `to ${toSeat}, escrow Ƒ${Math.floor(mine.escrow).toLocaleString()}` });
+    pushHeadline(`⬡ ${SEAT_META[fromSeat].label.toUpperCase()} TABLES AN ACCORD BEFORE ${SEAT_META[toSeat].label.toUpperCase()}`, 'neutral', null);
+    broadcast({ type: 'chat', data: { id: uuidv4(), t: now, user: 'SYSTEM',
+      text: `⬡ Accord ${id} tabled in Council: ${SEAT_META[fromSeat].label} to ${SEAT_META[toSeat].label}. "${t}"`,
+      badge: '⬡', color: '#ffce4d' } });
+    broadcastCouncil();
+    if (payerProposer === 'treasury') {
+      announceTreasury(fromSeat, `${p.name} committed ${fmtF(due)} of treasury funds to Accord ${id} against ${toSeat}.`, true);
+      broadcast({ type: 'treasury_dirty', data: { faction: fromSeat } });
+    }
+    broadcastToPlayer(p.id, { type: 'portfolio', data: snapshotPortfolio(p) });
+    res.json({ ok: true, id, cash: p.cash, escrow: mine.escrow, notary, payer: payerProposer });
+  } catch(e) {
+    console.error('[Council] propose error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── Announce then execute ────────────────────────────────────────────────────
+//
+// WHAT IS ACTUALLY IRREVERSIBLE, and it is narrower than "a big Accord". A leader
+// spending their own money on a bad deal hurts only them, and a treasury spend on
+// their OWN faction's control is waste at worst: the credits are gone but the
+// ground is theirs. The case that needs a brake is the one where a leader spends
+// the FACTION'S money to put ground in somebody else's hands. That is the only
+// combination where members are harmed by a decision they did not make and cannot
+// undo.
+//
+// So the rule is exactly that pair: PAID FROM A TREASURY, AND FUNDING A FACTION
+// THAT IS NOT THAT TREASURY'S OWN. Everything else still executes on signature,
+// which keeps routine diplomacy instant.
+//
+// WHY A WINDOW AND NOT A VOTE. Quorum in a faction with a dozen active players is
+// a feature that dies quietly, and it would mean building a voting UI nobody
+// reaches. A countdown needs no quorum and no new system, and the answer to "our
+// leader is about to hand Gluttonis to the Void" becomes: argue in the faction
+// room, lobby the other chairs on the floor, or if their 72 hour term has lapsed,
+// buy the chair out from under them before the clock runs out. That is politics
+// resolving politics, using only parts that already exist.
+// Named for the CONDITION, not for the Accord. Gating the window on the accord
+// SHAPE rather than on "treasury credits funding a faction that is not that
+// treasury's own" is precisely what left the direct spend route uncovered.
+const CEDE_DELAY_MS = 12 * 60 * 60 * 1000;
+
+// Returns the list of factions whose treasuries are ceding ground under this
+// Accord, or an empty array if none are.
+function accordCedingFactions(accord, clauses) {
+  const out = [];
+  for (const c of clauses) {
+    const side  = c.side === 'proposer' ? 'proposer' : 'counter';
+    const payer = String(side === 'proposer' ? (accord.payer_proposer || 'self') : (accord.payer_counter || 'self'));
+    if (payer !== 'treasury') continue;
+    const seat = side === 'proposer' ? accord.proposer_seat : accord.counter_seat;
+    if (c.faction_id !== seat && !out.includes(seat)) out.push(seat);
+  }
+  return out;
+}
+
+// May this player pull a pending Accord? The seated leader of a faction whose
+// treasury is ceding under it. Deliberately NOT the counterparty: they agreed,
+// and the window exists to protect a faction from its own chair rather than to
+// give either signatory a free option to walk.
+//
+// The right follows the CHAIR, not the person who signed. Taking the chair
+// during the window is the whole point of having a window.
+function canCancelPending(playerId, cedingFactions) {
+  const seat = councilSeatOf(playerId);
+  return !!(seat && cedingFactions.includes(seat));
+}
+
+function executeAccordClauses(a, clauses, signer) {
+  const proposer = a.proposer_id ? getPlayer(a.proposer_id) : null;
+  const results = [];
+  for (const c of clauses) {
+    const actor = c.side === 'proposer' ? proposer : signer;
+    if (!actor) { markClauseExecuted(c.id, 'skipped: no actor'); continue; }
+    const out = applyColonyFunding(actor, c.colony_id, c.faction_id, Number(c.amount), true);
+    const line = out.ok
+      ? `${c.faction_id} +${out.pctGained}% on ${c.colony_id}`
+      : `failed: ${out.error}`;
+    markClauseExecuted(c.id, line);
+    results.push({ side: c.side, colonyId: c.colony_id, factionId: c.faction_id,
+                   amount: c.amount, ok: !!out.ok, line });
+  }
+  return results;
+}
+
+// ─── Council: cancel a pending commitment ─────────────────────────────────────
+app.post('/api/council/accord/cancel', (req, res) => {
+  try {
+    const { token, accordId } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
+    const a = getAccord(String(accordId || ''));
+    if (!a) return res.status(404).json({ ok: false, error: 'accord_not_found' });
+    if (a.status !== 'pending') return res.status(400).json({ ok: false, error: 'not_pending' });
+    const clauses = getAccordClauses(a.id);
+    const ceding = accordCedingFactions(a, clauses);
+    if (!canCancelPending(p.id, ceding)) {
+      return res.status(403).json({ ok: false, error: 'not_permitted',
+        msg: 'Only the seated leader of a faction ceding ground under this Accord may pull it.' });
+    }
+    const rp = refundAccordSide(a, 'proposer');
+    const rc = refundAccordSide(a, 'counter');
+    setAccordStatus(a.id, 'cancelled', p.id, p.name);
+    logCouncil('accord_cancelled', { accordId: a.id, seatId: councilSeatOf(p.id), actorName: p.name,
+      detail: `pulled during the window, ${fmtF(rp.amount + rc.amount)} released` });
+    for (const f of ceding) {
+      announceTreasury(f, `${p.name} pulled Accord ${a.id} before it executed. Escrow returned to the treasury.`, true);
+    }
+    broadcast({ type: 'chat', data: { id: uuidv4(), t: Date.now(), user: 'SYSTEM',
+      text: `\u2B21 Accord ${a.id} was pulled before execution by ${p.name}. "${a.title}"`,
+      badge: '\u2B21', color: '#ffce4d' } });
+    broadcastCouncil();
+    res.json({ ok: true, refunded: rp.amount + rc.amount });
+  } catch(e) {
+    console.error('[Council] cancel:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── Council: execute anything whose window has run out ───────────────────────
+// A sweep rather than a per Accord timer, same reasoning as the expiry sweep: PM2
+// forgets every setTimeout on restart, and a pending commitment that silently
+// never fires is escrow nobody gets back.
+function sweepPendingAccords() {
+  try {
+    const rows = getDuePendingAccords(Date.now());
+    for (const a of rows) {
+      const clauses = getAccordClauses(a.id);
+      const signer  = a.counter_id ? getPlayer(a.counter_id) : null;
+      const results = executeAccordClauses(a, clauses, signer);
+      setAccordStatus(a.id, 'executed', a.counter_id || null, a.resolved_by_name || null);
+      logCouncil('accord_executed', { accordId: a.id, seatId: a.counter_seat,
+        actorName: a.proposer_name, detail: 'window lapsed; ' + results.map(r => r.line).join('; ').slice(0, 360) });
+      pushHeadline(`\u2B21 ACCORD ${a.id} EXECUTES, THE WINDOW CLOSED WITHOUT OBJECTION`, 'bad', null);
+      broadcast({ type: 'chat', data: { id: uuidv4(), t: Date.now(), user: 'SYSTEM',
+        text: `\u2B21 Accord ${a.id} executed. The window closed and nobody pulled it. "${a.title}"`,
+        badge: '\u2B21', color: '#ffce4d' } });
+    }
+    if (rows.length) { console.log(`[Council] ${rows.length} pending accord(s) executed`); broadcastCouncil(); }
+  } catch(e) { console.error('[Council] pending sweep:', e); }
+}
+setInterval(sweepPendingAccords, 2 * 60 * 1000);
+setTimeout(sweepPendingAccords, 9000);
+
+// ─── Council: sign, which executes ────────────────────────────────────────────
+//
+// Signature and execution are the same instant on purpose. A signed-but-pending
+// state would open a window in which a chair changes hands between agreement and
+// delivery, and then somebody has to decide who owes what. Atomic execution means
+// that window does not exist.
+app.post('/api/council/accord/sign', (req, res) => {
+  try {
+    const { token, accordId } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
+    const a = getAccord(String(accordId || ''));
+    if (!a) return res.status(404).json({ ok: false, error: 'accord_not_found' });
+    if (a.status !== 'open') return res.status(400).json({ ok: false, error: 'accord_closed' });
+    if (Date.now() > a.expires_at) return res.status(400).json({ ok: false, error: 'accord_expired' });
+    if (!canActForSeat(p.id, a.counter_seat)) {
+      return res.status(403).json({ ok: false, error: 'not_your_seat',
+        msg: `Only the ${SEAT_META[a.counter_seat].label} delegate may sign this Accord.` });
+    }
+    if (a.proposer_id && a.proposer_id === p.id) {
+      return res.status(403).json({ ok: false, error: 'self_sign' });
+    }
+
+    const clauses  = getAccordClauses(a.id);
+    const mySide   = clauses.filter(c => c.side === 'counter');
+    const theirSide= clauses.filter(c => c.side === 'proposer');
+    const myEscrow = mySide.reduce((s, c) => s + Number(c.amount || 0), 0);
+    const notary   = Math.ceil(myEscrow * NOTARY_RATE);
+    const due      = myEscrow + notary;
+    const signTreasury = String(req.body.payer || 'self') === 'treasury';
+    if (signTreasury) {
+      if (!treasuryFactions().includes(a.counter_seat) || !isFactionLeader(p.id, a.counter_seat)) {
+        return res.status(403).json({ ok: false, error: 'not_leader',
+          msg: 'Only the seated leader may commit the treasury.' });
+      }
+    } else if (p.cash < due) {
+      return res.status(400).json({ ok: false, error: 'insufficient_funds',
+        msg: `Signing costs Ƒ${myEscrow.toLocaleString()} in bonded obligations plus a Ƒ${notary.toLocaleString()} Guild notary fee. You need Ƒ${due.toLocaleString()}.` });
+    }
+
+    // Re-validate every colony before taking a credit. A colony can change hands
+    // between tabling and signature, and while that does not invalidate a funding
+    // clause, a colony that has stopped existing does.
+    for (const c of clauses) {
+      if (!getColonyState(c.colony_id)) {
+        return res.status(400).json({ ok: false, error: 'colony_gone',
+          msg: `Clause target ${c.colony_id} is no longer a recognised colony. This Accord can no longer execute.` });
+      }
+    }
+
+    if (signTreasury) {
+      if (!treasuryDebit(a.counter_seat, due)) {
+        return res.status(400).json({ ok: false, error: 'insufficient_treasury',
+          msg: `Signing commits ${fmtF(myEscrow)} plus a ${fmtF(notary)} notary fee. The treasury holds ${fmtF(getTreasury(a.counter_seat).balance)}.` });
+      }
+      logTreasury(a.counter_seat, 'accord_escrow', -due, { actorId: p.id, actorName: p.name,
+        detail: `signed ${a.id}` });
+    } else {
+      safeAddCash(p, -due);
+      savePlayer(p);
+    }
+    setCounterEscrow(a.id, myEscrow, notary, signTreasury ? 'treasury' : 'self', p.id);
+
+    // EXECUTION. Every clause is a burn into a colony war chest, so no credits
+    // reach any player and there is nothing here for the clearance gate to hold.
+    // See db_council.js for why a cash transfer clause is deliberately absent.
+    //
+    // NOT WRAPPED IN AN EXPLICIT TRANSACTION, and that is a considered choice
+    // rather than an omission: applyColonyFunding is the same multi statement
+    // path the colony panel has used since the galaxy shipped, and each clause is
+    // independently valid and independently logged. A crash mid Accord leaves
+    // some clauses applied and the rest recorded unexecuted, which is readable in
+    // the ledger. Wrapping it would mean re-entering the funding path inside a
+    // transaction it was never written for.
+    // THE BRANCH. Re-read the row so payer_counter, just written above, is
+    // visible: accordCedingFactions reads BOTH payer columns and the in-memory
+    // copy of `a` predates the signature.
+    const fresh  = getAccord(a.id) || a;
+    const ceding = accordCedingFactions(fresh, clauses);
+    if (ceding.length) {
+      const at = Date.now() + CEDE_DELAY_MS;
+      setAccordPending(a.id, at);
+      const hrs = Math.round(CEDE_DELAY_MS / 3600000);
+      logCouncil('accord_pending', { accordId: a.id, seatId: a.counter_seat, actorName: p.name,
+        detail: `${ceding.join(', ')} ceding; executes in ${hrs}h` });
+      pushHeadline(`\u2B21 ACCORD ${a.id} SIGNED, ${hrs} HOURS BEFORE IT BINDS`, 'bad', null);
+      const notice = `Accord ${a.id} has been signed and will execute in ${hrs} hours. `
+        + `It commits treasury funds to ground that will not be ours. `
+        + `Any seated leader of a ceding faction may pull it before the window closes.`;
+      for (const f of ceding) announceTreasury(f, notice, true);
+      broadcast({ type: 'chat', data: { id: uuidv4(), t: Date.now(), user: 'SYSTEM',
+        text: `\u2B21 Accord ${a.id} signed by ${p.name}. It executes in ${hrs}h unless it is pulled. "${a.title}"`,
+        badge: '\u2B21', color: '#ffce4d' } });
+      if (signTreasury) broadcast({ type: 'treasury_dirty', data: { faction: a.counter_seat } });
+      broadcastToPlayer(p.id, { type: 'portfolio', data: snapshotPortfolio(p) });
+      broadcastCouncil();
+      return res.json({ ok: true, id: a.id, cash: p.cash, escrow: myEscrow, notary,
+                        pending: true, executesAt: at, ceding,
+                        payer: signTreasury ? 'treasury' : 'self' });
+    }
+
+    const proposer = a.proposer_id ? getPlayer(a.proposer_id) : null;
+    const results = executeAccordClauses(fresh, clauses, p);
+
+    setAccordStatus(a.id, 'executed', p.id, p.name);
+    logCouncil('accord_executed', { accordId: a.id, seatId: a.counter_seat, actorName: p.name,
+      detail: results.map(r => r.line).join('; ').slice(0, 400) });
+    pushHeadline(`⬡ ACCORD ${a.id} EXECUTED, ${SEAT_META[a.proposer_seat].label.toUpperCase()} AND ${SEAT_META[a.counter_seat].label.toUpperCase()} SETTLE`, 'good', null);
+    broadcast({ type: 'chat', data: { id: uuidv4(), t: Date.now(), user: 'SYSTEM',
+      text: `⬡ Accord ${a.id} signed by ${p.name} and executed. "${a.title}"`,
+      badge: '⬡', color: '#ffce4d' } });
+
+    if (signTreasury) {
+      announceTreasury(a.counter_seat, `${p.name} committed ${fmtF(due)} of treasury funds to sign Accord ${a.id}.`, true);
+      broadcast({ type: 'treasury_dirty', data: { faction: a.counter_seat } });
+    }
+    if (proposer) broadcastToPlayer(proposer.id, { type: 'portfolio', data: snapshotPortfolio(getPlayer(proposer.id)) });
+    broadcastToPlayer(p.id, { type: 'portfolio', data: snapshotPortfolio(p) });
+    broadcastCouncil();
+    res.json({ ok: true, id: a.id, cash: p.cash, escrow: myEscrow, notary, results, payer: signTreasury ? 'treasury' : 'self' });
+  } catch(e) {
+    console.error('[Council] sign error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── Council: decline ─────────────────────────────────────────────────────────
+app.post('/api/council/accord/decline', (req, res) => {
+  try {
+    const { token, accordId } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
+    const a = getAccord(String(accordId || ''));
+    if (!a) return res.status(404).json({ ok: false, error: 'accord_not_found' });
+    if (a.status !== 'open') return res.status(400).json({ ok: false, error: 'accord_closed' });
+    if (!canActForSeat(p.id, a.counter_seat)) return res.status(403).json({ ok: false, error: 'not_your_seat' });
+
+    // Full refund including the notary fee. The Guild charges for notarising a
+    // deal, not for hearing one refused.
+    const back = refundAccordSide(a, 'proposer').amount;
+    setAccordStatus(a.id, 'declined', p.id, p.name);
+    logCouncil('accord_declined', { accordId: a.id, seatId: a.counter_seat, actorName: p.name,
+      detail: `refunded Ƒ${Math.floor(back).toLocaleString()}` });
+    broadcast({ type: 'chat', data: { id: uuidv4(), t: Date.now(), user: 'SYSTEM',
+      text: `⬡ Accord ${a.id} refused by ${SEAT_META[a.counter_seat].label}. "${a.title}"`,
+      badge: '⬡', color: '#888' } });
+    broadcastCouncil();
+    res.json({ ok: true, refunded: back });
+  } catch(e) {
+    console.error('[Council] decline error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── Council: withdraw your own ───────────────────────────────────────────────
+app.post('/api/council/accord/withdraw', (req, res) => {
+  try {
+    const { token, accordId } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
+    const a = getAccord(String(accordId || ''));
+    if (!a) return res.status(404).json({ ok: false, error: 'accord_not_found' });
+    if (a.status !== 'open') return res.status(400).json({ ok: false, error: 'accord_closed' });
+    if (a.proposer_id !== p.id) return res.status(403).json({ ok: false, error: 'not_proposer' });
+
+    const back = refundAccordSide(a, 'proposer').amount;
+    setAccordStatus(a.id, 'withdrawn', p.id, p.name);
+    logCouncil('accord_withdrawn', { accordId: a.id, seatId: a.proposer_seat, actorName: p.name,
+      detail: `refunded Ƒ${Math.floor(back).toLocaleString()}` });
+    broadcastToPlayer(p.id, { type: 'portfolio', data: snapshotPortfolio(p) });
+    broadcastCouncil();
+    res.json({ ok: true, refunded: back, cash: p.cash });
+  } catch(e) {
+    console.error('[Council] withdraw error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FACTION TREASURY (1.5.0.0)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// WHY THIS EXISTS. Before it, a faction owned nothing. faction_funding was a
+// ledger of past individual spending, war_fund_pool held a sub 1% remainder, and
+// colony_state held percentages. A "faction head" could therefore only commit
+// what was in their own wallet, which makes the chair a signature and not an
+// office. The treasury is what turns a leader into somebody who can act for the
+// faction rather than merely on its behalf.
+//
+// THE INVARIANT, and it is a property of the code rather than a rule anyone has
+// to remember: TREASURY CREDITS CAN BECOME FACTION CONTROL OR ACCORD ESCROW AND
+// CAN NEVER BECOME ANY PLAYER'S PERSONAL CASH, BY ANY PATH. There is no withdraw
+// endpoint. Refunds route back to the treasury, never to the leader who spent
+// from it. Both destinations are burns: fund_colony burns into a war chest, and
+// a refunded escrow returns to the pot it left.
+//
+// So a bad leader can WASTE a treasury and cannot STEAL one. That distinction is
+// the whole design. Waste is recoverable, it is public in the ledger, and it gets
+// the leader thrown out of a chair that is contestable every 72 hours. Theft is
+// not recoverable and would kill the feature the first time it happened.
+//
+// NOT GATED BY GUILD CLEARANCE, deliberately. canSendValue guards player to
+// player value routes. A contribution reaches no player, ever, so there is
+// nothing there for clearance to protect against. Gating it would only stop
+// players funding their own side.
+//
+// FUNDED VOLUNTARILY, NOT BY A TAX ON MEMBER ACTIVITY. A tax makes the treasury
+// something that happens TO members. A voluntary pot makes funding it a statement
+// of confidence in the chair, which means a leader nobody trusts runs an empty
+// treasury. That is a better check than any mechanic anyone would design on
+// purpose, and it costs nothing to build.
+const TREASURY_MIN_CONTRIB = 10_000;
+function fmtF(n) { return 'Ƒ' + Math.floor(Number(n) || 0).toLocaleString(); }
+
+function treasuryFactions() { return FUNDABLE_FACTIONS; }
+
+// Is this player the seated leader of this faction? The Coalition chair is the
+// Presidency, so it resolves through councilSeatOf like every other chair.
+function isFactionLeader(playerId, factionId) {
+  return councilSeatOf(playerId) === factionId;
+}
+
+function treasurySnapshot(factionId, viewerId) {
+  const t = getTreasury(factionId);
+  const seat = seatView(factionId);
+  return {
+    faction: factionId,
+    balance: Math.floor(t.balance || 0),
+    lifetimeIn: Math.floor(t.lifetime_in || 0),
+    lifetimeOut: Math.floor(t.lifetime_out || 0),
+    leader: seat.regent ? null : seat.holderName,
+    leaderIsMe: !!(viewerId && isFactionLeader(viewerId, factionId)),
+    ledger: getTreasuryLedger(factionId, 40).map(l => ({
+      ts: l.ts, kind: l.kind, amount: Math.floor(l.amount),
+      actor: l.actor_name || null, detail: l.detail || null })),
+    contributors: getTreasuryContributors(factionId, 8).map(c => ({
+      name: c.actor_name, total: Math.floor(c.total) })),
+    // Committed but not yet executed. Shown separately from the balance so a
+    // member can see what is already spoken for and how long they have to object.
+    pendingSpends: getPendingSpendsFor(factionId).map(sp => ({
+      id: sp.id, target: sp.target_faction, colonyId: sp.colony_id,
+      amount: Math.floor(sp.amount), by: sp.actor_name, executesAt: sp.executes_at,
+      canCancel: !!(viewerId && councilSeatOf(viewerId) === factionId) })),
+  };
+}
+
+// Every treasury movement is announced to the faction room AND, when it is a
+// spend, to the floor. The treasury spends other people's money; the ledger is
+// what makes contributing to it rational, and an announcement is what makes the
+// ledger get read.
+function announceTreasury(factionId, text, alsoFloor) {
+  const post = (room) => {
+    const view = { id: uuidv4(), room, ts: Date.now(), author_id: null,
+                   author_name: 'GUILD LEDGER', seat: null,
+                   speaking_as: 'GUILD LEDGER', portrait: null, body: text };
+    try { addCouncilPost({ id: view.id, room, ts: view.ts, authorId: null,
+      authorName: view.author_name, seat: null, speakingAs: view.speaking_as,
+      portrait: null, body: text }); } catch(_) {}
+    councilBroadcastPost(room, councilPostView(view));
+  };
+  try { post('faction:' + factionId); } catch(_) {}
+  if (alsoFloor) { try { post('floor'); } catch(_) {} }
+}
+
+app.post('/api/council/treasury', (req, res) => {
+  try {
+    const { token, faction } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    const f = String(faction || '');
+    if (!treasuryFactions().includes(f)) return res.status(400).json({ ok: false, error: 'bad_faction' });
+    res.json({ ok: true, ...treasurySnapshot(f, p ? p.id : null) });
+  } catch(e) {
+    console.error('[Treasury] read:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Contribute. Any member of the faction, any amount above the floor. One way.
+app.post('/api/council/treasury/contribute', (req, res) => {
+  try {
+    const { token, amount } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
+    let mine = null; try { mine = getPlayerFaction(p.id); } catch(_) {}
+    if (!treasuryFactions().includes(mine)) {
+      return res.status(403).json({ ok: false, error: 'no_faction',
+        msg: 'Align to a faction before funding its treasury.' });
+    }
+    const amt = Math.floor(Number(amount) || 0);
+    if (amt < TREASURY_MIN_CONTRIB) {
+      return res.status(400).json({ ok: false, error: 'below_min',
+        msg: `Minimum contribution is ${fmtF(TREASURY_MIN_CONTRIB)}.` });
+    }
+    if (p.cash < amt) return res.status(400).json({ ok: false, error: 'insufficient_funds' });
+
+    safeAddCash(p, -amt);
+    savePlayer(p);
+    treasuryCredit(mine, amt);
+    logTreasury(mine, 'contribute', amt, { actorId: p.id, actorName: p.name });
+    announceTreasury(mine, `${p.name} contributed ${fmtF(amt)} to the treasury.`, false);
+    broadcastToPlayer(p.id, { type: 'portfolio', data: snapshotPortfolio(p) });
+    broadcast({ type: 'treasury_dirty', data: { faction: mine } });
+    res.json({ ok: true, cash: p.cash, ...treasurySnapshot(mine, p.id) });
+  } catch(e) {
+    console.error('[Treasury] contribute:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Leader spend: fund a colony straight from the pot.
+// Pull a committed treasury spend before its window closes. Same rights as
+// pulling a ceding Accord: the seated leader of the faction whose money it is,
+// which follows the CHAIR rather than the person who committed it. Taking the
+// chair off a leader mid window is the whole reason the window exists.
+app.post('/api/council/treasury/cancel', (req, res) => {
+  try {
+    const { token, spendId } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
+    const sp = getPendingSpend(String(spendId || ''));
+    if (!sp) return res.status(404).json({ ok: false, error: 'not_found' });
+    if (sp.status !== 'pending') return res.status(400).json({ ok: false, error: 'not_pending' });
+    if (councilSeatOf(p.id) !== sp.faction_id) {
+      return res.status(403).json({ ok: false, error: 'not_permitted',
+        msg: 'Only the seated leader of the faction whose treasury this is may pull it.' });
+    }
+    treasuryRefund(sp.faction_id, sp.amount);
+    logTreasury(sp.faction_id, 'spend_cancelled', sp.amount, { actorId: p.id, actorName: p.name,
+      detail: `${sp.id}, committed by ${sp.actor_name}` });
+    setPendingSpendStatus(sp.id, 'cancelled', p.id);
+    announceTreasury(sp.faction_id,
+      `${p.name} pulled the ${fmtF(sp.amount)} commitment to ${sp.target_faction} on ${sp.colony_id} before it executed. The credits are back in the treasury.`, true);
+    broadcast({ type: 'treasury_dirty', data: { faction: sp.faction_id } });
+    broadcastCouncil();
+    res.json({ ok: true, refunded: Math.floor(sp.amount), ...treasurySnapshot(sp.faction_id, p.id) });
+  } catch(e) {
+    console.error('[Treasury] cancel:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Execute anything whose window has run out. A sweep, not a per spend timer, for
+// the same reason as every other sweep here: PM2 forgets setTimeout on restart,
+// and a committed spend that silently never fires is credits nobody gets back.
+function sweepPendingSpends() {
+  try {
+    const rows = getDuePendingSpends(Date.now());
+    for (const sp of rows) {
+      // Attributed to whoever committed it, not to whoever holds the chair now.
+      // The funding record should name the person who made the decision.
+      const actor = sp.actor_id ? getPlayer(sp.actor_id) : null;
+      if (!actor) {
+        // The committer no longer exists. Return the credits rather than guess an
+        // attribution: an unattributable spend is worse than an uncast one.
+        treasuryRefund(sp.faction_id, sp.amount);
+        logTreasury(sp.faction_id, 'spend_cancelled', sp.amount, { detail: `${sp.id}, committer gone` });
+        setPendingSpendStatus(sp.id, 'cancelled', null);
+        continue;
+      }
+      const out = applyColonyFunding(actor, sp.colony_id, sp.target_faction, Number(sp.amount), true);
+      if (!out.ok) {
+        treasuryRefund(sp.faction_id, sp.amount);
+        logTreasury(sp.faction_id, 'spend_cancelled', sp.amount, { detail: `${sp.id} failed: ${out.error}` });
+        setPendingSpendStatus(sp.id, 'cancelled', null);
+        continue;
+      }
+      // AMOUNT 0, DELIBERATELY. The credits left the treasury at COMMIT time and
+      // were already logged there as spend_pending. Logging the execution as
+      // another negative double counts the outflow and the ledger stops summing
+      // to the balance, which is the one property that makes the ledger worth
+      // reading. Caught by the conservation assertion.
+      logTreasury(sp.faction_id, 'spend_executed', 0, { actorId: sp.actor_id, actorName: sp.actor_name,
+        detail: `${fmtF(sp.amount)} to ${sp.target_faction}, +${out.pctGained}% on ${sp.colony_id}, window lapsed` });
+      setPendingSpendStatus(sp.id, 'executed', null);
+      announceTreasury(sp.faction_id,
+        `The ${fmtF(sp.amount)} commitment to ${sp.target_faction} on ${sp.colony_id} executed. The window closed and nobody pulled it.`, true);
+      broadcast({ type: 'treasury_dirty', data: { faction: sp.faction_id } });
+    }
+    if (rows.length) { console.log(`[Treasury] ${rows.length} pending spend(s) resolved`); broadcastCouncil(); }
+  } catch(e) { console.error('[Treasury] pending sweep:', e); }
+}
+setInterval(sweepPendingSpends, 2 * 60 * 1000);
+setTimeout(sweepPendingSpends, 10000);
+
+app.post('/api/council/treasury/fund', (req, res) => {
+  try {
+    const { token, colonyId, factionId, amount } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok: false, error: 'not_logged_in' });
+    let mine = null; try { mine = getPlayerFaction(p.id); } catch(_) {}
+    if (!treasuryFactions().includes(mine)) return res.status(403).json({ ok: false, error: 'no_faction' });
+    if (!isFactionLeader(p.id, mine)) {
+      return res.status(403).json({ ok: false, error: 'not_leader',
+        msg: 'Only the seated leader may spend the treasury.' });
+    }
+    // A leader may direct the treasury at any faction, including a rival's, which
+    // is exactly the "pay to flip one of our own planets" move an Accord is built
+    // around. The check that matters is that they hold the chair, not where the
+    // credits point.
+    const target = String(factionId || mine);
+    if (!FUNDABLE_FACTIONS.includes(target)) return res.status(400).json({ ok: false, error: 'invalid_faction' });
+    const amt = Math.floor(Number(amount) || 0);
+    if (amt < 1000) return res.status(400).json({ ok: false, error: 'min_1000' });
+    if (!getColonyState(colonyId)) return res.status(404).json({ ok: false, error: 'colony_not_found' });
+    if (!treasuryDebit(mine, amt)) {
+      return res.status(400).json({ ok: false, error: 'insufficient_treasury',
+        msg: `The treasury holds ${fmtF(getTreasury(mine).balance)}.` });
+    }
+
+    // SAME PREDICATE AS THE ACCORD PATH, APPLIED AT THE SOURCE. Spending the
+    // faction's own money on the faction's own ground is waste at worst: the
+    // credits are gone but the ground is theirs, so it lands immediately.
+    // Spending it to put ground in somebody else's hands is the only combination
+    // where members are harmed by a decision they did not make and cannot undo,
+    // so it waits, exactly as a ceding Accord does.
+    //
+    // The credits are ALREADY debited above and stay held until the window
+    // closes, so the balance members read is honest about what is committed.
+    if (target !== mine) {
+      const spendId = 'TS' + Math.random().toString(36).slice(2, 10).toUpperCase();
+      const at = Date.now() + CEDE_DELAY_MS;
+      createPendingSpend({ id: spendId, factionId: mine, targetFaction: target,
+        colonyId, amount: amt, actorId: p.id, actorName: p.name,
+        createdAt: Date.now(), executesAt: at });
+      logTreasury(mine, 'spend_pending', -amt, { actorId: p.id, actorName: p.name,
+        detail: `${target} on ${colonyId}, held ${Math.round(CEDE_DELAY_MS/3600000)}h` });
+      const hrs = Math.round(CEDE_DELAY_MS / 3600000);
+      announceTreasury(mine,
+        `${p.name} has committed ${fmtF(amt)} of treasury funds to ${target} control on ${colonyId}. `
+        + `It executes in ${hrs} hours. Any seated leader of this faction may pull it before then.`, true);
+      pushHeadline(`\u2B21 ${String(mine).toUpperCase()} TREASURY COMMITTED TO ${String(target).toUpperCase()} GROUND, ${hrs}H TO OBJECT`, 'bad', null);
+      broadcast({ type: 'treasury_dirty', data: { faction: mine } });
+      broadcastCouncil();
+      // NAMED `held`, NOT `pending`. applyColonyFunding already returns a field
+      // called `pending`: the war fund carry-forward remainder, a number of
+      // credits. Spreading that result into the same response as a boolean
+      // `pending` made an instant spend read as held to anything checking the
+      // flag. Caught by the assertion for the instant path, which is the one that
+      // looked least likely to break.
+      return res.json({ ok: true, held: true, spendId, executesAt: at,
+                        ceding: mine, target, ...treasurySnapshot(mine, p.id) });
+    }
+
+    // alreadyDebited=true: the credits left the treasury, not the leader's wallet.
+    // Passing false here would charge the leader personally on top, which is the
+    // obvious bug in this handler and the reason the flag exists at all.
+    const out = applyColonyFunding(p, colonyId, target, amt, true);
+    if (!out.ok) {
+      treasuryRefund(mine, amt);
+      return res.status(400).json({ ok: false, error: out.error });
+    }
+    logTreasury(mine, 'fund_colony', -amt, { actorId: p.id, actorName: p.name,
+      detail: `${target} +${out.pctGained}% on ${colonyId}` });
+    announceTreasury(mine, `${p.name} directed ${fmtF(amt)} of treasury funds to ${target} control on ${colonyId}. ${out.pctGained}% gained.`, true);
+    broadcast({ type: 'treasury_dirty', data: { faction: mine } });
+    res.json({ ok: true, ...out, ...treasurySnapshot(mine, p.id) });
+  } catch(e) {
+    console.error('[Treasury] fund:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COUNCIL: THE THREE SURFACES
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// floor         Only seated delegates may speak. Permanent record, never pruned.
+// gallery       Anybody logged in. Bounded scrollback. The cheap seats.
+// faction:<id>  That faction only. Bounded scrollback.
+//
+// WHY THE GALLERY IS NOT JUST GLOBAL CHAT WITH FEWER PEOPLE IN IT, which was the
+// original objection to building it: it sits directly under the floor. The value
+// is the co-location, not the channel. Reading a delegate table an Accord and the
+// room react to it in the same view is a thing global chat cannot do, and the
+// spectators were what made the original unprompted chat diplomacy worth
+// watching in the first place.
+//
+// THE FLOOR IS NEVER PRUNED. Everything a delegate says on the record stays on
+// the record. A chamber whose transcript ages out is not a record, and the whole
+// premise of riders being meaningful is that a broken one is still readable six
+// months later.
+const COUNCIL_ROOM_MAX = 200;      // gallery and faction scrollback per room
+const COUNCIL_POST_MAX = 400;      // characters
+const COUNCIL_POST_COOLDOWN_MS = 900;
+const _councilLastPost = new Map();
+
+function councilRoomValid(room) {
+  if (room === 'floor' || room === 'gallery') return true;
+  if (room.startsWith('faction:')) return FUNDABLE_FACTIONS.includes(room.slice(8)) || room.slice(8) === 'jade';
+  return false;
+}
+
+// May this player WRITE to this room, and if so under what persona?
+// Returns { ok } or { ok:false, error }.
+function councilCanPost(player, room) {
+  if (room === 'gallery') return { ok: true };
+  if (room.startsWith('faction:')) {
+    const f = room.slice(8);
+    let mine = null; try { mine = getPlayerFaction(player.id); } catch(_) {}
+    if (mine !== f) return { ok: false, error: 'You are not aligned to that faction.' };
+    return { ok: true };
+  }
+  if (room === 'floor') {
+    const seat = councilSeatOf(player.id);
+    if (seat) return { ok: true, seat };
+    // The GM speaks for any chair still held in regency, and for no other. This
+    // is the same rule that governs tabling and signing.
+    if (councilIsGM(player.id)) {
+      const regents = COUNCIL_SEATS.filter(sd => seatView(sd).regent);
+      if (regents.length) return { ok: true, gmRegents: regents };
+    }
+    return { ok: false, error: 'Only a seated delegate may speak on the floor.' };
+  }
+  return { ok: false, error: 'Unknown room.' };
+}
+
+// May this player READ this room? Reading is deliberately laxer than writing:
+// the floor and the gallery are public by design, and only the faction rooms
+// are closed.
+function councilCanRead(player, room) {
+  if (room === 'floor' || room === 'gallery') return true;
+  if (room.startsWith('faction:')) {
+    if (!player) return false;
+    let mine = null; try { mine = getPlayerFaction(player.id); } catch(_) {}
+    return mine === room.slice(8);
+  }
+  return false;
+}
+
+function councilPostView(r) {
+  // author_id is NEVER sent to clients. The record keeps it; the room does not
+  // need it, and leaking which account is behind a regent would undo the persona
+  // in the first message a GM ever sent.
+  //
+  // PORTRAIT AND FACTION ARE RESOLVED LIVE, NOT READ FROM THE ROW. The stored
+  // portrait is only a fallback. Freezing them at post time meant a player who
+  // posted before picking a portrait had an empty socket in the scrollback
+  // forever, and a player who changed faction had their old colour on every old
+  // line. The row is the RECORD of what was said; who the speaker is now is a
+  // property of the speaker, so it is looked up now.
+  //
+  // A regent post is exempt: speaking_as means the persona is the point, and an
+  // NPC has no live account to resolve against.
+  let portrait = r.portrait || null;
+  let faction = null;
+  if (!r.speaking_as && r.author_id) {
+    try {
+      const au = getPlayer(r.author_id);
+      if (au) {
+        if (au.portrait) portrait = au.portrait;
+        faction = au.faction || null;
+      }
+    } catch(_) {}
+  }
+  return { id: r.id, room: r.room, ts: r.ts, name: r.author_name,
+           seat: r.seat || null, npc: !!r.speaking_as, portrait,
+           faction, body: r.body };
+}
+
+function councilBroadcastPost(room, view) {
+  wss.clients.forEach(c => {
+    if (c.readyState !== 1) return;
+    const pid = wsPlayers.get(c);
+    const pl = pid ? getPlayer(pid) : null;
+    if (!councilCanRead(pl, room)) return;
+    c.send(JSON.stringify({ type: 'council_post', data: view }));
+  });
+}
+
+app.post('/api/council/room', (req, res) => {
+  try {
+    const { token, room } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    const rm = String(room || 'gallery');
+    if (!councilRoomValid(rm)) return res.status(400).json({ ok: false, error: 'bad_room' });
+    if (!councilCanRead(p, rm)) return res.status(403).json({ ok: false, error: 'not_permitted' });
+    const posts = getCouncilPosts(rm, 80).map(councilPostView);
+    const write = p ? councilCanPost(p, rm) : { ok: false };
+    res.json({ ok: true, room: rm, posts, canPost: !!write.ok,
+               gmRegents: write.gmRegents || null,
+               myFaction: p ? (() => { try { return getPlayerFaction(p.id); } catch(_) { return null; } })() : null });
+  } catch(e) {
+    console.error('[Council] room error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── Council: expiry sweep ────────────────────────────────────────────────────
+// Runs on a timer rather than a per Accord setTimeout, for the same reason the
+// cargo shipments do: a PM2 restart forgets every timer, and an escrow that
+// silently never comes back is the worst failure this system can have.
+function sweepExpiredAccords() {
+  try {
+    const rows = getExpiredOpenAccords(Date.now());
+    for (const a of rows) {
+      const r = refundAccordSide(a, 'proposer');
+      const back = r.amount;
+      if (r.to === 'player' && r.playerId) {
+        broadcastToPlayer(r.playerId, { type: 'chat_system', data: {
+          text: `Accord ${a.id} expired unanswered. Ƒ${Math.floor(back).toLocaleString()} released from escrow.` } });
+      }
+      setAccordStatus(a.id, 'expired', null, null);
+      logCouncil('accord_expired', { accordId: a.id, seatId: a.proposer_seat,
+        actorName: a.proposer_name, detail: `refunded Ƒ${Math.floor(back).toLocaleString()}` });
+    }
+    if (rows.length) { console.log(`[Council] ${rows.length} accord(s) expired and refunded`); broadcastCouncil(); }
+  } catch(e) { console.error('[Council] expiry sweep:', e); }
+}
+setInterval(sweepExpiredAccords, 5 * 60 * 1000);
+// Gallery and faction scrollback only. The floor is excluded inside the query.
+setInterval(() => { try { pruneCouncilPosts(COUNCIL_ROOM_MAX); } catch(e) { console.error('[Council] prune:', e); } }, 30 * 60 * 1000);
+// Boot pass: anything that expired while the process was down is refunded now,
+// not on the first tick five minutes from now.
+setTimeout(sweepExpiredAccords, 8000);
 
 // ─── Dunce: self-redeem ───────────────────────────────────────────────────────
 // Margin-call dunce → flat MARGIN_DUNCE_FINE. Mod (dev /dunce) dunce → 45% of net worth.
@@ -7587,7 +8929,9 @@ function snapshotPortfolio(player){
   const _snapGiftEquipped = equippedGiftOf(player.id, player.title);
   const _snapGiftActive = !!_snapGiftEquipped;
   let _snapColor;
+  const _snapSeatColor = councilSeatChatColor(player.id);
   if (_snapIsPresident) _snapColor = '#00bfff';
+  else if (_snapSeatColor) _snapColor = _snapSeatColor;
   else if (_snapEscaped) { _snapColor = playerFaction === 'syndicate' ? '#e74c3c' : null; }
   else if (_snapCyborg) _snapColor = player.patreon_tier === 2 ? '#2ecc71' : '#9b59b6';
   else if (_snapGiftActive) _snapColor = _snapGiftEquipped.color;
@@ -7617,7 +8961,7 @@ function snapshotPortfolio(player){
 // (price). A Syndicate shed is cheap and unbonded; a Coalition shed is dear and
 // safe. That gives the cheap-goods colonies a real downside and makes a control
 // flip something an inventory holder has to react to.
-// Capacity is ƒ, so rent is a RATE on the value under roof rather than a price
+// Capacity is Ƒ, so rent is a RATE on the value under roof rather than a price
 // per unit. Per unit pricing charged the same to store frayed wiring (basePrice
 // 210) as nano filament (4100), which had it backwards: the storage problem is
 // the value at risk, not the crate count.
@@ -7626,9 +8970,9 @@ function snapshotPortfolio(player){
 // 30 to 60% for correctly calling a faction control flip (COMMODITY_FACTION_MOD
 // spans 0.82 to 1.30 on med). That makes holding a bet with a price rather than
 // a free option, which was the whole point.
-const WAREHOUSE_RENT_RATE          = parseFloat(process.env.WAREHOUSE_RENT_RATE || '0.008'); // per ƒ of capacity per day
+const WAREHOUSE_RENT_RATE          = parseFloat(process.env.WAREHOUSE_RENT_RATE || '0.008'); // per Ƒ of capacity per day
 const WAREHOUSE_MIN_RENT           = parseFloat(process.env.WAREHOUSE_MIN_RENT || '250');  // floor per shed per day
-const WAREHOUSE_MAX_CAPACITY       = parseFloat(process.env.WAREHOUSE_MAX_CAPACITY || '5000000000'); // ƒ
+const WAREHOUSE_MAX_CAPACITY       = parseFloat(process.env.WAREHOUSE_MAX_CAPACITY || '5000000000'); // Ƒ
 // A default costs the colony for 30 days, not forever. Long enough to hurt,
 // short enough that it is a sentence and not an exile.
 const WAREHOUSE_LOCKOUT_MS         = parseInt(process.env.WAREHOUSE_LOCKOUT_MS || String(30 * 24 * 3600 * 1000), 10);
@@ -7686,7 +9030,7 @@ function fmtLockout(ms) {
 // Single gate for anything that would put units INTO a colony's shed.
 // Grandfathered stock is exempt from the meter but not from the ceiling: a
 // player with no shed simply cannot take on new units anywhere.
-// value is the ƒ of shelf the incoming goods will consume, priced at entry.
+// value is the Ƒ of shelf the incoming goods will consume, priced at entry.
 function warehouseCanAccept(playerId, colonyId, value) {
   const v = Math.max(0, Number(value) || 0);
   if (v <= 0) return { ok: true, free: 0 };
@@ -7704,7 +9048,7 @@ function warehouseCanAccept(playerId, colonyId, value) {
   const free = warehouseFreeSpace(playerId, colonyId);
   if (v > free) {
     return { ok: false, free, error: 'warehouse_full',
-             message: `Warehouse full on ${where}. ƒ${Math.floor(free).toLocaleString()} of free shelf, ƒ${Math.floor(v).toLocaleString()} requested.` };
+             message: `Warehouse full on ${where}. Ƒ${Math.floor(free).toLocaleString()} of free shelf, Ƒ${Math.floor(v).toLocaleString()} requested.` };
   }
   return { ok: true, free };
 }
@@ -7914,7 +9258,7 @@ function sweepWarehouseCalls() {
           setWarehouseLockout(p.id, call.colony_id, now + WAREHOUSE_LOCKOUT_MS);
           try { broadcastToPlayer(p.id, { type:'chat_system', data:{
             text: `Lease forfeited on ${String(call.colony_id).replace(/_/g,' ')}. `
-                + `ƒ${Math.round(owed).toLocaleString()} unpaid. The Guild will not rent to you there for `
+                + `Ƒ${Math.round(owed).toLocaleString()} unpaid. The Guild will not rent to you there for `
                 + `${Math.round(WAREHOUSE_LOCKOUT_MS/86400000)} days, or until the arrears are settled.` }}); } catch(_) {}
         }
       }
@@ -8616,6 +9960,22 @@ wss.on('connection',(ws,req)=>{
       if (president && president.id === player.id && !titles.includes('President of The Coalition')) {
         titles.push('President of The Coalition');
       }
+      // Council chair titles, re-derived from the seat table rather than trusted
+      // from ownedTitles, so a drifted row cannot leave a seated delegate unable
+      // to equip their own office.
+      try {
+        const _mySeat = seatHeldBy(player.id);
+        if (_mySeat && SEAT_TITLE[_mySeat] && !titles.includes(SEAT_TITLE[_mySeat].title)) {
+          titles.push(SEAT_TITLE[_mySeat].title);
+        }
+        // And the inverse: holding a chair title without the chair is stale.
+        for (const k of Object.keys(SEAT_TITLE)) {
+          if (k !== _mySeat) {
+            const idx = titles.indexOf(SEAT_TITLE[k].title);
+            if (idx >= 0) titles.splice(idx, 1);
+          }
+        }
+      } catch(_) {}
       // Patreon-gated titles
       const TIER_TITLES = {
         1: ['Tithe Payer','Branded Debtor'],
@@ -8765,17 +10125,133 @@ wss.on('connection',(ws,req)=>{
       ws.send(JSON.stringify({ type:'quest_state', data:{ quests: getPlayerQuests(actor.id) } }));
     }
 
+    // ── Council: speak in a chamber room ─────────────────────────────────────
+    if (msg.type === 'council_post') {
+      const room = String(msg.room || '');
+      const body = String(msg.text || '').trim().slice(0, COUNCIL_POST_MAX);
+      if (!body) return;
+      if (!councilRoomValid(room)) return;
+      if (isDunced(actor.id)) { ws.send(JSON.stringify({ type:'error', data:{ msg:'Dunced players may not address the chamber.' } })); return; }
+      if (isMuted(actor.id))  { ws.send(JSON.stringify({ type:'error', data:{ msg:'You are muted.' } })); return; }
+      const last = _councilLastPost.get(actor.id) || 0;
+      if (Date.now() - last < COUNCIL_POST_COOLDOWN_MS) return;
+
+      const perm = councilCanPost(actor, room);
+      if (!perm.ok) { ws.send(JSON.stringify({ type:'error', data:{ msg: perm.error } })); return; }
+
+      const { clean, flagged } = filterChat(body);
+      if (flagged) broadcastToAdmins({ type:'admin_log', data:{ action:'slur_filtered_council', user:actor.name, original:body } });
+
+      // PERSONA. On the floor, a GM may speak as any REGENT HELD chair, and the
+      // room sees the regent: their name, their portrait, their faction colour.
+      // The costume is on the display only. author_id in council_posts is always
+      // the real account, because an audit trail that lies about authorship is
+      // worse than none, and somebody will eventually need to know who actually
+      // typed a thing.
+      let seat = null, speakingAs = null, name = actor.name, portrait = actor.portrait || null;
+      if (room === 'floor') {
+        if (perm.seat) {
+          seat = perm.seat;
+        } else if (perm.gmRegents) {
+          const want = String(msg.asSeat || perm.gmRegents[0]);
+          if (!perm.gmRegents.includes(want)) {
+            ws.send(JSON.stringify({ type:'error', data:{ msg:'That chair is held by a player. You cannot speak for it.' } }));
+            return;
+          }
+          seat = want;
+          speakingAs = SEAT_META[want].regent;
+          name = speakingAs;
+          portrait = SEAT_META[want].portrait;
+        }
+      }
+
+      const view = { id: uuidv4(), room, ts: Date.now(), authorId: actor.id,
+                     authorName: name, seat, speakingAs, portrait, body: clean };
+      try { addCouncilPost(view); } catch(e) { console.error('[Council] post persist:', e); }
+      _councilLastPost.set(actor.id, Date.now());
+      // Built through councilPostView with author_id present so a live post and a
+      // post read back from history go through IDENTICAL resolution. Constructing
+      // the wire shape by hand here is how the two drift apart.
+      councilBroadcastPost(room, councilPostView({
+        id: view.id, room, ts: view.ts, author_id: actor.id, author_name: name, seat,
+        speaking_as: speakingAs, portrait, body: clean }));
+
+      // A floor post is the record moving, so the ledger notes it happened. The
+      // body is not duplicated into council_log; council_posts is the transcript.
+      if (room === 'floor') {
+        try { logCouncil('floor_address', { seatId: seat, actorName: name, detail: clean.slice(0, 90) }); } catch(_) {}
+      }
+      return;
+    }
+
+    // ── Council: typing indicator ────────────────────────────────────────────
+    // Ephemeral, never persisted. Exists so a GM composing as a regent reads to
+    // the room as "Guild Notary Ostrow is typing" rather than as nothing at all,
+    // which is the difference between an NPC that feels operated and one that
+    // feels like a label on an empty chair.
+    if (msg.type === 'council_typing') {
+      const room = String(msg.room || '');
+      if (!councilRoomValid(room)) return;
+      const perm = councilCanPost(actor, room);
+      if (!perm.ok) return;
+      let who = actor.name, seat = perm.seat || null, npc = false;
+      if (room === 'floor' && !perm.seat && perm.gmRegents) {
+        const want = String(msg.asSeat || perm.gmRegents[0]);
+        if (!perm.gmRegents.includes(want)) return;
+        seat = want; who = SEAT_META[want].regent; npc = true;
+      }
+      wss.clients.forEach(c => {
+        if (c.readyState !== 1) return;
+        const pid = wsPlayers.get(c);
+        if (pid === actor.id) return; // you do not need telling that you are typing
+        const pl = pid ? getPlayer(pid) : null;
+        if (!councilCanRead(pl, room)) return;
+        c.send(JSON.stringify({ type:'council_typing', data:{ room, name: who, seat, npc } }));
+      });
+      return;
+    }
+
     if (msg.type === 'buy_president') {
       if (actor.cash < PRESIDENT_COST) {
         ws.send(JSON.stringify({ type: 'error', data: { msg: `Need Ƒ1,000,000,000 to seize the Presidency.` } }));
         return;
       }
+      if (president && president.id === actor.id) {
+        ws.send(JSON.stringify({ type: 'error', data: { msg: 'You already hold the office.' } }));
+        return;
+      }
+      // Protected term. Checked BEFORE the charge, so a blocked attempt costs
+      // nothing.
+      if (president) {
+        const _left = (Number(president.acquiredAt || 0) + PRESIDENT_TERM_MS) - Date.now();
+        if (_left > 0) {
+          const _d = Math.floor(_left / 86400000);
+          const _h = Math.ceil((_left % 86400000) / 3600000);
+          ws.send(JSON.stringify({ type: 'error', data: { msg:
+            `${president.name} is serving a protected term. The Presidency cannot be seized for another ${_d}d ${_h}h.` } }));
+          return;
+        }
+      }
       // Oust previous holder
       if (president) {
+        // The Coalition chair is a Council seat, so losing it releases the escrow
+        // exactly as losing the Syndicate or Void chair does. Escrow is the
+        // ousted person's money; only the right to SIGN follows the office.
+        //
+        // THIS RUNS FIRST, deliberately. refundProposerAccords reads and saves
+        // its own copy of the player row, so anything read before it is stale by
+        // the refund and saving that copy afterwards would silently reverse the
+        // credit. Same hazard as the council chair path.
+        try { refundProposerAccords(president.id, 'seat_lost'); } catch(_) {}
         const prev = getPlayer(president.id);
         if (prev) {
-          if (prev.title === 'President of The Coalition') { prev.title = ''; savePlayer(prev); }
+          // savePlayer used to sit INSIDE the title check, so a player who owned
+          // the title without wearing it had ownedTitles filtered in memory and
+          // never written. On the next load they still held a Presidency they had
+          // lost. The write is now unconditional.
+          if (prev.title === 'President of The Coalition') prev.title = '';
           prev.ownedTitles = (prev.ownedTitles || []).filter(t => t !== 'President of The Coalition');
+          savePlayer(prev);
           broadcastToPlayer(prev.id, { type: 'president_ousted', data: { ousted: prev.name } });
           broadcastToPlayer(prev.id, { type: 'title_updated', data: { title: prev.title, owned: prev.ownedTitles } });
           broadcastToPlayer(prev.id, { type: 'portfolio', data: snapshotPortfolio(prev) });
@@ -8785,7 +10261,7 @@ wss.on('connection',(ws,req)=>{
       }
       // Charge, assign, rally
       safeAddCash(actor, -PRESIDENT_COST);
-      president = { id: actor.id, name: actor.name };
+      president = { id: actor.id, name: actor.name, acquiredAt: Date.now() };
       try { savePresidentState(president); } catch(_) {}
       actor.title = 'President of The Coalition';
       actor.ownedTitles = actor.ownedTitles || [];
@@ -10608,7 +12084,9 @@ wss.on('connection',(ws,req)=>{
       //   Escaped+Syndicate→red, Escaped+other→null (purple gone),
       //   Cyborg+Guild→green, Cyborg(normal)→purple, gifted title (equipped)→gift color, else→tier color
       let chatColor;
+      const _seatColor = councilSeatChatColor(actor.id);
       if (_isPresident) chatColor = '#00bfff';
+      else if (_seatColor) chatColor = _seatColor;
       else if (_isOwner) chatColor = '#ff6a00';
       else if (_isDev) chatColor = null;
       else if (actor.title === DEBTOR_TITLE) chatColor = '#6b4423'; // poop brown when the Debtor brand is worn
@@ -10661,7 +12139,9 @@ wss.on('connection',(ws,req)=>{
       const _wGiftActive=!!_wGiftEquipped;
       const wBadge=_isOwner?'★':(_isDev?null:(_wCyborg?(actor.patreon_tier===3?'♛':'🤖'):((_wGiftActive&&_wGiftEquipped.badge)||TIERS[actor.patreon_tier||0]?.badge||null)));
       let wColor;
+      const _wSeatColor = councilSeatChatColor(actor.id);
       if(_isPres) wColor='#00bfff';
+      else if(_wSeatColor) wColor=_wSeatColor;
       else if(_isOwner) wColor='#ff6a00';
       else if(_isDev) wColor=null;
       else if(_wEscaped){ const wf=getPlayerFaction(actor.id); wColor=wf==='syndicate'?'#e74c3c':null; }

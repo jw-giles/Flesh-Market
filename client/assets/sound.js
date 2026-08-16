@@ -8,13 +8,23 @@ let _soundOn = false;
 let _audioCtx = null;
 
 // ── Chat font size accessibility ──────────────────────────────────────────────
+// Exposed as window.FMChatFont so any other surface that renders chat can share
+// the SAME setting rather than growing its own. The Council Chamber rooms use it.
+// A second independent size control would be a second thing to discover and a
+// second thing to get out of sync with this one.
 (function initChatFont() {
   const STORAGE_KEY = 'fm_chat_font_pct';
   const STEPS = [70, 80, 90, 100, 110, 120, 130];
+  // Every element that should scale with the setting. Council room bodies are
+  // rebuilt by innerHTML on each render, so apply() is re-run after those rather
+  // than the value being set once at boot.
+  const TARGETS = ['chatBox', 'croomBody'];
 
   function applySize(pct) {
-    const box = document.getElementById('chatBox');
-    if (box) box.style.setProperty('--chat-font-scale', pct / 100);
+    for (const id of TARGETS) {
+      const el = document.getElementById(id);
+      if (el) el.style.setProperty('--chat-font-scale', pct / 100);
+    }
     localStorage.setItem(STORAGE_KEY, pct);
   }
 
@@ -22,14 +32,23 @@ let _audioCtx = null;
   let current = STEPS.includes(saved) ? saved : 100;
   applySize(current);
 
-  document.getElementById('chatFontDec')?.addEventListener('click', function() {
+  function step(dir) {
     const idx = STEPS.indexOf(current);
-    if (idx > 0) { current = STEPS[idx - 1]; applySize(current); }
-  });
-  document.getElementById('chatFontInc')?.addEventListener('click', function() {
-    const idx = STEPS.indexOf(current);
-    if (idx < STEPS.length - 1) { current = STEPS[idx + 1]; applySize(current); }
-  });
+    const next = idx + dir;
+    if (next < 0 || next >= STEPS.length) return current;
+    current = STEPS[next];
+    applySize(current);
+    return current;
+  }
+
+  document.getElementById('chatFontDec')?.addEventListener('click', function(){ step(-1); });
+  document.getElementById('chatFontInc')?.addEventListener('click', function(){ step(1); });
+
+  window.FMChatFont = {
+    get: function(){ return current; },
+    step: step,
+    apply: function(){ applySize(current); },
+  };
 })();
 
 window.toggleSound = function() {

@@ -36,17 +36,17 @@ var FACTIONS = {
   coalition:{
     id:'coalition', name:'The Coalition', short:'COALITION', color:'#4ecdc4', dim:'#1a4f4d', bg:'#061a1a', sym:'◇', devOnly:false,
     desc:'The legitimate face of interstellar commerce. Coalition colonies enforce corporate law and pay dividends on schedule.',
-    bonusSummary:'Colony dividend bonuses: Finance, Insurance &amp; Tech sectors + ƒ15/colony passive income',
+    bonusSummary:'Colony dividend bonuses: Finance, Insurance &amp; Tech sectors + Ƒ15/colony passive income',
   },
   syndicate:{
     id:'syndicate', name:'The Syndicate', short:'SYNDICATE', color:'#e74c3c', dim:'#4d1a1a', bg:'#1a0606', sym:'◈', devOnly:false,
     desc:'A distributed criminal network. No inspections, no tariffs, just a cut of every deal passing through Syndicate space.',
-    bonusSummary:'Colony dividend bonuses on controlled territory + ƒ15/colony passive income',
+    bonusSummary:'Colony dividend bonuses on controlled territory + Ƒ15/colony passive income',
   },
   void:{
     id:'void', name:'The Void Collective', short:'THE VOID', color:'#9b59b6', dim:'#2d1a40', bg:'#0d0617', sym:'◆', devOnly:false,
     desc:"Data-cult anarchists running NullSyndicate relays from uncharted debris fields. Nobody audits them.",
-    bonusSummary:'Colony dividend bonuses: Biotech &amp; Energy sectors + ƒ15/colony passive income + permanent +ƒ15 cyborg augment',
+    bonusSummary:'Colony dividend bonuses: Biotech &amp; Energy sectors + Ƒ15/colony passive income + permanent +Ƒ15 cyborg augment',
   },
   fleshstation:{
     id:'fleshstation', name:'Flesh Station', short:'FLESH STN', color:'#ffce4d', dim:'#4d3a00', bg:'#1a1200', sym:'⬡', devOnly:true,
@@ -2500,6 +2500,7 @@ function initSubTabs(){
       var cp=document.getElementById('gContractsPane');
       var kp=document.getElementById('gMarketsPane');
       var cyp=document.getElementById('gCitiesPane');
+      var cnp=document.getElementById('gCouncilPane');
       if(mp) mp.style.display=t==='map'?'flex':'none';
       // Cities takes the whole viewport: the map is the point of the view and a
       // 300px column inside a shared centre panel could not do it justice.
@@ -2513,11 +2514,13 @@ function initSubTabs(){
       if(sp) sp.style.display=t==='shipping'?'block':'none';
       if(cp) cp.style.display=t==='contracts'?'block':'none';
       if(kp) kp.style.display=t==='markets'?'block':'none';
+      if(cnp) cnp.style.display=t==='council'?'block':'none';
       if(t!=='markets') stopShipmentTicker();
       if(t==='factions') renderFactionList();
       if(t==='contracts') renderContractsTable();
       if(t==='shipping') window.renderShippingTab();
       if(t==='markets') renderMarketsTab();
+      if(t==='council'){ if(window.__councilOpen) window.__councilOpen(); }
       if(t==='cities'){ if(window.cityTabLoad) window.cityTabLoad(); }
       else if(window.cityLeaveFull) window.cityLeaveFull();
     });
@@ -2639,7 +2642,7 @@ function renderMarketsTab(){
     h+='</div></div>';
 
     // ── Warehouses ──
-    // Storage is metered per colony against a capacity denominated in ƒ, not
+    // Storage is metered per colony against a capacity denominated in Ƒ, not
     // crates, so the slider reads in the same unit as the rent it drives.
     h+=renderWarehousePanel(wh, grid, nameOf);
 

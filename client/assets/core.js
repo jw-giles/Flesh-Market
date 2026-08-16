@@ -1730,6 +1730,12 @@ window.I18N = {
   'gstab.shipping':{en:'💀 Smuggling',zh:'💀 走私'},
   'gstab.contracts':{en:'📋 Contracts',zh:'📋 合约'},
   'gstab.factions':{en:'◈ Factions',zh:'◈ 阵营'},
+  'gstab.council':{en:'⬡ Council',zh:'⬡ 议会'},
+  'title.seatVacant':{en:'SEAT IS VACANT',zh:'席位空缺'},
+  'title.protected':{en:'Protected',zh:'任期保护'},
+  'title.protectedFor':{en:'PROTECTED',zh:'保护中'},
+  'title.syndicateSeatPerks':{en:'NO PASSIVE INCOME  \u00b7  COUNCIL CHAIR, THE SYNDICATE  \u00b7  TABLE AND SIGN BINDING ACCORDS  \u00b7  72 HOUR PROTECTED TERM  \u00b7  SYNDICATE ALLEGIANCE REQUIRED  \u00b7  TITLE STRIPPED ON OVERTHROW',zh:'无被动收入  \u00b7  辛迪加特议会席位  \u00b7  可提案并签署约定  \u00b7  72 小时任期保护  \u00b7  需已效忠辛迪加特  \u00b7  被推翻时剥夺头衔'},
+  'title.voidSeatPerks':{en:'NO PASSIVE INCOME  \u00b7  COUNCIL CHAIR, THE VOID COLLECTIVE  \u00b7  TABLE AND SIGN BINDING ACCORDS  \u00b7  72 HOUR PROTECTED TERM  \u00b7  VOID ALLEGIANCE REQUIRED, CONVERSION IS PERMANENT  \u00b7  TITLE STRIPPED ON OVERTHROW',zh:'无被动收入  \u00b7  虚空集体议会席位  \u00b7  可提案并签署约定  \u00b7  72 小时任期保护  \u00b7  需已效忠虚空，改造不可逆  \u00b7  被推翻时剥夺头衔'},
   'gstab.cities':{en:'🏙 Cities',zh:'🏙 城市'},
   // ── Casino: Blackjack + Horse Races (localized 1.2.5.4) ──
   'casino.bj.title':{en:'Blackjack',zh:'21点'},
@@ -1968,7 +1974,7 @@ window.I18N = {
   'title.seizeOffice':{en:'Seize Office',zh:'夺取职位'},
   'title.claimOffice':{en:'Claim Office',zh:'就任'},
   'title.currentlyHeldBy':{en:'CURRENTLY HELD BY:',zh:'现任持有者：'},
-  'title.presidentPerks':{en:'+15,000 \u0191 / 30 MIN  \u00b7  NEON BLUE CHAT  \u00b7  MARKET RALLY ON ELECTION  \u00b7  TITLE STRIPPED ON OVERTHROW',zh:'+15,000 \u0191 / 30 分钟  \u00b7  霓虹蓝聊天  \u00b7  当选时市场上涨  \u00b7  被推翻时剥夺头衔'},
+  'title.presidentPerks':{en:'+15,000 \u0191 / 30 MIN  \u00b7  COUNCIL CHAIR, THE COALITION  \u00b7  7 DAY PROTECTED TERM  \u00b7  NEON BLUE CHAT  \u00b7  MARKET RALLY ON ELECTION  \u00b7  TITLE STRIPPED ON OVERTHROW',zh:'+15,000 \u0191 / 30 分钟  \u00b7  联合体议会席位  \u00b7  7 天任期保护  \u00b7  霓虹蓝聊天  \u00b7  当选时市场上涨  \u00b7  被推翻时剥夺头衔'},
 
   // ── Capital Houses (funds panel) ──
   'fnd.capitalHouse':{en:'Capital House',zh:'资本门阀'},
@@ -2429,7 +2435,7 @@ window.BONUS_FACTION_ZH = {
 // fit the generated pattern. Checked before the pattern parser.
 window.BONUS_ZH_EXACT = {
   'Any faction: grey-market passive income':'任意派系：灰市被动收入',
-  'Requires full cluster control (Limbosis + Lustandia + Gluttonis). Grants +Ƒ500 per income cycle to faction members with 30 or more days of continuous allegiance.':'需要完全控制整个星团（林波西斯 + 纵欲之地 + 饕餮星）。向连续归属满 30 天及以上的派系成员，每个收入周期发放 +ƒ500。',
+  'Requires full cluster control (Limbosis + Lustandia + Gluttonis). Grants +Ƒ500 per income cycle to faction members with 30 or more days of continuous allegiance.':'需要完全控制整个星团（林波西斯 + 纵欲之地 + 饕餮星）。向连续归属满 30 天及以上的派系成员，每个收入周期发放 +Ƒ500。',
   'Merchant Guild: Trade fee exemptions':'商人公会：交易费豁免',
   'Dev accounts only: \u26A1 passive income multiplier':'仅限开发者账号：\u26A1 被动收入倍增',
   "Syndicate: +1.8% Gray Bazaar dividends, S'weet trade monopoly":'辛迪加：+1.8% 灰市集分红，甜藤酒贸易垄断',
@@ -2841,6 +2847,8 @@ window.TITLE_ZH = {
   'The Yield':{name:'收益',blurb:'比多数殖民地更古老的资本所生的被动收入。'},
   'The Central Banker':{name:'央行行长',blurb:'在一处未公开的地点掌控殖民地间的货币供给。'},
   'President of The Coalition':{name:'联合体总统',blurb:'由资本权重选出，而非人头。仅此一席。'},
+  'Overseer of The Syndicate':{name:'辛迪加特督察使',blurb:'辛迪加特不投票。它只看谁付了钱。'},
+  'Prime Node of The Void Collective':{name:'虚空集体主节点',blurb:'集体只有一个声音。你买下了成为它的权利。'},
   'Tithe Payer':{name:'什一税缴纳者',blurb:'血肉市场运营基金的在册捐助人。'},
   'Branded Debtor':{name:'烙印债务人',blurb:'身上带有付款时签发的可见信用标记。'},
   'Guild Enforcer':{name:'公会执行人',blurb:'为商人公会处理催收与合约纠纷。'},
@@ -2865,19 +2873,19 @@ window.FACTION_ZH = {
     name:'联合体',
     short:'联合体',
     desc:'星际商业的合法门面。联合体殖民地执行企业法，并按时派发分红。',
-    bonus:'殖民地分红加成：金融、保险与科技板块 + 每殖民地 ƒ15 被动收入'
+    bonus:'殖民地分红加成：金融、保险与科技板块 + 每殖民地 Ƒ15 被动收入'
   },
   syndicate:{
     name:'辛迪加',
     short:'辛迪加',
     desc:'一张分散的犯罪网络。没有检查，没有关税，只从每一笔经过辛迪加空域的交易中抽成。',
-    bonus:'所控领地的殖民地分红加成 + 每殖民地 ƒ15 被动收入'
+    bonus:'所控领地的殖民地分红加成 + 每殖民地 Ƒ15 被动收入'
   },
   void:{
     name:'虚空集体',
     short:'虚空',
     desc:'数据邪教的无政府者，在未测绘的碎片带中运行空隙辛迪加中继。无人能审计他们。',
-    bonus:'殖民地分红加成：生物科技与能源板块 + 每殖民地 ƒ15 被动收入 + 永久 +ƒ15 改造人增强'
+    bonus:'殖民地分红加成：生物科技与能源板块 + 每殖民地 Ƒ15 被动收入 + 永久 +Ƒ15 改造人增强'
   },
   fleshstation:{
     name:'血肉站',

@@ -15,6 +15,7 @@ import path from 'path';
 import url  from 'url';
 import { initTcg } from './tcg/tcg-db.js';
 import { initCityDb } from './db_city.js';
+import { initCouncilDb } from './db_council.js';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const DB_PATH   = process.env.DB_PATH || path.join(__dirname, 'fleshmarket.db');
@@ -421,6 +422,7 @@ export function initDB() {
 
   initTcg(db); // FleshMarket TCG: collection + deck tables
   initCityDb(db); // City Charters: city_state + city_lots tables
+  initCouncilDb(db); // Council Chamber: seats + accords + clauses + ledger
 
   console.log(`[DB] SQLite ready: ${DB_PATH}`);
   return db;

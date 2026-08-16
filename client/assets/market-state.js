@@ -107,6 +107,8 @@
     {tier:'Mythic', price:'Ƒ50M', name:'The Central Banker', blurb:'Controls the inter-colony money supply from an undisclosed location.'},
     // Legendary (1B) — singular, contested
     {tier:'Legendary', price:'Ƒ1B', name:'President of The Coalition', blurb:'Elected by capital weight, not headcount. One seat.', singular:true},
+    {tier:'Legendary', price:'Ƒ500M', name:'Overseer of The Syndicate', blurb:'The Syndicate does not vote. It notices who paid.', singular:true},
+    {tier:'Legendary', price:'Ƒ500M', name:'Prime Node of The Void Collective', blurb:'The Collective has one voice. You bought the right to be it.', singular:true},
   ];
 
   // --- Patreon-exclusive titles (locked unless tier matches) ---
@@ -373,105 +375,170 @@
     if (bucket){ const r = rowFor(it); rows.push(r); bucket.appendChild(r); }
   });
 
-  // --- Legendary: President of The Coalition ---
+  // --- Legendary: the three offices ---
+  // Was one hardcoded President card. The Syndicate and Void chairs are titles on
+  // exactly the same footing, so the builder is driven by a spec list instead of
+  // being duplicated three times. The Presidency still buys over WebSocket
+  // because that is the handler it has always used; the two council chairs POST
+  // to the council API. Both paths are server authoritative and neither trusts a
+  // price sent from here.
   const legendaryList = document.getElementById('legendary-titles-list');
-  const PRESIDENT_TITLE = TITLES.find(t => t.tier === 'Legendary');
-  let presidentCard = null;
 
-  function buildPresidentCard() {
-    if (!PRESIDENT_TITLE || !legendaryList) return;
-    legendaryList.innerHTML = '';
-    const tc = '#00bfff';
-    const cost = 1_000_000_000;
+  const OFFICES = [
+    { seat:'coalition', name:'President of The Coalition', color:'#00bfff', price:'Ƒ1B',
+      perksKey:'title.presidentPerks',
+      perks:'+15,000 Ƒ / 30 MIN  \u00b7  COUNCIL CHAIR, THE COALITION  \u00b7  7 DAY PROTECTED TERM  \u00b7  NEON BLUE CHAT  \u00b7  MARKET RALLY ON ELECTION  \u00b7  TITLE STRIPPED ON OVERTHROW',
+      confirm:'Seize the Presidency for Ƒ1,000,000,000?\n\nThe current holder is removed from office and any Accord they tabled in Council is withdrawn and refunded to them.\n\nA sitting President serves a PROTECTED TERM OF SEVEN DAYS. If theirs has not lapsed this is refused and you are charged nothing.',
+      buy:function(){ try { sendWS({ type:'buy_president' }); } catch(e){} } },
 
-    const card = document.createElement('div');
-    card.style.cssText = [
-      'border:1px solid #00bfff33',
-      'border-left:3px solid #00bfff',
-      'border-radius:0 7px 7px 0',
-      'padding:12px 14px 11px 14px',
-      'margin-bottom:6px',
-      'background:#04080f',
-    ].join(';');
+    { seat:'syndicate', name:'Overseer of The Syndicate', color:'#ff2e63', price:'Ƒ500M',
+      perksKey:'title.syndicateSeatPerks',
+      perks:'NO PASSIVE INCOME  \u00b7  COUNCIL CHAIR, THE SYNDICATE  \u00b7  TABLE AND SIGN BINDING ACCORDS  \u00b7  72 HOUR PROTECTED TERM  \u00b7  SYNDICATE ALLEGIANCE REQUIRED  \u00b7  TITLE STRIPPED ON OVERTHROW',
+      confirm:'Take the Overseer of The Syndicate chair for Ƒ500,000,000?\n\nThis office pays NO passive income. It grants the right to table and sign binding Accords in the Council Chamber.\n\nYou must already be Syndicate aligned, and you may hold only one chair. A sitting Overseer serves a protected term of 72 hours; if theirs has not lapsed this is refused and you are charged nothing.',
+      buy:function(){ councilSeatBuy('syndicate'); } },
 
-    // Holder line
-    const holderLine = document.createElement('div');
-    holderLine.id = 'president-holder-line';
-    holderLine.style.cssText = 'font-size:.68rem;letter-spacing:.1em;color:#00bfff66;margin-bottom:8px;font-family:monospace';
-    holderLine.textContent = presidentHolder
-      ? ((window.t?window.t('title.currentlyHeldBy','CURRENTLY HELD BY:'):'CURRENTLY HELD BY:') + ' ' + presidentHolder.name.toUpperCase())
-      : 'SEAT IS VACANT';
-    card.appendChild(holderLine);
+    { seat:'void', name:'Prime Node of The Void Collective', color:'#c77dff', price:'Ƒ500M',
+      perksKey:'title.voidSeatPerks',
+      perks:'NO PASSIVE INCOME  \u00b7  COUNCIL CHAIR, THE VOID COLLECTIVE  \u00b7  TABLE AND SIGN BINDING ACCORDS  \u00b7  72 HOUR PROTECTED TERM  \u00b7  VOID ALLEGIANCE REQUIRED, CONVERSION IS PERMANENT  \u00b7  TITLE STRIPPED ON OVERTHROW',
+      confirm:'Take the Prime Node of The Void Collective chair for Ƒ500,000,000?\n\nThis office pays NO passive income. It grants the right to table and sign binding Accords in the Council Chamber.\n\nYou must ALREADY be Void aligned, which means you have already taken the permanent cybernetic conversion. The chair is not a way in. You may hold only one chair. A sitting Prime Node serves a protected term of 72 hours; if theirs has not lapsed this is refused and you are charged nothing.',
+      buy:function(){ councilSeatBuy('void'); } },
+  ];
 
-    const top = document.createElement('div');
-    top.style.cssText = 'display:flex;align-items:baseline;gap:10px';
+  // Live seat state for all three offices, fetched when the store builds. The
+  // Presidency also keeps its own president_state WS push, which rebuilds the
+  // whole rack rather than patching one card.
+  let councilSeats = {};
 
-    const nameEl = document.createElement('div');
-    nameEl.style.cssText = 'flex:1;font-weight:700;font-size:.92rem;color:#00bfff;letter-spacing:.04em';
-    nameEl.textContent = window.titleNameZh ? window.titleNameZh(PRESIDENT_TITLE.name) : PRESIDENT_TITLE.name;
-
-    const priceEl = document.createElement('div');
-    priceEl.style.cssText = 'font-size:.78rem;color:#00bfff55;white-space:nowrap';
-    priceEl.textContent = 'Ƒ1B';
-
-    const btn = document.createElement('button');
-    btn.className = 'btn';
-    btn.style.cssText = 'min-width:90px;padding:4px 12px;border-radius:6px;font-size:.78rem;border:1px solid #00bfff44;color:#00bfff;background:#001a2a';
-
-    function refreshPresidentBtn() {
-      const iAmPresident = presidentHolder && presidentHolder.name === (window?.ME?.name || '');
-      if (iAmPresident) {
-        btn.textContent = '✓ '+(window.t?window.t('title.inOffice','In Office'):'In Office');
-        btn.disabled = true;
-        btn.style.color = '#00bfff';
-        btn.style.borderColor = '#00bfff88';
-      } else {
-        btn.textContent = presidentHolder ? (window.t?window.t('title.seizeOffice','Seize Office'):'Seize Office') : (window.t?window.t('title.claimOffice','Claim Office'):'Claim Office');
-        btn.disabled = false;
-        btn.style.color = '#00bfff';
-        btn.style.borderColor = '#00bfff44';
-      }
-    }
-    refreshPresidentBtn();
-
-    btn.addEventListener('click', function() {
-      const iAmPresident = presidentHolder && presidentHolder.name === (window?.ME?.name || '');
-      if (iAmPresident) return;
-      if (!confirm('Seize the Presidency for Ƒ1,000,000,000? The current holder will be removed from office.')) return;
-      try { sendWS({ type: 'buy_president' }); } catch(e) {}
-    });
-
-    top.appendChild(nameEl); top.appendChild(priceEl); top.appendChild(btn);
-
-    const blurb = document.createElement('div');
-    blurb.style.cssText = 'font-size:.76rem;color:#00bfff44;margin-top:6px;font-style:italic';
-    blurb.textContent = window.titleBlurbZh ? window.titleBlurbZh(PRESIDENT_TITLE.name, PRESIDENT_TITLE.blurb) : PRESIDENT_TITLE.blurb;
-
-    const perks = document.createElement('div');
-    perks.style.cssText = 'font-size:.68rem;color:#00bfff55;margin-top:6px;font-family:monospace;letter-spacing:.06em';
-    perks.textContent = '⬡ '+(window.t?window.t('title.presidentPerks','+15,000 Ƒ / 30 MIN  ·  NEON BLUE CHAT  ·  MARKET RALLY ON ELECTION  ·  TITLE STRIPPED ON OVERTHROW'):'+15,000 Ƒ / 30 MIN  ·  NEON BLUE CHAT  ·  MARKET RALLY ON ELECTION  ·  TITLE STRIPPED ON OVERTHROW');
-
-    card.appendChild(top); card.appendChild(blurb); card.appendChild(perks);
-    legendaryList.appendChild(card);
-
-    card._refreshBtn = refreshPresidentBtn;
-    presidentCard = card;
+  function councilTok(){
+    return window.__fmToken || window.FM_TOKEN || localStorage.getItem('fm_token') || '';
   }
 
-  buildPresidentCard();
+  function councilSeatBuy(seat){
+    fetch(location.origin + '/api/council/seat/buy', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: councilTok(), seatId: seat })
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if (!d || !d.ok) { alert((d && (d.msg || d.error)) || 'The chamber refused.'); return; }
+      refreshCouncilSeats();
+      try { if (window.__councilRefresh) window.__councilRefresh(); } catch(e){}
+    }).catch(function(){ alert('The chamber is unreachable.'); });
+  }
+
+  function refreshCouncilSeats(){
+    fetch(location.origin + '/api/council/state', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: councilTok() })
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if (!d || !d.ok) return;
+      councilSeats = {};
+      (d.seats || []).forEach(function(sv){ councilSeats[sv.seat] = sv; });
+      buildLegendaryRack();
+    }).catch(function(){});
+  }
+  window.__refreshCouncilSeats = refreshCouncilSeats;
+
+  function officeHolder(o){
+    // The Presidency has a live WS holder; prefer it over the polled snapshot so
+    // an election shows instantly instead of on the next fetch.
+    if (o.seat === 'coalition' && presidentHolder) return { name: presidentHolder.name, id: presidentHolder.id };
+    const sv = councilSeats[o.seat];
+    return (sv && sv.holderId) ? { name: sv.holderName, id: sv.holderId } : null;
+  }
+  function officeTermEnds(o){
+    const sv = councilSeats[o.seat];
+    return sv ? (sv.termEndsAt || 0) : 0;
+  }
+  function termRemaining(ts){
+    const d = ts - Date.now(); if (d <= 0) return '';
+    const days = Math.floor(d / 86400000), hrs = Math.ceil((d % 86400000) / 3600000);
+    return (window.t?window.t('title.protectedFor','PROTECTED'):'PROTECTED') + ' ' + (days > 0 ? (days + 'D ' + hrs + 'H') : (hrs + 'H'));
+  }
+
+  function buildLegendaryRack(){
+    if (!legendaryList) return;
+    legendaryList.innerHTML = '';
+    OFFICES.forEach(function(o){
+      const tc = o.color;
+      const holder = officeHolder(o);
+      const termEnds = officeTermEnds(o);
+      const protectedNow = termEnds > Date.now();
+      const myName = (window && window.ME && window.ME.name) ? window.ME.name : '';
+      const mine = !!(holder && holder.name === myName);
+
+      const card = document.createElement('div');
+      card.style.cssText = [
+        'border:1px solid ' + tc + '33', 'border-left:3px solid ' + tc,
+        'border-radius:0 7px 7px 0', 'padding:12px 14px 11px 14px',
+        'margin-bottom:6px', 'background:#04080f'
+      ].join(';');
+
+      const holderLine = document.createElement('div');
+      holderLine.style.cssText = 'font-size:.68rem;letter-spacing:.1em;color:' + tc + '66;margin-bottom:8px;font-family:monospace';
+      holderLine.textContent = holder
+        ? ((window.t?window.t('title.currentlyHeldBy','CURRENTLY HELD BY:'):'CURRENTLY HELD BY:') + ' ' + String(holder.name).toUpperCase()
+           + (protectedNow ? '  \u00b7  ' + termRemaining(termEnds) : ''))
+        : (window.t?window.t('title.seatVacant','SEAT IS VACANT'):'SEAT IS VACANT');
+      card.appendChild(holderLine);
+
+      const top = document.createElement('div');
+      top.style.cssText = 'display:flex;align-items:baseline;gap:10px';
+
+      const nameEl = document.createElement('div');
+      nameEl.style.cssText = 'flex:1;font-weight:700;font-size:.92rem;color:' + tc + ';letter-spacing:.04em';
+      nameEl.textContent = window.titleNameZh ? window.titleNameZh(o.name) : o.name;
+
+      const priceEl = document.createElement('div');
+      priceEl.style.cssText = 'font-size:.78rem;color:' + tc + '55;white-space:nowrap';
+      priceEl.textContent = o.price;
+
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.style.cssText = 'min-width:96px;padding:4px 12px;border-radius:6px;font-size:.78rem;background:#00121d';
+
+      if (mine) {
+        btn.textContent = '\u2713 ' + (window.t?window.t('title.inOffice','In Office'):'In Office');
+        btn.disabled = true; btn.style.color = tc; btn.style.border = '1px solid ' + tc + '88';
+      } else if (protectedNow) {
+        // Shown as protected rather than offered and then refused. The refusal is
+        // free either way, but a button that always fails teaches a player the
+        // feature is broken rather than that the office is held.
+        btn.textContent = window.t?window.t('title.protected','Protected'):'Protected';
+        btn.disabled = true; btn.style.color = '#4a5260'; btn.style.border = '1px solid #4a526055';
+      } else {
+        btn.textContent = holder
+          ? (window.t?window.t('title.seizeOffice','Seize Office'):'Seize Office')
+          : (window.t?window.t('title.claimOffice','Claim Office'):'Claim Office');
+        btn.style.color = tc; btn.style.border = '1px solid ' + tc + '44';
+        btn.addEventListener('click', function(){ if (!confirm(o.confirm)) return; o.buy(); });
+      }
+
+      top.appendChild(nameEl); top.appendChild(priceEl); top.appendChild(btn);
+
+      const spec = TITLES.find(function(t){ return t.name === o.name; });
+      const blurb = document.createElement('div');
+      blurb.style.cssText = 'font-size:.76rem;color:' + tc + '55;margin-top:6px;font-style:italic';
+      blurb.textContent = (window.titleBlurbZh && spec) ? window.titleBlurbZh(o.name, spec.blurb) : (spec ? spec.blurb : '');
+
+      const perks = document.createElement('div');
+      perks.style.cssText = 'font-size:.68rem;color:' + tc + '66;margin-top:6px;font-family:monospace;letter-spacing:.06em;line-height:1.7';
+      perks.textContent = '\u2B21 ' + (window.t ? window.t(o.perksKey, o.perks) : o.perks);
+
+      card.appendChild(top); card.appendChild(blurb); card.appendChild(perks);
+      legendaryList.appendChild(card);
+    });
+  }
+
+  buildLegendaryRack();
+  refreshCouncilSeats();
 
   // Update president state from WS
   window._onPresidentState = function(data) {
     presidentHolder = data.holder || null;
     window.FM_PRESIDENT = presidentHolder; // global read for codec name-resolver + rep locks
 
-    const holderLine = document.getElementById('president-holder-line');
-    if (holderLine) {
-      holderLine.textContent = presidentHolder
-        ? ((window.t?window.t('title.currentlyHeldBy','CURRENTLY HELD BY:'):'CURRENTLY HELD BY:') + ' ' + presidentHolder.name.toUpperCase())
-        : 'SEAT IS VACANT';
-    }
-    if (presidentCard && presidentCard._refreshBtn) presidentCard._refreshBtn();
+    // The Presidency is one of three cards sharing a builder now, so an election
+    // rebuilds the rack rather than patching a single card in place.
+    buildLegendaryRack();
   };
 
   // Request president state on store open
@@ -490,6 +557,8 @@
   // Color map for special titles
   const SPECIAL_TITLE_COLORS = {
     'President of The Coalition': '#00bfff',
+    'Overseer of The Syndicate': '#ff2e63',
+    'Prime Node of The Void Collective': '#c77dff',
     'Borg Betrayer': '#e74c3c',
     'Marked Subscriber': '#c8a040', 'Premium Wage Slave': '#c8a040',
     'Officer of the Guild': '#2ecc71', 'Merchant of the 7th Ward': '#2ecc71',

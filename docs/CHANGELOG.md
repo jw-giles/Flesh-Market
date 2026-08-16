@@ -4,6 +4,90 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.8.0 (2026-08-16) - The Council Chamber (SERVER + CLIENT)
+
+Server side. Requires a restart. Hard refresh for the Store and Galactic tabs. Files touched: server/db_council.js (new), server/db.js, server/server.js, client/assets/council.js (new), client/assets/galaxy.js, client/assets/core.js, client/assets/market-state.js, client/assets/sound.js, client/index.html, client/version.json.
+
+VERSION NOTE, BECAUSE THE HISTORY WILL LOOK ODD OTHERWISE. This work was drafted across seven patches numbered 1.4.0.0 to 1.5.0.0 and is consolidated here as 1.3.8.0, a straight patch increment on 1.3.7.6. The old numbering was not merely inflated, it COLLIDED: v1.5.0.0 and v1.5.1.x already exist in this file from 2026-07-24. Nothing in the codebase compares version strings (apply.sh and ship.sh read client/version.json only to name a commit), so renumbering downward breaks nothing.
+
+WHY ANY OF THIS EXISTS. Players were already conducting territorial diplomacy in global chat, unprompted and with an audience. The Void Collective took two colonies and then offered the acting President a swap. Every part of that deal was ALREADY mechanically executable, because /api/galaxy/fund has never required faction membership and anyone may fund any faction on any colony. What was missing was not a room. It was ENFORCEMENT. Building a nicer room for the same unenforceable conversation would have added a paywall to content that was already happening for free.
+
+### The Accord
+
+A pair of typed obligation lists the server owns, escrows and executes atomically, plus an optional free text RIDER it stores and never reads.
+
+BONDED VERSUS RIDER IS THE WHOLE THING. A bonded clause is a guarantee the server holds credits against. A rider is a stated intention nothing enforces. The composer, the ledger and the signature confirmation all say which is which in words rather than only in colour, because a player who signs a rider believing the server was holding it is the exact failure that kills the guarantee for everyone at once, permanently. Riders are still the good part: a broken rider is a public, dated, on the record betrayal the whole chamber can read six months later.
+
+THERE IS DELIBERATELY NO CASH CLAUSE. Every player to player value route sits behind canSendValue, and the wire charges 2% plus a 90% Guild surcharge above 10,000. An Accord with a credits clause and no surcharge is a strictly better wire than the wire with no 12 hour cooldown, which is the Fbay hole from 1.2.x wearing a treaty. One that DID carry the surcharge would price a 500,000,000 political payment at 450,000,000 in tax. Neither branch is acceptable, so there is exactly one clause kind, fund_colony, which BURNS credits into a colony war chest and transfers to nobody. No transfer means no clearance surface and no laundering route. It is also the clause the real scenario needed: two blocs trade territory by buying each other's control percentage, not by wiring each other cash.
+
+applyColonyFunding was extracted verbatim from the /api/galaxy/fund route body so an Accord funds through the IDENTICAL path rather than a parallel implementation that can drift. The alreadyDebited flag exists because an Accord escrows hours before the funding applies.
+
+### The four chairs
+
+Coalition is the EXISTING Presidency, resolved live from the president variable, still bought in the Title Market. Guild is never purchasable: it is the notary and the house, and since it holds real territory a Guild outside the room would be the one bloc that can conquer and cannot be bargained with. Syndicate and Void are Legendary titles at 500,000,000 each, sitting in the same rack as the Presidency, because offices living in two shops made no sense.
+
+THE TITLE IS THE OFFICE. Granted on acquisition, auto-equipped, stripped on overthrow, and each drives the holder's chat colour. council_seats stays authoritative for one reason only: it carries acquired_at and a title has no timestamp, so a protected term cannot live in ownedTitles. buildAvailableTitles re-derives in BOTH directions so a drifted row self corrects.
+
+CHAIR COLOURS WERE PICKED AGAINST THE CHAT CHAIN, NOT THE FACTION PALETTE. The obvious choices, #e74c3c and #9b59b6, are already the escaped-cyborg and plain-cyborg colours; a delegate in either would tell every reader the wrong thing about who they are.
+
+PROTECTED TERMS ON EVERY CHAIR. 72 hours for the council seats, SEVEN DAYS for the Presidency. Before this the Presidency could be taken the instant somebody outbid it, which makes the office a live readout of who has the most cash rather than a position anyone holds, and the Coalition chair is a Council seat, so a counterparty who can vanish mid negotiation is not worth signing with. A protected term also guarantees the holder the passive for its whole length, a floor of 5,040,000 nobody can interrupt, and makes election rallies rarer. Both accepted; an office anyone can take at any second is not an office.
+
+ESCROW FOLLOWS THE PERSON, THE RIGHT TO SIGN FOLLOWS THE CHAIR. An ousted delegate is refunded in full; Accords addressed TO their chair stay open for the incoming holder to inherit.
+
+### The three surfaces
+
+floor (delegates only, NEVER pruned), gallery (anybody, bounded), faction:<id> (that faction only, and a non-member cannot even read one). Reading is deliberately laxer than writing: the floor is public to watch and closed to speak in, which is the entire shape of the feature. The floor is excluded from the prune sweep IN THE QUERY, because a chamber whose transcript ages out is not a record and riders only matter because a broken one is readable months later.
+
+THE GM REGENT VOICE. A dev, admin or owner addresses the floor as any REGENT HELD chair and the room sees the regent: name, portrait, faction colour, and a live typing indicator. The costume is on the DISPLAY ONLY. council_posts.author_id always holds the real account and speaking_as holds the persona, because an audit trail that lies about authorship is worse than none. author_id is never sent to any client. A GM cannot speak for a chair a player holds.
+
+SPEAKER IDENTITY RESOLVES LIVE. Portrait and faction are looked up on every read rather than frozen onto the row: the row records WHAT WAS SAID, but who the speaker is NOW is a property of the speaker. Old posts pick up a portrait chosen later and recolour on a faction change. The live broadcast and the history read go through one function, because two constructions of one wire shape is how they drift.
+
+### Faction treasuries
+
+Before this a faction owned NOTHING. faction_funding is a ledger of past individual spending; there was no pot, so a head could only commit their own wallet, which makes the chair a signature rather than an office.
+
+THE INVARIANT, a property of the code and not a policy: treasury credits can become faction control or Accord escrow and can NEVER become any player's personal cash, by any path. There is no withdraw endpoint and adding one undoes the feature. FOUR refund routes exist (decline, withdraw, expiry sweep, seat loss) and four independent implementations is four chances to send faction credits into a personal wallet, so all four go through one router that reads payer_proposer / payer_counter and sends money back where it came from.
+
+The consequence is the design: a bad leader can WASTE a treasury and cannot STEAL one. Waste is recoverable, public in the ledger, and gets them ousted from a chair contestable every 72 hours.
+
+Funding is VOLUNTARY, not a levy on member activity, so a leader nobody trusts runs an empty treasury. Contributions are NOT gated by Guild clearance, because clearance guards player to player routes and a contribution reaches no player ever.
+
+### Announce then execute
+
+WHAT IS ACTUALLY IRREVERSIBLE IS NARROWER THAN "A BIG ACCORD". A leader spending their own money on a bad deal hurts only them. A treasury spend on their OWN faction's control is waste at worst: the credits are gone but the ground is theirs. The case needing a brake is the pair PAID FROM A TREASURY and FUNDING A FACTION THAT IS NOT THAT TREASURY'S OWN, which is the only combination where members are harmed by a decision they did not make and cannot undo. Everything else still executes on signature.
+
+A WINDOW, NOT A VOTE. Quorum in a faction with a dozen active players is a feature that dies quietly and a voting UI nobody reaches. A 12 hour countdown needs neither. The answer to "our leader is about to hand Gluttonis to the Void" becomes: argue in the faction room, lobby the other chairs on the floor, or if their 72 hour term has lapsed, buy the chair out from under them before the clock runs out. The right to pull follows the CHAIR, not the person who committed, so the new holder can cancel their predecessor's decision. That is politics resolving politics using only parts that already exist.
+
+The receiving chair deliberately CANNOT pull it. They agreed; the window protects a faction from its own leader, not either signatory from a deal they regret.
+
+THE WINDOW COVERS BOTH ROUTES, AND THE FIRST CUT DID NOT. It was gated on the ACCORD SHAPE rather than on the condition, so a leader who wanted to hand ground away did not need an Accord at all: pointing /api/council/treasury/fund at a rival landed instantly, with no counterparty and nobody able to pull it. Found by inventorying what a chair actually grants before shipping rather than by reading the code, and confirmed against a running server, where one call moved lustandia void control from 28% to 32%. The predicate is now applied at the source, and it is named for the CONDITION rather than for the Accord, because naming it after the shape is what caused the gap. A direct spend has no Accord to hang a pending status on, so committed spends live in treasury_pending; the credits leave the balance at commit time and are held there exactly as Accord escrow is, so the figure members read is honest about what is already spoken for.
+
+TWO BUGS IN THAT FIX, BOTH CAUGHT BY THE SUITE. First, applyColonyFunding already returns a field called `pending`, the war fund carry-forward remainder, and spreading its result alongside a boolean `pending` made an INSTANT spend read as held to anything checking the flag. The flag is now `held`. Second, the outflow was double counted: credits are debited once at commit and logged there as spend_pending, and logging the execution as another negative made the ledger stop summing to the balance, which is the one property that makes the ledger worth reading. The execution entry is now amount 0.
+
+### Bugs found along the way, recorded because they repeat
+
+STALE OBJECT OVERWRITE, caught by the escrow conservation assertion and would otherwise have shipped. refundProposerAccords reads and saves its OWN player row, so any player object read BEFORE it is stale by exactly the refund and saving it afterwards silently reverses the credit. Adding stripSeatTitle to the ouster path introduced precisely that. The same hazard was latent in the President path.
+
+SAVE INSIDE A CONDITIONAL, pre-existing. The President ouster had savePlayer inside the equipped-title check, so a player who OWNED the title without WEARING it kept a Presidency they had lost across a reload.
+
+GLOW ON AN IMAGE IS A BLUR. The portrait glow filter was applied to the image itself, which smears the face and defeats the reason for having one. It belongs on the ring.
+
+TWO CONSTRUCTIONS OF ONE WIRE SHAPE. The live post broadcast hand-built its payload while history went through councilPostView, which is why a live post carried a portrait the same post lacked after reload.
+
+### Verification
+
+199 assertions across eleven suites, run against a live server: the Accord primitive and its guards, chair titles and colours, portraits, the three surfaces and the GM persona, speaker identity, treasuries and the no-withdraw invariant, treasury escrow surviving an ouster, the delay rule, and the chair-takeover counterplay. Plus i18n-check, selector-check, scopecheck and mobile-audit.
+
+### Currency glyph
+
+23 pre-existing instances of the wrong symbol are corrected: U+0192, a small f with hook, where U+0191, the capital F with hook, is the game's credit sign. They sat in the warehouse rent and shortfall messages, the faction bonus summaries, and the Chinese translations, where the English read "+Ƒ500 per income cycle" and the zh string directly beside it read "+ƒ500". Ƒbay was already correct in all 17 of its uses, which is what confirmed which character was intended. Every occurrence was inventoried and classified before the swap rather than blanket replaced on faith; there is no legitimate use of U+0192 anywhere in the tree. Historical CHANGELOG prose keeps its original characters, because that is a record of what was written at the time rather than shipped copy.
+
+### Still open
+
+Regent names and the two chair title names are placeholders, not GM-authored. Mining cash remains client-authoritative via mining_bank, and it matters more now: a fabricated balance can flow into a treasury and out as territory, at which point it is laundered into world state rather than isolated to one account.
+
+---
+
 ## v1.3.7.6 (2026-08-12) - Dev account decommission: four retirements, two rotations (SERVER)
 
 Server side. Requires a `.env` edit on the VPS and a restart. Files touched: server/seed_devaccounts.mjs, server/.env.example, server/server.js (comment), docs/README_LOCAL.md, deploy/DEPLOY_README.md, client/version.json.
