@@ -1,4 +1,16 @@
-# FleshMarket v1.3.8.1 - MANIFEST
+# FleshMarket v1.3.8.2 - MANIFEST
+
+## 1.3.8.2 changes (Council tab was eating typed text; CLIENT ONLY)
+- CLIENT ONLY. NO RESTART. HARD REFRESH REQUIRED. Files touched: client/assets/council.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.
+- SYMPTOM: Council tab appeared to refresh every ~10s, clearing anything half typed. NOTHING in the codebase runs on a 10s cadence. Cause was event driven and entirely in council.js.
+- ROOT CAUSE: renderRooms() rebuilds croomWrap with innerHTML and THE ROOM CHAT INPUT WAS NEVER CAPTURED. The Accord composer got captureDraft/restoreDraft when it shipped; the chat box directly beneath it got none of it. Same mistake, one element over.
+- TRIGGERS (none matching 10s, they just add up): anyone posting in the room; council_dirty on any accord/seat movement; a BLIND 30s tick calling a FULL render whether or not anything changed. Two people in a room = every few seconds.
+- FIX 1: room input preserves TEXT + CARET + FOCUS across every render. Restoring text but dropping the cursor to the end is its own insult mid-line. Focus only taken back if they ACTUALLY had it: unconditional focus() steals the caret out of the composer or the main chat.
+- FIX 2: an incoming post APPENDS one line instead of rebuilding the pane. Most frequent trigger by a distance; not touching the input at all beats restoring it.
+- FIX 3: the 30s tick (which exists ONLY to age relative timestamps) skips entirely while anything in the pane has focus.
+- FIX 4: council_dirty DEFERS + COALESCES while typing, so a burst of activity is one reload after you stop, not one per event on top of your sentence.
+- Scroll position preserved; follows new messages down ONLY if already at the bottom.
+- VERIFIED IN A REAL DOM under jsdom, not by reading: 11 assertions (text, caret, focus, message rendered, send still clears). CONTROL RUN against the unfixed code REPRODUCES the symptom, failing on text/caret/focus, which is what makes the passing run mean anything.
 
 ## 1.3.8.1 changes (Mr. Flesh takes the room; SERVER + CLIENT)
 - SERVER SIDE. RESTART REQUIRED. HARD REFRESH. Files touched: server/server.js, client/assets/council.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.

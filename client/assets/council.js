@@ -868,9 +868,53 @@
     return h;
   }
 
+  // THE COMPOSER GOT DRAFT PRESERVATION AND THE CHAT BOX DID NOT, which is the
+  // whole bug: renderRooms rebuilds croomWrap with innerHTML, and every rebuild
+  // threw away whatever was half typed in the room input. The pane re-renders on
+  // anyone posting, on an accord changing, and on a blind 30 second timer, so in
+  // a room with two people in it a sentence gets eaten every few seconds.
+  //
+  // Caret and scroll go with it. Restoring the text but dropping the cursor to
+  // the end is its own small insult when you were editing the middle of a line.
+  function captureRoomDraft(){
+    var inp = document.getElementById('croomInput');
+    var body = document.getElementById('croomBody');
+    var asSel = document.getElementById('croomAs');
+    if (!inp && !body) return null;
+    return {
+      text: inp ? inp.value : '',
+      selStart: inp ? inp.selectionStart : 0,
+      selEnd: inp ? inp.selectionEnd : 0,
+      // Only take focus back if the person actually had it. Calling focus() on
+      // every render steals the caret out of the Accord composer, or out of the
+      // main chat, while somebody is typing there.
+      focused: !!(inp && document.activeElement === inp),
+      as: asSel ? asSel.value : null,
+      // Preserve scroll unless they were already at the bottom, in which case
+      // follow new messages down as a chat should.
+      scrollTop: body ? body.scrollTop : null,
+      atBottom: body ? (body.scrollHeight - body.scrollTop - body.clientHeight < 40) : true,
+    };
+  }
+
+  function restoreRoomDraft(d){
+    if (!d) return;
+    var inp = document.getElementById('croomInput');
+    if (inp && d.text) {
+      inp.value = d.text;
+      try { inp.setSelectionRange(d.selStart, d.selEnd); } catch(e){}
+    }
+    if (inp && d.focused) { try { inp.focus(); } catch(e){} }
+    var asSel = document.getElementById('croomAs');
+    if (asSel && d.as) asSel.value = d.as;
+    var body = document.getElementById('croomBody');
+    if (body) body.scrollTop = d.atBottom ? body.scrollHeight : d.scrollTop;
+  }
+
   function renderRooms(){
     var box = document.getElementById('croomWrap');
     if (!box) return;
+    var _draft = captureRoomDraft();
     var rl = roomList();
     var active = st.active;
     if (!rl.some(function(r){ return r.id === active; })) { active = st.active = 'gallery'; }
@@ -963,10 +1007,11 @@
     if (inp) {
       inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') window.__councilSend(); });
       inp.addEventListener('input', sendTyping);
-      inp.focus();
     }
     var asSel = document.getElementById('croomAs');
     if (asSel) asSel.addEventListener('change', function(){ st.gmAsSeat = asSel.value; });
+
+    restoreRoomDraft(_draft);
 
     // #croomBody is rebuilt by innerHTML on every render, which drops the inline
     // custom property with it. Re-apply rather than setting it once at boot.
@@ -1000,6 +1045,9 @@
   window.__councilRoom = function(id){
     st.active = id;
     renderRooms();
+    // An explicit room switch is the one time focusing is what the person meant.
+    var inp = document.getElementById('croomInput');
+    if (inp) { try { inp.focus(); } catch(e){} }
     loadRoom(id);
   };
 
@@ -1012,6 +1060,7 @@
     send({ type:'council_post', room: st.active, text: text,
            asSeat: asSel ? asSel.value : undefined });
     inp.value = '';
+    try { inp.focus(); } catch(e){}
   };
 
   // ── Main render ────────────────────────────────────────────────────────────
@@ -1050,11 +1099,17 @@
     // unrelated chair moved, and the person composing a 50,000,000 clause is
     // exactly the person you must not do that to. So the composer is snapshotted
     // before the rewrite and restored after it.
+    // Both drafts are captured before the rewrite: the Accord composer AND the
+    // room chat box. renderRooms() captures its own again on the way through,
+    // which is harmless, but capturing here means a full render cannot lose it
+    // even if renderRooms is skipped.
     var draft = captureDraft();
+    var roomDraft = captureRoomDraft();
     box.innerHTML = h;
     restoreDraft(draft);
     renderTreasury();
     renderRooms();
+    restoreRoomDraft(roomDraft);
   }
 
   function captureDraft(){
@@ -1112,7 +1167,26 @@
         st.rooms[rm].push(m.data);
         if (rm !== 'floor' && st.rooms[rm].length > 200) st.rooms[rm].shift();
         st.typing[rm] = null;
-        if (rm === st.active) { renderRooms(); scrollRoomToEnd(); }
+        if (rm === st.active) {
+          // APPEND, do not rebuild. An incoming message is the most frequent
+          // reason this pane redraws, and rebuilding the whole thing to add one
+          // line at the bottom is what made typing feel like it was being eaten.
+          // The draft is preserved either way now, but not touching the input at
+          // all is better than restoring it.
+          var body = document.getElementById('croomBody');
+          if (body) {
+            var wasAtBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+            var empty = body.querySelector('div[style*="padding:16px"]');
+            if (empty) body.innerHTML = '';
+            body.insertAdjacentHTML('beforeend', postView(m.data));
+            if (isPixelArt(m.data.portrait)) ensureItemArt();
+            if (wasAtBottom) body.scrollTop = body.scrollHeight;
+            var tel = document.getElementById('croomTyping');
+            if (tel) tel.textContent = '';
+          } else {
+            renderRooms(); scrollRoomToEnd();
+          }
+        }
         return;
       }
       if (m && m.type === 'council_typing' && m.data) {
@@ -1136,13 +1210,38 @@
       }
       if (m && m.type === 'council_dirty') {
         var pane = document.getElementById('gCouncilPane');
-        if (pane && pane.style.display !== 'none') load();
+        if (!pane || pane.style.display === 'none') return;
+        // Defer a full reload while they are mid sentence. council_dirty means an
+        // accord or a seat moved, which is worth showing but never worth showing
+        // RIGHT NOW at the cost of what somebody is writing. Coalesced so a burst
+        // of events results in one reload once they stop typing.
+        var ae = document.activeElement;
+        if (ae && pane.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) {
+          st._dirtyPending = true;
+          clearTimeout(st._dirtyTimer);
+          st._dirtyTimer = setTimeout(function(){
+            var a2 = document.activeElement;
+            var pn = document.getElementById('gCouncilPane');
+            if (a2 && pn && pn.contains(a2) && /^(INPUT|TEXTAREA|SELECT)$/.test(a2.tagName)) return;
+            st._dirtyPending = false; load();
+          }, 4000);
+          return;
+        }
+        load();
       }
     } catch(err){}
   });
 
+  // The only reason this tick exists is to age the relative timestamps: "expires
+  // in 47h 58m", "executes in 11h". It was calling render(), which rebuilds the
+  // entire pane including both input boxes, on a blind timer whether or not
+  // anything had changed. Now it skips entirely while the person is typing
+  // anywhere inside the pane, so a redraw can never land mid sentence.
   setInterval(function(){
     var pane = document.getElementById('gCouncilPane');
-    if (pane && pane.style.display !== 'none' && st.loaded) render();
+    if (!pane || pane.style.display === 'none' || !st.loaded) return;
+    var ae = document.activeElement;
+    if (ae && pane.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+    render();
   }, 30000);
 })();

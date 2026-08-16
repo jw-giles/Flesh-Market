@@ -4,6 +4,32 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.8.2 (2026-08-16) - The Council tab was eating what you typed (CLIENT)
+
+Client only. No restart. HARD REFRESH REQUIRED. Files touched: client/assets/council.js, client/version.json.
+
+THE SYMPTOM was a Council tab that appeared to refresh every ten seconds or so, clearing anything half written. Nothing in the codebase runs on a ten second cadence; the cause was event driven and it was entirely mine.
+
+renderRooms() rebuilds croomWrap with innerHTML, and the room chat input was never captured across that rebuild. The Accord composer got captureDraft/restoreDraft when it shipped, precisely because a redraw eating a half typed 50,000,000 clause was the wrong failure, and then the chat box sitting directly beneath it got none of that treatment. Same mistake, one element over.
+
+WHAT WAS TRIGGERING THE REDRAWS, none of them on a timer that matched the reported interval: anyone posting in the room, a council_dirty broadcast whenever an accord or a seat moved, and a blind thirty second tick that called a FULL render regardless of whether anything had changed. With two people in a room those land every few seconds, which is where the ten seconds came from.
+
+FOUR FIXES.
+
+The room input now preserves its text, its CARET and its focus across every render, matching the composer. Restoring the text but dropping the cursor to the end is its own small insult when you were editing the middle of a line. Focus is only taken back if the person actually had it, because calling focus() unconditionally on every render steals the caret out of the Accord composer, or out of the main chat, while somebody is typing there.
+
+An incoming post now APPENDS one line rather than rebuilding the pane. That was the most frequent trigger by a distance, and rebuilding everything to add a line at the bottom is what made typing feel like it was being eaten. The draft survives either way now, but not touching the input at all is better than restoring it.
+
+The thirty second tick exists only to age relative timestamps such as "expires in 47h 58m". It now skips entirely while anything inside the pane has focus, so a redraw can never land mid sentence.
+
+council_dirty defers while typing and coalesces, so a burst of chamber activity results in one reload once you stop, rather than a reload per event on top of your sentence.
+
+Scroll position is preserved as well, and follows new messages down only when you were already at the bottom, which is how a chat should behave and was not what a full rebuild did.
+
+VERIFIED IN A REAL DOM, not by reading. council.js is run under jsdom, a line is typed with the caret placed mid string, and a post is delivered over the event bus: 11 assertions covering text, caret, focus, the message actually rendering, and send still clearing the box. A control run against the unfixed code reproduces the symptom exactly, failing on typed text, caret and focus, which is what makes the passing run mean anything.
+
+---
+
 ## v1.3.8.1 (2026-08-16) - Mr. Flesh takes the room (SERVER + CLIENT)
 
 Server side. Requires a restart. Hard refresh. Files touched: server/server.js, client/assets/council.js, client/version.json.
