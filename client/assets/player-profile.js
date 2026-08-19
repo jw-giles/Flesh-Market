@@ -327,9 +327,8 @@
     ov.style.cssText = 'position:fixed;inset:0;z-index:11000;background:#000a;display:flex;align-items:center;justify-content:center;font-family:inherit';
     let h = '<div style="background:#060f0b;border:1px solid #1c3a30;border-radius:10px;max-width:560px;width:92%;max-height:82vh;overflow:auto;box-shadow:0 10px 40px #000c">';
     h += '<div style="position:sticky;top:0;background:#08120d;border-bottom:1px solid #1c3a30;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;z-index:2">';
-    h += '<style>@keyframes ppCreditGlow{0%,100%{text-shadow:0 0 5px #42ff7e,0 0 10px #42ff7e66}50%{text-shadow:0 0 10px #6dffa0,0 0 20px #42ff7eaa}}.pp-credit{color:#6dffa0;font-size:.74rem;letter-spacing:.08em;text-decoration:none;display:inline-block;margin-top:4px;font-weight:600;animation:ppCreditGlow 2.2s ease-in-out infinite}.pp-credit:hover{color:#bfffd6}</style>';
-    h += '<div><div style="color:#42ff7e;letter-spacing:.16em;font-size:.8rem;text-transform:uppercase">Select Portrait</div>'
-      + '<a class="pp-credit" href="https://subotai-khudozhnik.itch.io/" target="_blank" rel="noopener noreferrer">Art by subotai \u2197</a></div>';
+    h += '<style>@keyframes ppCreditGlow{0%,100%{text-shadow:0 0 5px #42ff7e,0 0 10px #42ff7e66}50%{text-shadow:0 0 10px #6dffa0,0 0 20px #42ff7eaa}}.pp-credit{color:#6dffa0;font-size:.58rem;letter-spacing:.08em;text-decoration:none;display:inline;margin-left:6px;font-weight:600;text-transform:none;animation:ppCreditGlow 2.2s ease-in-out infinite}.pp-credit:hover{color:#bfffd6}</style>';
+    h += '<div><div style="color:#42ff7e;letter-spacing:.16em;font-size:.8rem;text-transform:uppercase">Select Portrait</div></div>';
     h += '<button id="ppPickClose" style="background:none;border:none;color:#5f8f74;font-size:1rem;cursor:pointer">✕</button></div>';
     h += '<div style="padding:14px 16px">';
     h += '<button id="ppPickClear" style="background:transparent;border:1px solid #3a2a2a;color:#c7a9a9;border-radius:4px;padding:5px 12px;font:inherit;font-size:.62rem;cursor:pointer;margin-bottom:12px;letter-spacing:.1em">REMOVE PORTRAIT</button>';
@@ -343,8 +342,20 @@
       });
       h += '</div>';
     }
+    // Credit sits on the GROUP, not on the modal. The set has more than one artist
+    // in it now, so a single header line would attribute all of them to whoever
+    // happened to be first. A group with no credit entry renders none.
+    var creditMap = window.FM_PORTRAITS.credits || {};
+    function ppEsc(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function ppUrl(s) { return /^https?:\/\//i.test(String(s || '')) ? ppEsc(s) : '#'; }
     window.FM_PORTRAITS.groups.forEach(function (g) {
-      h += '<div style="color:#5f8f74;font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;margin:6px 0 7px">' + g[0] + '</div>';
+      var cr = creditMap[g[0]];
+      h += '<div style="color:#5f8f74;font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;margin:6px 0 7px">' + ppEsc(g[0])
+        + (cr && cr.name ? ' <a class="pp-credit" href="' + ppUrl(cr.url) + '" target="_blank" rel="noopener noreferrer">art by ' + ppEsc(cr.name) + ' \u2197</a>' : '')
+        + '</div>';
       h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:8px;margin-bottom:14px">';
       g[1].forEach(function (id) {
         const sel = id === cur;

@@ -16,7 +16,7 @@ window.FM_CODEC = {
   reps: [
     {
       id:'mchallan', name:'Captain Trisha McHallan', faction:'coalition',
-      portrait:'corpo2', role:'Coalition Liaison', enabled:true,
+      portrait:'scan99', role:'Coalition Liaison', enabled:true,
       // presidentLock short-circuits BEFORE the tree, so it is off while the tree is
       // the only content. Restore it (with a president router node) when COLD OPEN ships.
       presidentLine:"President, I have nothing for you at this time.",
@@ -147,7 +147,7 @@ window.FM_CODEC = {
     },
     {
       id:'rahtan', name:'Rahtan', faction:'guild',
-      portrait:'corpo7', role:'Merchant Guild Factor', enabled:true,
+      portrait:'scan80', role:'Merchant Guild Factor', enabled:true,
       blurb:"A religious representative of the Merchant Guild, posted here under our lane shipping agreements and the debts that come with them. He preaches, but the Guild holds our contracts, so we listen. Bring him S'weet wine when you get the chance.",
       ver:'v3.40',
       lines:[
@@ -377,7 +377,7 @@ window.FM_CODEC = {
     },
     {
       id:'xen', name:'Father Xen', faction:'void',
-      portrait:'cyborg11', role:'Void Collective Tech Priest', enabled:true,
+      portrait:'droid38', role:'Void Collective Tech Priest', enabled:true,
       blurb:"Another religious representative. I would call him a man, but he is closer to a machine now. The Void Collective locks away tech we need and likes to pick at our OPSEC. Since he arrived, the hacks have stopped, and he has been useful enough to justify the trade secrets we lost for the quiet. Try not to let him preach too long.",
       idleLine:"The Collective is listening. Speak.", // fallback only; the tree below plays instead
       ver:'v0.14',

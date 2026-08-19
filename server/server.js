@@ -6359,10 +6359,14 @@ for (const k of Object.keys(SEAT_TITLE)) SEAT_TITLE_BY_LABEL[SEAT_TITLE[k].title
 // Regent portraits are drawn from the same portrait set players pick from, so a
 // regent and a seated player render identically in the chamber and nothing about
 // the room says "this one is real and that one is furniture". Picked for read at
-// 44px rather than for detail: corpo6 is a worn administrator, corpo7 wears the
-// shades a Syndicate fixer would, cyborg8 is machine rather than human because a
-// thing called Node 7 should not have a face, and corpo4's visor over a notary's
-// eyes is the joke the Guild deserves.
+// 44px rather than for detail: corpo6 is a worn administrator, scan31 is a fixer
+// behind a beard and shades and reads Syndicate red at thumbnail size, cyborg8 is
+// machine rather than human because a thing called Node 7 should not have a face,
+// and scan10's goggles over a notary's eyes are the joke the Guild deserves.
+// KEEP THESE IN SYNC WITH codec-data.js. Rahtan and Vasari both used to be corpo7,
+// which is how the Guild's factor and the Syndicate's proxy ended up wearing the
+// same face in two different rooms. Cross-check any new assignment against the
+// codec reps before reusing a stem.
 // THE PROPRIETOR. Mr. Flesh does not hold a chair and should not: he owns the
 // building. This is a VOICE, not a seat. It can address the floor and it cannot
 // table, sign, decline or pull anything, because giving the house a vote would
@@ -6377,9 +6381,9 @@ const PROPRIETOR_VOICE = {
 
 const SEAT_META = {
   coalition: { label: 'The Coalition',      color: '#4ecdc4', regent: 'Acting Administrator Pell', portrait: 'corpo6'  },
-  syndicate: { label: 'The Syndicate',      color: '#ff2e63', regent: 'Syndicate Proxy Vasari',    portrait: 'corpo7'  },
+  syndicate: { label: 'The Syndicate',      color: '#ff2e63', regent: 'Syndicate Proxy Vasari',    portrait: 'scan31'  },
   void:      { label: 'The Void Collective',color: '#c77dff', regent: 'Void Proxy Node 7',         portrait: 'cyborg8' },
-  guild:     { label: 'Merchant Guild',     color: '#42ff7e', regent: 'Guild Notary Ostrow',       portrait: 'corpo4'  },
+  guild:     { label: 'Merchant Guild',     color: '#42ff7e', regent: 'Guild Notary Ostrow',       portrait: 'scan10'  },
 };
 
 // The colour a seated delegate's chat renders in, or null. Read by the chat,

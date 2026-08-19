@@ -4211,8 +4211,22 @@ function addChat(item){
   const _pIR = ((_psrc || _needsCat) && window.FMPortraitPixelated && window.FMPortraitPixelated(item.portrait)) ? 'image-rendering:pixelated;' : '';
   // Transparent 1x1 placeholder while the item catalog loads; refilled by _refillChatAvatars.
   const _placeholder = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+  // AVATAR SIZE AND FRAMING. Two separate things were wrong here.
+  // Size was pinned at 40px while the text beside it scales with the A+ / A-
+  // control, so turning the type up left the face behind. It now scales off the
+  // same --chat-font-scale variable (.chat-avatar-w in style.css), which is the
+  // whole point of an accessibility control.
+  // Framing: object-fit:cover centres the entire bust in the circle, which is a
+  // small head in a lot of shoulder. FMPortraitFrame crops to the measured head
+  // box instead. That needs a positioned wrapper, so the img is now inside one.
+  // The img KEEPS class chat-avatar and its data attributes because
+  // _refillChatAvatars() and the profile click handler both query it by that.
+  const _fr = window.FMPortraitFrame ? window.FMPortraitFrame(item.portrait)
+                                     : { scale: 1.55, ox: -0.275, oy: -0.0735 };
+  const _frCss = `position:absolute;left:${(_fr.ox * 100).toFixed(2)}%;top:${(_fr.oy * 100).toFixed(2)}%;`
+    + `width:${(_fr.scale * 100).toFixed(2)}%;height:${(_fr.scale * 100).toFixed(2)}%;object-fit:cover;display:block;`;
   const avatar = (_psrc || _needsCat)
-    ? `<img class="chat-avatar" data-user="${item.user}" data-portrait="${item.portrait}" src="${_psrc || _placeholder}" alt="" loading="lazy" style="width:40px;height:40px;border-radius:50%;object-fit:cover;${_pIR}vertical-align:middle;margin-right:9px;border:2px solid ${color};cursor:pointer"${_psrc ? ` onerror="this.style.display='none'"` : ''}>`
+    ? `<span class="chat-avatar-w" style="border:2px solid ${color}"><img class="chat-avatar" data-user="${item.user}" data-portrait="${item.portrait}" src="${_psrc || _placeholder}" alt="" loading="lazy" style="${_frCss}${_pIR}cursor:pointer"${_psrc ? ` onerror="this.parentNode.style.display='none'"` : ''}></span>`
     : '';
   div.innerHTML = `${avatar}${badge}${userSpan}: <span style="color:${isSystem ? '#7fc090' : '#f0b454'}">${text}</span>${_timeSpan}${blockBtnHtml}`;
 

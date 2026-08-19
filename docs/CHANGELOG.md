@@ -4,6 +4,34 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.8.3 (2026-08-19) - 198 portraits, six faces change hands, and the framing stops being a constant (SERVER + CLIENT)
+
+Server restart required. Hard refresh required. Files touched: client/assets/portraits/ (198 new PNGs), client/assets/portrait-manifest.js, client/assets/player-profile.js, client/assets/codec-data.js, client/assets/council.js, client/assets/core.js, client/style.css, server/server.js, client/version.json.
+
+THE PICKER GOES FROM 60 TO 258. Ninety eight Colonist heads and one hundred Synthetic ones join the five groups already there, at 393x397 RGBA like everything else, so there is no resize path and no second loader. The sixty originals in the incoming pack were byte compared against the sixty on disk and are identical, which means nothing anybody is currently wearing moves.
+
+THE ARTIST CREDIT IS THE PART OF THIS THAT IS NOT BOOKKEEPING. It was one line in the modal header, "Art by subotai", sitting above the whole list. That was accurate for as long as subotai drew all sixty and stops being accurate the instant a second artist is in the set, at which point a line intended as credit quietly assigns someone else's work to the wrong name. Credit now attaches to the group rather than the modal, and a group with no entry renders nothing at all rather than inheriting whatever sits above it. Colonist and Synthetic credit gatlingart.
+
+SIX FACES CHANGE. Captain Trisha McHallan moves to scan99, Rahtan to scan80, Father Xen to droid38, which is the first time the Void Collective's tech priest has had a head that is actually a machine rather than a man with parts in him. Jaquet stays on hacker1. In the chamber, Guild Notary Ostrow moves to scan10 and Syndicate Proxy Vasari to scan31.
+
+THAT LAST PAIR CLOSED SOMETHING NOBODY HAD FILED. Rahtan and Vasari were both corpo7. The Guild's factor and the Syndicate's proxy have been wearing the same face this whole time, one in the codec and the other in the chamber, which is exactly the sort of collision that survives because the two rooms are never open at once.
+
+THE FRAMING WAS ONE HARDCODED NUMBER, 1.55x anchored thirty seven percent down, applied to every ring that shows a face. That constant was measured against art that sits inset in its frame with margin on every side. The scan set is drawn out to the frame edges and is already larger in frame before anything zooms it, so the same correction on top cropped straight through the face. Ostrow came out as hair and a pair of goggles. Vasari came out as a jaw.
+
+WHAT REPLACED IT, AND WHAT DID NOT. The scan portraits carry three numbers measured off the PNG at build time: the width of the widest point in the top of the silhouette, its centre, and where the subject begins. Everything else renders 1:1, no crop at all, which is both the correct default for art with no measurement and, for the original sixty, better than the crop they had always shipped with. Those were only readable as too tight once looser heads sat beside them in the same row.
+
+THE MEASUREMENT ASSUMES A HUMAN BUST and two things are not one. A machine bust is head all the way down, so the rule reads a droid's narrow crown as a small head and zooms in on it, worst on the most machine-like: droid16 landed at 2.79x, framed on a blank curve of helmet with the robot entirely out of shot. All hundred droids render 1:1. scan31 fails the same way for a different reason, a narrow hood over a wide beard, and is excluded by name. Both were found by rendering every portrait the rule zoomed past 1.25x and looking at them, not by trusting the arithmetic, which had already been wrong once.
+
+MR FLESH GAINS THE MOST AND WAS NOT PART OF THE REQUEST. His portrait is the Preserved Brain sprite, 32x32, and the old zoom cut the glass off entirely: the ring showed brain matter with no jar around it, which is a fairly serious thing to have been doing to the proprietor. He renders whole.
+
+THE CHAT AVATAR IGNORED THE ACCESSIBILITY CONTROL. It was forty pixels, written inline, while the text next to it scaled off the A+ / A- setting. Somebody turning the type up is doing it because the small size is hard to read, and the face was the one element that stayed put. It now scales off the same variable with a base of fifty two pixels set in one place in style.css; council room avatars do the same at thirty four. A broken image hides the whole ring rather than leaving an empty bordered circle behind.
+
+THE SERVER NEEDED NO VALIDATION CHANGE, which is worth stating rather than leaving implied. The selectable set is a readdir at boot, so new files are legal the moment the process restarts and illegal until then. A client that has hard refreshed against an old process will show the new faces and fail to save one.
+
+VERIFIED IN A REAL DOM. The picker is built under jsdom and asserted on: every tile resolving to a file that exists, no duplicates, selection highlight, credit placement, framing present for exactly the measured set and absent everywhere else, no ring left with an uncovered gap, and item art falling through to 1:1. A control run against the unmodified files fails eleven of them, which is the only reason the passing run means anything.
+
+---
+
 ## v1.3.8.2 (2026-08-16) - The Council tab was eating what you typed (CLIENT)
 
 Client only. No restart. HARD REFRESH REQUIRED. Files touched: client/assets/council.js, client/version.json.

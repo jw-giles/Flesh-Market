@@ -176,13 +176,16 @@
       // reads as "this one is furniture".
       var src = portraitSrc(v.portrait);
       var R = 25;
-      // PORTRAIT FRAMING. The source art is 393x397 with the head occupying
-      // roughly the middle of the upper two thirds, centred near (50%, 37%). Drawn
-      // at 1:1 into a 50px disc that reads as a shoulders-and-background shot with
-      // a tiny face in it. Scaling to 1.55x and anchoring that 37% point at the
-      // centre of the circle crops to the head, which is the only part worth
-      // showing at this size.
-      var PS = 1.55, PW = R * 2 * PS;
+      // PORTRAIT FRAMING is no longer a constant. It used to be 1.55x anchored at
+      // 37% down, which was tuned against art that sits inset in its frame. The
+      // scan and droid sets run to the frame edges and that zoom ate their faces.
+      // FMPortraitFrame returns multipliers of the disc DIAMETER derived from a
+      // measured head box, so every chair shows a head at the same size whoever
+      // is sitting in it. Falls back to the old constants if the manifest has not
+      // loaded, which keeps this render path working rather than blank.
+      var FR = window.FMPortraitFrame ? window.FMPortraitFrame(v.portrait)
+                                      : { scale: 1.55, ox: -0.275, oy: -0.0735 };
+      var DIA = R * 2, PW = DIA * FR.scale;
       if (src) {
         h += '<clipPath id="cclip-'+id+'"><circle cx="'+x+'" cy="'+y+'" r="'+R+'"/></clipPath>';
         h += '<circle cx="'+x+'" cy="'+y+'" r="'+(R+4)+'" fill="'+c+'" opacity="'+(occupied?0.16:0.06)+'"/>';
@@ -192,7 +195,7 @@
         if (occupied) h += '<circle cx="'+x+'" cy="'+y+'" r="'+R+'" fill="none" stroke="'+c+'" '
            + 'stroke-width="2.5" filter="url(#cgl-'+id+')"/>';
         h += '<image href="'+esc(src)+'" xlink:href="'+esc(src)+'" '
-           + 'x="'+(x - PW/2).toFixed(1)+'" y="'+(y - PW*0.37).toFixed(1)+'" '
+           + 'x="'+(x - R + FR.ox * DIA).toFixed(1)+'" y="'+(y - R + FR.oy * DIA).toFixed(1)+'" '
            + 'width="'+PW.toFixed(1)+'" height="'+PW.toFixed(1)+'" preserveAspectRatio="xMidYMid slice" '
            + 'clip-path="url(#cclip-'+id+')" opacity="'+(occupied?1:0.55)+'"/>';
         h += '<circle cx="'+x+'" cy="'+y+'" r="'+R+'" fill="none" stroke="'+c+'" '
@@ -275,6 +278,19 @@
     return isPixelArt(id) ? 'image-rendering:pixelated;image-rendering:crisp-edges;' : '';
   }
 
+  // The CSS half of the same framing the chair discs use. object-fit:cover alone
+  // centres the whole bust in the ring, which puts a small head in a lot of
+  // shoulder. These are the SAME multipliers, written as percentages of the
+  // wrapper, so a card, a chat avatar and a chair all crop a face identically.
+  // The caller's wrapper must be position:relative;overflow:hidden.
+  function portraitFrameCSS(id){
+    var f = window.FMPortraitFrame ? window.FMPortraitFrame(id)
+                                   : { scale: 1.55, ox: -0.275, oy: -0.0735 };
+    return 'position:absolute;left:'+(f.ox*100).toFixed(2)+'%;top:'+(f.oy*100).toFixed(2)+'%;'
+         + 'width:'+(f.scale*100).toFixed(2)+'%;height:'+(f.scale*100).toFixed(2)+'%;'
+         + 'object-fit:cover;display:block;';
+  }
+
   // ITEM_CATALOG_CLIENT lives in the lazy-loaded inventory.js. If a post needs it
   // and it is not loaded, pull it in and re-render once. Guarded by a flag so a
   // room full of Mr. Flesh lines does not queue a load per message.
@@ -312,10 +328,10 @@
       var psrc = portraitSrc(v.portrait);
       h += '<div style="display:flex;gap:11px;align-items:flex-start">';
       if (psrc) {
-        h += '<div style="flex:0 0 auto;width:52px;height:52px;border-radius:50%;overflow:hidden;'
+        h += '<div style="flex:0 0 auto;position:relative;width:52px;height:52px;border-radius:50%;overflow:hidden;'
            + 'border:2px solid '+col+(v.regent?'55':'');
         h += ';background:#04070b">';
-        h += '<img src="'+esc(psrc)+'" alt="" style="'+portraitStyle(v.portrait)+'width:100%;height:100%;object-fit:cover;display:block;'
+        h += '<img src="'+esc(psrc)+'" alt="" style="'+portraitStyle(v.portrait)+portraitFrameCSS(v.portrait)
            + 'opacity:'+(v.regent?'0.62':'1')+'"/>';
         h += '</div>';
       }
@@ -845,13 +861,13 @@
     // the body text growing away from the byline above it.
     var h = '<div class="cmsg" style="display:flex;gap:9px;padding:7px 0;align-items:flex-start">';
     if (psrc) {
-      h += '<div style="flex:0 0 auto;width:30px;height:30px;border-radius:50%;overflow:hidden;'
+      h += '<div class="croom-av" style="flex:0 0 auto;position:relative;border-radius:50%;overflow:hidden;'
          + 'border:'+(isDelegate?'2px solid '+col:'1px solid '+col+'88')+';background:#04070b">'
-         + '<img src="'+esc(psrc)+'" alt="" style="'+portraitStyle(m.portrait)+'width:100%;height:100%;object-fit:cover;display:block"/></div>';
+         + '<img src="'+esc(psrc)+'" alt="" style="'+portraitStyle(m.portrait)+portraitFrameCSS(m.portrait)+'"/></div>';
     } else {
       // No portrait picked. Render the speaker's initial in their faction colour
       // rather than an empty dashed ring, which reads as a broken avatar.
-      h += '<div style="flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:flex;'
+      h += '<div class="croom-av" style="flex:0 0 auto;border-radius:50%;display:flex;'
          + 'align-items:center;justify-content:center;border:1px solid '+col+'66;background:#04070b;'
          + 'color:'+col+';font-size:.8rem;font-weight:700">'
          + esc(String(m.name || '?').trim().charAt(0).toUpperCase() || '?') + '</div>';
@@ -925,7 +941,13 @@
     // Scale rules. Same --chat-font-scale variable the main chat uses, so the one
     // control in the chat header and the one here are the same setting.
     h += '<style>#croomBody .cmname{font-size:calc(.68rem * var(--chat-font-scale,1))}'
-       + '#croomBody .cmbody{font-size:calc(.82rem * var(--chat-font-scale,1))}</style>';
+       + '#croomBody .cmbody{font-size:calc(.82rem * var(--chat-font-scale,1))}'
+       // The avatar scales with the SAME control as the text it sits next to. A
+       // reader who turns the type up is turning it up because 12px is hard to
+       // read, and a face pinned at 30px while the line grows around it is the
+       // one element the setting was supposed to help.
+       + '#croomBody .croom-av{width:calc(34px * var(--chat-font-scale,1));'
+       + 'height:calc(34px * var(--chat-font-scale,1))}</style>';
 
     // Room switcher, with the text size control on the right.
     h += '<div style="display:flex;align-items:center;border-bottom:1px solid '+CO.line+'">';
