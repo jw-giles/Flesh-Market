@@ -18,7 +18,10 @@ let _audioCtx = null;
   // Every element that should scale with the setting. Council room bodies are
   // rebuilt by innerHTML on each render, so apply() is re-run after those rather
   // than the value being set once at boot.
-  const TARGETS = ['chatBox', 'croomBody'];
+  // gCouncilPane is in the list rather than gCouncilInner on purpose: the inner
+  // is rebuilt by innerHTML on every council_dirty and would drop the variable
+  // with it. Set on the PANE, which is markup and never rebuilt, it survives.
+  const TARGETS = ['chatBox', 'croomBody', 'gCouncilPane'];
 
   function applySize(pct) {
     for (const id of TARGETS) {

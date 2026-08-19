@@ -32,6 +32,32 @@ VERIFIED IN A REAL DOM. The picker is built under jsdom and asserted on: every t
 
 ---
 
+### Council chamber redesign (same release)
+
+Files touched: client/assets/council.js, client/assets/galaxy.js, client/assets/sound.js.
+
+THE CHAMBER WAS ONE COLUMN ABOUT 2500 PIXELS LONG: the ring, then four seat cards, then the composer, then the treasury, then the chat, then the accord list, then the log. Everything was there and none of it was next to anything it related to. You could not see who held a chair and what was being said in the room at the same time, and that pairing is most of what the page exists for.
+
+IT NOW HAS THE SAME SHAPE AS THE REST OF THE CLIENT. style.css lays the main view out as a centre column with a chat rail down the right, and the chamber is the same kind of page: one thing you are looking at and one conversation beside it. It had invented a different arrangement for no reason a player would recognise. The ring is centre stage, the four chairs sit directly under it because they are the choice the ring illustrates, and the floor scrolls below them. The treasury and the room move into the right rail, laid out like #rightPanel: treasury at its natural height, the room taking everything left, so the chat grows with the window instead of being pinned to an arbitrary 300 pixels.
+
+THE RING AND THE CHAIRS DO NOT SCROLL. They are the header of the centre column, so who holds a seat cannot leave the screen while you read what is on the floor, which is the pairing the old single column made impossible.
+
+FULLSCREEN IS THE SAME MECHANISM CITIES ALREADY USED, a class toggled on the pane by the sub tab handler, rather than a second way of doing the same thing. Unlike cities this pane covers the tab bar, so the band carries its own way out, and that exit clicks the sub tab it wants instead of hand unsetting display, so one code path still decides what is visible.
+
+TEXT SIZE RUNS OFF THE CONTROL THAT ALREADY EXISTS. All eighty two inline sizes in council.js were literals; they are now expressed against a single variable derived from the same A+ / A- setting the chat uses, at a 1.15 baseline so the default is larger than it was. A council only size control would have been a second thing to find and a second thing to drift out of sync with the first.
+
+UNDER 900 PIXELS IT IS ONE COLUMN and the ring goes. That is the breakpoint style.css already uses for the main grid, rather than a second number that means the same thing. A 900 by 260 graphic at phone width is a smear, and the four cards carry the same information in text. The columns flow into a single scroll rather than fighting over the height.
+
+THE SEAT CARDS WERE CARRYING TOO MUCH. Name, status and timer are what change between visits; the title that holds the chair and the house note do not, and four cards of that side by side was most of the reading weight on the page. Those open on click now. Which cards are open survives a rebuild, so an accord expiring elsewhere does not close what you were reading.
+
+THE COMPOSER NEVER GOT ITS CARET BACK, and this was found by the test rather than by reading. 1.3.8.2 gave the room chat box its text, its caret and its focus across a rebuild, and left the Accord composer directly above it with the text only. Same mistake, one element over, in the other direction, and it survived because restoring the text looks like the fix. It restores the caret and focus now, and only takes focus back if the person actually had it, which is the part that stops it stealing the cursor out of the chat below. Both column scroll positions are preserved on the same principle: a reader halfway down the accord list thrown back to the top because an unrelated chair moved has lost their place exactly the way a half typed clause used to be lost.
+
+THE RING IS CAPPED at a viewport fraction. At its natural size it would take a third of a laptop screen before a single accord was visible. The first attempt capped it across a full width band, which letterboxed a 900 by 260 graphic into a wide strip with empty gutters either side; inside the centre column its own width sets the height and the cap only catches tall windows.
+
+VERIFIED IN A REAL DOM: 32 assertions under jsdom covering the shell, which content lands in which region, the collapsed seat details toggling, and the state that has to survive a rebuild. No control run is available for this suite, since it drives a debug hook the old file does not have; the caret assertion did fail against the unfixed code while it was being written, which is what put the fix in.
+
+---
+
 ## v1.3.8.2 (2026-08-16) - The Council tab was eating what you typed (CLIENT)
 
 Client only. No restart. HARD REFRESH REQUIRED. Files touched: client/assets/council.js, client/version.json.

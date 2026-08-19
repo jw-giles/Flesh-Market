@@ -2509,12 +2509,20 @@ function initSubTabs(){
         cyp.style.display = t==='cities' ? 'block' : 'none';
         cyp.classList.toggle('fmfull', t==='cities');
       }
-      try { document.body.style.overflow = (t==='cities') ? 'hidden' : ''; } catch(_) {}
+      try { document.body.style.overflow = (t==='cities' || t==='council') ? 'hidden' : ''; } catch(_) {}
       if(fp) fp.style.display=t==='factions'?'block':'none';
       if(sp) sp.style.display=t==='shipping'?'block':'none';
       if(cp) cp.style.display=t==='contracts'?'block':'none';
       if(kp) kp.style.display=t==='markets'?'block':'none';
-      if(cnp) cnp.style.display=t==='council'?'block':'none';
+      // The chamber takes the whole viewport for the same reason cities does: the
+      // band of chairs plus two scrolling columns cannot be done inside a shared
+      // centre panel. position:fixed escapes the layout without moving anything.
+      // Unlike cities this covers the tab bar, so council.js puts its own way
+      // out in the band.
+      if(cnp){
+        cnp.style.display = t==='council' ? 'block' : 'none';
+        cnp.classList.toggle('fmfull', t==='council');
+      }
       if(t!=='markets') stopShipmentTicker();
       if(t==='factions') renderFactionList();
       if(t==='contracts') renderContractsTable();

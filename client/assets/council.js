@@ -108,6 +108,101 @@
   // An occupied chair burns at full faction colour with a glow; a regent held
   // chair is a dashed outline. Reading who is actually in the room is then a
   // glance instead of four label lookups.
+  // ── Layout shell ───────────────────────────────────────────────────────────
+  // The chamber used to be one 2500px column: ring, then four seat cards, then
+  // the composer, then the treasury, then chat, then the accord list. You could
+  // never see who held a chair and what was being said in the room at the same
+  // time, which is most of what the page is for.
+  //
+  // Three regions now. A BAND across the top holds the ring and the four chairs
+  // and does not scroll, because that is the state of the chamber and it should
+  // not leave the screen. Under it, FLOOR on the left (composer, accords, log)
+  // and ROOM on the right (treasury, chat), each scrolling on its own.
+  //
+  // FULLSCREEN COMES FROM THE SAME MECHANISM CITIES USES: galaxy.js toggles
+  // .fmfull on the pane and the rule below takes it out of page flow. Unlike
+  // cities this pane covers the tab bar, so the band carries its own way out.
+  //
+  // NOT FULLSCREEN IS A REAL STATE, not a fallback nobody hits: if the class is
+  // absent the columns collapse back to one flowing block, which is the old
+  // layout and still correct. Nothing here assumes a fixed viewport.
+  var _stylesDone = false;
+  function ensureStyles(){
+    if (_stylesDone) return; _stylesDone = true;
+    var css = [
+      '#gCouncilPane{--cn:calc(var(--chat-font-scale,1) * 1.15)}',
+      '#gCouncilPane.fmfull{position:fixed;inset:0;z-index:9000;background:#01060a;',
+      ' padding:0;overflow:hidden;display:block}',
+      '#gCouncilPane.fmfull #gCouncilInner{height:100%;min-height:0}',
+      '.cnshell{display:flex;flex-direction:column;height:100%;min-height:0}',
+      '.cnbar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;',
+      ' gap:12px;padding:8px 14px;border-bottom:1px solid ' + CO.line + '}',
+      '.cnexit{background:transparent;border:1px solid ' + CO.line + ';color:' + CO.gold + ';',
+      ' font:inherit;font-size:calc(.66rem * var(--cn,1));letter-spacing:.12em;padding:5px 12px;',
+      ' cursor:pointer;text-transform:uppercase}',
+      '.cnexit:hover{border-color:' + CO.gold + '}',
+      '.cnmain{flex:1;min-height:0;display:grid;grid-template-columns:2fr minmax(320px,1fr);',
+      ' gap:12px;padding:12px 14px 14px}',
+      '.cnstage{min-width:0;min-height:0;display:flex;flex-direction:column}',
+      '.cnstagehead{flex:0 0 auto}',
+      '.cnring{margin-bottom:10px}',
+      '.cnring svg{max-height:min(300px,32vh) !important}',
+      '.cnfloor{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:4px;margin-top:12px}',
+      '.cnside{min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px}',
+      '.cnside #ctreasWrap{flex:0 0 auto}',
+      '.cnside #croomWrap{flex:1;min-height:0;display:flex;flex-direction:column}',
+      '.cnside #croomWrap > div{flex:1;min-height:0;display:flex;flex-direction:column}',
+      '.cnside #croomBody{flex:1;min-height:0;max-height:none !important}',
+      '.cnhead{font-size:calc(.66rem * var(--cn,1));letter-spacing:.16em;text-transform:uppercase;',
+      ' color:' + CO.mute + ';margin:0 0 8px}',
+      '.cnseat{cursor:pointer}',
+      '.cnseat .cnmore{display:none}',
+      '.cnseat.open .cnmore{display:block}',
+      '.cnseat .cncaret{transition:transform .15s}',
+      '.cnseat.open .cncaret{transform:rotate(90deg)}',
+      '@media (max-width:900px){',
+      ' .cnmain{display:block;overflow-y:auto;padding:10px 10px 14px}',
+      ' .cnstage,.cnside{display:block}',
+      ' .cnfloor{overflow:visible;padding-right:0;margin-top:10px}',
+      ' .cnside{margin-top:16px}',
+      ' .cnside #croomBody{max-height:340px !important}',
+      ' .cnring{display:none}',
+      '}',
+      '#gCouncilPane:not(.fmfull) .cnshell{height:auto}',
+      '#gCouncilPane:not(.fmfull) .cnmain{display:block;padding:12px 0 0}',
+      '#gCouncilPane:not(.fmfull) .cnstage,#gCouncilPane:not(.fmfull) .cnside{display:block}',
+      '#gCouncilPane:not(.fmfull) .cnfloor{overflow:visible;padding-right:0}',
+      '#gCouncilPane:not(.fmfull) .cnside{margin-top:16px}'
+    ].join('');
+    var el = document.createElement('style');
+    el.id = 'cn-layout-css'; el.textContent = css;
+    document.head.appendChild(el);
+  }
+
+  // Leaves the chamber the way the cities view does: by clicking the sub tab that
+  // owns the pane you want instead of hand unsetting display, so one code path
+  // decides what is visible.
+  window.__councilExit = function(){
+    var b = document.querySelector('[data-gstab="map"]');
+    if (b) b.click();
+  };
+
+  // Harness hook, same idea as city.js's __cityFrame: the layout is worth
+  // asserting on in a real DOM and render() plus st are private to this IIFE.
+  // Read and write only, no behaviour of its own.
+  window.__councilDebug = {
+    setState: function(o){ Object.keys(o).forEach(function(k){ st[k] = o[k]; }); },
+    render: function(){ render(); },
+    state: function(){ return st; }
+  };
+
+  window.__councilSeatToggle = function(seat){
+    st._openSeats = st._openSeats || {};
+    st._openSeats[seat] = !st._openSeats[seat];
+    var el = document.getElementById('cseat-' + seat);
+    if (el) el.classList.toggle('open', !!st._openSeats[seat]);
+  };
+
   function renderChamber(){
     var W = 900, H = 260;
     // Chairs sit on a single arc facing the viewer, labels directly beneath each,
@@ -313,13 +408,16 @@
 
   // ── Seat roster ────────────────────────────────────────────────────────────
   function renderSeats(){
-    var h = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:9px;margin-bottom:15px">';
+    var h = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px">';
     st.seats.forEach(function(v){
       var col = SEAT_COLOR[v.seat] || CO.gold;
       var mine = st.mySeat === v.seat;
       var protectedNow = v.termEndsAt && v.termEndsAt > Date.now();
 
-      h += '<div id="cseat-'+v.seat+'" style="border:1px solid '+(mine?col:CO.line)+';border-left:3px solid '+col+';'
+      var openNow = !!(st._openSeats && st._openSeats[v.seat]);
+      h += '<div id="cseat-'+v.seat+'" class="cnseat'+(openNow?' open':'')+'" '
+         + 'onclick="window.__councilSeatToggle(\''+v.seat+'\')" '
+         + 'style="border:1px solid '+(mine?col:CO.line)+';border-left:3px solid '+col+';'
          + 'background:'+CO.panel+';padding:12px 13px">';
 
       // Face and identity on one row. The portrait is the fastest read on the
@@ -336,36 +434,45 @@
         h += '</div>';
       }
       h += '<div style="min-width:0;flex:1">';
-      h += '<div style="font-size:.62rem;letter-spacing:.15em;color:'+col+';text-transform:uppercase">'+esc(v.label)+'</div>';
-      h += '<div style="font-size:.98rem;color:'+(v.regent?CO.mute:CO.text)+';margin-top:5px;font-weight:'+(v.regent?500:700)+';line-height:1.25">'+esc(v.holderName)+'</div>';
+      h += '<div style="font-size:calc(.62rem * var(--cn,1));letter-spacing:.15em;color:'+col+';text-transform:uppercase">'+esc(v.label)+'</div>';
+      h += '<div style="font-size:calc(.98rem * var(--cn,1));color:'+(v.regent?CO.mute:CO.text)+';margin-top:5px;font-weight:'+(v.regent?500:700)+';line-height:1.25">'+esc(v.holderName)+'</div>';
 
       if (v.regent) {
-        h += '<div style="font-size:.62rem;color:'+CO.mute+';letter-spacing:.1em;margin-top:4px">VACANT, HELD IN REGENCY</div>';
+        h += '<div style="font-size:calc(.62rem * var(--cn,1));color:'+CO.mute+';letter-spacing:.1em;margin-top:4px">VACANT, HELD IN REGENCY</div>';
       } else if (protectedNow) {
-        h += '<div style="font-size:.62rem;color:'+CO.gold+';letter-spacing:.08em;margin-top:4px">SEATED, PROTECTED '+timeLeft(v.termEndsAt)+'</div>';
+        h += '<div style="font-size:calc(.62rem * var(--cn,1));color:'+CO.gold+';letter-spacing:.08em;margin-top:4px">SEATED, PROTECTED '+timeLeft(v.termEndsAt)+'</div>';
       } else {
-        h += '<div style="font-size:.62rem;color:'+CO.bad+';letter-spacing:.08em;margin-top:4px">TERM LAPSED, CONTESTABLE</div>';
+        h += '<div style="font-size:calc(.62rem * var(--cn,1));color:'+CO.bad+';letter-spacing:.08em;margin-top:4px">TERM LAPSED, CONTESTABLE</div>';
       }
-      if (mine) h += '<div style="font-size:.62rem;color:'+col+';letter-spacing:.12em;margin-top:4px">&#9679; YOUR CHAIR</div>';
+      if (mine) h += '<div style="font-size:calc(.62rem * var(--cn,1));color:'+col+';letter-spacing:.12em;margin-top:4px">&#9679; YOUR CHAIR</div>';
       h += '</div></div>';
 
+      // Everything below the fold on a chair: the title that holds it and the
+      // house note. Static between visits, so it opens on click rather than
+      // taking a third of the band permanently.
+      if (v.title || v.note || (v.purchasable && !mine)) {
+        h += '<div style="margin-top:8px;font-size:calc(.62rem * var(--cn,1));letter-spacing:.1em;color:'+CO.mute+'">'
+           + '<span class="cncaret" style="display:inline-block">&#9656;</span> DETAILS</div>';
+      }
+      h += '<div class="cnmore">';
       if (v.title) {
-        h += '<div style="margin-top:10px;font-size:.72rem;color:'+CO.text+';line-height:1.6">'
+        h += '<div style="margin-top:10px;font-size:calc(.72rem * var(--cn,1));color:'+CO.text+';line-height:1.6">'
            + '<span style="color:'+CO.mute+'">Held by title</span><br><span style="color:'+col+'">'+esc(v.title)+'</span></div>';
       }
-      if (v.note) h += '<div style="font-size:.72rem;color:'+CO.mute+';margin-top:8px;line-height:1.65">'+esc(v.note)+'</div>';
+      if (v.note) h += '<div style="font-size:calc(.72rem * var(--cn,1));color:'+CO.mute+';margin-top:8px;line-height:1.65">'+esc(v.note)+'</div>';
 
       // EVERY chair is bought as a Legendary title in the Title Market, including
       // these two. Selling them here as well would put offices in two shops. One
       // rack, one place, one mental model: the title IS the chair. This is a
       // signpost, not a second checkout.
       if (v.purchasable && !mine) {
-        h += '<div onclick="window.__councilToStore()" '
-           + 'style="margin-top:10px;text-align:center;font-size:.7rem;letter-spacing:.09em;padding:8px;'
+        h += '<div onclick="event.stopPropagation();window.__councilToStore()" '
+           + 'style="margin-top:10px;text-align:center;font-size:calc(.7rem * var(--cn,1));letter-spacing:.09em;padding:8px;'
            + 'border:1px solid '+col+'66;color:'+col+';background:rgba(255,255,255,0.03);cursor:pointer">'
            + (protectedNow ? 'PROTECTED, ' : '') + fm(v.cost) + ' IN TITLE MARKET &rarr;</div>';
       }
-      h += '</div>';
+      h += '</div>';   // .cnmore
+      h += '</div>';   // .cnseat
     });
     h += '</div>';
     return h;
@@ -373,7 +480,7 @@
 
   // ── Accord rendering ───────────────────────────────────────────────────────
   function clauseLine(c){
-    return '<div style="font-size:.76rem;color:'+CO.bonded+';padding:5px 0;line-height:1.6">'
+    return '<div style="font-size:calc(.76rem * var(--cn,1));color:'+CO.bonded+';padding:5px 0;line-height:1.6">'
          + '&#9679; Fund <b>'+esc(c.factionId)+'</b> on <b>'+esc(colonyName(c.colonyId))+'</b> with '+fm(c.amount)
          + (c.executed && c.result ? ' <span style="color:'+CO.dim+'">('+esc(c.result)+')</span>' : '')
          + '</div>';
@@ -382,8 +489,8 @@
   function sideBlock(seat, label, clauses){
     var col = SEAT_COLOR[seat] || CO.gold;
     var h = '<div style="flex:1;min-width:200px">';
-    h += '<div style="font-size:.64rem;letter-spacing:.13em;color:'+col+';text-transform:uppercase;margin-bottom:6px">'+esc(label)+' DELIVERS</div>';
-    if (!clauses.length) h += '<div style="font-size:.66rem;color:'+CO.dim+'">Nothing bonded on this side.</div>';
+    h += '<div style="font-size:calc(.64rem * var(--cn,1));letter-spacing:.13em;color:'+col+';text-transform:uppercase;margin-bottom:6px">'+esc(label)+' DELIVERS</div>';
+    if (!clauses.length) h += '<div style="font-size:calc(.66rem * var(--cn,1));color:'+CO.dim+'">Nothing bonded on this side.</div>';
     else clauses.forEach(function(c){ h += clauseLine(c); });
     h += '</div>';
     return h;
@@ -395,7 +502,7 @@
               cancelled:['PULLED', CO.mute],
               declined:['REFUSED', CO.bad], withdrawn:['WITHDRAWN', CO.dim],
               expired:['EXPIRED', CO.dim] }[a.status] || [a.status.toUpperCase(), CO.dim];
-    return '<span style="font-size:.6rem;letter-spacing:.12em;color:'+m[1]+';border:1px solid '+m[1]+'44;padding:2px 6px">'+m[0]+'</span>';
+    return '<span style="font-size:calc(.6rem * var(--cn,1));letter-spacing:.12em;color:'+m[1]+';border:1px solid '+m[1]+'44;padding:2px 6px">'+m[0]+'</span>';
   }
 
   function renderAccord(a){
@@ -407,8 +514,8 @@
 
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">';
     h += '<div style="flex:1;min-width:200px">';
-    h += '<div style="font-size:.9rem;color:'+CO.text+';line-height:1.4;font-weight:700">'+esc(a.title)+'</div>';
-    h += '<div style="font-size:.7rem;color:'+CO.mute+';margin-top:5px;letter-spacing:.04em">'
+    h += '<div style="font-size:calc(.9rem * var(--cn,1));color:'+CO.text+';line-height:1.4;font-weight:700">'+esc(a.title)+'</div>';
+    h += '<div style="font-size:calc(.7rem * var(--cn,1));color:'+CO.mute+';margin-top:5px;letter-spacing:.04em">'
        + '<span style="color:'+pc+'">'+esc(a.proposerSeat)+'</span> ('+esc(a.proposerName)+') &rarr; '
        + '<span style="color:'+cc+'">'+esc(a.counterSeat)+'</span> &nbsp;&middot;&nbsp; '+esc(a.id)
        + (open ? ' &middot; expires in '+timeLeft(a.expiresAt) : '')
@@ -424,26 +531,26 @@
 
     if (a.rider) {
       h += '<div style="margin-top:9px;border-left:2px solid '+CO.rider+';background:#160f04;padding:7px 10px">';
-      h += '<div style="font-size:.64rem;letter-spacing:.14em;color:'+CO.rider+';margin-bottom:3px">&#9888; RIDER, UNBONDED</div>';
-      h += '<div style="font-size:.78rem;color:#e8c88c;line-height:1.65;white-space:pre-wrap">'+esc(a.rider)+'</div>';
-      h += '<div style="font-size:.68rem;color:'+CO.mute+';margin-top:7px;line-height:1.6">The Guild holds nothing against this. It is a stated intention. Break it and the only thing you lose is your name, which is the entire reason anyone writes one.</div>';
+      h += '<div style="font-size:calc(.64rem * var(--cn,1));letter-spacing:.14em;color:'+CO.rider+';margin-bottom:3px">&#9888; RIDER, UNBONDED</div>';
+      h += '<div style="font-size:calc(.78rem * var(--cn,1));color:#e8c88c;line-height:1.65;white-space:pre-wrap">'+esc(a.rider)+'</div>';
+      h += '<div style="font-size:calc(.68rem * var(--cn,1));color:'+CO.mute+';margin-top:7px;line-height:1.6">The Guild holds nothing against this. It is a stated intention. Break it and the only thing you lose is your name, which is the entire reason anyone writes one.</div>';
       h += '</div>';
     }
 
     if (pending) {
       h += '<div style="margin-top:10px;border-left:2px solid '+CO.bad+';background:#1a0808;padding:9px 11px">';
-      h += '<div style="font-size:.62rem;letter-spacing:.13em;color:'+CO.bad+';margin-bottom:4px">&#9888; SIGNED, NOT YET BINDING</div>';
-      h += '<div style="font-size:.74rem;color:'+CO.text+';line-height:1.65">'
+      h += '<div style="font-size:calc(.62rem * var(--cn,1));letter-spacing:.13em;color:'+CO.bad+';margin-bottom:4px">&#9888; SIGNED, NOT YET BINDING</div>';
+      h += '<div style="font-size:calc(.74rem * var(--cn,1));color:'+CO.text+';line-height:1.65">'
          + 'This commits treasury funds to ground that will not be '
          + esc(a.ceding.join(' or ')) + '&#39;s. It executes in <b>'+timeLeft(a.executesAt)+'</b>.'
          + '</div>';
-      h += '<div style="font-size:.68rem;color:'+CO.mute+';line-height:1.6;margin-top:6px">'
+      h += '<div style="font-size:calc(.68rem * var(--cn,1));color:'+CO.mute+';line-height:1.6;margin-top:6px">'
          + 'Any seated leader of a ceding faction can pull it before the window closes. '
          + 'If their term has lapsed, so can whoever takes the chair off them.'
          + '</div>';
       if (a.canCancel) {
         h += '<div onclick="window.__councilCancel(\''+a.id+'\')" style="margin-top:9px;text-align:center;'
-           + 'font-size:.7rem;letter-spacing:.1em;padding:8px;border:1px solid '+CO.bad+'88;color:'+CO.bad+';cursor:pointer">'
+           + 'font-size:calc(.7rem * var(--cn,1));letter-spacing:.1em;padding:8px;border:1px solid '+CO.bad+'88;color:'+CO.bad+';cursor:pointer">'
            + 'PULL THIS ACCORD</div>';
       }
       h += '</div>';
@@ -452,11 +559,11 @@
     if (open && (a.canSign || a.canWithdraw)) {
       h += '<div style="display:flex;gap:7px;margin-top:10px;flex-wrap:wrap">';
       if (a.canSign) {
-        h += '<div onclick="window.__councilSign(\''+a.id+'\')" style="flex:1;min-width:120px;text-align:center;font-size:.64rem;letter-spacing:.1em;padding:7px;border:1px solid '+CO.bonded+'66;color:'+CO.bonded+';cursor:pointer">SIGN AND EXECUTE</div>';
-        h += '<div onclick="window.__councilDecline(\''+a.id+'\')" style="flex:1;min-width:120px;text-align:center;font-size:.64rem;letter-spacing:.1em;padding:7px;border:1px solid '+CO.bad+'55;color:'+CO.bad+';cursor:pointer">REFUSE</div>';
+        h += '<div onclick="window.__councilSign(\''+a.id+'\')" style="flex:1;min-width:120px;text-align:center;font-size:calc(.64rem * var(--cn,1));letter-spacing:.1em;padding:7px;border:1px solid '+CO.bonded+'66;color:'+CO.bonded+';cursor:pointer">SIGN AND EXECUTE</div>';
+        h += '<div onclick="window.__councilDecline(\''+a.id+'\')" style="flex:1;min-width:120px;text-align:center;font-size:calc(.64rem * var(--cn,1));letter-spacing:.1em;padding:7px;border:1px solid '+CO.bad+'55;color:'+CO.bad+';cursor:pointer">REFUSE</div>';
       }
       if (a.canWithdraw) {
-        h += '<div onclick="window.__councilWithdraw(\''+a.id+'\')" style="flex:1;min-width:120px;text-align:center;font-size:.64rem;letter-spacing:.1em;padding:7px;border:1px solid '+CO.mute+'66;color:'+CO.mute+';cursor:pointer">WITHDRAW</div>';
+        h += '<div onclick="window.__councilWithdraw(\''+a.id+'\')" style="flex:1;min-width:120px;text-align:center;font-size:calc(.64rem * var(--cn,1));letter-spacing:.1em;padding:7px;border:1px solid '+CO.mute+'66;color:'+CO.mute+';cursor:pointer">WITHDRAW</div>';
       }
       h += '</div>';
     }
@@ -470,10 +577,10 @@
     var f = ['coalition','syndicate','void','guild'].map(function(x){
       return '<option value="'+x+'"'+(x===c.factionId?' selected':'')+'>'+x+'</option>'; }).join('');
     return '<div style="display:flex;gap:5px;margin-bottom:5px;flex-wrap:wrap" data-crow="'+side+'">'
-      + '<select data-cf="colony" style="flex:2;min-width:120px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px 6px;font-size:.66rem;font-family:inherit">'+colonyOptions(c.colonyId)+'</select>'
-      + '<select data-cf="faction" style="flex:1;min-width:90px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px 6px;font-size:.66rem;font-family:inherit">'+f+'</select>'
-      + '<input data-cf="amount" type="number" min="1000" step="1000" value="'+esc(c.amount)+'" placeholder="Ƒ amount" style="flex:1;min-width:90px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px 6px;font-size:.66rem;font-family:inherit">'
-      + '<div onclick="this.parentNode.remove();window.__councilRecalc()" style="padding:4px 8px;border:1px solid #331a1a;color:'+CO.bad+';font-size:.66rem;cursor:pointer">&times;</div>'
+      + '<select data-cf="colony" style="flex:2;min-width:120px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px 6px;font-size:calc(.66rem * var(--cn,1));font-family:inherit">'+colonyOptions(c.colonyId)+'</select>'
+      + '<select data-cf="faction" style="flex:1;min-width:90px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px 6px;font-size:calc(.66rem * var(--cn,1));font-family:inherit">'+f+'</select>'
+      + '<input data-cf="amount" type="number" min="1000" step="1000" value="'+esc(c.amount)+'" placeholder="Ƒ amount" style="flex:1;min-width:90px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:4px 6px;font-size:calc(.66rem * var(--cn,1));font-family:inherit">'
+      + '<div onclick="this.parentNode.remove();window.__councilRecalc()" style="padding:4px 8px;border:1px solid #331a1a;color:'+CO.bad+';font-size:calc(.66rem * var(--cn,1));cursor:pointer">&times;</div>'
       + '</div>';
   }
 
@@ -482,8 +589,8 @@
     var actable = st.seats.filter(function(s){ return s.seat === my || (st.isGM && s.regent); });
     if (!actable.length) {
       return '<div style="border:1px solid '+CO.line+';border-left:3px solid '+CO.gold+';background:'+CO.panel+';padding:13px 14px">'
-           + '<div style="font-size:.64rem;letter-spacing:.15em;color:'+CO.gold+';text-transform:uppercase;margin-bottom:6px">You are in the gallery</div>'
-           + '<div style="font-size:.8rem;color:'+CO.text+';line-height:1.8">'
+           + '<div style="font-size:calc(.64rem * var(--cn,1));letter-spacing:.15em;color:'+CO.gold+';text-transform:uppercase;margin-bottom:6px">You are in the gallery</div>'
+           + '<div style="font-size:calc(.8rem * var(--cn,1));color:'+CO.text+';line-height:1.8">'
            + 'Read anything. Sign nothing. Only a seated delegate may table an Accord, and the record above is public precisely so that everyone else can watch them do it.'
            + '</div></div>';
     }
@@ -493,40 +600,40 @@
       return '<option value="'+s.seat+'">'+esc(s.label)+'</option>'; }).join('');
 
     var h = '<div id="councilComposer" style="border:1px solid '+CO.line+';background:'+CO.panel+';padding:12px">';
-    h += '<div style="font-size:.6rem;letter-spacing:.15em;color:'+CO.gold+';text-transform:uppercase;margin-bottom:4px">Table an Accord</div>';
-    h += '<div style="font-size:.74rem;color:'+CO.mute+';line-height:1.7;margin-bottom:11px">Green clauses are held by the Guild and execute the instant the other chair signs. The amber rider is not held by anyone.</div>';
+    h += '<div style="font-size:calc(.6rem * var(--cn,1));letter-spacing:.15em;color:'+CO.gold+';text-transform:uppercase;margin-bottom:4px">Table an Accord</div>';
+    h += '<div style="font-size:calc(.74rem * var(--cn,1));color:'+CO.mute+';line-height:1.7;margin-bottom:11px">Green clauses are held by the Guild and execute the instant the other chair signs. The amber rider is not held by anyone.</div>';
 
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px">';
-    h += '<select id="cpFrom" style="flex:1;min-width:130px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 7px;font-size:.68rem;font-family:inherit">'+fromOpts+'</select>';
-    h += '<select id="cpTo" style="flex:1;min-width:130px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 7px;font-size:.68rem;font-family:inherit">'+toOpts+'</select>';
-    h += '<select id="cpTtl" style="flex:1;min-width:110px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 7px;font-size:.68rem;font-family:inherit">'
+    h += '<select id="cpFrom" style="flex:1;min-width:130px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 7px;font-size:calc(.68rem * var(--cn,1));font-family:inherit">'+fromOpts+'</select>';
+    h += '<select id="cpTo" style="flex:1;min-width:130px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 7px;font-size:calc(.68rem * var(--cn,1));font-family:inherit">'+toOpts+'</select>';
+    h += '<select id="cpTtl" style="flex:1;min-width:110px;background:#0a0a14;border:1px solid #333;color:#aaa;padding:5px 7px;font-size:calc(.68rem * var(--cn,1));font-family:inherit">'
        + '<option value="21600000">Expires 6h</option><option value="86400000">Expires 24h</option>'
        + '<option value="172800000" selected>Expires 48h</option><option value="604800000">Expires 7d</option></select>';
     h += '</div>';
 
-    h += '<input id="cpTitle" maxlength="90" placeholder="What this Accord is called on the record" style="width:100%;box-sizing:border-box;background:#0a0a14;border:1px solid #333;color:#ddd;padding:6px 8px;font-size:.7rem;font-family:inherit;margin-bottom:10px">';
+    h += '<input id="cpTitle" maxlength="90" placeholder="What this Accord is called on the record" style="width:100%;box-sizing:border-box;background:#0a0a14;border:1px solid #333;color:#ddd;padding:6px 8px;font-size:calc(.7rem * var(--cn,1));font-family:inherit;margin-bottom:10px">';
 
     h += '<div style="display:flex;gap:14px;flex-wrap:wrap">';
     h += '<div style="flex:1;min-width:250px">';
-    h += '<div style="font-size:.64rem;letter-spacing:.12em;color:'+CO.bonded+';margin-bottom:5px">BONDED, YOU DELIVER</div>';
+    h += '<div style="font-size:calc(.64rem * var(--cn,1));letter-spacing:.12em;color:'+CO.bonded+';margin-bottom:5px">BONDED, YOU DELIVER</div>';
     h += '<div id="cpMine"></div>';
-    h += '<div onclick="window.__councilAddClause(\'mine\')" style="font-size:.62rem;color:'+CO.bonded+';border:1px dashed '+CO.bonded+'44;padding:5px;text-align:center;cursor:pointer">+ add bonded clause</div>';
+    h += '<div onclick="window.__councilAddClause(\'mine\')" style="font-size:calc(.62rem * var(--cn,1));color:'+CO.bonded+';border:1px dashed '+CO.bonded+'44;padding:5px;text-align:center;cursor:pointer">+ add bonded clause</div>';
     h += '</div>';
     h += '<div style="flex:1;min-width:250px">';
-    h += '<div style="font-size:.64rem;letter-spacing:.12em;color:'+CO.bonded+';margin-bottom:5px">BONDED, THEY DELIVER</div>';
+    h += '<div style="font-size:calc(.64rem * var(--cn,1));letter-spacing:.12em;color:'+CO.bonded+';margin-bottom:5px">BONDED, THEY DELIVER</div>';
     h += '<div id="cpTheirs"></div>';
-    h += '<div onclick="window.__councilAddClause(\'theirs\')" style="font-size:.62rem;color:'+CO.bonded+';border:1px dashed '+CO.bonded+'44;padding:5px;text-align:center;cursor:pointer">+ add bonded clause</div>';
+    h += '<div onclick="window.__councilAddClause(\'theirs\')" style="font-size:calc(.62rem * var(--cn,1));color:'+CO.bonded+';border:1px dashed '+CO.bonded+'44;padding:5px;text-align:center;cursor:pointer">+ add bonded clause</div>';
     h += '</div>';
     h += '</div>';
 
     h += '<div style="margin-top:11px;border-left:2px solid '+CO.rider+';background:#160f04;padding:8px 10px">';
-    h += '<div style="font-size:.64rem;letter-spacing:.14em;color:'+CO.rider+';margin-bottom:4px">&#9888; RIDER, UNBONDED, OPTIONAL</div>';
-    h += '<textarea id="cpRider" maxlength="600" rows="3" placeholder="Anything the server cannot hold. Ceasefires, promises, threats. Write it and mean it, but understand nothing enforces it." style="width:100%;box-sizing:border-box;background:#0d0904;border:1px solid #3a2a10;color:#c9a86a;padding:6px 8px;font-size:.68rem;font-family:inherit;resize:vertical"></textarea>';
-    h += '<div style="font-size:.6rem;color:'+CO.mute+';margin-top:5px;line-height:1.55">Recorded, never enforced. This is the half of the Accord that runs on your word.</div>';
+    h += '<div style="font-size:calc(.64rem * var(--cn,1));letter-spacing:.14em;color:'+CO.rider+';margin-bottom:4px">&#9888; RIDER, UNBONDED, OPTIONAL</div>';
+    h += '<textarea id="cpRider" maxlength="600" rows="3" placeholder="Anything the server cannot hold. Ceasefires, promises, threats. Write it and mean it, but understand nothing enforces it." style="width:100%;box-sizing:border-box;background:#0d0904;border:1px solid #3a2a10;color:#c9a86a;padding:6px 8px;font-size:calc(.68rem * var(--cn,1));font-family:inherit;resize:vertical"></textarea>';
+    h += '<div style="font-size:calc(.6rem * var(--cn,1));color:'+CO.mute+';margin-top:5px;line-height:1.55">Recorded, never enforced. This is the half of the Accord that runs on your word.</div>';
     h += '</div>';
 
-    h += '<div id="cpCost" style="font-size:.75rem;color:'+CO.mute+';margin-top:12px;line-height:1.7"></div>';
-    h += '<div onclick="window.__councilPropose()" style="margin-top:8px;text-align:center;font-size:.68rem;letter-spacing:.11em;padding:8px;border:1px solid '+CO.gold+'66;color:'+CO.gold+';cursor:pointer">TABLE ACCORD</div>';
+    h += '<div id="cpCost" style="font-size:calc(.75rem * var(--cn,1));color:'+CO.mute+';margin-top:12px;line-height:1.7"></div>';
+    h += '<div onclick="window.__councilPropose()" style="margin-top:8px;text-align:center;font-size:calc(.68rem * var(--cn,1));letter-spacing:.11em;padding:8px;border:1px solid '+CO.gold+'66;color:'+CO.gold+';cursor:pointer">TABLE ACCORD</div>';
     h += '</div>';
     return h;
   }
@@ -629,10 +736,10 @@
   function renderLog(){
     if (!st.log.length) return '';
     var h = '<div style="margin-top:16px;border-top:1px solid '+CO.line+';padding-top:11px">';
-    h += '<div style="font-size:.62rem;letter-spacing:.15em;color:'+CO.mute+';text-transform:uppercase;margin-bottom:8px">Chamber Record</div>';
+    h += '<div style="font-size:calc(.62rem * var(--cn,1));letter-spacing:.15em;color:'+CO.mute+';text-transform:uppercase;margin-bottom:8px">Chamber Record</div>';
     st.log.slice(0, 20).forEach(function(l){
       var d = new Date(l.ts);
-      h += '<div style="font-size:.7rem;color:'+CO.mute+';line-height:1.8">'
+      h += '<div style="font-size:calc(.7rem * var(--cn,1));color:'+CO.mute+';line-height:1.8">'
          + '<span style="color:#333">'+d.toLocaleDateString()+' '+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+'</span> '
          + '<span style="color:#7a7a8a">'+esc(l.event)+'</span> '
          + (l.actor ? '<span style="color:#999">'+esc(l.actor)+'</span> ' : '')
@@ -665,18 +772,18 @@
     if (!box) return;
     if (!st.myFaction || !st.treasury) {
       box.innerHTML = '<div style="border:1px solid '+CO.line+';background:'+CO.panel+';padding:13px 14px;'
-        + 'font-size:.74rem;color:'+CO.mute+';line-height:1.7">Align to a faction to see its treasury.</div>';
+        + 'font-size:calc(.74rem * var(--cn,1));color:'+CO.mute+';line-height:1.7">Align to a faction to see its treasury.</div>';
       return;
     }
     var t = st.treasury;
     var col = FACTION_COLOR[t.faction] || CO.gold;
     var h = '<div style="border:1px solid '+CO.line+';border-left:3px solid '+col+';background:'+CO.panel+';padding:13px 14px">';
     h += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">';
-    h += '<div style="font-size:.64rem;letter-spacing:.15em;color:'+col+';text-transform:uppercase">'
+    h += '<div style="font-size:calc(.64rem * var(--cn,1));letter-spacing:.15em;color:'+col+';text-transform:uppercase">'
        + esc(t.faction)+' Treasury</div>';
     h += '<div style="font-size:1.05rem;color:'+CO.text+';font-weight:700">'+fm(t.balance)+'</div>';
     h += '</div>';
-    h += '<div style="font-size:.68rem;color:'+CO.mute+';margin-top:5px;line-height:1.6">'
+    h += '<div style="font-size:calc(.68rem * var(--cn,1));color:'+CO.mute+';margin-top:5px;line-height:1.6">'
        + 'Contributed to date '+fm(t.lifetimeIn)+' &middot; spent '+fm(t.lifetimeOut)
        + (t.leader ? ' &middot; directed by <span style="color:'+col+'">'+esc(t.leader)+'</span>'
                    : ' &middot; <span style="color:'+CO.bad+'">no seated leader</span>') + '</div>';
@@ -684,30 +791,30 @@
     // The one line that has to be on this panel. Somebody is about to hand over
     // their own money, and the reason it is safe to do so is that nobody can take
     // it out, including the person spending it.
-    h += '<div style="font-size:.68rem;color:'+CO.mute+';margin-top:8px;line-height:1.65;border-top:1px solid '+CO.line+';padding-top:8px">'
+    h += '<div style="font-size:calc(.68rem * var(--cn,1));color:'+CO.mute+';margin-top:8px;line-height:1.65;border-top:1px solid '+CO.line+';padding-top:8px">'
        + 'Credits here can buy colony control and bond Accords. They can never be withdrawn to anyone, '
        + 'including the leader who spends them. A bad chair can waste this. Nobody can take it.</div>';
 
     h += '<div style="display:flex;gap:7px;margin-top:10px;flex-wrap:wrap">';
     h += '<input id="ctreasAmt" type="number" min="10000" step="10000" placeholder="Amount" '
        + 'style="flex:1;min-width:110px;background:#0a0a14;border:1px solid '+CO.line+';color:'+CO.text+';'
-       + 'padding:7px 10px;font-size:.76rem;font-family:inherit">';
-    h += '<div onclick="window.__treasContribute()" style="flex:0 0 auto;padding:7px 15px;font-size:.7rem;'
+       + 'padding:7px 10px;font-size:calc(.76rem * var(--cn,1));font-family:inherit">';
+    h += '<div onclick="window.__treasContribute()" style="flex:0 0 auto;padding:7px 15px;font-size:calc(.7rem * var(--cn,1));'
        + 'letter-spacing:.09em;border:1px solid '+CO.bonded+'66;color:'+CO.bonded+';cursor:pointer">CONTRIBUTE</div>';
     h += '</div>';
 
     if (t.leaderIsMe) {
       h += '<div style="margin-top:11px;border-top:1px solid '+CO.line+';padding-top:10px">';
-      h += '<div style="font-size:.62rem;letter-spacing:.13em;color:'+col+';text-transform:uppercase;margin-bottom:6px">Direct the treasury</div>';
-      h += '<div style="font-size:.68rem;color:'+CO.mute+';line-height:1.6;margin-bottom:8px">'
+      h += '<div style="font-size:calc(.62rem * var(--cn,1));letter-spacing:.13em;color:'+col+';text-transform:uppercase;margin-bottom:6px">Direct the treasury</div>';
+      h += '<div style="font-size:calc(.68rem * var(--cn,1));color:'+CO.mute+';line-height:1.6;margin-bottom:8px">'
          + 'Every spend is posted to your faction room and to the floor, under your name.</div>';
       h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
-      h += '<select id="ctreasColony" style="flex:2;min-width:130px;background:#0a0a14;border:1px solid '+CO.line+';color:'+CO.text+';padding:6px 8px;font-size:.72rem;font-family:inherit">'+colonyOptions('')+'</select>';
+      h += '<select id="ctreasColony" style="flex:2;min-width:130px;background:#0a0a14;border:1px solid '+CO.line+';color:'+CO.text+';padding:6px 8px;font-size:calc(.72rem * var(--cn,1));font-family:inherit">'+colonyOptions('')+'</select>';
       var fo = ['coalition','syndicate','void','guild'].map(function(x){
         return '<option value="'+x+'"'+(x===t.faction?' selected':'')+'>'+x+'</option>'; }).join('');
-      h += '<select id="ctreasFaction" style="flex:1;min-width:100px;background:#0a0a14;border:1px solid '+CO.line+';color:'+CO.text+';padding:6px 8px;font-size:.72rem;font-family:inherit">'+fo+'</select>';
-      h += '<input id="ctreasSpend" type="number" min="1000" step="1000" placeholder="Amount" style="flex:1;min-width:100px;background:#0a0a14;border:1px solid '+CO.line+';color:'+CO.text+';padding:6px 8px;font-size:.72rem;font-family:inherit">';
-      h += '<div onclick="window.__treasFund()" style="flex:0 0 auto;padding:6px 14px;font-size:.7rem;letter-spacing:.09em;border:1px solid '+col+'66;color:'+col+';cursor:pointer">FUND</div>';
+      h += '<select id="ctreasFaction" style="flex:1;min-width:100px;background:#0a0a14;border:1px solid '+CO.line+';color:'+CO.text+';padding:6px 8px;font-size:calc(.72rem * var(--cn,1));font-family:inherit">'+fo+'</select>';
+      h += '<input id="ctreasSpend" type="number" min="1000" step="1000" placeholder="Amount" style="flex:1;min-width:100px;background:#0a0a14;border:1px solid '+CO.line+';color:'+CO.text+';padding:6px 8px;font-size:calc(.72rem * var(--cn,1));font-family:inherit">';
+      h += '<div onclick="window.__treasFund()" style="flex:0 0 auto;padding:6px 14px;font-size:calc(.7rem * var(--cn,1));letter-spacing:.09em;border:1px solid '+col+'66;color:'+col+';cursor:pointer">FUND</div>';
       h += '</div></div>';
     }
 
@@ -715,21 +822,21 @@
     // reading the balance needs to know what is already spoken for.
     if (t.pendingSpends && t.pendingSpends.length) {
       h += '<div style="margin-top:11px;border-left:2px solid '+CO.bad+';background:#1a0808;padding:9px 11px">';
-      h += '<div style="font-size:.62rem;letter-spacing:.13em;color:'+CO.bad+';margin-bottom:5px">&#9888; COMMITTED, NOT YET EXECUTED</div>';
+      h += '<div style="font-size:calc(.62rem * var(--cn,1));letter-spacing:.13em;color:'+CO.bad+';margin-bottom:5px">&#9888; COMMITTED, NOT YET EXECUTED</div>';
       t.pendingSpends.forEach(function(sp){
         h += '<div style="padding:5px 0;border-top:1px solid #2a1010">';
-        h += '<div style="font-size:.74rem;color:'+CO.text+';line-height:1.6">'
+        h += '<div style="font-size:calc(.74rem * var(--cn,1));color:'+CO.text+';line-height:1.6">'
            + fm(sp.amount) + ' to <b>'+esc(sp.target)+'</b> control on <b>'+esc(colonyName(sp.colonyId))+'</b></div>';
-        h += '<div style="font-size:.66rem;color:'+CO.mute+';line-height:1.6">'
+        h += '<div style="font-size:calc(.66rem * var(--cn,1));color:'+CO.mute+';line-height:1.6">'
            + 'committed by '+esc(sp.by)+' &middot; executes in <span style="color:'+CO.bad+'">'+timeLeft(sp.executesAt)+'</span></div>';
         if (sp.canCancel) {
           h += '<div onclick="window.__treasCancel(\''+sp.id+'\')" style="margin-top:6px;text-align:center;'
-             + 'font-size:.68rem;letter-spacing:.09em;padding:6px;border:1px solid '+CO.bad+'88;color:'+CO.bad+';cursor:pointer">'
+             + 'font-size:calc(.68rem * var(--cn,1));letter-spacing:.09em;padding:6px;border:1px solid '+CO.bad+'88;color:'+CO.bad+';cursor:pointer">'
              + 'PULL THIS COMMITMENT</div>';
         }
         h += '</div>';
       });
-      h += '<div style="font-size:.64rem;color:'+CO.mute+';line-height:1.6;margin-top:6px">'
+      h += '<div style="font-size:calc(.64rem * var(--cn,1));color:'+CO.mute+';line-height:1.6;margin-top:6px">'
          + 'These credits have already left the balance above and return to it if pulled. '
          + 'Any seated leader of this faction can pull one, including whoever takes the chair.</div>';
       h += '</div>';
@@ -737,11 +844,11 @@
 
     if (t.ledger && t.ledger.length) {
       h += '<div style="margin-top:12px;border-top:1px solid '+CO.line+';padding-top:9px">';
-      h += '<div style="font-size:.62rem;letter-spacing:.13em;color:'+CO.mute+';text-transform:uppercase;margin-bottom:6px">Ledger</div>';
+      h += '<div style="font-size:calc(.62rem * var(--cn,1));letter-spacing:.13em;color:'+CO.mute+';text-transform:uppercase;margin-bottom:6px">Ledger</div>';
       t.ledger.slice(0, 12).forEach(function(l){
         var m = TLED[l.kind] || [l.kind.toUpperCase(), CO.mute];
         var d = new Date(l.ts);
-        h += '<div style="font-size:.68rem;color:'+CO.mute+';line-height:1.75">'
+        h += '<div style="font-size:calc(.68rem * var(--cn,1));color:'+CO.mute+';line-height:1.75">'
            + '<span style="color:'+CO.dim+'">'+d.toLocaleDateString()+'</span> '
            + '<span style="color:'+m[1]+'">'+m[0]+'</span> '
            + '<span style="color:'+(l.amount<0?CO.bad:CO.bonded)+'">'+(l.amount<0?'-':'+')+fm(Math.abs(l.amount))+'</span>'
@@ -869,7 +976,7 @@
       // rather than an empty dashed ring, which reads as a broken avatar.
       h += '<div class="croom-av" style="flex:0 0 auto;border-radius:50%;display:flex;'
          + 'align-items:center;justify-content:center;border:1px solid '+col+'66;background:#04070b;'
-         + 'color:'+col+';font-size:.8rem;font-weight:700">'
+         + 'color:'+col+';font-size:calc(.8rem * var(--cn,1));font-weight:700">'
          + esc(String(m.name || '?').trim().charAt(0).toUpperCase() || '?') + '</div>';
     }
     h += '<div style="min-width:0;flex:1">';
@@ -955,25 +1062,25 @@
     rl.forEach(function(r){
       var on = r.id === active;
       h += '<div onclick="window.__councilRoom(\''+r.id+'\')" style="flex:0 0 auto;padding:9px 15px;'
-         + 'font-size:.64rem;letter-spacing:.13em;cursor:pointer;white-space:nowrap;'
+         + 'font-size:calc(.64rem * var(--cn,1));letter-spacing:.13em;cursor:pointer;white-space:nowrap;'
          + 'color:'+(on?r.color:CO.dim)+';border-bottom:2px solid '+(on?r.color:'transparent')+'">'
          + esc(r.label) + '</div>';
     });
     h += '</div>';
     h += '<div style="flex:0 0 auto;display:flex;gap:4px;padding:0 10px">'
        + '<div onclick="window.__councilFont(-1)" title="Smaller text" style="border:1px solid '+CO.gold+'55;'
-       + 'color:'+CO.gold+';font-size:.72rem;font-weight:700;padding:2px 7px;cursor:pointer;user-select:none">A&#8722;</div>'
+       + 'color:'+CO.gold+';font-size:calc(.72rem * var(--cn,1));font-weight:700;padding:2px 7px;cursor:pointer;user-select:none">A&#8722;</div>'
        + '<div onclick="window.__councilFont(1)" title="Larger text" style="border:1px solid '+CO.gold+'55;'
-       + 'color:'+CO.gold+';font-size:.72rem;font-weight:700;padding:2px 7px;cursor:pointer;user-select:none">A+</div>'
+       + 'color:'+CO.gold+';font-size:calc(.72rem * var(--cn,1));font-weight:700;padding:2px 7px;cursor:pointer;user-select:none">A+</div>'
        + '</div>';
     h += '</div>';
 
-    h += '<div style="font-size:.66rem;color:'+CO.mute+';padding:8px 13px 0">'+esc(meta.hint)+'</div>';
+    h += '<div style="font-size:calc(.66rem * var(--cn,1));color:'+CO.mute+';padding:8px 13px 0">'+esc(meta.hint)+'</div>';
 
     var posts = st.rooms[active] || [];
     h += '<div id="croomBody" style="max-height:300px;overflow-y:auto;padding:4px 13px 8px">';
     if (!posts.length) {
-      h += '<div style="font-size:.76rem;color:'+CO.mute+';padding:16px 0;line-height:1.6">'
+      h += '<div style="font-size:calc(.76rem * var(--cn,1));color:'+CO.mute+';padding:16px 0;line-height:1.6">'
          + (active === 'floor' ? 'The floor has not been addressed.' : 'Nobody has said anything here yet.')
          + '</div>';
     } else {
@@ -984,7 +1091,7 @@
     // Typing indicator. Ephemeral and never persisted, so it lives outside the
     // post list rather than being faked as a message.
     var ty = st.typing[active];
-    h += '<div id="croomTyping" style="height:16px;padding:0 13px;font-size:.64rem;color:'+CO.mute+';font-style:italic">'
+    h += '<div id="croomTyping" style="height:16px;padding:0 13px;font-size:calc(.64rem * var(--cn,1));color:'+CO.mute+';font-style:italic">'
        + (ty ? esc(ty.name) + ' is typing...' : '') + '</div>';
 
     // Composer.
@@ -1006,17 +1113,17 @@
           return '<option value="'+sd+'"'+(st.gmAsSeat===sd?' selected':'')+'>as '+esc(sv?sv.holderName:sd)+'</option>';
         }).join('');
         h += '<select id="croomAs" style="flex:0 0 auto;max-width:190px;background:#0a0a14;border:1px solid '+CO.gold+'55;'
-           + 'color:'+CO.gold+';padding:6px 8px;font-size:.7rem;font-family:inherit">'+opts+'</select>';
+           + 'color:'+CO.gold+';padding:6px 8px;font-size:calc(.7rem * var(--cn,1));font-family:inherit">'+opts+'</select>';
       }
       h += '<input id="croomInput" maxlength="400" placeholder="'
          + (active === 'floor' ? 'Address the chamber. This is permanent.' : 'Say something') + '" '
          + 'style="flex:1;min-width:0;background:#0a0a14;border:1px solid '+CO.line+';color:'+CO.text+';'
-         + 'padding:7px 10px;font-size:.78rem;font-family:inherit">';
-      h += '<div onclick="window.__councilSend()" style="flex:0 0 auto;padding:7px 15px;font-size:.7rem;'
+         + 'padding:7px 10px;font-size:calc(.78rem * var(--cn,1));font-family:inherit">';
+      h += '<div onclick="window.__councilSend()" style="flex:0 0 auto;padding:7px 15px;font-size:calc(.7rem * var(--cn,1));'
          + 'letter-spacing:.1em;border:1px solid '+meta.color+'66;color:'+meta.color+';cursor:pointer">SEND</div>';
       h += '</div>';
     } else {
-      h += '<div style="padding:9px 13px 11px;border-top:1px solid '+CO.line+';font-size:.72rem;color:'+CO.mute+';line-height:1.6">'
+      h += '<div style="padding:9px 13px 11px;border-top:1px solid '+CO.line+';font-size:calc(.72rem * var(--cn,1));color:'+CO.mute+';line-height:1.6">'
          + (active === 'floor'
              ? 'Only a seated delegate may speak here. You can read every word of it.'
              : 'Align to a faction to use its room.')
@@ -1089,31 +1196,52 @@
   function render(){
     var box = document.getElementById('gCouncilInner');
     if (!box) return;
-    if (!st.loaded) { box.innerHTML = '<div style="padding:34px;text-align:center;color:'+CO.mute+';font-size:.72rem;letter-spacing:.12em">CONVENING</div>'; return; }
+    if (!st.loaded) { box.innerHTML = '<div style="padding:34px;text-align:center;color:'+CO.mute+';font-size:calc(.72rem * var(--cn,1));letter-spacing:.12em">CONVENING</div>'; return; }
 
-    var h = '';
-    h += renderChamber();
-    h += renderSeats();
-    h += renderComposer();
-
-    h += '<div id="ctreasWrap" style="margin-top:16px"></div>';
-    h += '<div id="croomWrap" style="margin-top:16px"></div>';
+    ensureStyles();
 
     // Pending sits with open, above everything settled: it is the only status
     // with a deadline somebody may need to act before.
     var open = st.accords.filter(function(a){ return a.status === 'open' || a.status === 'pending'; });
     var past = st.accords.filter(function(a){ return a.status !== 'open' && a.status !== 'pending'; });
 
-    h += '<div style="margin-top:18px;font-size:.64rem;letter-spacing:.15em;color:'+CO.gold+';text-transform:uppercase;margin-bottom:8px">On the floor ('+open.length+')</div>';
-    if (!open.length) h += '<div style="font-size:.78rem;color:'+CO.mute+';padding:12px 0;line-height:1.65">The floor is clear. No delegate has tabled anything.</div>';
-    else open.forEach(function(a){ h += renderAccord(a); });
+    var h = '<div class="cnshell">';
 
+    h += '<div class="cnbar">';
+    h += '<div class="cnhead" style="margin:0">The chamber</div>';
+    h += '<button class="cnexit" onclick="window.__councilExit()">&larr; Leave chamber</button>';
+    h += '</div>';
+
+    h += '<div class="cnmain">';
+
+    // CENTRE STAGE. The ring, the four chairs directly under it, and the floor
+    // below that. The chairs are a CHOICE the ring illustrates, so they belong
+    // beneath it rather than in a separate band across the top.
+    h += '<div class="cnstage">';
+    h += '<div class="cnstagehead">';
+    h += '<div class="cnring">' + renderChamber() + '</div>';
+    h += renderSeats();
+    h += '</div>';
+    h += '<div class="cnfloor" id="cnfloor">';
+    h += renderComposer();
+    h += '<div class="cnhead" style="color:'+CO.gold+';margin-top:18px">On the floor ('+open.length+')</div>';
+    if (!open.length) h += '<div style="font-size:calc(.78rem * var(--cn,1));color:'+CO.mute+';padding:12px 0;line-height:1.65">The floor is clear. No delegate has tabled anything.</div>';
+    else open.forEach(function(a){ h += renderAccord(a); });
     if (past.length) {
-      h += '<div style="margin-top:18px;font-size:.62rem;letter-spacing:.15em;color:'+CO.mute+';text-transform:uppercase;margin-bottom:8px">Struck from the floor</div>';
+      h += '<div class="cnhead" style="margin-top:18px">Struck from the floor</div>';
       past.slice(0, 15).forEach(function(a){ h += renderAccord(a); });
     }
-
     h += renderLog();
+    h += '</div></div>';
+
+    // RIGHT RAIL, the same shape as #rightPanel in the main view: treasury at its
+    // natural height, the room taking everything left.
+    h += '<div class="cnside" id="cnroom">';
+    h += '<div id="ctreasWrap"></div>';
+    h += '<div id="croomWrap"></div>';
+    h += '</div>';
+
+    h += '</div></div>';
 
     // COMPOSER PRESERVATION. The chamber re-renders on every council_dirty
     // broadcast, which fires whenever ANY delegate acts. Blowing away innerHTML
@@ -1127,18 +1255,55 @@
     // even if renderRooms is skipped.
     var draft = captureDraft();
     var roomDraft = captureRoomDraft();
+    // TWO SCROLL POSITIONS NOW, AND THEY MATTER AS MUCH AS THE DRAFTS DO. The
+    // whole pane is rebuilt on every council_dirty, and a reader halfway down the
+    // accord list who gets thrown back to the top because an unrelated chair
+    // moved has lost their place exactly the way the composer used to lose a
+    // half typed clause. Captured before the rewrite and put back after.
+    var scrolls = captureScrolls();
     box.innerHTML = h;
     restoreDraft(draft);
     renderTreasury();
     renderRooms();
     restoreRoomDraft(roomDraft);
+    restoreScrolls(scrolls);
+  }
+
+  function captureScrolls(){
+    var out = {};
+    ['cnfloor','cnroom'].forEach(function(id){
+      var e = document.getElementById(id);
+      // A column that has never been scrolled reports 0 and needs no restoring;
+      // recording it anyway is harmless and keeps the shape simple.
+      if (e) out[id] = e.scrollTop;
+    });
+    return out;
+  }
+  function restoreScrolls(sc){
+    if (!sc) return;
+    Object.keys(sc).forEach(function(id){
+      var e = document.getElementById(id);
+      // Clamped by the browser if the content got shorter, which is the correct
+      // behaviour: an accord expiring off the list should not leave the column
+      // scrolled past its own end.
+      if (e && sc[id]) e.scrollTop = sc[id];
+    });
   }
 
   function captureDraft(){
     if (!document.getElementById('cpTitle')) return null;
     var g = function(id){ var e = document.getElementById(id); return e ? e.value : ''; };
+    // THE CARET, NOT JUST THE TEXT. 1.3.8.2 gave the room chat box its caret and
+    // focus back across a rebuild and left the composer directly above it with
+    // the text only, which is the same mistake one element over in the other
+    // direction. Restoring a half written clause but dropping the cursor to the
+    // end of it is its own small insult when the edit was mid string.
+    var ae = document.activeElement, focus = null;
+    if (ae && /^(cpTitle|cpRider|cpFrom|cpTo|cpTtl)$/.test(ae.id)) {
+      focus = { id: ae.id, start: ae.selectionStart, end: ae.selectionEnd };
+    }
     return { from: g('cpFrom'), to: g('cpTo'), ttl: g('cpTtl'),
-             title: g('cpTitle'), rider: g('cpRider'),
+             title: g('cpTitle'), rider: g('cpRider'), focus: focus,
              mine: readClauses('cpMine'), theirs: readClauses('cpTheirs') };
   }
 
@@ -1154,6 +1319,19 @@
     theirs.forEach(function(c){ theirBox.insertAdjacentHTML('beforeend', clauseRow('theirs', 0, c)); });
     bindClauseInputs();
     window.__councilRecalc();
+    // Focus is only taken back if they ACTUALLY had it. Calling focus()
+    // unconditionally on every render steals the caret out of the room chat box,
+    // or out of the main chat, while somebody is typing there. That is the
+    // failure the room fix was careful to avoid and this must not reintroduce it.
+    if (d && d.focus) {
+      var fe = document.getElementById(d.focus.id);
+      if (fe) {
+        try { fe.focus(); } catch(_) {}
+        if (d.focus.start != null && fe.setSelectionRange) {
+          try { fe.setSelectionRange(d.focus.start, d.focus.end); } catch(_) {}
+        }
+      }
+    }
   }
 
   function bindClauseInputs(){
