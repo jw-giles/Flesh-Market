@@ -26,6 +26,7 @@ import {
   createPlayerSync, getPlayer, getPlayerByName,
   getPlayerByPatreonEmail, getPlayerByPatreonMemberId,
   isNameAvailable, touchPlayer, renamePlayer, markTutorialSeen,
+  setPlayerBio, addPlaytimeSeconds, getPlayerItemListings,
   savePlayerFn, recordNetWorthFn, recordFundNAVFn,
   getNetWorthHistory, getFundNAVHistory, getLeaderboard,
   verifyPassword, createPasswordHash,
@@ -7949,9 +7950,59 @@ app.get('/api/items/profile/:name', (req, res) => {
       invId: row.id, itemId: row.item_id,
       ...(ITEM_CATALOG[row.item_id] || {})
     }));
+    // Open Ƒbay listings. getInventory() filters these out, so without this the
+    // profile would show a shelf with the for-sale stock missing from it.
+    const listings = getPlayerItemListings(target.id).map(row => ({
+      listingId: row.id, itemId: row.item_id, price: row.price, listedAt: row.listed_at,
+      ...(ITEM_CATALOG[row.item_id] || {})
+    }));
     res.json({ ok: true, name: target.name, title: target.title || null,
       portrait: target.portrait || null, faction: target.faction || null,
-      items, equipped: equipped || {}, passiveBonus: passive });
+      level: target.level || 1,
+      bio: target.bio || null,
+      createdAt: target.createdAt || null,
+      playtimeSec: target.playtimeSec || 0,
+      items, listings, equipped: equipped || {}, passiveBonus: passive });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ─── Profile bio ──────────────────────────────────────────────────────────────
+// Free text written by one player and read by every other player. Three gates,
+// all server side: hard length cap, the same slur filter chat runs through, and
+// a write cooldown. The client renders the result with textContent - the cap and
+// the filter are content policy, they are NOT the XSS defence and must not be
+// mistaken for it.
+const BIO_MAX = 2000;
+const BIO_COOLDOWN_MS = 20_000;
+const _bioWriteTs = new Map();
+app.post('/api/profile/bio', requirePlayer, (req, res) => {
+  try {
+    const p = req.player;
+    if (isDunced(p.id)) return res.status(403).json({ ok: false, error: 'dunced' });
+    const raw = String(req.body?.bio ?? '');
+    if (raw.length > BIO_MAX * 2) return res.status(400).json({ ok: false, error: 'too_long' });
+    // Collapse runaway blank lines before capping so the cap counts real content.
+    let bio = raw.replace(/\r\n?/g, '\n').replace(/\n{4,}/g, '\n\n\n').trim().slice(0, BIO_MAX);
+    const last = _bioWriteTs.get(p.id) || 0;
+    const waitMs = BIO_COOLDOWN_MS - (Date.now() - last);
+    if (waitMs > 0 && !isAdminAccount(p.id))
+      return res.status(429).json({ ok: false, error: 'cooldown', seconds: Math.ceil(waitMs / 1000) });
+    let flagged = false;
+    if (bio) { const f = filterChat(bio); bio = f.clean; flagged = !!f.flagged; }
+    const saved = setPlayerBio(p.id, bio);
+    _bioWriteTs.set(p.id, Date.now());
+    res.json({ ok: true, bio: saved, filtered: flagged });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Admin: wipe a bio without touching the rest of the account.
+app.post('/api/profile/bio/clear', requireAdmin, (req, res) => {
+  try {
+    const target = getPlayerByName(String(req.body?.name || '').trim());
+    if (!target) return res.status(404).json({ ok: false, error: 'not_found' });
+    setPlayerBio(target.id, null);
+    console.log(`[Bio] cleared for ${target.name} by admin`);
+    res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -9623,6 +9674,11 @@ wss.on('connection',(ws,req)=>{
     const actor=playerId?getPlayer(playerId):null;
 
     if(msg.type==='ping'){if(actor)touchPlayer(actor.id);return;}
+
+    // Tab visibility for playtime accrual. Cheap, unrated, and deliberately
+    // handled before the rate limiter: it fires on tab switch, which a player
+    // alt-tabbing rapidly would otherwise burn their chat budget on.
+    if(msg.type==='visibility'){ ws._fmVisible = !!msg.visible; return; }
 
     // Per connection rate limit. See server/ratelimit.js for why two buckets
     // and why this drops the frame rather than the socket.
@@ -13333,6 +13389,38 @@ setInterval(() => {
   } catch(_) {}
 }, 15 * 60_000);
 
+
+// ── Playtime accrual ─────────────────────────────────────────────────────────
+// Credits connected, tab-visible players once a minute. Presence comes from
+// playerSockets (server-held), not from a number the client hands us, so the
+// worst a modified client can do is claim a hidden tab is visible - which is
+// identical in effect to leaving the tab open, something it can already do.
+// Idle time therefore counts. That is the deliberate trade: the stat is a
+// session odometer, not an engagement score, and NOTHING may be gated on it.
+// The elapsed value is measured rather than assumed so a stalled event loop
+// under-credits instead of silently drifting; addPlaytimeSeconds clamps to an
+// hour so a suspended process cannot dump a day into the column on resume.
+const PLAYTIME_TICK_MS = 60_000;
+let _playtimeLastRun = Date.now();
+setInterval(() => {
+  try {
+    const now = Date.now();
+    const elapsed = Math.round((now - _playtimeLastRun) / 1000);
+    _playtimeLastRun = now;
+    if (elapsed <= 0) return;
+    const ids = [];
+    for (const [pid, socks] of playerSockets) {
+      let visible = false;
+      for (const ws of socks) {
+        // Undefined means a client too old to report visibility. Those count,
+        // otherwise the stat freezes for everyone until they hard refresh.
+        if (ws._fmVisible !== false) { visible = true; break; }
+      }
+      if (visible) ids.push(pid);
+    }
+    if (ids.length) addPlaytimeSeconds(ids, elapsed);
+  } catch (e) { console.error('[Playtime]', e); }
+}, PLAYTIME_TICK_MS);
 
 setInterval(stepMarket, TICK_MS);
 setInterval(broadcastLeaderboard, 15000);

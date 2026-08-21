@@ -1,3 +1,37 @@
 
-.pp-item{background:#0a0303;border:1px solid #1a0808;border-radius:5px;padding:5px 4px;text-align:center}
-.pp-asset{background:#0a0303;border:1px solid #1a0808;border-radius:5px;padding:6px 8px;flex:1;text-align:center}
+.pp-item{background:#0a0303;border:1px solid #1a0808;border-radius:5px;padding:5px 4px;text-align:center;min-width:0}
+.pp-asset{background:#0a0303;border:1px solid #1a0808;border-radius:5px;padding:6px 8px;flex:1;text-align:center;min-width:0}
+
+/* Profile modal chrome. The overlay is the scroll container, not the card, so a
+   long bio on a short viewport scrolls the whole panel instead of trapping the
+   scroll inside a nested box the way the old fixed-position popup did. */
+#ppOverlay{-webkit-overflow-scrolling:touch}
+#ppOverlay::-webkit-scrollbar{width:8px}
+#ppOverlay::-webkit-scrollbar-thumb{background:#2a1010;border-radius:4px}
+#playerProfilePopup #ppBio::-webkit-scrollbar{width:6px}
+#playerProfilePopup #ppBio::-webkit-scrollbar-thumb{background:#2a1010;border-radius:3px}
+
+.pp-btn{
+  font:inherit;font-size:.66rem;letter-spacing:.08em;
+  background:transparent;border:1px solid #2a4a38;color:#7fc090;
+  padding:4px 11px;border-radius:4px;cursor:pointer;line-height:1.3;
+  transition:border-color .15s,color .15s,box-shadow .15s;
+}
+.pp-btn:hover{border-color:#46ff7d;color:#9dffb0}
+.pp-btn:disabled{opacity:.5;cursor:default}
+/* The primary action. Green, per the brief. */
+.pp-btn-go{border-color:#2e6b4a;color:#46ff7d;background:#0a1813;font-weight:600}
+.pp-btn-go:hover{border-color:#46ff7d;box-shadow:0 0 8px #46ff7d33}
+
+#ppBioText:focus{outline:none;border-color:#f0b454;box-shadow:0 0 6px #f0b45433}
+
+/* Mobile: the modal is the full viewport minus a thin margin. The old anchored
+   popup was positioned at the tap coordinate, which on a phone put it half off
+   screen as often as not. */
+@media (max-width:640px){
+  #ppOverlay{padding:2vh 8px}
+  #playerProfilePopup{width:100%}
+  #playerProfilePopup #ppPortrait{width:46px;height:46px}
+  #playerProfilePopup #ppName{font-size:.94rem}
+  #ppEquipped,#ppForSale{grid-template-columns:repeat(auto-fill,minmax(66px,1fr))!important}
+}

@@ -1,33 +1,80 @@
 
 (function(){
   let _ppTarget = null;
+  let _ppBioCurrent = '';
   // Cache of fetched profile data
   const _ppCache = {};
 
-  window.openPlayerProfile = async function(userName, x, y) {
+  // ── Formatting helpers ───────────────────────────────────────────────────
+  function fmtPlaytime(sec) {
+    sec = Math.max(0, Math.floor(Number(sec) || 0));
+    if (sec < 60) return sec + 's';
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+    if (h < 1) return m + 'm';
+    if (h < 100) return h + 'h ' + m + 'm';
+    return h.toLocaleString() + 'h';
+  }
+  function fmtJoined(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return '';
+    var days = Math.max(0, Math.floor((Date.now() - ts) / 86400000));
+    var age = days < 1 ? 'today' : (days === 1 ? '1 day' : days.toLocaleString() + ' days');
+    return d.toISOString().slice(0, 10) + ' (' + age + ')';
+  }
+  function isSelfName(n) {
+    var me = (window.ME && window.ME.name) ? window.ME.name : '';
+    return !!(me && n && String(me).toLowerCase() === String(n).toLowerCase());
+  }
+  function ppToken() { return window.FM_TOKEN || (window.ME && window.ME.token) || ''; }
+
+  function showModal(show) {
+    var ov = document.getElementById('ppOverlay');
+    var card = document.getElementById('playerProfilePopup');
+    // HOIST TO BODY BEFORE SHOWING. On mobile, body.fm-mobile .wrap is
+    // position:fixed, which makes it a stacking context at z-index auto. The
+    // overlay ships inside .wrap, so its 10500 was never being compared against
+    // the mobile chrome at 9990-9998 at all - it was compared against .wrap's
+    // siblings, and .wrap loses. The modal would render UNDER the top bar and
+    // the bottom nav. Same defect and same fix as the drawer; see hoistDrawer()
+    // in mobile.js and the note above the .wrap rule in mobile.css.
+    // One-way, unlike the drawer: nothing reads this node's position in the
+    // tree, so there is nothing to restore on leaving mobile.
+    if (ov && ov.parentNode !== document.body) document.body.appendChild(ov);
+    if (ov)   ov.style.display   = show ? 'flex'  : 'none';
+    if (card) card.style.display = show ? 'block' : 'none';
+  }
+
+  window.openPlayerProfile = async function(userName /*, x, y - legacy, ignored */) {
     _ppTarget = userName;
     const popup = document.getElementById('playerProfilePopup');
     if (!popup) return;
+    showModal(true);
+    if (popup.parentNode) popup.parentNode.scrollTop = 0;
 
-    // Position popup smartly
-    const pw = 280, ph = 320;
-    let left = x + 10, top = y + 10;
-    if (left + pw > window.innerWidth  - 10) left = x - pw - 10;
-    if (top  + ph > window.innerHeight - 10) top  = y - ph - 10;
-    popup.style.left = Math.max(6, left) + 'px';
-    popup.style.top  = Math.max(6, top)  + 'px';
-    popup.style.display = 'block';
-
-    // Show name immediately
+    // Reset every region before the fetch so a slow load never shows the last
+    // player's bio under this player's name.
     document.getElementById('ppName').textContent = userName;
     document.getElementById('ppTitle').textContent = '';
-    document.getElementById('ppEquipped').innerHTML = '<div style="color:#332222;font-size:.68rem;grid-column:1/-1">Loading…</div>';
+    document.getElementById('ppMeta').textContent = '';
+    document.getElementById('ppEquipped').innerHTML = '<div style="color:#553333;font-size:.68rem;grid-column:1/-1">Loading\u2026</div>';
     document.getElementById('ppAssets').innerHTML   = '';
     document.getElementById('ppPassive').textContent = '';
+    const bioWrap = document.getElementById('ppBioWrap');
+    const bioEl   = document.getElementById('ppBio');
+    // Cleared HERE, not only on close. Without this, opening someone else's
+    // profile, closing it, then opening your own while the fetch fails would
+    // leave THEIR text sitting in your editor, one Save away from being
+    // published under your name.
+    _ppBioCurrent = '';
+    if (bioEl) bioEl.textContent = '';
+    if (bioWrap) bioWrap.style.display = 'none';
+    const ed = document.getElementById('ppBioEditor'); if (ed) ed.style.display = 'none';
+    const fsw = document.getElementById('ppForSaleWrap'); if (fsw) fsw.style.display = 'none';
+    const selfBar = document.getElementById('ppSelfBar');
+    if (selfBar) selfBar.style.display = 'none';
     const _ppReset = document.getElementById('ppPortrait');
     if (_ppReset) { _ppReset.style.display = 'none'; _ppReset.onclick = null; }
-    const _ppcReset = document.getElementById('ppChangePortrait');
-    if (_ppcReset) _ppcReset.remove();
 
     // Show admin bar if admin
     const adminBar = document.getElementById('ppAdminBar');
@@ -35,31 +82,67 @@
 
     // Fetch profile
     try {
-      const token = window.FM_TOKEN || window.ME?.token || '';
+      const token = ppToken();
       const r = await fetch(`/api/items/profile/${encodeURIComponent(userName)}${token?'?token='+token:''}`);
       const d = await r.json();
-      if (!d.ok) { document.getElementById('ppEquipped').innerHTML = '<div style="color:#332222;font-size:.68rem;grid-column:1/-1">No items equipped.</div>'; return; }
-
+      if (!d.ok) { document.getElementById('ppEquipped').innerHTML = '<div style="color:#553333;font-size:.68rem;grid-column:1/-1">No items equipped.</div>'; return; }
+      // A slower earlier fetch must not paint over a profile opened since.
+      if (String(_ppTarget || '').toLowerCase() !== String(d.name || userName).toLowerCase()) return;
       renderProfilePopup(d);
     } catch(e) {
       document.getElementById('ppEquipped').innerHTML = '<div style="color:#443333;font-size:.68rem;grid-column:1/-1">Could not load.</div>';
     }
   };
 
+  // Header entry points. The header button is labelled Edit Profile, so it opens
+  // the editor rather than dropping the player on a read-only panel they then
+  // have to find a second button on. The name itself opens the view.
+  window.openMyProfile = function (startEditing) {
+    const me = (window.ME && window.ME.name) ? window.ME.name : '';
+    if (!me) return;
+    const p = window.openPlayerProfile(me);
+    if (!startEditing) return;
+    // openPlayerProfile resolves after the fetch, so the bio is loaded by the
+    // time the editor reads it. Guard the then() because a failed fetch still
+    // resolves and _ppBioCurrent stays empty, which is the correct blank editor.
+    if (p && typeof p.then === 'function') p.then(function () { window.ppOpenBioEditor(); }).catch(function () {});
+  };
+
   function renderProfilePopup(d) {
     const SLOT_LABEL = window.SLOT_LABELS || {hat:'Hat',glasses:'Glasses',upperbody:'Upper Body',necklace:'Necklace',watch:'Watch',pants:'Pants',shoes:'Shoes',ring:'Ring',earring:'Earring',bracelet:'Bracelet',implant:'Implant',vehicle:'Vehicle',property:'Property'};
-    const SLOT_ICONS = window.SLOT_ICONS  || {hat:'🎩',glasses:'👓',upperbody:'👕',necklace:'📿',watch:'⌚',pants:'👖',shoes:'👟',ring:'💍',earring:'✨',bracelet:'📿',implant:'🔩',vehicle:'🚗',property:'🏠'};
+    const SLOT_ICONS = window.SLOT_ICONS  || {hat:'\ud83c\udfa9',glasses:'\ud83d\udc53',upperbody:'\ud83d\udc55',necklace:'\ud83d\udcff',watch:'\u231a',pants:'\ud83d\udc56',shoes:'\ud83d\udc5f',ring:'\ud83d\udc8d',earring:'\u2728',bracelet:'\ud83d\udcff',implant:'\ud83d\udd29',vehicle:'\ud83d\ude97',property:'\ud83c\udfe0'};
     const RARITY_C   = window.RARITY_COLORS || {common:'#888780',uncommon:'#1D9E75',rare:'#3B8BD4',epic:'#8B5CF6',legendary:'#ff6a00'};
     const RARITY_BG  = {common:'#1a1a1a',uncommon:'#0a1f18',rare:'#0a1220',epic:'#150e24',legendary:'#1f0e00'};
     const ITEM_CAT   = window.ITEM_CATALOG_CLIENT || {};
 
     const titleEl = document.getElementById('ppTitle');
-    if (titleEl && d.title) titleEl.textContent = d.title;
+    if (titleEl) titleEl.textContent = d.title || '';
 
-    // Portrait avatar + self-serve change link
+    // Joined + playtime. Playtime is a session odometer, not an activity score;
+    // it accrues while the tab is open and visible.
+    const metaEl = document.getElementById('ppMeta');
+    if (metaEl) {
+      metaEl.innerHTML = '';
+      const joined = fmtJoined(d.createdAt);
+      function chip(label, value, color) {
+        const s = document.createElement('span');
+        const k = document.createElement('span');
+        k.textContent = label + ' ';
+        k.style.cssText = 'color:#7a5555;text-transform:uppercase;letter-spacing:.1em';
+        const v = document.createElement('span');
+        v.textContent = value;
+        v.style.color = color || '#8fd6a6';
+        s.appendChild(k); s.appendChild(v);
+        metaEl.appendChild(s);
+      }
+      if (joined) chip('Joined', joined);
+      chip('Playtime', fmtPlaytime(d.playtimeSec), '#f0b454');
+      if (d.level) chip('Level', String(d.level));
+    }
+
+    // Portrait avatar
     const portEl = document.getElementById('ppPortrait');
-    const me = (window.ME && window.ME.name) ? window.ME.name : '';
-    const isSelf = me && _ppTarget && me.toLowerCase() === String(_ppTarget).toLowerCase();
+    const isSelf = isSelfName(_ppTarget);
     if (portEl) {
       const pid = d.portrait ? String(d.portrait) : '';
       if (pid) { portEl.src = window.FMPortraitSrc(pid); portEl.style.imageRendering = window.FMPortraitPixelated(pid) ? 'pixelated' : ''; portEl.style.display = 'block'; }
@@ -67,16 +150,35 @@
       if (isSelf) {
         portEl.style.cursor = 'pointer'; portEl.title = 'Change portrait';
         portEl.onclick = function (e) { e.stopPropagation(); window.openPortraitPicker(); };
-        if (!document.getElementById('ppChangePortrait')) {
-          const lk = document.createElement('div');
-          lk.id = 'ppChangePortrait';
-          lk.textContent = '✎ portrait';
-          lk.style.cssText = 'font-size:.6rem;color:#5f8f74;cursor:pointer;letter-spacing:.06em;margin-top:2px';
-          lk.onclick = function (e) { e.stopPropagation(); window.openPortraitPicker(); };
-          if (titleEl && titleEl.parentNode) titleEl.parentNode.appendChild(lk);
-        }
+      } else {
+        portEl.style.cursor = ''; portEl.title = ''; portEl.onclick = null;
       }
     }
+
+    // Self controls
+    const selfBar = document.getElementById('ppSelfBar');
+    if (selfBar) selfBar.style.display = isSelf ? 'flex' : 'none';
+
+    // Bio. textContent, never innerHTML: this is the one string on the profile
+    // that another player wrote. No auto-linking either - a clickable link a
+    // stranger controls is a phishing surface, and the server does not vet URLs.
+    const bioWrap = document.getElementById('ppBioWrap');
+    const bioEl   = document.getElementById('ppBio');
+    _ppBioCurrent = d.bio || '';
+    if (bioEl && bioWrap) {
+      if (_ppBioCurrent) {
+        bioEl.textContent = _ppBioCurrent;
+        bioEl.style.color = '#c7d8c9'; bioEl.style.fontStyle = '';
+        bioWrap.style.display = 'block';
+      } else if (isSelf) {
+        bioEl.textContent = 'No transmission on file. Write one.';
+        bioEl.style.color = '#5f8f74'; bioEl.style.fontStyle = 'italic';
+        bioWrap.style.display = 'block';
+      } else {
+        bioWrap.style.display = 'none';
+      }
+    }
+    const ed = document.getElementById('ppBioEditor'); if (ed) ed.style.display = 'none';
 
     const equippedItems = d.equipped || {};
     const allSlots = ['hat','glasses','upperbody','necklace','watch','pants','shoes','ring','earring','bracelet','implant','vehicle','property'];
@@ -88,7 +190,7 @@
       // inv already has name/rarity/slot spread from server's ITEM_CATALOG
       const inv   = invId ? (d.items||[]).find(i=>i.invId===invId) : null;
       if (inv) {
-        // Only use img if it's a base64 data URI — bare filenames (e.g. 'flesh_suite.png')
+        // Only use img if it's a base64 data URI - bare filenames (e.g. 'flesh_suite.png')
         // are server-only and not bundled in the client, so fall back to emoji for those.
         const clientDef = ITEM_CAT[inv.itemId];
         const rawImg = (clientDef && clientDef.img) || inv.img || null;
@@ -118,7 +220,7 @@
     // Clothing grid (11 slots)
     const clothingSlots = ['hat','glasses','upperbody','necklace','watch','pants','shoes','ring','earring','bracelet','implant'];
     const eqEl = document.getElementById('ppEquipped');
-    eqEl.innerHTML = clothingSlots.map(s => renderCell(s, 34)).join('');
+    eqEl.innerHTML = clothingSlots.map(s => renderCell(s, 40)).join('');
 
     // Asset row (vehicle + property)
     const assetEl = document.getElementById('ppAssets');
@@ -137,11 +239,39 @@
       </div>`;
     }).join('');
 
+    // Open Fbay listings. Server sends these separately because getInventory()
+    // filters listed rows out of the owned set.
+    const fsWrap = document.getElementById('ppForSaleWrap');
+    const fsEl   = document.getElementById('ppForSale');
+    const listings = Array.isArray(d.listings) ? d.listings : [];
+    if (fsWrap && fsEl) {
+      if (!listings.length) { fsWrap.style.display = 'none'; fsEl.innerHTML = ''; }
+      else {
+        fsWrap.style.display = 'block';
+        fsEl.innerHTML = listings.map(function (L) {
+          const rc = RARITY_C[L.rarity] || '#888';
+          const rbg = RARITY_BG[L.rarity] || '#0a0303';
+          const clientDef = ITEM_CAT[L.itemId];
+          const rawImg = (clientDef && clientDef.img) || L.img || null;
+          const img = (rawImg && String(rawImg).startsWith('data:')) ? rawImg : null;
+          const art = img
+            ? `<img src="${img}" style="width:40px;height:40px;image-rendering:pixelated;display:block;margin:0 auto">`
+            : `<span style="font-size:26px;line-height:1;display:block;text-align:center;opacity:.35">\u25a3</span>`;
+          const price = Number(L.price) || 0;
+          return `<div class="pp-item" style="background:${rbg};border-color:${rc}44">
+            ${art}
+            <div style="font-size:.55rem;color:${rc};font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px">${(L.name||L.itemId||'').replace(/[<>&"]/g,'')}</div>
+            <div style="font-size:.56rem;color:#f0b454;margin-top:2px">\u0192${price.toLocaleString()}</div>
+          </div>`;
+        }).join('');
+      }
+    }
+
     // Passive total
     const passiveEl = document.getElementById('ppPassive');
     if (passiveEl && typeof d.passiveBonus === 'number') {
       passiveEl.textContent = d.passiveBonus > 0
-        ? `Item passive: +${d.passiveBonus} Ƒ/30min`
+        ? `Item passive: +${d.passiveBonus} \u0192/30min`
         : 'No items equipped';
     }
 
@@ -151,6 +281,112 @@
     window._ppRarityC = RARITY_C;
     window._ppRarityBG = RARITY_BG;
   }
+
+  // ── Bio editing ──────────────────────────────────────────────────────────
+  const BIO_MAX = 2000;
+  function bioMsg(text, color) {
+    const m = document.getElementById('ppBioMsg');
+    if (m) { m.textContent = text || ''; m.style.color = color || '#c08a44'; }
+  }
+  function bioCount() {
+    const ta = document.getElementById('ppBioText');
+    const c  = document.getElementById('ppBioCount');
+    if (!ta || !c) return;
+    const n = ta.value.length;
+    c.textContent = n + ' / ' + BIO_MAX;
+    c.style.color = n > BIO_MAX - 100 ? '#f0b454' : '#5f8f74';
+  }
+  window.ppOpenBioEditor = function () {
+    if (!isSelfName(_ppTarget)) return;
+    const ed = document.getElementById('ppBioEditor');
+    const wrap = document.getElementById('ppBioWrap');
+    const ta = document.getElementById('ppBioText');
+    if (!ed || !ta) return;
+    ta.value = _ppBioCurrent || '';
+    bioMsg('');
+    bioCount();
+    if (wrap) wrap.style.display = 'none';
+    ed.style.display = 'block';
+    ta.focus();
+  };
+  function closeBioEditor() {
+    const ed = document.getElementById('ppBioEditor');
+    const wrap = document.getElementById('ppBioWrap');
+    if (ed) ed.style.display = 'none';
+    if (wrap) wrap.style.display = 'block';
+  }
+  window.ppSaveBio = function () {
+    const ta = document.getElementById('ppBioText');
+    const btn = document.getElementById('ppBioSave');
+    if (!ta) return;
+    if (btn) btn.disabled = true;
+    bioMsg('Transmitting\u2026', '#5f8f74');
+    const token = ppToken();
+    fetch('/api/profile/bio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'x-auth-token': token } : {}) },
+      body: JSON.stringify({ bio: ta.value, token })
+    }).then(r => r.json()).then(function (res) {
+      if (btn) btn.disabled = false;
+      if (!res || !res.ok) {
+        if (res && res.error === 'cooldown') bioMsg('Too fast. Wait ' + (res.seconds || 20) + 's.', '#c08a44');
+        else if (res && res.error === 'too_long') bioMsg('Too long.', '#c08a44');
+        else if (res && res.error === 'dunced') bioMsg('Your account cannot edit its profile.', '#a85555');
+        else bioMsg('Could not save.', '#a85555');
+        return;
+      }
+      _ppBioCurrent = res.bio || '';
+      const bioEl = document.getElementById('ppBio');
+      const wrap  = document.getElementById('ppBioWrap');
+      if (bioEl) {
+        if (_ppBioCurrent) { bioEl.textContent = _ppBioCurrent; bioEl.style.color = '#c7d8c9'; bioEl.style.fontStyle = ''; }
+        else { bioEl.textContent = 'No transmission on file. Write one.'; bioEl.style.color = '#5f8f74'; bioEl.style.fontStyle = 'italic'; }
+      }
+      if (wrap) wrap.style.display = 'block';
+      closeBioEditor();
+      if (window.showToast) window.showToast(res.filtered ? 'Saved, with terms censored' : 'Profile updated', res.filtered ? '#f0b454' : '#42ff7e', 2500);
+    }).catch(function () {
+      if (btn) btn.disabled = false;
+      bioMsg('Network error.', '#a85555');
+    });
+  };
+
+  window.ppAdminClearBio = function () {
+    if (!_ppTarget || !window.__isAdmin_g) return;
+    if (!confirm('Clear ' + _ppTarget + "'s bio?")) return;
+    const token = ppToken();
+    const name = _ppTarget;
+    fetch('/api/profile/bio/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'x-auth-token': token } : {}) },
+      body: JSON.stringify({ name, token })
+    }).then(r => r.json()).then(function (res) {
+      if (res && res.ok) {
+        _ppBioCurrent = '';
+        const bioEl = document.getElementById('ppBio');
+        const wrap  = document.getElementById('ppBioWrap');
+        if (bioEl) bioEl.textContent = '';
+        if (wrap) wrap.style.display = 'none';
+        if (window.showToast) window.showToast('Bio cleared', '#42ff7e', 2000);
+      } else if (window.showToast) window.showToast('Could not clear bio', '#ff6a6a', 2500);
+    }).catch(function () {});
+  };
+
+  // Wire the profile controls once the DOM node exists.
+  function wireProfileControls() {
+    const edit = document.getElementById('ppEditBtn');
+    const port = document.getElementById('ppPortraitBtn');
+    const save = document.getElementById('ppBioSave');
+    const cancel = document.getElementById('ppBioCancel');
+    const ta = document.getElementById('ppBioText');
+    if (edit && !edit._wired) { edit._wired = 1; edit.className = 'pp-btn pp-btn-go'; edit.onclick = function (e) { e.stopPropagation(); window.ppOpenBioEditor(); }; }
+    if (port && !port._wired) { port._wired = 1; port.className = 'pp-btn'; port.onclick = function (e) { e.stopPropagation(); window.openPortraitPicker && window.openPortraitPicker(); }; }
+    if (save && !save._wired) { save._wired = 1; save.className = 'pp-btn pp-btn-go'; save.onclick = function (e) { e.stopPropagation(); window.ppSaveBio(); }; }
+    if (cancel && !cancel._wired) { cancel._wired = 1; cancel.className = 'pp-btn'; cancel.onclick = function (e) { e.stopPropagation(); closeBioEditor(); }; }
+    if (ta && !ta._wired) { ta._wired = 1; ta.addEventListener('input', bioCount); }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireProfileControls);
+  else wireProfileControls();
 
   window.ppShowItemDetail = function(slot) {
     const item  = window._ppSlotData && window._ppSlotData[slot];
@@ -173,11 +409,13 @@
       ${item.img ? `<img src="${item.img}" style="width:56px;height:56px;image-rendering:pixelated;display:block;margin:0 auto 8px">` : ''}
       <div style="font-size:.82rem;font-weight:700;color:${rc};margin-bottom:3px">${item.name}</div>
       <div style="font-size:.62rem;color:${rc};opacity:.7;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">${item.rarity}</div>
-      ${item.passive ? `<div style="font-size:.68rem;color:#86ff6a">+${item.passive} Ƒ/30min</div>` : ''}
+      ${item.passive ? `<div style="font-size:.68rem;color:#86ff6a">+${item.passive} \u0192/30min</div>` : ''}
     `;
-    // Anchor to popup so it positions relatively
+    // Anchor to the cell inside the card. The card is position:relative inside
+    // the flex overlay; do NOT force it to position:fixed here or it drops out
+    // of the overlay's centering. (The old cursor-anchored popup did that.)
     const popup = document.getElementById('playerProfilePopup');
-    popup.style.position = 'fixed'; // ensure
+    if (!popup) return;
     const cell = popup.querySelector(`[data-slot="${slot}"]`);
     if (cell) {
       cell.style.position = 'relative';
@@ -190,11 +428,13 @@
   };
 
   window.closePlayerProfile = function() {
-    const popup = document.getElementById('playerProfilePopup');
-    if (popup) popup.style.display = 'none';
+    showModal(false);
     const card = document.getElementById('ppDetailCard');
     if (card) card.remove();
+    const ed = document.getElementById('ppBioEditor');
+    if (ed) ed.style.display = 'none';
     _ppTarget = null;
+    _ppBioCurrent = '';
   };
 
   window.ppAdmin = function(cmd) {
@@ -203,13 +443,48 @@
     try { window._ws.send(JSON.stringify(payload)); closePlayerProfile(); } catch(_) {}
   };
 
-  // Close on outside click
-  document.addEventListener('click', e => {
-    const popup = document.getElementById('playerProfilePopup');
-    if (popup && popup.style.display !== 'none' && !popup.contains(e.target)) {
-      closePlayerProfile();
+  // Backdrop click closes. The listener is on the overlay rather than document
+  // so the portrait picker (its own overlay at a higher z-index) does not read
+  // as an outside click and close the profile out from under itself.
+  (function () {
+    function bind() {
+      const ov = document.getElementById('ppOverlay');
+      if (!ov || ov._wired) return;
+      ov._wired = 1;
+      ov.addEventListener('click', function (e) { if (e.target === ov) closePlayerProfile(); });
     }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+    else bind();
+  })();
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    const ov = document.getElementById('ppOverlay');
+    if (!ov || ov.style.display === 'none') return;
+    // The portrait picker sits above the profile; Escape peels one layer only.
+    if (document.getElementById('portraitPickerOverlay')) return;
+    closePlayerProfile();
   });
+
+  // Tab visibility -> playtime accrual. The server holds the connection list and
+  // only credits sockets that have not reported themselves hidden. This frame is
+  // the client's entire contribution, and the most a forged one buys is what an
+  // open tab already buys. Nothing is gated on playtime; that is what makes this
+  // acceptable and it stops being acceptable the moment something is.
+  (function () {
+    var _lastSent = null;
+    function send() {
+      var vis = document.visibilityState !== 'hidden';
+      if (vis === _lastSent) return;
+      var ws = window._ws;
+      if (!ws || ws.readyState !== 1) return;
+      try { ws.send(JSON.stringify({ type: 'visibility', visible: vis })); _lastSent = vis; } catch (_) {}
+    }
+    document.addEventListener('visibilitychange', send);
+    // Sockets reconnect. Re-announce on a slow poll rather than reaching into
+    // the socket setup in core.js.
+    setInterval(function () { _lastSent = null; send(); }, 45000);
+    setTimeout(send, 3000);
+  })();
 
   // Admins: clicking username also opens profile (override mod panel to show both)
   const _origOpenMod = window.openModPanel;

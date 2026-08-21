@@ -1,4 +1,34 @@
-# FleshMarket v1.3.8.4 - MANIFEST
+# FleshMarket v1.3.9.1 - MANIFEST
+
+## 1.3.9.1 changes (Edit Profile button; modal was buried under mobile chrome; CLIENT ONLY)
+- NO SERVER CHANGE. NO RESTART. HARD REFRESH REQUIRED. Files touched: client/index.html, client/assets/player-profile.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.
+- UNDERLINE REMOVED from #fm-header-name. New #fm-edit-profile-btn, class btn, green, in the header row. Name still opens the read-only view; button calls openMyProfile(true) and opens the editor directly.
+- BUTTON IS A SIBLING OF THE NAME SPAN, NOT A CHILD. mobile.js paintTitle() mirrors #fm-header-name.textContent into the mobile top bar; a nested element puts its label into the mobile title. Constraint is now written in a comment above the span.
+- openMyProfile(startEditing) chains off openPlayerProfile's promise so the bio is loaded before the editor reads it. A failed fetch still resolves and yields a correctly blank editor.
+- MODAL WAS BURIED ON MOBILE. body.fm-mobile .wrap is position:fixed -> stacking context at z-index auto. #ppOverlay ships inside .wrap, so 10500 was compared against .wrap's SIBLINGS, never against the chrome at 9990-9998. Modal would render under #fmTop and the bottom nav on every phone.
+- FIX: showModal() hoists #ppOverlay to body before showing. Same defect and same remedy as the 1.3.6.1 drawer bug (see hoistDrawer() and the comment above the .wrap rule in mobile.css). ONE-WAY, unlike the drawer: nothing reads this node's tree position, so no restore on leaving mobile.
+- PRE-EXISTING, NOT INTRODUCED BY 1.3.9.0. The old cursor-anchored popup sat in the same place with the same defect. 1.3.9.0 changed the COST: a small mispainted box is cosmetic, a full-screen modal that is the only route to a profile is the feature not working.
+- PORTRAIT PICKER STILL LAYERS CORRECTLY. buildPortraitPicker appends to body at z-index 11000; both overlays now share the root stacking context, 11000 > 10500. Mining fullscreen host at 9999 is below both.
+- _ppBioCurrent NOW CLEARED ON OPEN, not only on close. Previously: view another player, close, open your own with a failed fetch -> THEIR bio in your editor, one Save from being published under your name. Low odds, unrecoverable outcome, one line.
+
+## 1.3.9.0 changes (player profiles: bio, playtime, for-sale; popup replaced by modal; SERVER + CLIENT)
+- SERVER RESTART REQUIRED. HARD REFRESH REQUIRED. Files touched: server/db.js, server/server.js, client/index.html, client/assets/player-profile.js, client/assets/player-profile.css, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.
+- ONE SURFACE. #playerProfilePopup is now a card inside a new #ppOverlay backdrop, not a cursor-positioned box. Chat name click, chat avatar click and header name click all route to openPlayerProfile. openModPanel still forwards here (unchanged). Legacy x,y args accepted and ignored, so no caller had to change.
+- EDIT CONTROL IS IN THE MODAL, NOT THE HEADER. mobile.js paintTitle() mirrors #fm-header-name.textContent into the mobile top bar; a nested button leaks its label into the mobile title. #fm-header-name got an onclick instead -> window.openMyProfile. It carries [onclick] so mobile.js wireDrawerAutoClose already dismisses the drawer on tap, no new code.
+- BIO RENDERS THROUGH textContent ONLY. The rest of the panel is innerHTML built from server ITEM_CATALOG strings, which is why that path was safe; player text through it is stored XSS on every viewer. No auto-linking: a clickable stranger-controlled URL is a phishing surface and the server does not vet destinations.
+- CAP + FILTER ARE CONTENT POLICY, NOT THE INJECTION DEFENCE. 2000 chars, filterChat on write (same pass as chat), 20s cooldown (admin exempt), isDunced blocked. Admin POST /api/profile/bio/clear wipes the field only.
+- NEW COLUMNS via the existing players migration block: bio TEXT, bio_updated_at INTEGER, playtime_sec INTEGER NOT NULL DEFAULT 0. Additive, no rewrite, no backfill.
+- TWO TIME STATS. Joined = created_at (already present, cannot be manufactured). Playtime = playtime_sec. The ask conflated "track myself" with "flex on account age"; they are different facts and both are shown.
+- PLAYTIME IS SERVER-ACCRUED FROM playerSockets, one tick/min, skipping sockets whose ws._fmVisible === false. Client contributes only a {type:'visibility'} frame. Forging it buys exactly what an open tab already buys.
+- IDLE TIME COUNTS. DELIBERATE. Session odometer, NOT an engagement score. NOTHING MAY BE GATED ON playtime_sec: no payout, no unlock, no title, no prized leaderboard. Constraint is written above addPlaytimeSeconds AND above the tick, in both places on purpose.
+- ELAPSED IS MEASURED, NOT ASSUMED (_playtimeLastRun delta), so a stalled loop under-credits instead of drifting. addPlaytimeSeconds clamps to 3600s so a suspended process cannot dump a day in on resume. Single db.transaction per tick.
+- OLD CLIENTS COUNT AS VISIBLE (ws._fmVisible !== false), or the stat freezes at zero for everyone until they hard refresh.
+- VISIBILITY FRAME IS HANDLED BEFORE THE RATE LIMITER. It fires on tab switch; rapid alt-tabbing would otherwise spend the player's chat budget.
+- FOR SALE IS A SEPARATE QUERY. getInventory already excludes rows with an open item_market listing, so reusing it would have shown a shelf with the for-sale stock missing. New getPlayerItemListings + idx_item_market_seller(seller_id,sold) so profile opens are not a table scan.
+- STALE-FETCH GUARD: the profile response is discarded if _ppTarget moved on, or a slow load paints one player's bio under another player's name.
+- ESCAPE + BACKDROP CLOSE. The old handler was document-level and closed the profile when the portrait picker overlay was clicked; the listener is now on #ppOverlay itself and Escape peels one layer (picker first).
+- ppShowItemDetail NO LONGER FORCES position:fixed on the card. It did that to anchor against a fixed popup; inside a flex overlay it would drop the card out of centering.
+- OPEN, NOT FIXED HERE: /api/fleshbook/post does not run filterChat. Chat does, bio now does. Pre-existing gap in a shipped UGC surface, same class, unrelated to this patch. Decide it deliberately.
 
 ## 1.3.8.4 changes (droid5 withdrawn; boot sweep for withdrawn portrait ids; SERVER + CLIENT)
 - SERVER RESTART REQUIRED. HARD REFRESH REQUIRED. Files touched: client/assets/portraits/droid5.png (DELETED), client/assets/portrait-manifest.js, server/db.js, server/db_council.js, server/server.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.

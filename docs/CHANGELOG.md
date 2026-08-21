@@ -4,6 +4,48 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.9.1 (2026-08-21) - a real Edit Profile button, and the modal was buried on mobile (CLIENT ONLY)
+
+No server change. No restart. Hard refresh required. Files touched: `client/index.html`, `client/assets/player-profile.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE UNDERLINE IS GONE AND THERE IS A BUTTON. `Edit Profile` sits in the header next to the name, styled like the rest of the header controls. The name stays clickable and opens the read-only view; the button opens the editor directly, because a control labelled Edit Profile should not drop the player on a panel where they have to find a second Edit Profile.
+
+THE BUTTON IS A SIBLING OF THE NAME, NOT A CHILD OF IT. This is the same constraint as last release and it has not gone away: `mobile.js` `paintTitle()` mirrors `#fm-header-name.textContent` into the mobile top bar, so anything nested inside that span puts its label into the mobile title. Beside it is fine. Inside it is not. The comment above the span now says so, because the next person to touch this will reach for the obvious wrapper.
+
+WIRING THE BUTTON TURNED UP A WORSE BUG THAN THE ONE BEING FIXED. `body.fm-mobile .wrap` is `position:fixed`, which makes it a stacking context, and the profile overlay ships inside `.wrap`. Its z-index of 10500 was therefore never compared against the mobile chrome at 9990 through 9998 at all; it was compared against `.wrap`'s siblings, and `.wrap` sits at auto. The profile modal would have opened underneath the top bar and the bottom nav on every phone. This is the identical defect to the drawer bug fixed in 1.3.6.1, described at length in the comment above the `.wrap` rule in mobile.css, and it is fixed the same way: the overlay is hoisted to body before it is shown. One-way, unlike the drawer, because nothing reads this node's position in the tree and there is nothing to restore on leaving mobile.
+
+WORTH BEING CLEAR ABOUT WHOSE FAULT THIS WAS. The old cursor-anchored popup lived in the same place and had the same defect, so this predates 1.3.9.0. What 1.3.9.0 changed is how much it costs: a small box tucked near the tap point is a cosmetic annoyance when it renders low, and a full-screen modal that is the only route to a player's profile is the feature not working on mobile at all.
+
+AND A SMALLER ONE, WORSE IN KIND THAN IN ODDS. `_ppBioCurrent` was cleared on close but not on open. Open another player's profile, close it, open your own while the fetch fails, and their text is sitting in your editor one Save away from being published under your name. The odds are poor, the outcome is not recoverable by the player, and the fix is one line in the reset block. Cleared on open now.
+
+---
+
+## v1.3.9.0 (2026-08-21) - player profiles: bios, playtime, and one panel instead of two (SERVER + CLIENT)
+
+Server restart required. Hard refresh required. Files touched: `server/db.js`, `server/server.js`, `client/index.html`, `client/assets/player-profile.js`, `client/assets/player-profile.css`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+ONE PROFILE SURFACE, NOT TWO. The old cursor-anchored 280px popup is gone. Clicking a name in chat, clicking a chat avatar, and clicking your own name in the header all open the same modal. The desktop case is mildly worse for it: a screen-blocking overlay on a casual "who is this" click is more interruption than a small card next to the cursor was. It loses that argument on mobile, where a popup positioned at the tap coordinate was half off screen as often as not, and it loses it again on principle, because two panels describing the same object drift.
+
+THE EDIT CONTROL IS NOT IN THE HEADER. It sits under the name inside the profile, self only, alongside Change Portrait. The header row was the obvious place and it is the wrong one for a concrete reason: `mobile.js` `paintTitle()` mirrors `#fm-header-name.textContent` into the mobile top bar, so a button nested under that node puts the string "Edit Profile" into the mobile title. The header name is now a click target instead, which costs nothing and reaches the same place.
+
+THE BIO IS THE ONLY STRING ON THIS PANEL THAT AN UNTRUSTED PARTY WROTE. Every other value the profile renders comes from `ITEM_CATALOG` on the server, which is why the existing render path builds the whole thing with `innerHTML` and has been safe doing it. Putting player text through that path is stored XSS on every viewer who clicks the name. The bio goes through `textContent` and nothing else. URLs are not auto-linked either: a clickable link a stranger controls is a phishing surface and the server does not vet destinations.
+
+THE 2000 CHARACTER CAP AND THE SLUR FILTER ARE CONTENT POLICY. They are not the injection defence and must not be read as one. `filterChat` is the same pass chat runs through, applied on write. Writes are on a twenty second cooldown, admins exempt, and dunced accounts cannot write at all. Admins get a Clear Bio control that wipes the field without touching anything else on the account.
+
+TWO TIME STATS, BECAUSE THE ASK WAS TWO THINGS. "How long have you had the account" is Joined, read from `created_at`, already in the table, and impossible to manufacture. "Track your own time" is Playtime, a new `playtime_sec` column.
+
+PLAYTIME ACCRUES SERVER SIDE AND STILL COUNTS IDLE TIME. One tick a minute walks `playerSockets` and credits every player who has a live socket that has not reported its tab hidden. Presence is therefore a server held fact, not a number the client hands over, and the only thing the client contributes is a `visibility` frame. The most a forged frame buys is what leaving the tab open already buys, which is the whole reason this shape is acceptable. The elapsed value is measured rather than assumed, so a stalled event loop under-credits instead of drifting, and the credit is clamped to an hour so a suspended process cannot dump a day into the column on resume.
+
+WHICH MAKES IT A SESSION ODOMETER AND NOT AN ENGAGEMENT SCORE. NOTHING MAY BE GATED ON IT. No payout, no unlock, no title, no leaderboard with a prize attached. The number is cosmetic and it is only safe while it stays cosmetic; the moment a reward hangs off it, it has to be re-derived from something an open tab cannot fake. That constraint is written into the comment above `addPlaytimeSeconds` and above the tick, in both places, because one of them will get read and the other will not.
+
+FOR SALE IS A SEPARATE QUERY, NOT A FILTER ON THE OWNED SET. `getInventory` already excludes rows with an open `item_market` listing. Reusing it for a shelf-and-stock view would have rendered a profile with exactly the for-sale items missing from it. `getPlayerItemListings` reads the listings directly and the panel shows them in their own grid with prices. Added `idx_item_market_seller` so the per-seller lookup is not a table scan on every profile open.
+
+The visibility frame is handled ahead of the rate limiter on purpose. It fires on tab switch, and a player alt-tabbing quickly would otherwise spend their chat budget on it.
+
+MIGRATIONS ARE ADDITIVE AND RUN THROUGH THE EXISTING COLUMN BLOCK: `bio`, `bio_updated_at`, `playtime_sec`. No table rewrite, no backfill, nothing to undo. Old clients that never send a `visibility` frame are treated as visible rather than frozen at zero, so the stat starts moving on restart without waiting for everyone to refresh.
+
+---
+
 ## v1.3.8.4 (2026-08-21) - droid5 is withdrawn, and a withdrawn portrait stops leaving a hole (SERVER + CLIENT)
 
 Server restart required. Hard refresh required. Files touched: `client/assets/portraits/droid5.png` (DELETED), `client/assets/portrait-manifest.js`, `server/db.js`, `server/db_council.js`, `server/server.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.

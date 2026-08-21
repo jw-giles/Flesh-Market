@@ -375,6 +375,13 @@ export function initDB() {
     ['ship_class',            "TEXT NOT NULL DEFAULT ''"],
     ['portrait',              'TEXT'],
     ['patreon_exempt',        'INTEGER NOT NULL DEFAULT 0'],
+    // Player-authored profile bio. Plain text only. Rendered with textContent on
+    // the client, never innerHTML - this is the only field on the players row that
+    // an untrusted party writes and every other player reads.
+    ['bio',                   'TEXT'],
+    ['bio_updated_at',        'INTEGER'],
+    // Accrued connected time in seconds. Cosmetic only. See addPlaytimeSeconds.
+    ['playtime_sec',          'INTEGER NOT NULL DEFAULT 0'],
   ];
   for (const [col, def] of _migrations) {
     if (!_existingCols.has(col)) {
@@ -533,6 +540,9 @@ function hydratePlayer(row) {
     holdings, basisC, shortCollC,
     tutorial_seen: row.tutorial_seen || 0,
     shipClass: row.ship_class || '',
+    bio: row.bio || null,
+    bioUpdatedAt: row.bio_updated_at || null,
+    playtimeSec: row.playtime_sec || 0,
     createdAt:row.created_at, updatedAt:row.updated_at, lastSeen:row.last_seen,
   };
 }
@@ -558,6 +568,49 @@ export function renamePlayer(id,newName) { stmt('UPDATE players SET name=?,updat
 export function markTutorialSeen(id) { stmt('UPDATE players SET tutorial_seen=1,updated_at=? WHERE id=?').run(Date.now(),id); }
 export function setPlayerShipClass(id, shipClass) { stmt('UPDATE players SET ship_class=?,updated_at=? WHERE id=?').run(shipClass, Date.now(), id); }
 export function setPlayerPortrait(id, portrait) { stmt('UPDATE players SET portrait=?,updated_at=? WHERE id=?').run(portrait || null, Date.now(), id); }
+
+// ─── Profile bio ──────────────────────────────────────────────────────────────
+// Stored raw. The caller is responsible for length capping and slur filtering
+// BEFORE this is called; this function does not sanitise, because sanitising in
+// two places means neither place owns it. Readers must treat the value as
+// untrusted text and never interpolate it into markup.
+export function setPlayerBio(id, bio) {
+  const v = (bio == null || String(bio).trim() === '') ? null : String(bio);
+  stmt('UPDATE players SET bio=?,bio_updated_at=?,updated_at=? WHERE id=?')
+    .run(v, v ? Date.now() : null, Date.now(), id);
+  return v;
+}
+
+// ─── Playtime ─────────────────────────────────────────────────────────────────
+// Bulk credit of accrued seconds. Called from one tick in server.js and nowhere
+// else. COSMETIC ONLY: presence is server-observed but idle-with-tab-open still
+// accrues, so this number must never gate a reward, unlock, title or payout. If
+// that changes, the stat has to be re-derived from something an open tab cannot
+// manufacture.
+const _addPlaytimeTx = () => db.transaction((ids, seconds) => {
+  const s = stmt('UPDATE players SET playtime_sec = playtime_sec + ? WHERE id=?');
+  for (const id of ids) s.run(seconds, id);
+});
+let _addPlaytimeFn = null;
+export function addPlaytimeSeconds(ids, seconds) {
+  if (!Array.isArray(ids) || !ids.length) return 0;
+  const sec = Math.max(0, Math.min(3600, Math.round(Number(seconds) || 0)));
+  if (!sec) return 0;
+  if (!_addPlaytimeFn) _addPlaytimeFn = _addPlaytimeTx();
+  _addPlaytimeFn(ids, sec);
+  return ids.length;
+}
+
+// Open Ƒbay item listings for one seller, newest first. getInventory() already
+// excludes listed items, so a profile that wants to show "owned" and "for sale"
+// side by side has to ask for these separately or the listed ones vanish.
+export function getPlayerItemListings(sellerId, limit = 60) {
+  try {
+    return stmt(`SELECT id, inv_id, item_id, price, listed_at FROM item_market
+                 WHERE seller_id=? AND sold=0 ORDER BY listed_at DESC LIMIT ?`)
+      .all(sellerId, limit);
+  } catch (_) { return []; }
+}
 
 // A portrait id is only ever as real as the PNG behind it. When one is withdrawn
 // (defective art, a licence that changes, an artist asking for a piece back) the
@@ -2559,6 +2612,7 @@ export function initItemTables() {
       sold         INTEGER NOT NULL DEFAULT 0,
       buyer_id     TEXT
     );
+    CREATE INDEX IF NOT EXISTS idx_item_market_seller ON item_market(seller_id, sold);
 
   -- limit orders (persisted across restarts)
   CREATE TABLE IF NOT EXISTS limit_orders (

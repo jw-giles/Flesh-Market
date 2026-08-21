@@ -42,8 +42,18 @@
 <span id="fm-header-user" style="display:none;align-items:center;gap:6px;font-size:.85rem">
   <button id="fm-tax-btn" onclick="window.openTaxPanel&&window.openTaxPanel()" title="Pay Taxes" data-i18n="hdr.taxes" data-i18n-title="hdr.taxesTitle" style="display:none;align-items:center;gap:4px;padding:3px 10px;font-size:.78rem;border:1px solid #7a5e1e;border-radius:4px;background:#140d00;color:#ffce4d;cursor:pointer;flex:0 0 auto">🏛 Taxes</button>
   <span id="fm-header-portrait" onclick="window.openPortraitPicker&&window.openPortraitPicker()" title="Change portrait" style="display:none;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1px solid #2e6b4a;background:#0a1813 center/cover no-repeat;cursor:pointer;font-size:.85rem;color:#46ff7d;flex:0 0 auto">＋</span>
-  <span id="fm-header-name" style="color:#46ff7d;opacity:.85"></span>
+  <!-- Opens your own profile. The click handler is on this node and the label is
+       still its only text child, because mobile.js paintTitle() mirrors
+       #fm-header-name.textContent into the mobile top bar - a nested button
+       here would put its label into the mobile title. -->
+  <!-- Still a click target for the profile, but the affordance is the button
+       next to it now. NOTHING may be nested inside this span: mobile.js
+       paintTitle() mirrors #fm-header-name.textContent into the mobile top bar,
+       so a child element puts its label into the mobile title. The button is a
+       SIBLING for that reason. -->
+  <span id="fm-header-name" onclick="window.openMyProfile&amp;&amp;window.openMyProfile()" title="View your profile" style="color:#46ff7d;opacity:.85;cursor:pointer"></span>
   <span id="fm-tier-badge-hdr" style="font-size:.95rem"></span>
+  <button class="btn" id="fm-edit-profile-btn" onclick="window.openMyProfile&amp;&amp;window.openMyProfile(true)" title="Edit your profile" style="padding:3px 10px;font-size:.78rem;border-color:#2e6b4a;color:#46ff7d;font-weight:500;flex:0 0 auto">Edit Profile</button>
   <span id="invNavBtn" style="display:none"></span><span id="slotNavBtn" style="display:none"><span id="slotNavSpinCount"></span></span>
   <a href="https://www.patreon.com/FLSH" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#7a5e1e;color:#ffce4d;text-decoration:none;animation:patreonPulse 2.5s ease-in-out infinite;font-weight:500"data-i18n="hdr.patreon">☆ Patreon</a>
   <a href="https://discord.gg/H47DnbY33t" target="_blank" class="btn" style="padding:4px 14px;font-size:.82rem;border-color:#3a3a6a;color:#8a8ae0;text-decoration:none;animation:discordPulse 2.5s ease-in-out infinite;font-weight:500"data-i18n="hdr.discord">◈ Discord</a>
@@ -2586,40 +2596,79 @@ ws.addEventListener('message', function(ev){
 <link rel="stylesheet" href="assets/inventory.css">
 
 <!-- inventory.js loaded lazily above -->
-<!-- ===== PLAYER PROFILE POPUP ===== -->
+<!-- ===== PLAYER PROFILE MODAL =====
+     One surface for a player identity. Chat name clicks, chat avatar clicks and
+     the header name all land here; there is no second smaller popup any more.
+     #ppOverlay is the backdrop and #playerProfilePopup is the card - the id is
+     kept on the card because the existing outside-click handler tests
+     card.contains(e.target), which is exactly the backdrop-dismiss behaviour we
+     want, and because other modules already reference it. -->
+<div id="ppOverlay" style="display:none;position:fixed;inset:0;z-index:10500;background:#000c;align-items:flex-start;justify-content:center;padding:5vh 12px;overflow:auto">
 <div id="playerProfilePopup" style="
-  display:none;position:fixed;z-index:10500;
+  display:none;position:relative;
   background:#060303;border:1px solid #3a1010;border-radius:10px;
-  width:280px;padding:0;overflow:hidden;
-  box-shadow:0 8px 32px #000d;font-family:inherit;
+  width:min(560px,96vw);padding:0;overflow:hidden;
+  box-shadow:0 8px 40px #000e;font-family:inherit;
 ">
-  <div style="background:linear-gradient(135deg,#120303,#060303);padding:10px 14px 8px;border-bottom:1px solid #2a1010;display:flex;align-items:center;justify-content:space-between">
-    <div style="display:flex;align-items:center;gap:9px">
-      <img id="ppPortrait" alt="" title="" style="display:none;width:40px;height:40px;border-radius:6px;object-fit:cover;border:1px solid #3a1010">
-      <div>
-        <div id="ppName" style="font-size:.9rem;font-weight:500;color:#7fc090"></div>
-        <div id="ppTitle" style="font-size:.65rem;color:#553333;letter-spacing:.06em"></div>
+  <div style="background:linear-gradient(135deg,#120303,#060303);padding:12px 16px 10px;border-bottom:1px solid #2a1010;display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+    <div style="display:flex;align-items:flex-start;gap:11px;min-width:0">
+      <img id="ppPortrait" alt="" title="" style="display:none;width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid #3a1010;flex:0 0 auto">
+      <div style="min-width:0">
+        <div id="ppName" style="font-size:1.02rem;font-weight:500;color:#7fc090;overflow:hidden;text-overflow:ellipsis"></div>
+        <div id="ppTitle" style="font-size:.68rem;color:#7a5555;letter-spacing:.06em"></div>
+        <!-- Joined / playtime. Sits under the name, above the edit control. -->
+        <div id="ppMeta" style="font-size:.63rem;color:#5f8f74;letter-spacing:.05em;margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 12px"></div>
+        <div id="ppSelfBar" style="display:none;gap:6px;margin-top:7px;flex-wrap:wrap">
+          <button id="ppEditBtn" type="button">Edit Profile</button>
+          <button id="ppPortraitBtn" type="button">Change Portrait</button>
+        </div>
       </div>
     </div>
-    <button onclick="closePlayerProfile()" style="background:none;border:none;color:#553333;font-size:.9rem;cursor:pointer;padding:0 2px;line-height:1">✕</button>
+    <button onclick="closePlayerProfile()" title="Close" style="background:none;border:none;color:#7a5555;font-size:1rem;cursor:pointer;padding:0 2px;line-height:1;flex:0 0 auto">&#10005;</button>
   </div>
-  <div style="padding:10px 14px">
+  <div style="padding:12px 16px">
+    <!-- Bio -->
+    <div id="ppBioWrap" style="display:none;margin-bottom:14px">
+      <div style="font-size:.6rem;color:#7a5555;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Transmission</div>
+      <!-- Player-authored text. Filled with textContent ONLY. -->
+      <div id="ppBio" style="font-size:.78rem;color:#c7d8c9;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#0a0303;border:1px solid #1a0808;border-radius:6px;padding:9px 11px;max-height:220px;overflow:auto"></div>
+    </div>
+    <!-- Bio editor (self only) -->
+    <div id="ppBioEditor" style="display:none;margin-bottom:14px">
+      <div style="font-size:.6rem;color:#f0b454;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Edit Transmission</div>
+      <textarea id="ppBioText" rows="7" maxlength="2000" placeholder="Who are you on this station? What do you deal in? Who owes you?" style="width:100%;box-sizing:border-box;background:#0a0303;border:1px solid #3a2a10;border-radius:6px;color:#c7d8c9;font:inherit;font-size:.78rem;line-height:1.5;padding:9px 11px;resize:vertical"></textarea>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;flex-wrap:wrap">
+        <span id="ppBioCount" style="font-size:.62rem;color:#5f8f74"></span>
+        <span style="display:flex;gap:6px">
+          <button id="ppBioCancel" type="button">Cancel</button>
+          <button id="ppBioSave" type="button">Save</button>
+        </span>
+      </div>
+      <div id="ppBioMsg" style="font-size:.65rem;color:#c08a44;margin-top:6px;min-height:14px"></div>
+    </div>
     <!-- Equipped items grid -->
-    <div style="font-size:.6rem;color:#553333;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px">Equipped</div>
-    <div id="ppEquipped" style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px"></div>
+    <div style="font-size:.6rem;color:#7a5555;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px">Equipped</div>
+    <div id="ppEquipped" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px;margin-bottom:10px"></div>
     <!-- Assets row -->
     <div id="ppAssets" style="display:flex;gap:6px;margin-bottom:10px"></div>
+    <!-- Open Fbay listings -->
+    <div id="ppForSaleWrap" style="display:none;margin-bottom:10px">
+      <div style="font-size:.6rem;color:#f0b454;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px">For Sale on &#402;bay</div>
+      <div id="ppForSale" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px"></div>
+    </div>
     <!-- Passive bonus -->
-    <div id="ppPassive" style="font-size:.68rem;color:#553333;border-top:1px solid #1a0808;padding-top:8px"></div>
+    <div id="ppPassive" style="font-size:.68rem;color:#7a5555;border-top:1px solid #1a0808;padding-top:8px"></div>
   </div>
   <!-- Admin actions (only visible to admins) -->
-  <div id="ppAdminBar" style="display:none;padding:8px 14px;border-top:1px solid #1a0808;background:#08020202">
-    <div style="font-size:.6rem;color:#553333;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px">Admin</div>
+  <div id="ppAdminBar" style="display:none;padding:8px 16px;border-top:1px solid #1a0808;background:#08020202">
+    <div style="font-size:.6rem;color:#7a5555;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px">Admin</div>
     <div style="display:flex;gap:4px;flex-wrap:wrap">
-      <button onclick="ppAdmin('mute')" style="font-size:.65rem;background:none;border:1px solid #3a1010;color:#884444;padding:2px 8px;border-radius:3px;cursor:pointer;font-family:inherit">Mute 10m</button>
-      <button onclick="ppAdmin('timeout')" style="font-size:.65rem;background:none;border:1px solid #3a1010;color:#884444;padding:2px 8px;border-radius:3px;cursor:pointer;font-family:inherit">Timeout</button>
+      <button onclick="ppAdmin('mute')" style="font-size:.65rem;background:none;border:1px solid #3a1010;color:#a85555;padding:2px 8px;border-radius:3px;cursor:pointer;font-family:inherit">Mute 10m</button>
+      <button onclick="ppAdmin('timeout')" style="font-size:.65rem;background:none;border:1px solid #3a1010;color:#a85555;padding:2px 8px;border-radius:3px;cursor:pointer;font-family:inherit">Timeout</button>
+      <button onclick="ppAdminClearBio()" style="font-size:.65rem;background:none;border:1px solid #3a1010;color:#a85555;padding:2px 8px;border-radius:3px;cursor:pointer;font-family:inherit">Clear Bio</button>
     </div>
   </div>
+</div>
 </div>
 
 <link rel="stylesheet" href="assets/player-profile.css">
