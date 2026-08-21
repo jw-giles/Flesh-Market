@@ -340,7 +340,6 @@ const ITEM_CATALOG_CLIENT = {
   stripe_cuff:{id:'stripe_cuff',slot:'bracelet',name:'Stripe Cuff',rarity:'legendary',passive:540,img:IMG_STRIPE_CUFF},
   void_bangle:{id:'void_bangle',slot:'bracelet',name:'Void Bangle',rarity:'legendary',passive:540,img:IMG_VOID_BANGLE},
   // ── Hats (new pack) ──
-  cat_ear_headband:{id:'cat_ear_headband',slot:'hat',name:'Cat-Ear Headband',rarity:'common',passive:15,img:IMG_CAT_EAR_HEADBAND},
   hard_hat:{id:'hard_hat',slot:'hat',name:'Hard Hat',rarity:'common',passive:15,img:IMG_HARD_HAT},
   orange_pom_beanie:{id:'orange_pom_beanie',slot:'hat',name:'Orange Pom Beanie',rarity:'common',passive:15,img:IMG_ORANGE_POM_BEANIE},
   neon_goggle_band:{id:'neon_goggle_band',slot:'hat',name:'Neon Headband',rarity:'uncommon',passive:35,img:IMG_NEON_GOGGLE_BAND},
@@ -349,6 +348,9 @@ const ITEM_CATALOG_CLIENT = {
   red_fez:{id:'red_fez',slot:'hat',name:'Red Fez',rarity:'rare',passive:85,img:IMG_RED_FEZ},
   pointed_hood:{id:'pointed_hood',slot:'hat',name:'Pointed Hood',rarity:'rare',passive:85,img:IMG_POINTED_HOOD},
   horned_mask:{id:'horned_mask',slot:'hat',name:'Horned Mask',rarity:'epic',passive:225,img:IMG_HORNED_MASK},
+  // Waow's Band. Mirrors server ITEM_CATALOG exactly; these two tables must not
+  // drift or the client shows one rarity and the payout follows another.
+  cat_ear_headband:{id:'cat_ear_headband',slot:'hat',name:"Waow's Band",rarity:'legendary',passive:555,img:IMG_CAT_EAR_HEADBAND},
   // ── Glasses (new pack) ──
   tri_shades:{id:'tri_shades',slot:'glasses',name:'Tri-Lens Shades',rarity:'rare',passive:85,img:IMG_TRI_SHADES},
   // ── Upper Body (new pack) ──

@@ -4,6 +4,26 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.9.3 (2026-08-21) - Waow's Band (SERVER + CLIENT)
+
+Server restart required. Hard refresh required. Files touched: `server/db.js`, `client/assets/inventory.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+`cat_ear_headband` is renamed to Waow's Band and promoted from common to legendary.
+
+THERE WERE TWO CAT EAR ITEMS AND ONLY ONE MOVED. `cat_ear_beanie` (uncommon, 35, member of the `crimson_wave` set) is untouched. `cat_ear_headband` is the one that is literally a band, which the sprite confirms, and it is standalone, so promoting it disturbs no set bonus. If the beanie was the intended item, this is the wrong one and the fix is the same two lines in the other entry, plus pulling it out of `crimson_wave` or accepting a legendary inside a set built around an uncommon.
+
+THE ID IS UNCHANGED AND THAT IS THE ACTUAL DECISION HERE. `player_inventory` stores `item_id`, so every row already holding one becomes a legendary in place. Nobody is reissued anything and nothing is migrated, which also means whoever rolled this hat back when it was a common now owns a legendary, and there is no undo short of editing the table by hand. The alternative was a new `waows_band` id, leaving existing headbands alone as commons; the ask said rename, so rename is what shipped.
+
+PASSIVE MOVES 15 TO 555. `getEquippedPassiveBonus` sums `item.passive` straight off the catalog; it does not derive the number from rarity. `RARITY_CONFIG.legendary.passiveBonus` is display metadata, not the payout. Leaving passive at 15 would have shipped a legendary that pays a third of what an uncommon pays, and rarity in this table is otherwise a strict function of passive within a slot. 555 is the existing legendary hat rate, matching Warlord Helm.
+
+IT IS 60 TIMES HARDER TO ROLL NOW. `rollItemDrop` picks a rarity by weight and then picks uniformly inside that rarity's pool. As a common it was 550/1000 weight across 42 items, or 1.31 percent of a drop. As a legendary it is 5/1000 across 23, or 0.02 percent. The common pool shrinks 42 to 41 and the legendary pool grows 22 to 23, so every other legendary in the game got slightly rarer too: 0.0227 percent down to 0.0217 percent each. Small, but it is a real change to items nobody asked to touch, and it is what promoting anything into a five-weight bucket costs.
+
+FIRST CATALOG NAME WITH AN APOSTROPHE IN IT. Stored double-quoted. Every path that renders an item name was checked before committing to the name: all of them put it in HTML text content or inside a double-quoted attribute, and the one `onclick` that sits next to a name passes `invId` and `slot` rather than the name. Nothing needed escaping. Worth knowing for the next name like this, because the failure would have been a broken handler rather than a wrong-looking string.
+
+THE ENTRY MOVED TO THE END OF THE NEW-PACK HAT BLOCK, which is ordered by ascending rarity. Verified inert: the only consumer of catalog order is `Object.values` inside `rollItemDrop`, which filters by rarity and then picks at random.
+
+---
+
 ## v1.3.9.2 (2026-08-21) - the profile reads the same playtime the dossier reads (SERVER + CLIENT)
 
 Server restart required. Hard refresh required. Files touched: `server/db.js`, `server/server.js`, `client/assets/player-profile.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.

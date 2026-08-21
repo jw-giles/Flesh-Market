@@ -2451,7 +2451,6 @@ export const ITEM_CATALOG = {
   stripe_cuff: {id:'stripe_cuff',slot:'bracelet',name:'Stripe Cuff',rarity:'legendary',passive:540,img:'new_stripe_cuff.png'},
   void_bangle: {id:'void_bangle',slot:'bracelet',name:'Void Bangle',rarity:'legendary',passive:540,img:'new_void_bangle.png'},
   // ── Hats (new pack) ──
-  cat_ear_headband: {id:'cat_ear_headband',slot:'hat',name:'Cat-Ear Headband',rarity:'common',passive:15,img:'new_cat_ear_headband.png'},
   hard_hat: {id:'hard_hat',slot:'hat',name:'Hard Hat',rarity:'common',passive:15,img:'new_hard_hat.png'},
   orange_pom_beanie: {id:'orange_pom_beanie',slot:'hat',name:'Orange Pom Beanie',rarity:'common',passive:15,img:'new_orange_pom_beanie.png'},
   neon_goggle_band: {id:'neon_goggle_band',slot:'hat',name:'Neon Headband',rarity:'uncommon',passive:35,img:'new_neon_goggle_band.png'},
@@ -2460,6 +2459,14 @@ export const ITEM_CATALOG = {
   red_fez: {id:'red_fez',slot:'hat',name:'Red Fez',rarity:'rare',passive:85,img:'new_red_fez.png'},
   pointed_hood: {id:'pointed_hood',slot:'hat',name:'Pointed Hood',rarity:'rare',passive:85,img:'new_pointed_hood.png'},
   horned_mask: {id:'horned_mask',slot:'hat',name:'Horned Mask',rarity:'epic',passive:225,img:'new_horned_mask.png'},
+  // Waow's Band. Promoted from common to legendary; the ID IS UNCHANGED, so every
+  // player_inventory row already holding one becomes a legendary in place. Passive
+  // moves 15 -> 555 to match warlord_helm, because passive is per-item here and a
+  // legendary paying less than a common breaks the one rule this table has.
+  // Double-quoted for the apostrophe. Verified safe: every render path puts the
+  // name in HTML text or a double-quoted attribute, never a single-quoted JS
+  // string inside one. It is the first catalog name with an apostrophe in it.
+  cat_ear_headband: {id:'cat_ear_headband',slot:'hat',name:"Waow's Band",rarity:'legendary',passive:555,img:'new_cat_ear_headband.png'},
   // ── Glasses (new pack) ──
   tri_shades: {id:'tri_shades',slot:'glasses',name:'Tri-Lens Shades',rarity:'rare',passive:85,img:'new_tri_shades.png'},
   // ── Upper Body (new pack) ──
