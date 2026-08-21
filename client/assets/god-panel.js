@@ -9,9 +9,75 @@
     panel.style.display = __godVisible ? 'flex' : 'none';
     if (__godVisible) {
       refreshGodTickers();
+      godFillItemSelect();
       document.getElementById('godStatusDot').style.background = '#86ff6a';
     }
   };
+
+  // ── Spawn list ────────────────────────────────────────────────────────────
+  // Built from ITEM_CATALOG_CLIENT, which is a complete mirror of the server's
+  // ITEM_CATALOG. It used to be a hand-written list of option tags in
+  // index.html and it had fallen 50 items behind: the entire "new pack" of
+  // necklaces, hats, tops, trousers and shoes could not be spawned at all, and
+  // nobody would find out until they went looking for a specific item. Every
+  // item added from here on appears without anyone remembering to add it.
+  const __GOD_RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4, phantom: 5 };
+  let __godItemsFilled = false;
+
+  function godFillItemSelect() {
+    if (__godItemsFilled) return;
+    const sel = document.getElementById('god-item-select');
+    if (!sel) return;
+    const cat = window.ITEM_CATALOG_CLIENT;
+    // inventory.js is lazy loaded, so on a fresh session the catalog may not be
+    // here yet. Pull it, then come back; the select shows its loading option in
+    // the meantime rather than an empty box.
+    if (!cat) {
+      if (window.lazyLoad) window.lazyLoad('assets/inventory.js', function () { godFillItemSelect(); });
+      return;
+    }
+    const SLOT_LABEL = window.SLOT_LABELS || {};
+    const bySlot = {};
+    for (const id of Object.keys(cat)) {
+      const it = cat[id];
+      if (!it || !it.slot) continue;
+      (bySlot[it.slot] = bySlot[it.slot] || []).push(it);
+    }
+    // SLOT_LABELS is declared in the same order as ITEM_SLOTS on the server, so
+    // its key order is the canonical slot order and there is no second list to
+    // keep in sync. Any slot the labels miss still renders, appended after.
+    const labelled = Object.keys(SLOT_LABEL);
+    const slots = labelled.concat(Object.keys(bySlot).filter(function (s) { return labelled.indexOf(s) < 0; }));
+    let html = '';
+    for (const slot of slots) {
+      const list = bySlot[slot];
+      if (!list || !list.length) continue;
+      list.sort(function (a, b) {
+        const d = (__GOD_RARITY_ORDER[a.rarity] || 0) - (__GOD_RARITY_ORDER[b.rarity] || 0);
+        return d || String(a.name || '').localeCompare(String(b.name || ''));
+      });
+      html += '<optgroup label="' + godEsc('\u2500\u2500 ' + (SLOT_LABEL[slot] || slot) + ' \u2500\u2500') + '">';
+      for (const it of list) {
+        const r = String(it.rarity || '');
+        const label = (it.name || it.id) + ' (' + (r ? r.charAt(0).toUpperCase() + r.slice(1) : '?') + ')'
+          // Phantom items are 1:1 unique and rollItemDrop filters out ones already
+          // owned. Handing one out from here bypasses that check, so the option is
+          // listed but marked, rather than hidden from an admin who may want it.
+          + (r === 'phantom' ? ' \u26a0 UNIQUE' : '');
+        html += '<option value="' + godEsc(it.id) + '">' + godEsc(label) + '</option>';
+      }
+      html += '</optgroup>';
+    }
+    if (!html) return;
+    sel.innerHTML = html;
+    __godItemsFilled = true;
+  }
+
+  function godEsc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
 
   window.godTab = function(tab) {
     __godActiveTab = tab;

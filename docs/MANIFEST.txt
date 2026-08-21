@@ -1,4 +1,15 @@
-# FleshMarket v1.3.9.3 - MANIFEST
+# FleshMarket v1.3.9.4 - MANIFEST
+
+## 1.3.9.4 changes (dev spawn list generated from ITEM_CATALOG_CLIENT; CLIENT ONLY)
+- NO SERVER CHANGE. NO RESTART. HARD REFRESH REQUIRED. Files touched: client/index.html, client/assets/god-panel.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.
+- ROOT CAUSE: #god-item-select was 145 hand-written option tags in index.html, covering only the original cyberpunk pack. DRIFT WAS 50 ITEMS: necklace 10, hat 9, upperbody 10, pants 10, shoes 10, glasses 1. The whole new pack was unspawnable. Waow's Band missing was a symptom, not the bug.
+- FIX: godFillItemSelect() in god-panel.js builds the select at toggleGodPanel() open from window.ITEM_CATALOG_CLIENT. Grouped by slot, sorted by rarity then name. Runs once per session (__godItemsFilled).
+- 145 HARDCODED OPTIONS DELETED from index.html. The empty select carries a comment telling the next person not to put them back, because hand-editing it looked like it worked.
+- VERIFIED BY EXECUTION: inventory.js evaluated against a stubbed window, grouping logic replayed, emitted option ids diffed against ids parsed from server ITEM_CATALOG. 195/195. Empty in BOTH directions. Hats group 10 -> 19 entries.
+- SLOT ORDER from Object.keys(SLOT_LABELS), which is declared in the same order as server ITEM_SLOTS. No third copy of the order to desync. Unlabelled slots are appended rather than dropped.
+- PHANTOM PLANETS LISTED BUT FLAGGED "UNIQUE". They are 1:1 and rollItemDrop excludes already-owned ones; a panel give bypasses that. Hiding them would decide for the admin, so they are marked instead.
+- LAZY LOAD HANDLED: inventory.js may be absent on a fresh session. Fill calls window.lazyLoad('assets/inventory.js') and re-runs; the select shows a loading option meanwhile.
+- OPTION TEXT AND VALUES ESCAPED (godEsc). Not the security boundary: server give_item already rejects any id not in ITEM_CATALOG (server.js:11766). The select is convenience only.
 
 ## 1.3.9.3 changes (cat_ear_headband -> Waow's Band, common -> legendary; SERVER + CLIENT)
 - SERVER RESTART REQUIRED. HARD REFRESH REQUIRED. Files touched: server/db.js, client/assets/inventory.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.

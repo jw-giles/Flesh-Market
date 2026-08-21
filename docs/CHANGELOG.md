@@ -4,6 +4,26 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.9.4 (2026-08-21) - the dev spawn list is generated from the catalog (CLIENT ONLY)
+
+No server change. No restart. Hard refresh required. Files touched: `client/index.html`, `client/assets/god-panel.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+WAOW'S BAND WAS MISSING FROM THE SPAWN LIST AND SO WERE FORTY-NINE OTHER ITEMS. `#god-item-select` was a hand-written block of 145 `option` tags in index.html covering the original cyberpunk pack. The entire "new pack" was never added to it: ten necklaces, nine hats, ten tops, ten trousers, ten shoes and a pair of glasses could not be spawned from the panel at all. Nothing surfaced it, because a missing entry in a long dropdown looks like a dropdown.
+
+ADDING ONE OPTION WOULD HAVE FIXED THE REPORT AND LEFT THE BUG. The list is now built at panel open from `ITEM_CATALOG_CLIENT`, grouped by slot, sorted by rarity then name. Every item added from here on appears without anyone remembering to add it, and that is the actual fix; Waow's Band showing up is a side effect of it.
+
+VERIFIED BY EVALUATING THE REAL CATALOG, NOT BY READING THE CODE. inventory.js was executed against a stubbed window, the grouping logic was replayed over what it produced, and the emitted option ids were diffed against the ids parsed out of server `ITEM_CATALOG`: 195 of 195, empty in both directions. The Hats group goes from 10 entries to 19.
+
+SLOT ORDER COMES FROM `SLOT_LABELS` KEY ORDER, not a second list. `SLOT_LABELS` is declared in the same order as the server's `ITEM_SLOTS`, so using its keys means there is no third copy of the slot order to fall out of sync. A slot with no label still renders, appended at the end, rather than having its items silently dropped.
+
+PHANTOM PLANETS ARE LISTED BUT MARKED. They are 1:1 unique and `rollItemDrop` filters out any already owned; handing one out from the panel bypasses that check entirely. Hiding them would be deciding on an admin's behalf, so they carry a UNIQUE warning in the option text instead.
+
+THE CATALOG IS LAZY LOADED AND THE PANEL HANDLES IT. inventory.js may not be present on a fresh session, so the fill pulls it via `lazyLoad` and re-runs, showing a loading option in the meantime rather than an empty box. Option text is escaped on the way in; the ids are catalog keys and the server rejects anything not in `ITEM_CATALOG` regardless, so the select is a convenience and not the validation.
+
+THE EMPTY SELECT CARRIES A COMMENT SAYING NOT TO PUT OPTIONS BACK IN IT. The failure mode here was that hand-editing looked like it worked.
+
+---
+
 ## v1.3.9.3 (2026-08-21) - Waow's Band (SERVER + CLIENT)
 
 Server restart required. Hard refresh required. Files touched: `server/db.js`, `client/assets/inventory.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
