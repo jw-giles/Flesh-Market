@@ -1,4 +1,17 @@
-# FleshMarket v1.3.8.3 - MANIFEST
+# FleshMarket v1.3.8.4 - MANIFEST
+
+## 1.3.8.4 changes (droid5 withdrawn; boot sweep for withdrawn portrait ids; SERVER + CLIENT)
+- SERVER RESTART REQUIRED. HARD REFRESH REQUIRED. Files touched: client/assets/portraits/droid5.png (DELETED), client/assets/portrait-manifest.js, server/db.js, server/db_council.js, server/server.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.
+- ART: droid5.png DELETED (defective). Synthetic group 100 -> 99, total picker 258 -> 257. Removed from FM_PORTRAITS.groups AND FM_PORTRAITS.all. NOT in FM_PORTRAITS.frame to begin with (whole droid set renders 1:1), so nothing to remove there. Header comment counts corrected (258 -> 257, "all 100 render 1:1" -> 99).
+- NO OTHER REFERENCES. Grepped: no codec-data.js rep, no SEAT_META regent, no seed, no test fixture named droid5.
+- VALIDATION NEEDED NO CHANGE. PORTRAIT_SET is a readdir at boot (server.js), so the id is illegal on the way IN the moment the process restarts.
+- THE ROWS ARE THE PROBLEM, NOT THE VALIDATION. Anyone already wearing droid5 keeps the string. #fm-header-portrait is a background-image, so a 404 renders an EMPTY SQUARE with the + suppressed: no avatar and no route back to the picker, which no longer lists what they are wearing.
+- NEW: db.js clearWithdrawnPortraits(isValid) -> nulls players.portrait for rejected ids, returns [{portrait,n}].
+- NEW: db_council.js clearWithdrawnPostPortraits(isValid) -> same for council_posts.portrait. REQUIRED, not optional: councilPostView reads the frozen column ONLY when the live author portrait is absent, so the players sweep is what creates the fallthrough. Touches floor posts (pruneCouncilPosts does not) because this is a rendering hint, not the record.
+- PREDICATE LIVES IN server.js (portraitStillExists), not in the storage layer. Passes GATED_PORTRAITS keys and item:/data: forms rather than judging them; their art is not in the portraits dir.
+- SWEEP IS GATED: PORTRAIT_LOAD_OK (readdir actually succeeded) AND PORTRAIT_SET.size >= PORTRAIT_SWEEP_FLOOR (200). Asymmetric failure. Skipping = one blank avatar until next boot. Running against an empty/truncated set = portrait column wiped for every account, no undo without a backup. The pre-existing catch swallowed a read failure into an empty set, which was safe only while the set was read-only.
+- LOGS EVERY CLEARED ID AND COUNT, and logs explicitly when it clears nothing. Idempotent, verified: second run finds zero rows.
+- OPEN: portrait-manifest.js is generated OUTSIDE this repo. Edit made to the generated artifact. If the generator reads the directory it regenerates 257 correctly; if it works from a stored id list, strike droid5 there or it returns on next build.
 
 ## 1.3.8.3 changes (198 portraits; six faces swapped; framing rebuilt; chat avatar scales; SERVER + CLIENT)
 - SERVER RESTART REQUIRED. HARD REFRESH REQUIRED. Files touched: client/assets/portraits/ (198 new PNGs), client/assets/portrait-manifest.js, client/assets/player-profile.js, client/assets/codec-data.js, client/assets/council.js, client/assets/core.js, client/style.css, server/server.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.
@@ -1757,7 +1770,7 @@ game/
       calc.js               pixel-art trader calculator widget (Markets view)
       calc/buttons/         calculator key sprites (PNG)
       portrait-manifest.js  generated portrait list (grouped) + per-group artist credits + measured head framing (FMPortraitFrame)
-      portraits/            258 selectable player portrait PNGs (7 groups)
+      portraits/            257 selectable player portrait PNGs (7 groups)
       codec-data.js         faction rep contacts + conversations + branching dialogue trees (GM-authored data)
       codec.js              codec-call engine (linear scripts + branching trees) + contacts overlay
       pnl-livepatch.js      P&L live patching

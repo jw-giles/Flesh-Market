@@ -374,6 +374,26 @@ export function getCouncilPosts(room, limit = 80) {
     .all(room, limit).reverse();
 }
 
+// The portrait frozen on a post is only ever a FALLBACK; councilPostView resolves
+// the author's live portrait first and reads this column only when the author has
+// none. That is exactly the case that breaks when a portrait is withdrawn: the
+// players sweep nulls the wearer's live portrait, which hands the render straight
+// back to a frozen id whose PNG no longer exists. So the two sweeps have to run
+// together or the first one makes the second one necessary.
+//
+// The body is untouched. This nulls a rendering hint, not a record of what was
+// said, which is why it is allowed to touch floor posts when pruneCouncilPosts is
+// not.
+export function clearWithdrawnPostPortraits(isValid) {
+  const rows = stmt(`SELECT portrait, COUNT(*) AS n FROM council_posts
+                     WHERE portrait IS NOT NULL AND portrait <> '' GROUP BY portrait`).all();
+  const dead = rows.filter(r => !isValid(r.portrait));
+  if (!dead.length) return [];
+  const upd = stmt('UPDATE council_posts SET portrait=NULL WHERE portrait=?');
+  for (const r of dead) upd.run(r.portrait);
+  return dead.map(r => ({ portrait: r.portrait, n: r.n }));
+}
+
 // The floor is the permanent record and is deliberately absent from this sweep.
 // Everything a delegate says on the record stays on the record; only the gallery
 // and the faction rooms are scrollback.

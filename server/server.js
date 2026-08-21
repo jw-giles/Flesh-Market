@@ -142,6 +142,7 @@ import {
   addCasinoWager, resolveCasinoRound, getExpiredOpenCasinoRounds,
   getAllOpenCasinoRounds, getCasinoActivity,
   getLastCasinoRoundTs, getBestCasinoResult,
+  clearWithdrawnPortraits,
 } from './db.js';
 import { replay as solitaireReplay } from './solitaire.js';
 import * as MathTest from './mathtest.js';
@@ -197,7 +198,7 @@ import {
   createPendingSpend, getPendingSpend, getPendingSpendsFor,
   getDuePendingSpends, setPendingSpendStatus,
   logCouncil, getCouncilLog,
-  addCouncilPost, getCouncilPosts, pruneCouncilPosts,
+  addCouncilPost, getCouncilPosts, pruneCouncilPosts, clearWithdrawnPostPortraits,
   getTreasury, getAllTreasuries, treasuryCredit, treasuryDebit, treasuryRefund,
   logTreasury, getTreasuryLedger, getTreasuryContributors,
 } from './db_council.js';
@@ -3562,8 +3563,10 @@ app.use('/',express.static(path.join(__dirname,'..','client'),{
 // client can never set an arbitrary string into an <img src>. Filenames (sans .png).
 const PORTRAIT_DIR = path.join(__dirname,'..','client','assets','portraits');
 let PORTRAIT_SET = new Set();
+let PORTRAIT_LOAD_OK = false;
 try {
   PORTRAIT_SET = new Set(fs.readdirSync(PORTRAIT_DIR).filter(f=>/\.png$/i.test(f)).map(f=>f.replace(/\.png$/i,'')));
+  PORTRAIT_LOAD_OK = true;
   console.log(`[portraits] ${PORTRAIT_SET.size} selectable portraits loaded`);
 } catch(e) { console.error('[portraits] could not read', PORTRAIT_DIR, e.message); }
 
@@ -3574,6 +3577,43 @@ try {
 const GATED_PORTRAITS = {
   jarred_brain: { requiresItem: 'jarred_brain', img: 'cyberpunk_jarred_brain.png', name: 'Preserved Brain' },
 };
+
+// Is this stored portrait id still something we can actually render? Stems live
+// in PORTRAIT_SET, gated ids live in GATED_PORTRAITS, and item: / data: forms are
+// resolved client side against art that is not in the portraits dir at all, so
+// they are passed rather than judged. Anything else names a file that is gone.
+function portraitStillExists(id) {
+  const s = String(id || '');
+  if (!s) return true;
+  if (/^(item:|data:)/.test(s)) return true;
+  if (GATED_PORTRAITS[s]) return true;
+  return PORTRAIT_SET.has(s);
+}
+
+// BOOT SWEEP for withdrawn portraits. A portrait leaves the set by having its PNG
+// deleted; that stops it validating on the way in but does nothing about rows
+// written while it was live, which then render as an empty socket the wearer can
+// see and cannot fix, because the picker no longer lists the thing they are
+// wearing. So the id is cleared and they fall back to the + affordance.
+//
+// GATED ON A SUCCESSFUL DIRECTORY READ AND A FLOOR, because the failure mode is
+// asymmetric. Missing one dead id costs a player one broken avatar until the next
+// boot. Running the sweep against an empty or truncated PORTRAIT_SET wipes the
+// portrait column for every account on the station and there is no undo short of
+// a backup restore. Unlikely is not the same as recoverable, so it does not run
+// unless the read succeeded AND returned a set the right order of magnitude.
+const PORTRAIT_SWEEP_FLOOR = 200;
+if (!PORTRAIT_LOAD_OK || PORTRAIT_SET.size < PORTRAIT_SWEEP_FLOOR) {
+  console.warn(`[portraits] sweep SKIPPED (loaded=${PORTRAIT_LOAD_OK} size=${PORTRAIT_SET.size} floor=${PORTRAIT_SWEEP_FLOOR})`);
+} else {
+  try {
+    const wornDead = clearWithdrawnPortraits(portraitStillExists);
+    const postDead = clearWithdrawnPostPortraits(portraitStillExists);
+    for (const d of wornDead) console.log(`[portraits] withdrawn '${d.portrait}' cleared from ${d.n} player row(s)`);
+    for (const d of postDead) console.log(`[portraits] withdrawn '${d.portrait}' cleared from ${d.n} council post(s)`);
+    if (!wornDead.length && !postDead.length) console.log('[portraits] sweep clean, no withdrawn ids in use');
+  } catch(e) { console.error('[portraits] sweep failed', e.message); }
+}
 
 // If the player's current portrait is gated and the gate is no longer satisfied
 // (the required item was unequipped), clear it so the avatar reverts.

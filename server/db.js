@@ -558,6 +558,28 @@ export function renamePlayer(id,newName) { stmt('UPDATE players SET name=?,updat
 export function markTutorialSeen(id) { stmt('UPDATE players SET tutorial_seen=1,updated_at=? WHERE id=?').run(Date.now(),id); }
 export function setPlayerShipClass(id, shipClass) { stmt('UPDATE players SET ship_class=?,updated_at=? WHERE id=?').run(shipClass, Date.now(), id); }
 export function setPlayerPortrait(id, portrait) { stmt('UPDATE players SET portrait=?,updated_at=? WHERE id=?').run(portrait || null, Date.now(), id); }
+
+// A portrait id is only ever as real as the PNG behind it. When one is withdrawn
+// (defective art, a licence that changes, an artist asking for a piece back) the
+// file goes and the id stops validating on the way IN, but every row written
+// while it was live still names it and the picker no longer offers it, so the
+// wearer gets a silent empty socket they cannot see and cannot fix. The set of
+// valid ids is not a database fact, so the caller passes the predicate; this
+// function only knows how to null out what the caller rejects.
+//
+// Returns [{portrait,n}] so the boot log names what it cleared. A sweep that
+// quietly deletes column data and prints nothing is how you find out about a bad
+// predicate a week later from a player, not from a log line.
+export function clearWithdrawnPortraits(isValid) {
+  const rows = stmt(`SELECT portrait, COUNT(*) AS n FROM players
+                     WHERE portrait IS NOT NULL AND portrait <> '' GROUP BY portrait`).all();
+  const dead = rows.filter(r => !isValid(r.portrait));
+  if (!dead.length) return [];
+  const upd = stmt('UPDATE players SET portrait=NULL,updated_at=? WHERE portrait=?');
+  const now = Date.now();
+  for (const r of dead) upd.run(now, r.portrait);
+  return dead.map(r => ({ portrait: r.portrait, n: r.n }));
+}
 export function getPlayerShipClass(id) { const r = stmt('SELECT ship_class FROM players WHERE id=?').get(id); return r ? (r.ship_class||'') : ''; }
 export function countCEOs() { return (stmt('SELECT COUNT(*) as n FROM players WHERE patreon_tier=3').get()||{n:0}).n; }
 
