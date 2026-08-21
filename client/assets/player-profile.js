@@ -6,13 +6,13 @@
   const _ppCache = {};
 
   // ── Formatting helpers ───────────────────────────────────────────────────
+  // Deliberately identical in output to _frsTime in god-panel.js. Same column,
+  // same rendering: a dossier reading 521h 39m and a profile reading 521h for
+  // the same account is the kind of mismatch that gets reported as a bug.
   function fmtPlaytime(sec) {
-    sec = Math.max(0, Math.floor(Number(sec) || 0));
-    if (sec < 60) return sec + 's';
+    sec = Number(sec) || 0;
     var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
-    if (h < 1) return m + 'm';
-    if (h < 100) return h + 'h ' + m + 'm';
-    return h.toLocaleString() + 'h';
+    return h ? (h + 'h ' + m + 'm') : (m + 'm');
   }
   function fmtJoined(ts) {
     if (!ts) return '';
@@ -464,33 +464,6 @@
     if (document.getElementById('portraitPickerOverlay')) return;
     closePlayerProfile();
   });
-
-  // Tab visibility -> playtime accrual. The server holds the connection list and
-  // only credits sockets that have not reported themselves hidden. This frame is
-  // the client's entire contribution, and the most a forged one buys is what an
-  // open tab already buys. Nothing is gated on playtime; that is what makes this
-  // acceptable and it stops being acceptable the moment something is.
-  (function () {
-    var _lastSent = null;
-    function send() {
-      var vis = document.visibilityState !== 'hidden';
-      if (vis === _lastSent) return;
-      var ws = window._ws;
-      if (!ws || ws.readyState !== 1) return;
-      try { ws.send(JSON.stringify({ type: 'visibility', visible: vis })); _lastSent = vis; } catch (_) {}
-    }
-    document.addEventListener('visibilitychange', send);
-    // Sockets reconnect. Re-announce on a slow poll rather than reaching into
-    // the socket setup in core.js.
-    setInterval(function () { _lastSent = null; send(); }, 45000);
-    setTimeout(send, 3000);
-  })();
-
-  // Admins: clicking username also opens profile (override mod panel to show both)
-  const _origOpenMod = window.openModPanel;
-  window.openModPanel = function(userName, x, y) {
-    openPlayerProfile(userName, x, y);
-  };
 
   // ── Portrait picker ──────────────────────────────────────────────────────
   // Gated portraits: selectable only while the required item is equipped (the

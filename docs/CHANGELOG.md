@@ -4,6 +4,24 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.3.9.2 (2026-08-21) - the profile reads the same playtime the dossier reads (SERVER + CLIENT)
+
+Server restart required. Hard refresh required. Files touched: `server/db.js`, `server/server.js`, `client/assets/player-profile.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THIS FIXES A DUPLICATE I SHOULD NOT HAVE BUILT. `players.play_seconds` has existed since the FRS telemetry work, accrues once a minute off `playerSockets`, and is what the god panel dossier prints. 1.3.9.0 added a second column, `playtime_sec`, with a second tick doing the same job from the same source, and pointed the profile at it. The new column started at zero, so an account reading 521h 39m in the dossier read a handful of minutes on its own profile.
+
+THE DUPLICATE IS DELETED, NOT RECONCILED. `playtime_sec`, `addPlaytimeSeconds` and the second `setInterval` are gone. The surviving accrual is the original telemetry tick, unmodified. The profile endpoint calls `getPlaySeconds`, which is the same function the dossier path already called. Two surfaces, one column, one getter, no reconciliation logic to drift.
+
+THE CLIENT FORMATTER NOW MATCHES `_frsTime` IN god-panel.js EXACTLY. Not approximately: same thresholds, same output string. The old profile formatter dropped minutes above 100 hours and printed seconds below a minute. A dossier saying 521h 39m beside a profile saying 521h for one account is a bug report waiting to happen, and the fix for it would have been this anyway.
+
+THE VISIBILITY GATE IS GONE AND THAT IS A REAL LOSS. 1.3.9.0's tick skipped players whose tab reported itself hidden. `play_seconds` has no such gate and counts any live socket, so idle time with the tab open accrues again. Keeping the gate would have meant applying it to a column with a long history behind it, which silently redefines what every existing number in it means and puts a discontinuity in a stat the dev panel uses for analysis. Counting idle time is the smaller problem. The constraint from 1.3.9.0 stands unchanged and now covers a column that predates it: NOTHING MAY BE GATED ON PLAYTIME. No payout, no unlock, no title, no prized leaderboard.
+
+THE DEAD `visibility` WEBSOCKET FRAME IS REMOVED on both ends. Nothing reads it now. A half-wired message type that looks load-bearing is worse than no message type.
+
+THE ORPHAN COLUMN STAYS. Any database that already took 1.3.9.0 has a `playtime_sec` column that nothing reads. It is additive, it holds at most a few hours of data nobody saw, and dropping a column buys nothing while risking a rewrite of the players table. It is left alone deliberately.
+
+---
+
 ## v1.3.9.1 (2026-08-21) - a real Edit Profile button, and the modal was buried on mobile (CLIENT ONLY)
 
 No server change. No restart. Hard refresh required. Files touched: `client/index.html`, `client/assets/player-profile.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.

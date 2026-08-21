@@ -1,4 +1,16 @@
-# FleshMarket v1.3.9.1 - MANIFEST
+# FleshMarket v1.3.9.2 - MANIFEST
+
+## 1.3.9.2 changes (profile playtime now reads players.play_seconds; duplicate system deleted; SERVER + CLIENT)
+- SERVER RESTART REQUIRED. HARD REFRESH REQUIRED. Files touched: server/db.js, server/server.js, client/assets/player-profile.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.
+- ROOT CAUSE: 1.3.9.0 built a SECOND playtime system beside one that already existed. players.play_seconds (added by initFRSTables, accrued by the telemetry setInterval, printed by the god-panel dossier via getPlaySeconds) vs playtime_sec (added 1.3.9.0, accrued by a second setInterval). Same source (playerSockets), same cadence (60s), different columns. New column started at zero -> dossier 521h 39m, profile a few minutes, same account.
+- DELETED, NOT RECONCILED: playtime_sec migration entry, playtimeSec on hydratePlayer, addPlaytimeSeconds + _addPlaytimeTx (db.js), the second setInterval and PLAYTIME_TICK_MS/_playtimeLastRun (server.js). Original telemetry tick UNTOUCHED.
+- /api/items/profile/:name now calls getPlaySeconds(target.id), the same function server.js:11700 already used for the dossier. One column, one getter, no drift surface.
+- CLIENT fmtPlaytime REWRITTEN to be output-identical to _frsTime in god-panel.js:705. Verified: 1877940s -> "521h 39m" in both. Old version printed seconds under 60 and dropped minutes over 100h.
+- VISIBILITY GATE LOST. play_seconds counts any live socket; idle-with-tab-open accrues. ACCEPTED DELIBERATELY: applying the gate to a column with a long history silently redefines every number already in it and puts a discontinuity in a dev-panel analysis stat. Counting idle time is the smaller failure.
+- CONSTRAINT UNCHANGED AND NOW WIDER: NOTHING MAY BE GATED ON PLAYTIME. No payout, unlock, title, or prized leaderboard. Applies to play_seconds, which predates 1.3.9.0.
+- DEAD {type:'visibility'} FRAME REMOVED from both the ws handler and player-profile.js. ws._fmVisible gone. Nothing reads it; a half-wired message type that looks load-bearing is worse than none.
+- ORPHAN COLUMN LEFT IN PLACE. Databases that took 1.3.9.0 keep an unread playtime_sec. Additive, near-empty, and dropping a column risks a players table rewrite for zero gain.
+- SWEEP CLEAN: grep for playtime_sec / addPlaytimeSeconds / _fmVisible / PLAYTIME_TICK_MS / _playtimeLastRun across server/ and client/ returns nothing.
 
 ## 1.3.9.1 changes (Edit Profile button; modal was buried under mobile chrome; CLIENT ONLY)
 - NO SERVER CHANGE. NO RESTART. HARD REFRESH REQUIRED. Files touched: client/index.html, client/assets/player-profile.js, client/version.json, docs/CHANGELOG.md, docs/MANIFEST.txt.

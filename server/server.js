@@ -26,7 +26,7 @@ import {
   createPlayerSync, getPlayer, getPlayerByName,
   getPlayerByPatreonEmail, getPlayerByPatreonMemberId,
   isNameAvailable, touchPlayer, renamePlayer, markTutorialSeen,
-  setPlayerBio, addPlaytimeSeconds, getPlayerItemListings,
+  setPlayerBio, getPlayerItemListings,
   savePlayerFn, recordNetWorthFn, recordFundNAVFn,
   getNetWorthHistory, getFundNAVHistory, getLeaderboard,
   verifyPassword, createPasswordHash,
@@ -7961,7 +7961,9 @@ app.get('/api/items/profile/:name', (req, res) => {
       level: target.level || 1,
       bio: target.bio || null,
       createdAt: target.createdAt || null,
-      playtimeSec: target.playtimeSec || 0,
+      // Same column the god-panel dossier reads (players.play_seconds, accrued
+      // by the telemetry tick). One source, so the two surfaces cannot disagree.
+      playtimeSec: (() => { try { return getPlaySeconds(target.id); } catch(_) { return 0; } })(),
       items, listings, equipped: equipped || {}, passiveBonus: passive });
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -9675,10 +9677,6 @@ wss.on('connection',(ws,req)=>{
 
     if(msg.type==='ping'){if(actor)touchPlayer(actor.id);return;}
 
-    // Tab visibility for playtime accrual. Cheap, unrated, and deliberately
-    // handled before the rate limiter: it fires on tab switch, which a player
-    // alt-tabbing rapidly would otherwise burn their chat budget on.
-    if(msg.type==='visibility'){ ws._fmVisible = !!msg.visible; return; }
 
     // Per connection rate limit. See server/ratelimit.js for why two buckets
     // and why this drops the frame rather than the socket.
@@ -13389,38 +13387,6 @@ setInterval(() => {
   } catch(_) {}
 }, 15 * 60_000);
 
-
-// ── Playtime accrual ─────────────────────────────────────────────────────────
-// Credits connected, tab-visible players once a minute. Presence comes from
-// playerSockets (server-held), not from a number the client hands us, so the
-// worst a modified client can do is claim a hidden tab is visible - which is
-// identical in effect to leaving the tab open, something it can already do.
-// Idle time therefore counts. That is the deliberate trade: the stat is a
-// session odometer, not an engagement score, and NOTHING may be gated on it.
-// The elapsed value is measured rather than assumed so a stalled event loop
-// under-credits instead of silently drifting; addPlaytimeSeconds clamps to an
-// hour so a suspended process cannot dump a day into the column on resume.
-const PLAYTIME_TICK_MS = 60_000;
-let _playtimeLastRun = Date.now();
-setInterval(() => {
-  try {
-    const now = Date.now();
-    const elapsed = Math.round((now - _playtimeLastRun) / 1000);
-    _playtimeLastRun = now;
-    if (elapsed <= 0) return;
-    const ids = [];
-    for (const [pid, socks] of playerSockets) {
-      let visible = false;
-      for (const ws of socks) {
-        // Undefined means a client too old to report visibility. Those count,
-        // otherwise the stat freezes for everyone until they hard refresh.
-        if (ws._fmVisible !== false) { visible = true; break; }
-      }
-      if (visible) ids.push(pid);
-    }
-    if (ids.length) addPlaytimeSeconds(ids, elapsed);
-  } catch (e) { console.error('[Playtime]', e); }
-}, PLAYTIME_TICK_MS);
 
 setInterval(stepMarket, TICK_MS);
 setInterval(broadcastLeaderboard, 15000);

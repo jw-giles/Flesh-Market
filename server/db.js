@@ -380,8 +380,6 @@ export function initDB() {
     // an untrusted party writes and every other player reads.
     ['bio',                   'TEXT'],
     ['bio_updated_at',        'INTEGER'],
-    // Accrued connected time in seconds. Cosmetic only. See addPlaytimeSeconds.
-    ['playtime_sec',          'INTEGER NOT NULL DEFAULT 0'],
   ];
   for (const [col, def] of _migrations) {
     if (!_existingCols.has(col)) {
@@ -542,7 +540,6 @@ function hydratePlayer(row) {
     shipClass: row.ship_class || '',
     bio: row.bio || null,
     bioUpdatedAt: row.bio_updated_at || null,
-    playtimeSec: row.playtime_sec || 0,
     createdAt:row.created_at, updatedAt:row.updated_at, lastSeen:row.last_seen,
   };
 }
@@ -579,26 +576,6 @@ export function setPlayerBio(id, bio) {
   stmt('UPDATE players SET bio=?,bio_updated_at=?,updated_at=? WHERE id=?')
     .run(v, v ? Date.now() : null, Date.now(), id);
   return v;
-}
-
-// ─── Playtime ─────────────────────────────────────────────────────────────────
-// Bulk credit of accrued seconds. Called from one tick in server.js and nowhere
-// else. COSMETIC ONLY: presence is server-observed but idle-with-tab-open still
-// accrues, so this number must never gate a reward, unlock, title or payout. If
-// that changes, the stat has to be re-derived from something an open tab cannot
-// manufacture.
-const _addPlaytimeTx = () => db.transaction((ids, seconds) => {
-  const s = stmt('UPDATE players SET playtime_sec = playtime_sec + ? WHERE id=?');
-  for (const id of ids) s.run(seconds, id);
-});
-let _addPlaytimeFn = null;
-export function addPlaytimeSeconds(ids, seconds) {
-  if (!Array.isArray(ids) || !ids.length) return 0;
-  const sec = Math.max(0, Math.min(3600, Math.round(Number(seconds) || 0)));
-  if (!sec) return 0;
-  if (!_addPlaytimeFn) _addPlaytimeFn = _addPlaytimeTx();
-  _addPlaytimeFn(ids, sec);
-  return ids.length;
 }
 
 // Open Ƒbay item listings for one seller, newest first. getInventory() already
