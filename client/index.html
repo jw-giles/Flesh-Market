@@ -61,6 +61,12 @@
   <style>@keyframes patreonPulse{0%,100%{box-shadow:0 0 4px #ffce4d22;border-color:#7a5e1e}50%{box-shadow:0 0 8px #ffce4d44,0 0 12px #ffce4d22;border-color:#a07e2e}}@keyframes discordPulse{0%,100%{box-shadow:0 0 4px #5865f222;border-color:#3a3a6a}50%{box-shadow:0 0 8px #5865f244,0 0 12px #5865f222;border-color:#5a5a9a}}</style>
   <button class="btn" id="jadeThemeBtn" onclick="window.toggleJadeTheme&&window.toggleJadeTheme()" style="padding:3px 10px;font-size:.78rem;border-color:#2f6a4a;color:#6fcf97" title="Toggle Jade theme"data-i18n="hdr.jade">◈ Jade</button>
 <button class="btn" onclick="window.showTutorial&&window.showTutorial()" style="padding:3px 10px;font-size:.78rem;border-color:#1a3a1a;color:#4a8a4a" title="Replay Tutorial"data-i18n="hdr.tutorial">? Tutorial</button>
+  <!-- Trial upgrade. Hidden by default; fm-auth.js unhides it whenever the
+       session is a guest, locked or not, so "make it permanent" is reachable
+       from the main chrome at any time and not only from the bottom bar. The
+       bottom bar is hidden behind #fmNav on mobile, so this is the ONLY entry
+       point on a phone before the account locks. -->
+  <button class="btn" id="fm-claim-btn" onclick="window.FM_Auth&&window.FM_Auth.showUpgrade()" style="display:none;padding:3px 12px;font-size:.78rem;border-color:#46ff7d;color:#46ff7d;font-weight:600" title="Turn your trial into a permanent account, keeping everything">Claim Account</button>
   <button class="btn" onclick="window.FM_Auth&&window.FM_Auth.logout()" style="padding:3px 10px;font-size:.78rem;border-color:#1f4515;color:#888" data-i18n="btn.logout">Logout</button>
 </span>
 </div>

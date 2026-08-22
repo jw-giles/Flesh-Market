@@ -4,6 +4,125 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.4.0.4 (2026-08-22) - pre-deploy sanity pass (SERVER ONLY)
+
+Server restart required. No client change. Files touched: `server/server.js`, `tools/guest-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE TRIAL REST GATE WAS RUNNING ON A SIXTH OF THE API AND STATIC CHECKS COULD NOT SEE IT. In 1.4.0.0 the gate went inside `requirePlayer`, on the stated assumption that `requirePlayer` was the single REST chokepoint. It is not. Only 22 of 142 routes use it. Every `/api/funds`, `/api/fund`, `/api/warehouses`, `/api/council` and `/api/patreon` route resolves its token inline with `tokenFrom` instead, so the gate never ran on any of them.
+
+WHAT THAT MEANT IN PRACTICE: a trial account could create a Capital House, join or deposit into one, buy a council seat, contribute to a faction treasury, lease a warehouse, or link a Patreon email. Every one of those creates a row that outlives the account, which is the exact rule the block list was written by.
+
+FOUND BY BOOTING THE SERVER, NOT BY READING IT. `POST /api/funds/create` with a live guest token answered `insufficient_funds` rather than `guest_blocked`. Four patches of static parity checks had all passed while this was open, because a check that reads the block list cannot tell you the code holding the list never executes.
+
+THE GATE IS NOW GLOBAL `app.use` MIDDLEWARE, mounted immediately after `express.json()` and before any route is declared, so it sees every request regardless of how that route authenticates. It fails open to `next()` on a throw rather than 500ing the whole API, because the websocket gates and `canSendValue` hold independently and a middleware crash would take down every request rather than only a guest one. The copy inside `requirePlayer` is deleted with a comment saying not to put it back.
+
+GET IS NO LONGER BLOCKED. Prefix matching was also stopping a trial from BROWSING Capital Houses, the Ƒbay shelf and warehouse quotes, which is the opposite of showing someone the game. The rule the list was built by is "anything whose row outlives the account or obligates another player", and a read does neither. Audited: all ten GET routes under the blocked prefixes are reads.
+
+`tools/guest-check.mjs` NOW ASSERTS THE GATE IS GLOBAL and fails if it ever moves back inside `requirePlayer`.
+
+VERIFIED AGAINST A RUNNING SERVER, which is the point of this patch. Boot clean with the trials line reporting existing rows. 19 REST assertions: 12 routes blocked including all the previously ungated ones, 7 reads still open. WebSocket: `transfer`, `share_buy` and `council_post` all return `guest_blocked`; the chat unlock message fires pre-15-minutes; an empty chat frame is dropped without burning the cooldown; a normal `order` reaches its handler. Upgrade round trip: succeeds, `whoami` flips to permanent, login works afterward, and the returned token is byte-identical to the guest's, confirming nothing migrated. Every upgrade failure path returns its own message (reserved pattern, slur, short password, invalid characters) and the session survives four consecutive failures then upgrades cleanly. Live expiry: a backdated guest settles and locks on socket contact, `guest_locked` reaches the client, writes are refused, reads still work, and the upgrade still opens it. Fleshbook filter on real accounts: clean text stored verbatim, `n1gg3r` and `n1gg3rking` refused as inappropriate, `nigger` refused as empty after censoring. Normal-account regression: none of the six previously blocked routes answer `guest_blocked`.
+
+---
+
+## v1.4.0.3 (2026-08-22) - Claim Account button (CLIENT ONLY)
+
+No server change. No restart. Hard refresh required. Files touched: `client/index.html`, `client/assets/fm-auth.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+UPGRADING AT ANY TIME WAS ALREADY POSSIBLE, AND ON MOBILE IT WAS NOT. The bottom guest bar carried a Create Account button from 1.4.0.0. It was anchored at `bottom:0` with `z-index:9500`. `#fmNav` is also `bottom:0`, at `z-index:9992`, with a height of `var(--fm-nav)`. The nav sat directly on top of the button. A phone player had no route to a permanent account until the lock screen appeared on day seven, which is exactly the population this feature exists to convert.
+
+THE BAR NOW SITS ABOVE THE NAV. Offset by `var(--fm-nav, 56px)` plus `env(safe-area-inset-bottom)` when `body.fm-mobile` is present, flush to the bottom otherwise, at `z-index:9993`.
+
+POSITION IS RECOMPUTED ON EVERY RENDER, NOT ON CREATION. The first version of this fix read the mobile class once, inside the `if (!bar)` branch. `body.fm-mobile` can be applied after the bar first draws, and a one-shot read would leave the offset permanently wrong for anyone whose mobile class arrived late. It also re-renders on `resize`, so an orientation change repositions it.
+
+A CLAIM ACCOUNT BUTTON NOW LIVES IN THE HEADER, next to Logout, and it is the primary entry point rather than the bar. It ships hidden in `index.html` and `syncClaimButton()` unhides it whenever the session is a trial, locked or not. The unhide retries on a 100ms interval up to 4 seconds, because `index.html` and `fm-auth.js` can finish in either order depending on cache state and a button that is only correct on one of those orderings is a button that intermittently is not there.
+
+HITTING A BLOCKED FEATURE NOW OPENS THE UPGRADE FORM after the toast, rather than informing the player and leaving them to find the button. That is the highest intent moment a trial has: they just tried to do something and were told they cannot.
+
+There are now four routes to a permanent account: the header button, the bottom bar, any blocked feature, and the day-seven lock screen.
+
+VERIFIED STATICALLY, 14 assertions across both files: button present and hidden by default, wired to `FM_Auth.showUpgrade`, `showUpgrade` exported, `syncClaimButton` called from both `setGuestState` and the post-upgrade path, the retry loop present, `z-index` above 9992, nav offset applied, position set outside the creation branch, resize handler present, blocked-feature route to upgrade, and the lock screen path intact.
+
+---
+
+## v1.4.0.2 (2026-08-22) - Fleshbook text filter (SERVER ONLY)
+
+Server restart required. NO client change. Files touched: `server/server.js`, `tools/guest-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+FLESHBOOK WAS THE LAST PLAYER-AUTHORED SURFACE OTHER PLAYERS READ THAT RAN NO SLUR FILTERING AT ALL. Chat and bio ran `filterChat`. Names ran `isTextClean`. Fleshbook ran neither, and the gap was invisible because a post looks the same either way. This had been sitting open across several patches.
+
+FILTERED ON ALL THREE WRITE PATHS: `post`, `reply`, `edit`. The edit route is the one that actually mattered. Filtering post and reply while leaving edit open means publishing something clean and substituting the slur in afterward, which is the entire filter beaten by one extra request. Admins are filtered on edit too: an admin editing another player's post has no reason to need slurs through, and exempting them would have put the hole back behind a privilege check.
+
+IT NEEDED BOTH FILTERS, AND THAT WAS A TEST RESULT RATHER THAN A DESIGN PREFERENCE. The plan was to call `filterChat` and stop. Running it first showed why that fails: `filterChat` FLAGS leet substitution but does not CENSOR it. Its leet branch sets `flagged`, then calls `working.replace(re)` against the ORIGINAL string, which does not match the leet form, so `n1gg3r` comes back `flagged: true` with the text completely untouched. Padded forms like `n1gg3rking` are not caught at all. Shipping `filterChat` alone would have stored the slur verbatim and returned `filtered: true`, which is worse than no filter because it reports success.
+
+`isTextClean` catches both. It is the three pass gate the name path already uses: raw substring list, then the same list against leet-normalised text, then `containsSlur`. New `fbCleanBody()` runs `filterChat` first to silently censor what it can handle, so ordinary profanity does not bounce a whole post back, then `isTextClean` to reject whatever survived.
+
+REJECTION RATHER THAN CENSORING FOR THE REMAINDER. A Fleshbook post is a deliberate compose action against a form and the author can edit and resend. Chat censors instead because bouncing a live chat line mid-conversation is the worse trade. A post that censors down to nothing but asterisks is refused rather than stored as a row of stars.
+
+THE LEET HOLE IN `filterChat` ITSELF IS NOT FIXED HERE. It still affects chat and bio for every player, and it is a real finding. Fixing a shared filter that every message on the station passes through does not belong riding along inside a Fleshbook patch; it needs its own change and its own testing.
+
+`tools/guest-check.mjs` now asserts `fbCleanBody` is called on every Fleshbook write route. Adding a fourth write path and forgetting the gate would restore the hole silently.
+
+VERIFIED BY EXECUTION against the real function extracted from source, 9 assertions: clean post accepted unchanged; plain slur refused; leet slur refused via the isTextClean pass specifically; padded leet slur refused; slur plus real content still refused; whitespace-only refused; no false positive on ordinary text including Scunthorpe; the 1000 character cap applied before filtering; emoji preserved.
+
+---
+
+## v1.4.0.1 (2026-08-22) - trial gates tightened (SERVER ONLY)
+
+Server restart required. NO client change, no hard refresh needed. Files touched: `server/guest.js`, `server/server.js`, `tools/guest-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THREE OF THE SIX ASKS WERE ALREADY DONE IN 1.4.0.0 and were re-verified against the live handlers rather than taken from the changelog: the wire is `transfer` (blocked), Ƒbay posting is `/api/items/market/*` (blocked by prefix), council chamber talk is `council_post` (blocked). The three that were actually new are below.
+
+CHAT NOW HAS A 90 SECOND PER MESSAGE COOLDOWN FOR TRIALS. This does NOT replace the 15 minute unlock; they defend different things. The unlock stops a throwaway account being created FOR one message. The cooldown stops an account that already cleared the unlock from flooding. The global `chatAllowed()` limiter is 500ms with a 6-in-3s burst, which is a typing-speed guard and was never a spam guard.
+
+WHISPERS SHARE THE SAME COUNTER, not a parallel one. Spamming DMs is worse than spamming a channel, and two independent timers would halve the real interval for anyone willing to alternate surfaces.
+
+THE COOLDOWN IS CHARGED AFTER AN EMPTY TEXT CHECK AND BEFORE THE MUTE AND SLUR CHECKS, and both halves of that were deliberate. Empty text is dropped silently much further down (`if(!rawText)return`), so charging first would have let a client burn a guest's full 90 seconds on a blank frame it never sees fail. That was a real bug in the first draft of this patch. Charging before the content filters is the opposite call and also correct: a rejected message still costs the interval, because free retries are exactly what makes a filter probe-able.
+
+PORTRAITS ARE HELD BACK UNTIL THE ACCOUNT IS PERMANENT. `/api/portrait` joins the blocked prefix list. Identity on a throwaway account is how you impersonate someone, and a portrait is the most identity-carrying thing a trial could otherwise set.
+
+FLESHBOOK WRITES ARE BLOCKED, READS ARE NOT, AND THAT NEEDED A FINER CUT THAN A PREFIX. `/api/fleshbook` as a prefix would have taken the feed with it, and reading Fleshbook is most of what makes the trial worth having. Blocked by exact path: `post`, `reply`, `edit`, `pin`, `delete`. Left open: reading, `seen`, `vote`.
+
+VOTE IS LEFT OPEN AND THAT IS A JUDGEMENT CALL, NOT AN OVERSIGHT. Anonymous free accounts voting is the same brigading vector the chat unlock exists to blunt. It was not in the ask, so it is not in the patch; if trial votes start swinging Fleshbook it is one line.
+
+`tools/guest-check.mjs` NOW COVERS EXACT PATHS TOO. It already asserted every blocked message type resolves to a live handler, because the first draft of that list was written from memory and was fiction. The same rot applies to route paths, so it now also asserts every entry in `GUEST_BLOCKED_EXACT` resolves to a real `app.post`. Currently 5 exact paths, 34 blocked types, 25 locked-allow types, against 98 handled message types and 140 REST routes.
+
+VERIFIED BY EXECUTION. 21 assertions: cooldown boundaries at 0s, 1s, 89s, 90s and 91s; per-player isolation; the reported countdown rounding; that the map prune cannot evict a live cooldown; that portrait and all five Fleshbook write paths gate while feed, seen and vote do not; that Ƒbay list and buy gate while inventory and equip do not; and that the three already-blocked items really are blocked.
+
+---
+
+## v1.4.0.0 (2026-08-22) - trial accounts (SERVER + CLIENT)
+
+Server restart required. Hard refresh required. Files touched: `server/guest.js` (new), `server/db.js`, `server/server.js`, `client/assets/fm-auth.js`, `tools/guest-check.mjs` (new), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+A FIRST TIME VISITOR NO LONGER SEES A SIGNUP FORM. They land in the game on a trial account that runs seven days and then locks. The signup wall was the friction this removes; everything else in the patch is the consequence of removing it safely.
+
+THE TRIAL LOCKS, IT IS NEVER DELETED, AND THAT WAS THE LOAD BEARING DECISION. The brief was "deletes after seven days". There are 69 tables and around forty of them carry a player id, and there has never been a `deletePlayer` anywhere in this codebase. A correct cascade is forty hand written statements running unattended, nightly, against production. Probability of a bug shipping in that: moderate, it is forty statements. Severity if one has a wrong WHERE: real accounts gone with no undo short of the cron backup. Those are separate axes and this is bad on the second one. Same reasoning that put a floor on the portrait sweep. A dead row costs a few KB and ten thousand of them is nothing to SQLite, so the cost of keeping them is not real and the cost of deleting them is.
+
+LOCKING IS ALSO THE BETTER PITCH. Deletion makes day seven a loss. A lock makes it the offer: the portfolio, the cargo, the inventory and the level are all still there behind glass, and a name and a password opens it.
+
+THE UPGRADE IS ONE UPDATE ON ONE ROW. `/api/login` has always returned `token: player.id`, so the token IS the row id. Upgrading sets name, hash and salt, clears `is_guest`, and stops. Nothing moves, so nothing can half move: holdings, inventory, cargo, XP, quests and portrait stay attached to the id they were always on. `upgradeGuestSync` carries `AND is_guest=1` so a replayed call cannot rewrite a permanent account.
+
+THE UPGRADE MUST NEVER DEAD END, because once an account is locked it is the only exit. Every failure path (name taken, name reserved, slur filter, short password, server error) returns a specific message and re-prompts in place with the session intact. Nothing on that path clears the token or closes the form.
+
+GUESTS SEND NOTHING. Clearance already computes a fresh guest to zero allowance, since the seed is Ƒ1000 and `CLEARANCE_GRANT` is Ƒ1000. That is not enough on its own: allowance RISES with peak net worth, `mining_bank` is still client reported, and free accounts remove the friction from that existing hole rather than adding a new one. `canSendValue` takes a flat guest block at the single chokepoint every transfer route already passes through.
+
+WHAT ELSE GUESTS CANNOT DO, picked by one rule: block anything whose row outlives the account or creates an obligation to another player. Lane shares (limited slot supply), Ƒbay and the title market (a listing is an obligation to a buyer), Capital Houses, cities, council, war funding, warehouses (30 day default clock outruns a 7 day trial). Everything else is the real game: stocks, shorts, commodities, cargo, casino, mining, quests, tutorial, inventory, codec, chat.
+
+THE FIRST DRAFT OF THAT BLOCK LIST WAS FICTION AND `tools/guest-check.mjs` EXISTS BECAUSE OF IT. It was written from memory with plausible names like `wire`, `buy_share` and `fund_join`. The real dispatcher uses `transfer` and `share_buy` and has no `fund_join` at all, so every one of those would have been a gate that gated nothing, silently, with no error anywhere. The shipped list was rebuilt from a grep of the dispatcher and the tool now asserts all 34 blocked and 25 locked-allow types still resolve to live handlers, and that no type appears in both sets. 98 handled types total.
+
+NAMES COME FROM A RESERVED NAMESPACE. `Drifter-XXXX`, refused by both `/api/register` and `/api/rename`. A trial can therefore never squat a good name, nothing has to be freed when an account locks, and picking a real name becomes part of the upgrade. Guest rows also get random bytes for a password and are refused at `/api/login` by name, so the namespace cannot be probed for which trials exist.
+
+CREATION IS DEFERRED AND IP LIMITED. The row is created on first real interaction or on the tab being visibly open for 2.5 seconds, not on page load. Page load would mint a permanent row for every crawler, link preview and three second bounce, and nothing here is ever deleted. Three per IP per 24 hours. Does not stop a VPN, does stop incognito spam.
+
+CHAT OPENS AFTER FIFTEEN MINUTES. Anonymous free accounts plus an open chat box is a raid vector, and chat is the social core so blocking it outright would gut the trial. Whispers are on the same clock.
+
+EXPIRY SETTLES BEFORE IT LOCKS, AND ONLY SETTLES WHAT CAN LOSE VALUE UNATTENDED. In flight cargo, shipping contracts and mining runs are deliberately left alone: they resolve on their own timers into the account and the money is still there at upgrade. The lock stops the player acting, not the world paying out. Shorts are the exception and the reason the pass exists, because an open short in an account nobody can log into rides to a margin call and wipes the portfolio the upgrade prompt is promising back. Limit orders go too, with escrowed cash returned exactly as `cancel_limit` does it. Cash floors at zero so a locked account never greets its owner with a debt.
+
+`guest_locked` IS SET LAST, ON PURPOSE. Settlement runs, then the flag. If settlement throws, the row stays unlocked and the next sweep retries it rather than sealing an unsettled account. The sweep is hourly, runs once at boot so downtime over an expiry cannot hand back a live account, and a guest returning between sweeps is settled on socket contact.
+
+VERIFIED BY EXECUTION AGAINST A REAL SQLITE DB, not by reading the code. Migration on an existing schema, guest creation, reserved name match, 7 day clock, leaderboard exclusion before and inclusion after upgrade, chat gate closed at 0 and open at 16 minutes. Settlement was run four ways: a short 20% against a Ƒ150 collateral position with a Ƒ40 buy order open landed on Ƒ5069.70 with Ƒ0.30 tax taken, exactly the hand computed figure; a catastrophic short floored at zero instead of going negative; a delisted symbol with no price was left in place rather than guessed at; and a locked row was confirmed to never be re-picked by the sweep.
+
+---
 ## v1.3.9.4 (2026-08-21) - the dev spawn list is generated from the catalog (CLIENT ONLY)
 
 No server change. No restart. Hard refresh required. Files touched: `client/index.html`, `client/assets/god-panel.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.

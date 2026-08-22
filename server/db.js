@@ -380,6 +380,17 @@ export function initDB() {
     // an untrusted party writes and every other player reads.
     ['bio',                   'TEXT'],
     ['bio_updated_at',        'INTEGER'],
+    // Trial accounts (v1.4.0.0). is_guest is the live flag; it clears on upgrade
+    // and the row becomes an ordinary account in place, which is why there is no
+    // separate guest table. guest_created_at is the clock the 7 day window runs
+    // off; it is NOT last_seen, deliberately, because a sliding window means a
+    // guest never has to convert. guest_locked is set by the sweep and is what
+    // every gate actually reads, so a clock disagreement can never unlock an
+    // account that was already settled.
+    ['is_guest',              'INTEGER NOT NULL DEFAULT 0'],
+    ['guest_created_at',      'INTEGER'],
+    ['guest_locked',          'INTEGER NOT NULL DEFAULT 0'],
+    ['guest_settled_at',      'INTEGER'],
   ];
   for (const [col, def] of _migrations) {
     if (!_existingCols.has(col)) {
@@ -540,6 +551,10 @@ function hydratePlayer(row) {
     shipClass: row.ship_class || '',
     bio: row.bio || null,
     bioUpdatedAt: row.bio_updated_at || null,
+    isGuest: !!row.is_guest,
+    guestCreatedAt: row.guest_created_at || null,
+    guestLocked: !!row.guest_locked,
+    guestSettledAt: row.guest_settled_at || null,
     createdAt:row.created_at, updatedAt:row.updated_at, lastSeen:row.last_seen,
   };
 }
@@ -552,6 +567,64 @@ export function createPlayerSync(id, name, password) {
     .run(id,name,hash,salt,now,now);
   return getPlayer(id);
 }
+// ─── Trial (guest) accounts ───────────────────────────────────────────────────
+// A guest is an ordinary players row with is_guest=1 and no usable password. It
+// gets the same Ƒ1000 seed as everyone else, which matters: CLEARANCE_GRANT is
+// also 1000, so a fresh guest's send allowance computes to exactly zero before
+// any other gate is applied. The transfer block in canSendValue is belt on top
+// of that, not the only strap.
+//
+// The password columns are filled with random bytes rather than left NULL. NULL
+// would make verifyPassword's behaviour depend on how it handles a missing hash,
+// and a guest row must not be loginnable by name under any input at all. Random
+// bytes mean there is no string that verifies, without depending on that.
+export function createGuestSync(id, name) {
+  const now = Date.now();
+  const junk = randomBytes(32).toString('hex');
+  const {hash,salt} = createPasswordHash(junk);
+  stmt(`INSERT INTO players(id,name,password_hash,password_salt,cash,xp,level,badges,patreon_tier,created_at,updated_at,is_guest,guest_created_at,guest_locked)
+        VALUES(?,?,?,?,1000,0,1,'[]',0,?,?,1,?,0)`)
+    .run(id,name,hash,salt,now,now,now);
+  return getPlayer(id);
+}
+
+// The upgrade. One statement, because the row IS the account: nothing moves, so
+// there is no partial state to land in. Holdings, inventory, cargo, XP, quest
+// progress and portrait all stay attached to the same id they were always on.
+export function upgradeGuestSync(id, newName, password) {
+  const now = Date.now();
+  const {hash,salt} = createPasswordHash(password);
+  stmt(`UPDATE players SET name=?, password_hash=?, password_salt=?,
+        is_guest=0, guest_locked=0, guest_created_at=NULL, guest_settled_at=NULL, updated_at=?
+        WHERE id=? AND is_guest=1`)
+    .run(newName.trim(), hash, salt, now, id);
+  return getPlayer(id);
+}
+
+// Guests whose window has closed and which have not been settled yet. Returns
+// rows, not ids, so the caller can log what it is about to touch.
+export function getExpiredGuests(cutoff) {
+  return stmt(`SELECT id,name,guest_created_at FROM players
+               WHERE is_guest=1 AND guest_locked=0 AND guest_created_at IS NOT NULL AND guest_created_at <= ?`)
+    .all(cutoff);
+}
+export function lockGuest(id) {
+  stmt('UPDATE players SET guest_locked=1, guest_settled_at=?, updated_at=? WHERE id=? AND is_guest=1')
+    .run(Date.now(), Date.now(), id);
+}
+export function countGuests() {
+  try {
+    const r = stmt('SELECT COUNT(*) c, SUM(guest_locked) locked FROM players WHERE is_guest=1').get();
+    return { total: r?.c || 0, locked: r?.locked || 0 };
+  } catch(_) { return { total: 0, locked: 0 }; }
+}
+// Guest names live in a reserved namespace so a trial can never squat a real one
+// and so nothing has to be freed when an account locks. Checked on the way IN at
+// register and rename; see isReservedGuestName in server.js for the gate.
+export function guestNameExists(name) {
+  return !!stmt('SELECT id FROM players WHERE name=? COLLATE NOCASE').get(name);
+}
+
 export function getPlayer(id) { return hydratePlayer(stmt('SELECT * FROM players WHERE id=?').get(id)); }
 export function getPlayerByName(name) { return hydratePlayer(stmt('SELECT * FROM players WHERE name=? COLLATE NOCASE').get(name)); }
 export function getPlayerByPatreonEmail(email) { return hydratePlayer(stmt('SELECT * FROM players WHERE patreon_email=? COLLATE NOCASE').get(email)); }
@@ -756,7 +829,11 @@ export function getFundNAVHistory(fundId, limit=300) {
 
 export function getLeaderboard(companies, limit=20) {
   try { db.exec('ALTER TABLE players ADD COLUMN faction TEXT'); } catch(_){}
-  const players = stmt(`SELECT id,name,cash,xp,level,title,patreon_tier,is_dev,is_admin,is_prime,faction FROM players WHERE is_dev=0 AND is_admin=0 AND is_prime=0`).all();
+  // is_guest=0: a trial account that expires and locks has no business sitting on
+  // a public board, and a guest who tops it before locking leaves a name nobody
+  // can ever play against again.
+  try { db.exec('ALTER TABLE players ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0'); } catch(_){}
+  const players = stmt(`SELECT id,name,cash,xp,level,title,patreon_tier,is_dev,is_admin,is_prime,faction FROM players WHERE is_dev=0 AND is_admin=0 AND is_prime=0 AND is_guest=0`).all();
   const priceMap = {}; for (const c of companies) priceMap[c.symbol] = c.price;
   return players.map(p=>{
     const holdRows = stmt('SELECT symbol,qty FROM holdings WHERE player_id=?').all(p.id);

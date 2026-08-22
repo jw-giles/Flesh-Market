@@ -24,6 +24,8 @@ import { filterChat, containsSlur, normalizeLeet } from './chat-filter.js';
 import {
   initDB, setupTransactions,
   createPlayerSync, getPlayer, getPlayerByName,
+  createGuestSync, upgradeGuestSync, getExpiredGuests, lockGuest,
+  countGuests, guestNameExists,
   getPlayerByPatreonEmail, getPlayerByPatreonMemberId,
   isNameAvailable, touchPlayer, renamePlayer, markTutorialSeen,
   setPlayerBio, getPlayerItemListings,
@@ -148,6 +150,12 @@ import {
 import { replay as solitaireReplay } from './solitaire.js';
 import * as MathTest from './mathtest.js';
 import { newBuckets, checkRate } from './ratelimit.js';
+import {
+  GUEST_WINDOW_MS, GUEST_CHAT_UNLOCK_MS, GUEST_IP_LIMIT, GUEST_IP_WINDOW_MS,
+  isReservedGuestName, generateGuestName, guestState, guestCanChat,
+  guestBlocks, guestBlocksPath, lockedAllows, settleGuestAccount,
+  GUEST_CHAT_COOLDOWN_MS, guestChatCooldownLeft, noteGuestChat,
+} from './guest.js';
 
 // City Charters (1.2.5.25): player-owned cities on colony planets
 import {
@@ -3402,6 +3410,59 @@ const wss=new WebSocketServer({server});
 app.use('/api/patreon/webhook', express.raw({type:'application/json'}));
 app.use(express.json());
 
+// ─── Trial account REST gate ──────────────────────────────────────────────────
+// MOUNTED AS GLOBAL MIDDLEWARE, NOT INSIDE requirePlayer, AND THAT DISTINCTION
+// IS THE WHOLE POINT. requirePlayer is NOT a chokepoint: only 22 of 142 routes
+// use it. Every /api/funds, /api/warehouses, /api/council and /api/patreon route
+// resolves the token inline with tokenFrom instead. A gate written inside
+// requirePlayer therefore ran on a sixth of the surface and silently did nothing
+// on the rest, which is exactly the "gate one route and the whole thing is
+// decorative" failure the Guild Clearance comment warns about. Caught by hitting
+// /api/funds/create on a live guest and getting insufficient_funds back instead
+// of guest_blocked.
+//
+// Registered here, before any route is declared, so it sees every request no
+// matter how that route authenticates. After express.json() because tokenFrom
+// reads req.body.
+app.use((req, res, next) => {
+  try {
+    const tok = tokenFrom(req);
+    if (!tok) return next();
+    const p = getPlayer(tok);
+    if (!p || !p.isGuest) return next();
+
+    // The upgrade route is the only exit from a locked trial. Gating it would
+    // strand every expired account permanently.
+    if (String(req.path || '').startsWith('/api/guest/upgrade')) return next();
+
+    if (p.guestLocked && req.method !== 'GET') {
+      return res.status(403).json({ ok:false, error:'guest_locked',
+        message:'Your trial has ended. Create a permanent account to keep playing. Everything you own is still here.' });
+    }
+    // GET is never blocked. The rule the block list was built by is "anything
+    // whose row outlives the account or obligates another player", and a read
+    // does neither. Blocking by prefix alone stopped a trial from BROWSING
+    // Capital Houses, the Ƒbay shelf and the warehouse quote, which is the
+    // opposite of showing someone the game. Audited: every GET under the
+    // blocked prefixes is a read (funds list/detail/history, fund snapshot,
+    // items/market browse, warehouses list and quote, fleshbook feed, replies
+    // and unread count). If a mutating GET is ever added under one of these,
+    // this line stops covering it, so add it to GUEST_BLOCKED_EXACT instead of
+    // relaxing this further.
+    if (req.method !== 'GET' && guestBlocksPath(req.path)) {
+      return res.status(403).json({ ok:false, error:'guest_blocked',
+        message:'Not available on a trial account. Create a permanent account to unlock it.' });
+    }
+    return next();
+  } catch (e) {
+    // A throw here would take down every request, not just a guest one. Fail
+    // open to next() rather than 500 the whole API: the websocket gates and
+    // canSendValue still hold independently.
+    console.error('[Guest] REST gate error:', e.message);
+    return next();
+  }
+});
+
 // Dev-only toggle for the passage. Opening broadcasts the Jade tickers to connected
 // clients (they appear on the tape); closing delists them. Also flips the client
 // sealed UI via the 'wormhole' broadcast.
@@ -3677,12 +3738,123 @@ function isNameValid(name) {
   return true;
 }
 
+// ─── Trial (guest) accounts ───────────────────────────────────────────────────
+// See server/guest.js for the lifecycle and for why an expired trial locks
+// instead of being deleted.
+
+// ratelimit.js is per-socket and only covers the websocket dispatcher, so guest
+// creation needs its own bucket at the REST layer. In-memory on purpose: a
+// restart forgiving a few counters is fine, and this is friction, not security.
+const _guestIpLog = new Map();   // ip -> [timestamps]
+function guestIpAllowed(ip) {
+  const now = Date.now();
+  const hits = (_guestIpLog.get(ip) || []).filter(t => now - t < GUEST_IP_WINDOW_MS);
+  if (hits.length >= GUEST_IP_LIMIT) { _guestIpLog.set(ip, hits); return false; }
+  hits.push(now); _guestIpLog.set(ip, hits);
+  return true;
+}
+function clientIp(req) {
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return fwd || req.socket?.remoteAddress || 'unknown';
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, hits] of _guestIpLog) {
+    const live = hits.filter(t => now - t < GUEST_IP_WINDOW_MS);
+    if (live.length) _guestIpLog.set(ip, live); else _guestIpLog.delete(ip);
+  }
+}, 60 * 60 * 1000).unref?.();
+
+// The client calls this on FIRST MEANINGFUL INTERACTION, not on page load.
+// Creating a row per pageview would mint an account for every crawler, link
+// preview and three-second bounce, and since nothing is ever deleted those rows
+// are permanent. See fm-auth.js: the session renders first and becomes an
+// account the moment it is worth persisting.
+app.post('/api/guest',(req,res)=>{
+  try{
+    if(!guestIpAllowed(clientIp(req)))
+      return res.status(429).json({ok:false,error:'guest_rate_limited',
+        message:'Too many trial accounts from this connection today. Log in, or register a permanent account.'});
+    const name = generateGuestName(guestNameExists);
+    if(!name) return res.status(503).json({ok:false,error:'name_space_exhausted'});
+    const id = uuidv4();
+    const player = createGuestSync(id, name);
+    const st = guestState(player);
+    console.log(`[Guest] created ${name} (${id})`);
+    res.json({ok:true,token:player.id,name:player.name,cash:player.cash,patreon_tier:0,
+              is_guest:true,guest_locked:false,guest_expires_at:st.expiresAt,guest_days_left:st.daysLeft});
+  }catch(e){console.error('/api/guest:',e);res.status(500).json({ok:false,error:'server_error'});}
+});
+
+// The upgrade. This is the ONLY exit from a locked trial, so it must never
+// dead-end: every failure returns a specific error the client re-prompts on, in
+// place, with the session intact. A generic 500 here strands the account.
+app.post('/api/guest/upgrade',(req,res)=>{
+  try{
+    const tok=tokenFrom(req);
+    const p=tok?getPlayer(tok):null;
+    if(!p) return res.status(401).json({ok:false,error:'unauthorized',message:'Session not found. Your trial lives in this browser only.'});
+    if(!p.isGuest) return res.status(409).json({ok:false,error:'not_a_guest',message:'This account is already permanent.'});
+
+    const {name,password}=req.body||{};
+    const trimmed=String(name||'').trim().slice(0,32);
+    if(!trimmed) return res.status(400).json({ok:false,error:'name_required',message:'Pick a name.'});
+    if(!password||password.length<4) return res.status(400).json({ok:false,error:'password_too_short',message:'Password must be at least 4 characters.'});
+    if(isReservedGuestName(trimmed)) return res.status(400).json({ok:false,error:'name_reserved',message:'That name pattern is reserved for trial accounts. Pick your own.'});
+    if(!isNameValid(trimmed)) return res.status(400).json({ok:false,error:'name_invalid',message:'Names can only contain letters, numbers, spaces, underscores, and hyphens.'});
+    if(!isTextClean(trimmed)) return res.status(400).json({ok:false,error:'name_inappropriate',message:'That name contains inappropriate language.'});
+    if(!isNameAvailable(trimmed)) return res.status(409).json({ok:false,error:'name_taken',message:'That name is taken. Try another.'});
+
+    const upgraded=upgradeGuestSync(p.id,trimmed,password);
+    if(!upgraded||upgraded.isGuest)
+      return res.status(500).json({ok:false,error:'upgrade_failed',message:'Could not complete. Try again.'});
+    console.log(`[Guest] upgraded ${p.name} -> ${trimmed} (${p.id})`);
+    res.json({ok:true,token:upgraded.id,name:upgraded.name,cash:upgraded.cash,xp:upgraded.xp,
+              level:upgraded.level,title:upgraded.title,faction:upgraded.faction||null,
+              portrait:upgraded.portrait||null,patreon_tier:upgraded.patreon_tier||0,is_guest:false});
+  }catch(e){console.error('/api/guest/upgrade:',e);res.status(500).json({ok:false,error:'server_error',message:'Server error. Your account is safe. Try again.'});}
+});
+
+// ─── Guest expiry sweep ───────────────────────────────────────────────────────
+// Settles then locks. Order matters: guest_locked is only set AFTER settlement
+// has run, so an account can never read as locked while its shorts are still
+// open. If settlement throws, the row stays unlocked and the next sweep retries
+// it rather than sealing an unsettled account.
+function sweepExpiredGuests() {
+  let locked = 0;
+  try {
+    const cutoff = Date.now() - GUEST_WINDOW_MS;
+    const due = getExpiredGuests(cutoff);
+    if (!due.length) return 0;
+    const priceMap = buildPriceMap();
+    for (const row of due) {
+      try {
+        const p = getPlayer(row.id);
+        if (!p || !p.isGuest) continue;
+        const rep = settleGuestAccount(p, {
+          priceMap, toCents, safeAddCash, savePlayer,
+          getPlayerOrders, deleteLimitOrder: dbDeleteLimitOrder,
+          TRADE_TAX_BPS, onTax: (amt) => { FMI.treasury += amt; },
+        });
+        lockGuest(row.id);
+        locked++;
+        console.log(`[Guest] locked ${row.name}: shorts=${rep.shortsClosed.length} orders=${rep.ordersCancelled} returned=${rep.cashReturned.toFixed(2)}`);
+        try {
+          broadcastToPlayer(row.id, { type:'guest_locked', data:{ reason:'expired' } });
+        } catch(_) {}
+      } catch(e) { console.error(`[Guest] settle failed for ${row.id}, will retry next sweep:`, e.message); }
+    }
+  } catch(e) { console.error('[Guest] sweep failed:', e.message); }
+  return locked;
+}
+
 app.post('/api/register',(req,res)=>{
   try{
     const {name,password}=req.body||{};
     if(!name||!name.trim()) return res.status(400).json({ok:false,error:'name_required'});
     if(!password||password.length<4) return res.status(400).json({ok:false,error:'password_too_short'});
     const trimmed=name.trim().slice(0,32);
+    if(isReservedGuestName(trimmed)) return res.status(400).json({ok:false,error:'name_reserved',message:'That name pattern is reserved for trial accounts.'});
     if(!isNameValid(trimmed)) return res.status(400).json({ok:false,error:'name_invalid',message:'Names can only contain letters, numbers, spaces, underscores, and hyphens. No emojis or special characters.'});
     if(!isTextClean(trimmed)) return res.status(400).json({ok:false,error:'name_inappropriate',message:'That name contains inappropriate language.'});
     if(!isNameAvailable(trimmed)) return res.status(409).json({ok:false,error:'name_taken'});
@@ -3698,6 +3870,11 @@ app.post('/api/login',(req,res)=>{
     if(!name||!password) return res.status(400).json({ok:false,error:'missing_fields'});
     const player=getPlayerByName(name.trim());
     if(!player) return res.status(401).json({ok:false,error:'invalid_credentials'});
+    // A guest row has random bytes for a password, so nothing would verify anyway.
+    // Refusing by name as well means the guest namespace cannot be probed for
+    // which trials exist, and it keeps the "guests have no login" rule in one
+    // readable place rather than resting on the hash being unguessable.
+    if(player.isGuest) return res.status(401).json({ok:false,error:'invalid_credentials'});
     if(!verifyPassword(password,player.password_hash,player.password_salt))
       return res.status(401).json({ok:false,error:'invalid_credentials'});
     touchPlayer(player.id);
@@ -3714,7 +3891,8 @@ app.get('/api/whoami',(req,res)=>{
   const tok=tokenFrom(req);
   const p=tok?getPlayer(tok):null;
   if(!p) return res.status(404).json({ok:false,error:'not_found'});
-  res.json({ok:true,id:p.id,name:p.name,cash:p.cash,holdings:p.holdings,xp:p.xp,level:p.level,title:p.title,faction:p.faction||null,portrait:p.portrait||null,patreon_tier:p.patreon_tier||0,is_dev:!!(isDevAccount(p.id)),is_admin:!!(isAdminAccount(p.id)),is_dunced:!!(isDunced(p.id)),is_prime:!!(isOwnerAccount(p.id)),void_locked:!!(isVoidLocked(p.id))});
+  const _g=guestState(p);
+  res.json({ok:true,id:p.id,name:p.name,cash:p.cash,holdings:p.holdings,xp:p.xp,level:p.level,title:p.title,faction:p.faction||null,portrait:p.portrait||null,patreon_tier:p.patreon_tier||0,is_dev:!!(isDevAccount(p.id)),is_admin:!!(isAdminAccount(p.id)),is_dunced:!!(isDunced(p.id)),is_prime:!!(isOwnerAccount(p.id)),void_locked:!!(isVoidLocked(p.id)),is_guest:_g.isGuest,guest_locked:_g.locked,guest_expires_at:_g.expiresAt,guest_days_left:_g.daysLeft});
 });
 
 app.post('/api/rename',(req,res)=>{
@@ -3724,6 +3902,7 @@ app.post('/api/rename',(req,res)=>{
     if(!p) return res.status(401).json({ok:false,error:'unauthorized'});
     const name=String(req.body?.name||req.query.name||'').trim().slice(0,32);
     if(!name) return res.status(400).json({ok:false,error:'invalid_name'});
+    if(isReservedGuestName(name)) return res.status(400).json({ok:false,error:'name_reserved',message:'That name pattern is reserved for trial accounts.'});
     if(!isNameValid(name)) return res.status(400).json({ok:false,error:'name_invalid',message:'Names can only contain letters, numbers, spaces, underscores, and hyphens.'});
     if(!isTextClean(name)) return res.status(400).json({ok:false,error:'name_inappropriate',message:'That name contains inappropriate language.'});
     if(!isNameAvailable(name)) return res.status(409).json({ok:false,error:'name_taken'});
@@ -4173,6 +4352,16 @@ function clearanceDenialMsg(c) {
 function canSendValue(player, amount) {
   const c   = clearanceFor(player);
   const amt = Number(amount) || 0;
+  // Trial accounts send nothing, ever. Clearance already computes a guest's
+  // allowance to zero (peak 1000 - grant 1000 = 0), so this is belt on braces,
+  // but allowance RISES with peak net worth and a guest costs nothing to create.
+  // Mining cash is still client-reported, so free accounts would otherwise remove
+  // the friction from an existing hole rather than add a new one. A flat block is
+  // one check instead of a tuning problem.
+  if (player && player.isGuest && amt > 0) {
+    return { ok: false, clearance: c,
+      msg: 'Trial accounts cannot move credits off the station. Create a permanent account to trade with other players.' };
+  }
   if (c.exempt) return { ok: true, clearance: c };
   if (!(amt > 0)) return { ok: true, clearance: c };
   if (amt <= c.remaining) return { ok: true, clearance: c };
@@ -7810,29 +7999,74 @@ app.get('/api/fleshbook/post/:id/replies', (req, res) => {
   try { res.json({ ok: true, replies: fbGetReplies(Number(req.params.id)) }); }
   catch(e) { res.json({ ok: false, replies: [] }); }
 });
+// ─── Fleshbook text gate ──────────────────────────────────────────────────────
+// Fleshbook player writes were the last player-authored surface other players
+// read that ran NO slur filtering at all. Chat and bio ran filterChat; names ran
+// isTextClean. Fleshbook ran neither, and the gap was invisible because a post
+// looks the same either way.
+//
+// IT NEEDS BOTH, and finding out why is the reason this is a function instead of
+// one inlined call. filterChat FLAGS leet substitution but does not CENSOR it:
+// its leet branch sets flagged, then calls working.replace(re) against the
+// ORIGINAL string, which does not match, so "n1gg3r" comes back flagged with the
+// text untouched. Padded forms like "n1gg3rking" are not caught at all. Verified
+// by execution, not by reading. So filterChat alone would have stored the slur
+// verbatim and returned filtered:true, which is worse than no filter because it
+// reports success.
+//
+// isTextClean is the three pass gate the NAME path already uses (raw substring,
+// leet-normalised substring, then containsSlur) and it catches both of those.
+// Running filterChat first still earns its place: it silently censors what it
+// can handle, so ordinary profanity does not bounce the whole post back.
+//
+// Rejection rather than censoring for whatever survives, because a Fleshbook post
+// is a deliberate compose action against a form. The author can edit and resend.
+// Chat censors instead because bouncing a live chat line mid-conversation is a
+// worse trade.
+//
+// NOT FIXING filterChat ITSELF HERE. That would change chat and bio behaviour for
+// every player in a patch about Fleshbook, and the leet hole in chat is a real
+// finding that deserves its own change and its own testing.
+function fbCleanBody(raw, maxLen) {
+  let body = String(raw || '').trim().slice(0, maxLen);
+  if (!body) return { ok: false, error: 'empty' };
+  const f = filterChat(body);
+  body = f.clean;
+  // Censoring can empty a post that was nothing but the slur. Refuse rather than
+  // store a row of asterisks.
+  if (!body.replace(/\*/g, '').trim()) return { ok: false, error: 'empty' };
+  if (!isTextClean(body)) return { ok: false, error: 'inappropriate' };
+  return { ok: true, body, flagged: !!f.flagged };
+}
+
 app.post('/api/fleshbook/post', requirePlayer, (req, res) => {
   const p = req.player;
-  const body = String(req.body?.body || '').trim().slice(0, 1000);
-  if (!body) return res.status(400).json({ ok: false, error: 'empty' });
   const block = fbPostBlock(p);
   if (block) return res.status(403).json({ ok: false, error: block });
   const cd = fbCooldownLeft(_fbPostTs, p.id, FB_POST_COOLDOWN_MS, isAdminAccount(p.id));
   if (cd) return res.status(429).json({ ok: false, error: 'cooldown', seconds: cd });
+  const c = fbCleanBody(req.body?.body, 1000);
+  if (!c.ok) return res.status(400).json({ ok: false, error: c.error,
+    message: c.error === 'inappropriate' ? 'That post contains inappropriate language.' : undefined });
+  const body = c.body; const flagged = c.flagged;
   let faction = null; try { faction = getPlayerFaction(p.id); } catch(_) {}
   const post = fbAddPost({ authorId: p.id, authorName: p.name, faction, body, isGm: false });
   _fbPostTs.set(p.id, Date.now());
   for (const mid of fbMentionIds(body, p.id)) fbNotify(mid, post.id, p.name, `📣 ${p.name} mentioned you on Fleshbook.`);
-  res.json({ ok: true, post });
+  res.json({ ok: true, post, filtered: flagged });
 });
 app.post('/api/fleshbook/reply', requirePlayer, (req, res) => {
   const p = req.player;
   const postId = Number(req.body?.postId);
-  const body = String(req.body?.body || '').trim().slice(0, 500);
-  if (!postId || !body) return res.status(400).json({ ok: false, error: 'invalid' });
+  if (!postId) return res.status(400).json({ ok: false, error: 'invalid' });
   const block = fbPostBlock(p);
   if (block) return res.status(403).json({ ok: false, error: block });
   const cd = fbCooldownLeft(_fbReplyTs, p.id, FB_REPLY_COOLDOWN_MS, isAdminAccount(p.id));
   if (cd) return res.status(429).json({ ok: false, error: 'cooldown', seconds: cd });
+  const c = fbCleanBody(req.body?.body, 500);
+  if (!c.ok) return res.status(400).json({ ok: false, error: c.error === 'empty' ? 'invalid' : c.error,
+    message: c.error === 'inappropriate' ? 'That reply contains inappropriate language.' : undefined });
+  const body = c.body; const flagged = c.flagged;
   let faction = null; try { faction = getPlayerFaction(p.id); } catch(_) {}
   const out = fbAddReply({ postId, authorId: p.id, authorName: p.name, faction, body, isGm: false });
   if (!out) return res.status(404).json({ ok: false, error: 'post_gone' });
@@ -7847,7 +8081,7 @@ app.post('/api/fleshbook/reply', requirePlayer, (req, res) => {
     fbNotify(mid, postId, p.name, `📣 ${p.name} mentioned you on Fleshbook.`);
     notified.add(mid);
   }
-  res.json({ ok: true, reply: out.reply });
+  res.json({ ok: true, reply: out.reply, filtered: flagged });
 });
 app.post('/api/fleshbook/vote', requirePlayer, (req, res) => {
   const postId = Number(req.body?.postId);
@@ -7885,19 +8119,28 @@ app.post('/api/fleshbook/edit', requirePlayer, (req, res) => {
   const p = req.player; const admin = isAdminAccount(p.id);
   const postId = Number(req.body?.postId);
   const replyId = Number(req.body?.replyId);
-  const body = String(req.body?.body || '').trim();
-  if (!body) return res.status(400).json({ ok: false, error: 'empty' });
+  // THE EDIT PATH IS THE ONE THAT MATTERS. Filtering post and reply while leaving
+  // this open means publishing clean and substituting the slur afterward, which
+  // is the whole filter defeated by one extra request. Admins are filtered here
+  // too: an admin editing someone else's post has no reason to need slurs
+  // through, and exempting them would put the hole back behind a privilege check.
+  // Capped at 1000 here and re-sliced per branch below, so a reply edit is still
+  // held to 500.
+  const c = fbCleanBody(req.body?.body, 1000);
+  if (!c.ok) return res.status(400).json({ ok: false, error: c.error,
+    message: c.error === 'inappropriate' ? 'That edit contains inappropriate language.' : undefined });
+  const body = c.body; const flagged = c.flagged;
   if (postId) {
     const owner = fbPostOwner(postId);
     if (owner === null) return res.status(404).json({ ok: false, error: 'gone' });
     if (!admin && owner !== p.id) return res.status(403).json({ ok: false, error: 'forbidden' });
-    const b = body.slice(0, 1000); fbEditPost(postId, b); return res.json({ ok: true, body: b });
+    const b = body.slice(0, 1000); fbEditPost(postId, b); return res.json({ ok: true, body: b, filtered: flagged });
   }
   if (replyId) {
     const owner = fbReplyOwner(replyId);
     if (owner === null) return res.status(404).json({ ok: false, error: 'gone' });
     if (!admin && owner !== p.id) return res.status(403).json({ ok: false, error: 'forbidden' });
-    const b = body.slice(0, 500); fbEditReply(replyId, b); return res.json({ ok: true, body: b });
+    const b = body.slice(0, 500); fbEditReply(replyId, b); return res.json({ ok: true, body: b, filtered: flagged });
   }
   res.status(400).json({ ok: false, error: 'invalid' });
 });
@@ -7934,6 +8177,9 @@ function requirePlayer(req, res, next) {
     || req.headers['x-auth-token'] || req.headers['authorization']?.replace(/^bearer /i,'');
   const p = token ? getPlayer(token) : null;
   if (!p) return res.status(401).json({ ok: false, error: 'auth_required' });
+  // Trial gating lives in the global middleware at the top of the app, NOT here.
+  // requirePlayer covers 22 of 142 routes, so a gate in this function is a gate
+  // on a sixth of the API. Do not add one back.
   req.player = p;
   next();
 }
@@ -9685,6 +9931,74 @@ wss.on('connection',(ws,req)=>{
     if(!rl.ok){
       if(rl.notify){ try{ ws.send(JSON.stringify({type:'rate_limited',data:{retryInMs:1000}})); }catch(_){} }
       return;
+    }
+
+    // ── Trial account gates ────────────────────────────────────────────────
+    // Three checks, in this order, because they answer different questions:
+    // whether the window has closed (deny by default), whether this action
+    // outlives a trial (explicit list), and whether they have been here long
+    // enough to talk.
+    if(actor && actor.isGuest){
+      const _gst = guestState(actor);
+
+      // Lazy expiry. The interval sweep is the authority, but a guest who returns
+      // between sweeps must not get a free window, so the socket settles them on
+      // contact. sweepExpiredGuests is idempotent: it re-reads guest_locked and
+      // skips anything already sealed.
+      if(!_gst.locked && _gst.msLeft <= 0){
+        try { sweepExpiredGuests(); } catch(_) {}
+        const _fresh = getPlayer(actor.id);
+        if(_fresh && _fresh.guestLocked){
+          try{ ws.send(JSON.stringify({type:'guest_locked',data:{reason:'expired'}})); }catch(_){}
+          return;
+        }
+      }
+
+      if(actor.guestLocked && !lockedAllows(msg.type)){
+        try{ ws.send(JSON.stringify({type:'guest_locked',data:{reason:'expired'}})); }catch(_){}
+        return;
+      }
+
+      if(guestBlocks(msg.type)){
+        return ws.send(JSON.stringify({type:'guest_blocked',data:{
+          feature: msg.type,
+          msg: 'Not available on a trial account. Create a permanent account to unlock it.',
+        }}));
+      }
+
+      // Chat and whispers open after a session-time floor. Anonymous free
+      // accounts plus an open chat box is a raid vector; fifteen minutes is a
+      // cost, not a wall. Measured from row creation, which is first meaningful
+      // interaction, so it is real play time and not a page left open.
+      if(msg.type==='chat' || msg.type==='whisper'){
+        const _now  = Date.now();
+        const _sess = _now - Number(actor.guestCreatedAt || actor.createdAt || 0);
+        if(!guestCanChat(actor, _sess)){
+          const _mins = Math.ceil((GUEST_CHAT_UNLOCK_MS - _sess) / 60000);
+          return ws.send(JSON.stringify({type:'error',data:{
+            msg:`Trial accounts can post after ${_mins} more minute${_mins===1?'':'s'} of play. You can read chat now.`,
+          }}));
+        }
+        // Per message cooldown, separate from the global chatAllowed() typing
+        // guard. Whispers are on the same clock and share the same counter:
+        // spamming DMs is worse than spamming a channel, and letting the two
+        // surfaces hold independent timers would just halve the real interval.
+        // Empty text is dropped silently further down (`if(!rawText)return`), so
+        // charging the cooldown before checking it would let a client burn a
+        // guest's 90 seconds on a blank frame it never sees fail. Check here.
+        const _txt = String(msg.text || '').trim();
+        if(!_txt) return;
+        const _left = guestChatCooldownLeft(actor.id, _now);
+        if(_left > 0){
+          return ws.send(JSON.stringify({type:'error',data:{
+            msg:`Trial accounts can send one message every 90 seconds. ${Math.ceil(_left/1000)}s left.`,
+          }}));
+        }
+        // Charged here, before the mute and slur checks downstream, deliberately.
+        // A rejected message still costs the interval: free retries are exactly
+        // what makes a filter probe-able.
+        noteGuestChat(actor.id, _now);
+      }
     }
 
     if(!actor){
@@ -13433,6 +13747,11 @@ setInterval(() => { try { runBorrowFees(); } catch(e) { console.error('[Borrow]'
 // blowing well past the 65% trigger between checks without scanning every tick.
 setInterval(() => { try { runMarginCalls(); } catch(e) { console.error('[MarginCall]', e); } }, 5000);
 
+// Trial expiry sweep. Hourly is deliberate over per-minute: the window is seven
+// days, so an hour of slack is invisible to the player, and a guest who returns
+// between sweeps is settled on socket contact anyway (see the dispatch gate).
+setInterval(() => { try { sweepExpiredGuests(); } catch(e) { console.error('[Guest] sweep', e); } }, 60 * 60 * 1000);
+
 // Reset prevClose at midnight
 setInterval(() => {
   const now = new Date();
@@ -14199,5 +14518,12 @@ server.listen(PORT,()=>{
     syncDevAccounts(DEV_ACCOUNTS);
     console.log(`   Dev accounts: ${DEV_ACCOUNTS.join(', ')}`);
   }
+  // Boot sweep. A server that was down over a trial's expiry must not hand back
+  // a live account on restart.
+  try {
+    const n = sweepExpiredGuests();
+    const g = countGuests();
+    console.log(`   Trials: ${g.total} total, ${g.locked} locked${n ? ` (${n} settled this boot)` : ''}`);
+  } catch(e) { console.error('[Guest] boot sweep', e.message); }
   console.log('');
 });

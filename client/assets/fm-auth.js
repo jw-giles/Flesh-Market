@@ -284,12 +284,302 @@
     };
   }
 
+  // ── Trial accounts ─────────────────────────────────────────────────────────
+  // A first-time visitor never sees a signup form. They land in the game on a
+  // trial account that runs seven days and then LOCKS; it is never deleted, so
+  // the upgrade prompt at the end is showing them a portfolio they still own.
+  //
+  // window.FM_GUEST is the single source of truth for every other module that
+  // wants to know. Shape: {active, locked, expiresAt, daysLeft}.
+  window.FM_GUEST = { active:false, locked:false, expiresAt:null, daysLeft:null };
+
+  function setGuestState(d) {
+    window.FM_GUEST = {
+      active:   !!d.is_guest,
+      locked:   !!d.guest_locked,
+      expiresAt: d.guest_expires_at || null,
+      daysLeft:  d.guest_days_left != null ? d.guest_days_left : null,
+    };
+    syncClaimButton();
+    if (window.FM_GUEST.active) renderGuestBar();
+    if (window.FM_GUEST.locked) showLockScreen();
+  }
+
+  // The header Claim Account button. Lives in index.html hidden, because the
+  // header is built before this script decides whether the session is a trial.
+  //
+  // This is the primary entry point, not the bottom bar. On mobile #fmNav is
+  // fixed to bottom:0 at z-index 9992 and the guest bar sits under it, so a
+  // phone player would otherwise have no way to upgrade until the lock screen
+  // appeared on day seven.
+  //
+  // Retried on an interval for a short while because index.html and this script
+  // can finish in either order depending on cache state, and a button that is
+  // only correct on one of those orderings is a button that intermittently is
+  // not there.
+  function syncClaimButton() {
+    const set = () => {
+      const b = document.getElementById('fm-claim-btn');
+      if (!b) return false;
+      b.style.display = (window.FM_GUEST && window.FM_GUEST.active) ? '' : 'none';
+      return true;
+    };
+    if (set()) return;
+    let tries = 0;
+    const iv = setInterval(() => { if (set() || ++tries > 40) clearInterval(iv); }, 100);
+  }
+
+  // A guest row is created on FIRST MEANINGFUL INTERACTION, not on page load.
+  // Page load would mint a permanent row for every crawler, link preview, uptime
+  // check and three-second bounce, and nothing is ever deleted. Resolving on the
+  // first real input OR on the tab being visibly open for a couple of seconds is
+  // indistinguishable from auto-guest for a human and skips nearly every bot,
+  // because bots do not scroll, click, or sit on a visible timer.
+  function armGuestCreation() {
+    return new Promise(resolve => {
+      let done = false;
+      const fire = () => {
+        if (done) return; done = true;
+        ['pointerdown','keydown','touchstart','scroll','wheel'].forEach(ev =>
+          window.removeEventListener(ev, fire, true));
+        clearTimeout(timer);
+        resolve();
+      };
+      ['pointerdown','keydown','touchstart','scroll','wheel'].forEach(ev =>
+        window.addEventListener(ev, fire, {capture:true, once:true, passive:true}));
+      const timer = setTimeout(() => {
+        if (document.visibilityState === 'visible') fire();
+        else document.addEventListener('visibilitychange', function vc(){
+          if (document.visibilityState === 'visible') {
+            document.removeEventListener('visibilitychange', vc);
+            fire();
+          }
+        });
+      }, 2500);
+    });
+  }
+
+  async function createGuest() {
+    const data = await apiPost('/api/guest', {});
+    if (!data.ok) {
+      if (data.error === 'guest_rate_limited') {
+        showLogin(data.message || 'Too many trial accounts from this connection today.');
+        return null;
+      }
+      showLogin(data.message || 'Could not start a trial session.');
+      return null;
+    }
+    saveSession(data.token, data.name);
+    window.FM_TOKEN = data.token;
+    setGuestState(data);
+    return data;
+  }
+
+  // ── Boot overlay ───────────────────────────────────────────────────────────
+  function showBootVeil() {
+    if (document.getElementById('fm-boot-veil')) return;
+    injectStyles();
+    const v = document.createElement('div');
+    v.id = 'fm-boot-veil';
+    v.style.cssText = 'position:fixed;inset:0;background:#050505;z-index:99998;display:flex;'
+      + 'align-items:center;justify-content:center;flex-direction:column;gap:14px;'
+      + 'font-family:ui-monospace,Menlo,Consolas,monospace;color:#46ff7d;';
+    const t = document.createElement('div');
+    t.style.cssText = 'font-size:.9rem;letter-spacing:.28em;text-transform:uppercase;opacity:.85';
+    t.textContent = 'Flesh Market';
+    const sub = document.createElement('div');
+    sub.style.cssText = 'font-size:.72rem;letter-spacing:.16em;opacity:.45';
+    sub.textContent = 'Establishing link';
+    const btn = document.createElement('button');
+    btn.textContent = 'Log In';
+    btn.style.cssText = 'margin-top:10px;cursor:pointer;padding:5px 16px;background:transparent;'
+      + 'border:1px solid #1f4515;border-radius:6px;color:#6f8f7a;font-family:inherit;font-size:.76rem;';
+    btn.onclick = () => { hideBootVeil(); showLogin(); };
+    v.appendChild(t); v.appendChild(sub); v.appendChild(btn);
+    document.body.appendChild(v);
+  }
+  function hideBootVeil() { const n=document.getElementById('fm-boot-veil'); if(n)n.remove(); }
+
+  // ── Guest status bar ───────────────────────────────────────────────────────
+  // Permanently visible for the whole trial, and it carries the LOG IN affordance
+  // as well as the upgrade one. That second link is not decoration: a returning
+  // player who cleared their browser gets auto-guested and this is the only way
+  // back to their real account.
+  function renderGuestBar() {
+    const g = window.FM_GUEST;
+    if (!g.active || g.locked) { const o=document.getElementById('fm-guest-bar'); if(o)o.remove(); return; }
+    let bar = document.getElementById('fm-guest-bar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'fm-guest-bar';
+      document.body.appendChild(bar);
+    }
+    // Positioned on EVERY render, not just on creation. The bar sits ABOVE
+    // #fmNav rather than under it: the nav is fixed at bottom:0 with z-index
+    // 9992 and height var(--fm-nav), so anchoring here at bottom:0 with a lower
+    // z-index put the Create Account button behind the nav on every phone.
+    // Recomputed each time because body.fm-mobile can be applied after this bar
+    // first renders, and a one-shot read would leave the offset permanently
+    // wrong for anyone whose mobile class arrived late.
+    const navOffset = document.body.classList.contains('fm-mobile')
+      ? 'calc(var(--fm-nav, 56px) + env(safe-area-inset-bottom, 0px))'
+      : '0px';
+    bar.style.cssText = 'position:fixed;left:0;right:0;bottom:' + navOffset + ';z-index:9993;'
+      + 'display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;'
+      + 'padding:5px 12px;background:rgba(8,10,8,.94);border-top:1px solid #1f4515;'
+      + 'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.72rem;color:#8fae97;';
+    const days = g.daysLeft != null ? g.daysLeft : 7;
+    bar.innerHTML = '';
+    const msg = document.createElement('span');
+    msg.textContent = 'Trial account, ' + days + ' day' + (days===1?'':'s') + ' left. Progress is saved in this browser only.';
+    const up = document.createElement('button');
+    up.textContent = 'Create account';
+    up.style.cssText = 'cursor:pointer;padding:2px 12px;background:transparent;border:1px solid #46ff7d;'
+      + 'border-radius:4px;color:#46ff7d;font-family:inherit;font-size:.72rem;';
+    up.onclick = () => showUpgrade();
+    const li = document.createElement('button');
+    li.textContent = 'Log in';
+    li.style.cssText = 'cursor:pointer;padding:2px 12px;background:transparent;border:1px solid #1f4515;'
+      + 'border-radius:4px;color:#6f8f7a;font-family:inherit;font-size:.72rem;';
+    li.onclick = () => showLogin();
+    bar.appendChild(msg); bar.appendChild(up); bar.appendChild(li);
+  }
+
+  // ── Lock screen ────────────────────────────────────────────────────────────
+  // Not a wall, a window. The client behind it stays rendered and readable; only
+  // the actions are gone, and the server denies them independently.
+  function showLockScreen() {
+    if (document.getElementById('fm-guest-lock')) return;
+    injectStyles();
+    const wrap = document.createElement('div');
+    wrap.id = 'fm-guest-lock';
+    wrap.style.cssText = 'position:fixed;inset:0;background:rgba(2,4,2,.88);z-index:99990;'
+      + 'display:flex;align-items:center;justify-content:center;'
+      + 'font-family:ui-monospace,Menlo,Consolas,monospace;';
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#0a0a08;color:#d4b87a;border:1px solid #1f4515;border-radius:10px;'
+      + 'max-width:440px;width:92%;padding:26px 30px;box-shadow:0 16px 48px rgba(0,0,0,.7);';
+    const h = document.createElement('h2');
+    h.style.cssText = 'margin:0 0 14px;font-size:1rem;letter-spacing:.14em;text-transform:uppercase;'
+      + 'color:#46ff7d;border-bottom:1px dashed #3a2a08;padding-bottom:10px;';
+    h.textContent = 'Trial ended';
+    const body = document.createElement('p');
+    body.style.cssText = 'font-size:.82rem;line-height:1.55;opacity:.82;margin:0 0 16px;';
+    body.textContent = 'Nothing was deleted. Your credits, holdings, cargo, inventory and level are '
+      + 'exactly where you left them. Pick a name and a password and this same account becomes permanent.';
+    const btn = document.createElement('button');
+    btn.textContent = 'Create permanent account';
+    btn.style.cssText = 'cursor:pointer;padding:8px 18px;background:transparent;border:1px solid #46ff7d;'
+      + 'border-radius:6px;color:#46ff7d;font-family:inherit;font-size:.88rem;width:100%;';
+    btn.onclick = () => showUpgrade();
+    const alt = document.createElement('div');
+    alt.style.cssText = 'text-align:center;margin-top:12px;font-size:.74rem;opacity:.5;cursor:pointer;';
+    alt.textContent = 'Already have an account? Log in';
+    alt.onclick = () => showLogin();
+    card.appendChild(h); card.appendChild(body); card.appendChild(btn); card.appendChild(alt);
+    wrap.appendChild(card);
+    document.body.appendChild(wrap);
+    const gb = document.getElementById('fm-guest-bar'); if (gb) gb.remove();
+  }
+
+  // ── Upgrade ────────────────────────────────────────────────────────────────
+  // MUST NEVER DEAD-END. Once an account is locked this is the only exit, so
+  // every failure re-prompts in place with the session intact. Nothing here
+  // clears the token or closes the form on error.
+  function showUpgrade() {
+    const ui = buildModal('register');
+    ui.switchBtn.textContent = (window.t?window.t('auth.logIn','Log In'):'Log In');
+    ui.switchBtn.onclick = () => showLogin();
+    ui.submitBtn.textContent = 'Claim account';
+    setHint(ui.hint, 'Your progress carries over to this name.', 'ok');
+
+    let checkTimer;
+    ui.nameInput.addEventListener('input', ()=>{
+      clearTimeout(checkTimer);
+      const n = ui.nameInput.value.trim();
+      if (!n) { ui.hint.textContent=''; return; }
+      checkTimer = setTimeout(async ()=>{
+        try {
+          const r = await fetch('/api/name_available?name='+encodeURIComponent(n));
+          const d = await r.json();
+          setHint(ui.hint, d.available ? '"'+n+'" is available' : '"'+n+'" is taken', d.available?'ok':'err');
+        } catch(e) {}
+      }, 380);
+    });
+
+    const reset = () => {
+      ui.submitBtn.disabled = false;
+      ui.submitBtn.textContent = 'Claim account';
+    };
+
+    ui.submitBtn.onclick = async () => {
+      const name = ui.nameInput.value.trim();
+      const pass = ui.passInput.value;
+      if (!name) { setHint(ui.hint, 'Pick a name.', 'err'); return; }
+      if (!pass || pass.length < 4) { setHint(ui.hint, 'Password must be at least 4 characters.', 'err'); return; }
+      ui.submitBtn.disabled = true;
+      ui.submitBtn.textContent = '…';
+      try {
+        const data = await apiPost('/api/guest/upgrade', {token: getToken(), name, password: pass});
+        if (data.ok) {
+          saveSession(data.token, data.name);
+          window.FM_TOKEN = data.token;
+          window.FM_GUEST = { active:false, locked:false, expiresAt:null, daysLeft:null };
+          syncClaimButton();
+          const gb = document.getElementById('fm-guest-bar'); if (gb) gb.remove();
+          const lk = document.getElementById('fm-guest-lock'); if (lk) lk.remove();
+          closeModal();
+          // Reload rather than patch state in place. Every panel that cached a
+          // guest flag on boot is now wrong, and a reload is one round trip
+          // against a session that is already saved.
+          location.reload();
+          return;
+        }
+        // Every branch below leaves the form open with the session intact.
+        setHint(ui.hint, data.message || data.error || 'Could not complete. Try again.', 'err');
+        reset();
+      } catch(e) {
+        setHint(ui.hint, 'Server unreachable. Your account is safe, try again.', 'err');
+        reset();
+      }
+    };
+  }
+
   // ── Public API ─────────────────────────────────────────────────────────────
   window.FM_Auth = {
     logout() { clearSession(); window.FM_TOKEN=null; location.reload(); },
-    showLogin, showRegister,
+    showLogin, showRegister, showUpgrade, showLockScreen,
     getToken, getName,
+    isGuest() { return !!(window.FM_GUEST && window.FM_GUEST.active); },
+    isLocked() { return !!(window.FM_GUEST && window.FM_GUEST.locked); },
   };
+
+  // The server seals an account on its own clock, so the client has to be told
+  // rather than trusted to notice.
+  // Orientation change and resize can flip body.fm-mobile, which moves where the
+  // bar has to sit. Cheap to re-render; the bar rebuilds its own children.
+  window.addEventListener('resize', () => {
+    if (window.FM_GUEST && window.FM_GUEST.active && !window.FM_GUEST.locked) renderGuestBar();
+  });
+
+  // 'fm_ws_msg' is the parsed-message bus core.js publishes on (core.js:39).
+  document.addEventListener('fm_ws_msg', (e) => {
+    const m = e && e.detail;
+    if (!m) return;
+    if (m.type === 'guest_locked') {
+      window.FM_GUEST.locked = true;
+      showLockScreen();
+    } else if (m.type === 'guest_blocked') {
+      // gToast is exported from galaxy.js and may not be loaded yet, so this
+      // uses the same defensive chain core.js already uses for clearance denials.
+      // Hitting a locked feature is the highest-intent moment there is, so the
+      // toast is followed by the upgrade form rather than leaving the player to
+      // go find the button themselves.
+      const msg = (m.data && m.data.msg) || 'Not available on a trial account.';
+      try { (window.gToast || window.toast || alert)(msg); } catch(_) {}
+      if (!document.getElementById(WRAP_ID)) setTimeout(() => showUpgrade(), 400);
+    }
+  });
 
   // ── Boot ───────────────────────────────────────────────────────────────────
   async function boot() {
@@ -308,7 +598,8 @@
           const data = await res.json();
           if (data.ok) {
             window.FM_TOKEN = tok;
-            emit({name:data.name, token:tok, cash:data.cash, faction:data.faction||null, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_dunced:!!(data.is_dunced), is_prime:!!(data.is_prime)});
+            setGuestState(data);
+            emit({name:data.name, token:tok, cash:data.cash, faction:data.faction||null, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_dunced:!!(data.is_dunced), is_prime:!!(data.is_prime), is_guest:!!(data.is_guest), guest_locked:!!(data.guest_locked)});
             return;
           }
         }
@@ -317,8 +608,17 @@
       clearSession();
     }
 
-    // No valid session — show login
-    showLogin();
+    // No session. Do NOT open a login form: that is the signup wall this feature
+    // exists to remove. Start a trial instead, and keep a Log In affordance on
+    // screen the whole time for the returning player whose browser was cleared.
+    showBootVeil();
+    await armGuestCreation();
+    if (getToken()) { hideBootVeil(); return; }   // they logged in from the veil
+    const g = await createGuest();
+    hideBootVeil();
+    if (!g) return;                                // createGuest surfaced its own error
+    emit({name:g.name, token:g.token, cash:g.cash, faction:null, patreon_tier:0,
+          is_dev:false, is_admin:false, is_prime:false, is_guest:true, guest_locked:false});
   }
 
   boot();
