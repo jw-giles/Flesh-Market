@@ -4690,8 +4690,27 @@ ws.addEventListener('message', (ev)=>{
     }
     // Seed heatmap data immediately
     window.TICKERS = TICKERS;
-    if (msg.data.wormholeOpen != null) { window._WORMHOLE_OPEN = !!msg.data.wormholeOpen; if (window._setWormhole) window._setWormhole(window._WORMHOLE_OPEN); }
-    if (msg.data.reachOpen != null && window._setPassage) window._setPassage('khaisultull', !!msg.data.reachOpen);
+    /* THE SERVER'S ANSWER HAS TO SURVIVE galaxy.js NOT EXISTING YET. galaxy.js
+       is lazy loaded on the first galactic tab click, so _setWormhole and
+       _setPassage are ALWAYS undefined when init lands - init is sent on socket
+       connect and the click cannot have happened yet. The setter guards below
+       therefore dropped the seal state on the floor on every single load, and
+       galaxy.js came up with its hardcoded defaults: both passages sealed.
+       Harmless while the seal only drew a banner; from the moment swapGalaxy
+       started refusing on it, it locked every player out of the Circuit
+       against a server that had the passage open.
+       Banked on window, keyed by galaxy id, and read by galaxy.js at load. */
+    window._PASSAGE_SEED = window._PASSAGE_SEED || {};
+    if (msg.data.wormholeOpen != null) {
+      window._WORMHOLE_OPEN = !!msg.data.wormholeOpen;
+      window._PASSAGE_SEED.jade = window._WORMHOLE_OPEN;
+      if (window._setWormhole) window._setWormhole(window._WORMHOLE_OPEN);
+    }
+    if (msg.data.reachOpen != null) {
+      window._REACH_OPEN = !!msg.data.reachOpen;
+      window._PASSAGE_SEED.khaisultull = window._REACH_OPEN;
+      if (window._setPassage) window._setPassage('khaisultull', window._REACH_OPEN);
+    }
   }
   if (msg.type === 'company_added' && msg.data && msg.data.symbol) {
     // A new ticker (e.g. a freshly Index-listed Capital House) — add it live so
@@ -4726,6 +4745,11 @@ ws.addEventListener('message', (ev)=>{
   }
   if (msg.type === 'wormhole' && msg.data) {
     window._WORMHOLE_OPEN = !!msg.data.open;
+    // Banked as well as applied: a GM toggle that lands while the player has
+    // never opened the galactic tab has no setter to call, and without this the
+    // toggle is lost and the map opens on the pre-toggle state.
+    window._PASSAGE_SEED = window._PASSAGE_SEED || {};
+    window._PASSAGE_SEED.jade = window._WORMHOLE_OPEN;
     if (window._setWormhole) window._setWormhole(window._WORMHOLE_OPEN);
   }
   // Generic per-galaxy passage broadcast. The Circuit keeps its own message
@@ -4785,6 +4809,9 @@ ws.addEventListener('message', (ev)=>{
     try { if (window.gToast) window.gToast(_rv.who + msg.data.text, _rv.tone); } catch(e) {}
   }
   if (msg.type === 'passage' && msg.data && msg.data.galaxy) {
+    window._PASSAGE_SEED = window._PASSAGE_SEED || {};
+    window._PASSAGE_SEED[msg.data.galaxy] = !!msg.data.open;
+    if (msg.data.galaxy === 'khaisultull') window._REACH_OPEN = !!msg.data.open;
     if (window._setPassage) window._setPassage(msg.data.galaxy, !!msg.data.open);
     if (msg.data.galaxy === 'khaisultull') {
       const el = document.getElementById('reach-passage-state');

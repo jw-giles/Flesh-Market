@@ -66,6 +66,24 @@ function galaxyDef(id){ return GALAXIES[id] || GALAXIES.coalition; }
 // Per-galaxy seal state. The Circuit's flag keeps its original name and DB key
 // so existing saves and the existing /api/dev/wormhole switch keep working.
 var PASSAGE_OPEN = { jade:false, khaisultull:false };
+/* THESE ARE A STARTING POINT, NOT THE STATE. This file is lazy loaded on the
+   first galactic tab click, which is always long after the init message that
+   carries the seal state, so the literals above were what the map ran on for
+   the whole session. The Reach's default happens to match the server's and hid
+   it; the Circuit's does not - the server defaults the passage OPEN - so every
+   player was refused entry to a Circuit the server was letting them into, and a
+   GM toggling the passage saw nothing change because his own client had no
+   setter to call either.
+   core.js banks whatever the server last said in window._PASSAGE_SEED, keyed by
+   galaxy id, at init and on every broadcast. Read it here. */
+(function(){
+  var seed = window._PASSAGE_SEED;
+  if(!seed) return;
+  Object.keys(GALAXIES).forEach(function(k){
+    var d = GALAXIES[k];
+    if(d && d.sealKey && seed[k] != null) PASSAGE_OPEN[d.sealKey] = !!seed[k];
+  });
+})();
 Object.defineProperty(window,'_PASSAGE_OPEN',{get:function(){return PASSAGE_OPEN;}});
 /* A SEAL IS A RULE FOR PLAYERS AND AN OBSTACLE FOR THE PERSON RUNNING THE GAME.
    A GM has to be able to stand on a world before he opens it to anyone: check
@@ -139,6 +157,9 @@ window._setPassage = function(galaxyId, open){
   var d = GALAXIES[galaxyId];
   if(!d || !d.sealKey) return;
   PASSAGE_OPEN[d.sealKey] = !!open;
+  // Write through, so the bank core.js reads from and the table this file reads
+  // from are never two answers to the same question.
+  try { (window._PASSAGE_SEED = window._PASSAGE_SEED || {})[galaxyId] = !!open; } catch(e) {}
   /* Sealed while somebody is standing in it: send them home. Checked against
      the galaxy the player is actually looking at rather than against the one
      being sealed, so a future third galaxy cannot slip through. */

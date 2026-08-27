@@ -4,7 +4,59 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.10.1.1 (2026-08-27) - the Circuit was sealed against a passage the server had open (CLIENT)
+
+**No server change. Hard refresh required.** Files touched: `client/assets/core.js`, `client/assets/galaxy.js`, `tools/lane-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The seal state was thrown away on every single load
+
+`galaxy.js` is lazy loaded on the first click of the galactic tab. The `init` message that carries `wormholeOpen` and `reachOpen` is sent when the socket connects, which is always earlier, so `window._setWormhole` and `window._setPassage` did not exist yet and core.js's `if (window._setWormhole)` guard was never true at init. The server's answer went nowhere.
+
+`galaxy.js` then initialised `PASSAGE_OPEN` from its own literals, `{ jade:false, khaisultull:false }`, and nothing ever reconciled that against the server. Both passages came up SEALED on the client on every load, regardless of what the server held.
+
+The Reach's default matches the server's, so nothing looked wrong there. The Circuit's does not: `WORMHOLE_OPEN` defaults to **true** on the server. So the client sealed a passage the server had open, on every load, since the day the lazy load was introduced.
+
+### Why it only became a bug in v1.6.7.1
+
+Until then the seal drew a banner and a portal label and stopped nothing, so a wrong client-side flag cost a wrong sprite and no more. v1.6.7.1 made `swapGalaxy` refuse on it, correctly, because the seal was not being enforced at all. That refusal is right and it stays. What it did was turn a cosmetic wrong answer into a locked door: every player was refused entry to the Jade Circuit against a server that was letting them in, and every route in shared the refusal because there is one predicate rather than a check per caller.
+
+**And the dev switch appeared dead for the same reason.** Opening the passage broadcasts, core.js receives it, and calls a setter that does not exist on a client whose galaxy tab was never opened. So the GM opening the gate saw no change on his own screen, and any player who loaded the page after the toggle got the literals again anyway. The switch was working. Nothing was listening.
+
+### One bank, read at load, written on every change
+
+core.js now banks the last thing the server said in `window._PASSAGE_SEED`, keyed by galaxy id, UNCONDITIONALLY: at init and on both broadcast types, whether or not a setter exists to call. `galaxy.js` seeds `PASSAGE_OPEN` from it at load, and `_setPassage` writes back to it, so the bank and the table are never two answers to the same question.
+
+Defaults are untouched and still apply when nothing has been banked, so a client that never received an init is exactly as sealed as it was before.
+
+### Checks
+
+`lane-check` 55 to 67, and the new nine are **driven rather than matched**. The file is executed in a sandbox with a seed in place and the seal is asked afterwards, in both directions and with no seed at all, plus the write-back. A text read could not have caught this: every line involved was correct on its own and the fault was the order they ran in. Three assertions do match text, deliberately, on the half that has to be unconditional in core.js, because that is a property of where the statement sits rather than of what it computes.
+
+Suite otherwise unchanged. `city-battle`, `faction`, `reach` and `reach-terrain` fail on this tree for the same reason they fail on a clean checkout: the vehicle, brood and terrain art is gitignored and pushed separately, so a repo clone has no sheets to assert against.
+
+---
+
 ## v1.10.1.0 - THE BIG ONE - everything from v1.4.0.4 to here, as one release
+
+> **CORRECTION, 2026-08-27.** Everything below this line about live being v1.4.0.4 and about a
+> 132-entry gap waiting to be deployed is STALE. v1.10.1.0 SHIPPED. It is what is running on the
+> VPS. The entry is left intact rather than rewritten because it is where the reasoning lives and
+> because a pre-deploy checklist edited after the fact is a worse record than one clearly marked,
+> but read it as a log of a deploy that happened, not as instructions for one that has not.
+>
+> WHAT THAT CHANGES IN THE TEXT BELOW: the mining faucet fix is live, so the faucet is closed in
+> the running code rather than pending. The `player_cargo` rebuild migration has already run at
+> boot; whether it ran CLEAN is a separate question that only the running database answers, and it
+> has not been checked (`SELECT colony_id, COUNT(*) FROM player_cargo GROUP BY colony_id;` settles
+> it). "Live has no check suite at all" is no longer true. Items (3) and (4), the manual backup and
+> the migration rehearsal, are spent.
+>
+> WHAT IT DOES NOT CHANGE: the licence question on `client/assets/commodities/` is still open and
+> still Jacob's, and every item in the STILL OPEN list at the end is still open.
+>
+> SOURCE, STATED PLAINLY: Jacob confirmed the deploy directly. It was not read off the server, and
+> earlier entries in this file carrying "nothing has shipped since v1.3.9.x" or similar are stale
+> in the same way and are likewise left as written.
 
 **RELEASE BUILD. Hard refresh AND a server restart.** 55 new files and directories, 34 changed, none removed. Full list in `docs/MANIFEST.txt`. Largest additions: `client/assets/reach-battle.js`, `client/assets/reach-hive.js`, `server/reach.js`, `client/assets/city-battle.js`, `client/assets/space/city/`, `client/assets/factions.js`, `server/factions.js`, `server/sudoku.js`, `client/assets/asset-credits.js`, `docs/CREDITS.md`, and the whole of `tools/`. Largest edits: `client/assets/galaxy.js` (+1036), `server/server.js` (+1012), `client/assets/god-panel.js` (+998), `client/index.html` (+313).
 

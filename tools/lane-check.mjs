@@ -14,6 +14,7 @@
 //
 // No dependencies. Run from the repo root:  node tools/lane-check.mjs
 import fs from 'fs';
+import vm from 'vm';
 
 const ROOT = process.cwd();
 let pass = 0, fail = 0; const failures = [];
@@ -321,6 +322,66 @@ console.log('\n== Circuit freight works the gate, and the station sees what it c
   ok('and restored at boot', /getCityKV\(WORMHOLE_KEY\)/.test(srv));
   ok('defaulting to open when it has never been set',
      /let WORMHOLE_OPEN = true;/.test(srv));
+}
+
+// ── The seal state survives galaxy.js being lazy loaded ──────────────────────
+//
+// galaxy.js is loaded on the FIRST GALACTIC TAB CLICK. The init message that
+// carries the seal state is sent on socket connect, which is always earlier, so
+// core.js's `if (window._setWormhole)` guard could never be true at init and
+// the server's answer was discarded on every load. galaxy.js then ran on its
+// own literals - both passages sealed - and once swapGalaxy started refusing on
+// that, the Circuit was shut to every player while the server had it open.
+//
+// DRIVEN, NOT MATCHED. The file is executed with a seed in place and the seal
+// is asked afterwards, because the bug was invisible to a text read: every line
+// involved was correct on its own and the fault was the ORDER they ran in.
+console.log('');
+console.log('== The seal state survives the lazy load ==');
+{
+  const gxSrc = fs.readFileSync(ROOT + '/client/assets/galaxy.js', 'utf8');
+  const stub = new Proxy(function(){}, {
+    get: (t, k) => k === 'style' ? {} : (k === 'children' ? [] : (typeof k === 'string' ? stub : undefined)),
+    set: () => true, apply: () => stub, construct: () => stub });
+  const load = seed => {
+    const doc = { getElementById:()=>null, querySelectorAll:()=>[], querySelector:()=>null,
+      createElement:()=>stub, createElementNS:()=>stub, addEventListener:()=>{}, body:stub, head:stub };
+    const w = { document:doc, addEventListener:()=>{}, setTimeout:()=>0, setInterval:()=>0,
+      clearInterval:()=>{}, localStorage:{ getItem:()=>null, setItem:()=>{} },
+      location:{ href:'', origin:'' }, fetch:()=>Promise.resolve({ json:()=>Promise.resolve({}) }), console };
+    w.window = w;
+    if (seed) w._PASSAGE_SEED = seed;
+    const ctx = vm.createContext(w);
+    vm.runInContext(gxSrc, ctx, { filename:'galaxy.js' });
+    return ctx;
+  };
+  let c = load({ jade:true, khaisultull:false });
+  ok('an open Circuit seeded before load is open after it', c._fmGalaxyView.open('jade') === true);
+  ok('and the Reach is still sealed in the same load',      c._fmGalaxyView.open('khaisultull') === false);
+  c._fmGalaxyView.swap('jade');
+  ok('so swapGalaxy actually moves the player in',          c._fmGalaxyView.get() === 'jade');
+
+  c = load({ jade:false, khaisultull:true });
+  ok('and it carries the other way round too',
+     c._fmGalaxyView.open('jade') === false && c._fmGalaxyView.open('khaisultull') === true);
+
+  c = load(null);
+  ok('no seed at all still defaults to sealed',
+     c._fmGalaxyView.open('jade') === false && c._fmGalaxyView.open('khaisultull') === false);
+
+  c = load({ jade:false, khaisultull:false });
+  c._setWormhole(true);
+  ok('a live toggle writes back to the bank', c._PASSAGE_SEED.jade === true);
+
+  // The other half of the pair: core.js has to bank it UNCONDITIONALLY, not
+  // inside the setter guard, or there is nothing here to read.
+  const coreSrc = fs.readFileSync(ROOT + '/client/assets/core.js', 'utf8');
+  ok('core.js banks the Circuit flag at init',
+     /_PASSAGE_SEED\.jade = window\._WORMHOLE_OPEN;/.test(coreSrc));
+  ok('core.js banks the Reach flag at init',
+     /_PASSAGE_SEED\.khaisultull = window\._REACH_OPEN;/.test(coreSrc));
+  ok('and banks every broadcast, not just the ones with a setter to call',
+     /_PASSAGE_SEED\[msg\.data\.galaxy\] = !!msg\.data\.open;/.test(coreSrc));
 }
 
 console.log('');
