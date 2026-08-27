@@ -11,9 +11,39 @@ server/fleshmarket.db
 node_modules/
 npm-debug.log*
 *.log
-server/package-lock.json
+# ANY package-lock, not just the server's. A stale one shipped inside a build zip
+# once cost a multi-hour outage and a DB restore from the cron backup, and the
+# rule was written as server/package-lock.json, which stopped covering the case
+# the moment a second package.json existed at the repo root.
+package-lock.json
 
 # SQLite sidecar files (WAL mode) - never commit these either
 *.db-shm
 *.db-wal
 *.db-journal
+
+# ── Licence-restricted art: deployed, never committed ────────────────────────
+# THREE OF FOUR ART PACKS FORBID REDISTRIBUTING THE ART, and this repo is
+# public. That is not bad luck with three packs; "use it in your game, do not
+# redistribute the source art" is what nearly every commercial art licence
+# says, so fixing it pack by pack would have kept failing.
+#
+# So the art stops living in git. ship.sh pushes these directories to the VPS
+# over ssh as a separate step, after the git push, so the live game has the art
+# and the public repo never has. A clone without them still runs: reach-battle
+# falls back to wireframe ground and wireframe units when a sheet is absent,
+# which was built as a load-failure path and turns out to be the thing that
+# makes this workable.
+#
+# WHAT IS NOT HERE, DELIBERATELY: client/assets/space/nature/ is CC0 and stays
+# tracked, and so does everything under client/assets/space/troops/. If a pack's
+# licence is settled, its art belongs in the repo like any other source.
+#
+# apply.sh removes TRACKED files only, so a local build keeps these across an
+# apply and the zip refreshes them. Nothing about the local workflow changes.
+client/assets/space/terrain/*.png
+client/assets/space/vehicles/
+client/assets/space/brood/
+
+# citybattle bench: harness frames are build output, not source
+tools/_citybattle/

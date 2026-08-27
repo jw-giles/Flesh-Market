@@ -248,3 +248,76 @@ input[type="search"], textarea, [contenteditable] {
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   text-align:center;color:#333;font-size:.75rem;letter-spacing:.1em;
 }
+
+/* ── Asset credits, beside the end-of-day clock ──────────────────────────────
+   Styled off the timer's own vocabulary rather than the generic .btn, because
+   it lives inside #eod-timer-wrap and a button in a different visual language
+   there reads as something that fell out of the toolbar. Deliberately quiet:
+   this is an obligation and a courtesy, not a call to action, and it should not
+   compete with a clock that is counting down to something. */
+#assetCreditsBtn {
+  font-family: 'Share Tech Mono', ui-monospace, Menlo, monospace;
+  font-size: .62rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #00ff88;
+  opacity: .5;
+  background: rgba(0,255,100,.04);
+  border: 1px solid rgba(0,255,100,.18);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity .18s, border-color .18s;
+}
+#assetCreditsBtn:hover { opacity: 1; border-color: rgba(0,255,100,.45); }
+
+#assetCreditsScrim {
+  position: fixed; inset: 0; z-index: 100000;
+  background: rgba(2,6,4,.82);
+  display: none; align-items: center; justify-content: center;
+  padding: 24px;
+}
+#assetCreditsScrim.open { display: flex; }
+#assetCreditsBox {
+  width: min(680px, 100%);
+  max-height: min(80vh, 760px);
+  overflow-y: auto;
+  background: #060b08;
+  border: 1px solid #1d3a2c;
+  border-radius: 9px;
+  padding: 20px 24px 24px;
+  font-family: 'Share Tech Mono', ui-monospace, Menlo, monospace;
+  color: #cfe3d6;
+  line-height: 1.6;
+  font-size: .82rem;
+}
+#assetCreditsBox h3 {
+  margin: 0 0 4px; font-size: 1rem; letter-spacing: .14em;
+  color: #00ff88; font-weight: 700;
+}
+#assetCreditsBox h4 {
+  margin: 20px 0 8px; font-size: .64rem; letter-spacing: .18em;
+  color: #46ff7d; opacity: .65; font-weight: 400;
+  border-top: 1px solid #14261d; padding-top: 10px;
+}
+#assetCreditsBox .ac-who { color: #e6f5ec; }
+#assetCreditsBox .ac-what { color: #7f9b8b; }
+#assetCreditsBox a { color: #46ff7d; text-decoration: none; border-bottom: 1px dotted #2e6b4a; }
+#assetCreditsBox a:hover { color: #9dffc4; }
+#assetCreditsBox .ac-row { margin: 0 0 12px; }
+#assetCreditsBox .ac-note {
+  margin-top: 18px; padding: 10px 12px;
+  border: 1px solid #2a2416; background: #0d0b05;
+  color: #a7946a; font-size: .74rem; line-height: 1.55;
+}
+#assetCreditsClose {
+  float: right; background: none; border: 1px solid #1d3a2c; color: #7f9b8b;
+  font-family: inherit; font-size: .7rem; letter-spacing: .1em;
+  padding: 3px 9px; border-radius: 5px; cursor: pointer;
+}
+#assetCreditsClose:hover { color: #46ff7d; border-color: #2e6b4a; }
+
+@media (max-width: 900px) {
+  #assetCreditsBtn { font-size: .56rem; padding: 4px 8px; }
+}

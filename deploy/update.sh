@@ -3,7 +3,17 @@
 #  FleshMarket — Update Script
 #  Run from your local machine or on the server after pulling new code.
 #  Usage (from project root):  ./deploy/update.sh
-#         Or on server:         cd /opt/fleshmarket && ./deploy/update.sh
+#         Or on server:         cd "$FM_APP_DIR" && ./deploy/update.sh
+#
+#  NOT THE CANONICAL DEPLOY. ./ship.sh in the repo root is: it commits, pushes,
+#  and has the server git pull and restart. This rsync path predates it and is
+#  kept for a machine that was set up by deploy/setup.sh.
+#
+#  IT POINTED AT THE WRONG DIRECTORY. APP_DIR was hardcoded to /opt/fleshmarket
+#  while the live server runs from /root/Flesh-Market, and rsync CREATES a
+#  missing destination. Running this on the VPS built a second, dead copy of the
+#  app at a path nothing serves, and then called pm2 reload on the real process.
+#  The guard below refuses rather than inventing a tree.
 # =============================================================================
 
 set -euo pipefail
@@ -12,12 +22,28 @@ ok()   { echo -e "${GREEN}[OK]${RESET}  $*"; }
 info() { echo -e "${CYAN}[FM]${RESET}  $*"; }
 warn() { echo -e "${YELLOW}[!!]${RESET}  $*"; }
 
-APP_DIR="/opt/fleshmarket"
-FM_USER="fm"
+APP_DIR="${FM_APP_DIR:-/root/Flesh-Market}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-info "Deploying updated files to $APP_DIR..."
+# REFUSE RATHER THAN CREATE. rsync makes a missing destination, so a wrong
+# APP_DIR does not fail, it succeeds somewhere useless and then reloads the live
+# process anyway. An install is identified by the file every build carries.
+if [ ! -f "$APP_DIR/client/version.json" ]; then
+  echo "[update] No FleshMarket install at $APP_DIR (no client/version.json)." >&2
+  echo "[update] Set FM_APP_DIR=/path/to/install if it lives somewhere else." >&2
+  exit 1
+fi
+# Refusing to sync a tree onto itself, which deletes as much as it copies.
+if [ "$(cd "$APP_DIR" && pwd -P)" = "$PROJECT_ROOT" ]; then
+  echo "[update] $APP_DIR is this checkout. Nothing to sync; use ./ship.sh." >&2
+  exit 1
+fi
+# Ownership follows whoever already owns the install rather than a name baked in
+# here. The live box runs as root; a setup.sh box runs as 'fm'.
+FM_USER="${FM_USER:-$(stat -c %U "$APP_DIR" 2>/dev/null || echo root)}"
+
+info "Deploying updated files to $APP_DIR (owner $FM_USER)..."
 
 # Sync code (preserve .env and DB)
 rsync -a --delete \

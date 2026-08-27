@@ -41,6 +41,29 @@ main() {
     exit 1
   fi
 
+  # ── Licence gate ───────────────────────────────────────────────────────────
+  # THE ART DIRECTORIES ARE GITIGNORED AND THIS PROVES IT BEFORE COMMITTING.
+  # A single missing .gitignore line puts licence-restricted art into a public
+  # repo, and once it is pushed, deleting it later does NOT remove it: it stays
+  # in history and stays fetchable. There is no cheap undo, so the check is here
+  # rather than after the fact.
+  restricted="client/assets/space/vehicles client/assets/space/brood"
+  leaked=""
+  for d in $restricted; do
+    [ -d "$d" ] || continue
+    if git ls-files --error-unmatch "$d" >/dev/null 2>&1; then leaked="$leaked $d"; fi
+  done
+  if git ls-files --error-unmatch 'client/assets/space/terrain/*.png' >/dev/null 2>&1; then
+    leaked="$leaked client/assets/space/terrain/*.png"
+  fi
+  if [ -n "$leaked" ]; then
+    echo "[ship] SAFETY STOP: licence-restricted art is TRACKED by git:$leaked"
+    echo "[ship]   This repo is public and these packs forbid redistributing the art."
+    echo "[ship]   Untrack without deleting:  git rm -r --cached <dir>"
+    echo "[ship]   Then confirm .gitignore covers it and run ./ship.sh again."
+    exit 1
+  fi
+
   git add -A
   if git diff --cached --quiet; then
     echo "[ship] Nothing new to commit; pushing and restarting anyway."
@@ -62,8 +85,37 @@ main() {
       echo "[ship]   Or discard all of it:                         git reset --hard origin/main"
       exit 1
     fi
-    git pull --ff-only
-    pm2 restart fleshmarket'
+    git pull --ff-only'
+
+  # ── Art push ───────────────────────────────────────────────────────────────
+  # The art the repo deliberately does not carry. Sent over ssh as a tar stream
+  # rather than with rsync, because tar and ssh are the only two things this
+  # deploy has ever assumed are on the box, and a deploy step that works until
+  # the day someone rebuilds the VPS without rsync is a worse deploy step.
+  #
+  # AFTER the pull, not before: git pull can create the directories it does not
+  # own, and unpacking first then pulling would race for no reason.
+  #
+  # NOT --delete. This only ever adds and overwrites. A bug in the local file
+  # list should cost a stale asset on the server, never a wiped one.
+  art=""
+  for d in client/assets/space/terrain client/assets/space/vehicles client/assets/space/brood; do
+    # `|| :` because set -e is on and a bare `[ -d x ] && y` that finds no
+    # directory returns 1, which would abort the deploy AFTER the push has
+    # already happened. A missing art directory is a normal state, not a fault.
+    [ -d "$d" ] && art="$art $d" || :
+  done
+  if [ -n "$art" ]; then
+    echo "[ship] Pushing licence-restricted art (not in git)..."
+    tar czf - $art | ssh root@5.78.119.169 'cd /root/Flesh-Market && tar xzf -'
+  else
+    echo "[ship] No local art directories to push; the server keeps what it has."
+  fi
+
+  # The restart is last, so the process only ever comes up against a tree that
+  # has both the new code and the new art. Restarting between the two serves a
+  # client that asks for sheets which are still in flight.
+  ssh root@5.78.119.169 'pm2 restart fleshmarket'
   echo "[ship] Live: v$ver deployed. Hard-refresh the game client."
 }
 main "$@"

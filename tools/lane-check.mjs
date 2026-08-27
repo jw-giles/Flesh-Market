@@ -143,20 +143,41 @@ console.log('\n== The passage gates the commodity market, not just the exchange 
 
   ok('there is a single sealed predicate', /function jadeSealed\(/.test(srv));
 
-  // Every route that can reach a Circuit commodity market has to consult it.
+  /* Every route that can reach a Circuit commodity market has to consult it.
+     jadeSealed TAKES THE ACTOR NOW - a GM has to be able to run a lane inside a
+     sealed Circuit to test it before the passage opens - so these match the
+     actor form. The exception is deliberate at each route rather than inside
+     the predicate, which is why the arbitrage grid below still passes none: a
+     shared price board published to everyone listening is not the same act as a
+     GM acting on a colony. */
   const guarded = [
     ['the arbitrage grid drops sealed colonies', /filter\(c => !jadeSealed\(c\.id\)\)/],
-    ['the per-colony price board refuses', /jadeSealed\(colonyId\)\) return res\.status\(403\)/],
-    ['freight cannot set out inside a sealed Circuit', /jadeSealed\(from\) \|\| jadeSealed\(to\)/],
+    ['the per-colony price board refuses', /jadeSealed\(colonyId, p\)\) return res\.status\(403\)/],
+    ['freight cannot set out inside a sealed Circuit', /jadeSealed\(from, actor\) \|\| jadeSealed\(to, actor\)/],
   ];
   for (const [name, re] of guarded) ok(name, re.test(srv));
+  /* And the exception itself: one predicate, taking an actor, absent meaning no
+     exception - so a caller that forgets to pass one keeps the behaviour it had
+     rather than silently opening. */
+  ok('the dev exception is one predicate, not a bypass at each call site',
+     /function devPassesSeal\(actor\)/.test(srv));
+  ok('and an absent actor means no exception',
+     /const id = actor && \(actor\.id \|\| actor\.playerId\);\s*\n\s*if \(!id\) return false;/.test(srv));
+  ok('the shared price board deliberately passes no actor',
+     /NO ACTOR ON PURPOSE/.test(srv));
 
   // buy and sell are separate handlers and both need it; counting stops one
   // being gated and the other quietly left open.
-  const guards = (srv.match(/jadeSealed\(colonyId\)\) return res\.status\(403\)/g) || []).length;
+  const guards = (srv.match(/jadeSealed\(colonyId, p\)\) return res\.status\(403\)/g) || []).length;
   ok('both trade handlers and the price board are gated', guards === 3, String(guards));
-  const runGuards = (srv.match(/jadeSealed\(from\) \|\| jadeSealed\(to\)/g) || []).length;
+  const runGuards = (srv.match(/jadeSealed\(from, actor\) \|\| jadeSealed\(to, actor\)/g) || []).length;
   ok('both smuggling and shipping are gated', runGuards === 2, String(runGuards));
+  /* NO CALL SITE MAY DROP THE ACTOR SILENTLY. Counting the gated forms proves
+     the ones that should pass one do; this proves nothing else calls the
+     predicate bare except the one place that is documented as deliberate. */
+  const bare = (srv.match(/jadeSealed\([^,)]*\)/g) || [])
+    .filter(x => !/jadeSealed\(colonyId, p\)|jadeSealed\(from, actor\)|jadeSealed\(to, actor\)/.test(x));
+  ok('the only actorless call is the shared price board', bare.length === 1, bare.join(' '));
 
   // The predicate has to actually recognise every Circuit world, or the gate
   // is enforced on some of them and not others.
@@ -169,7 +190,22 @@ console.log('\n== The passage gates the commodity market, not just the exchange 
   // And the client has to rebuild, or an open Markets tab keeps showing a
   // board the server has started refusing.
   const gx = fs.readFileSync(ROOT + '/client/assets/galaxy.js', 'utf8');
-  const setW = gx.slice(gx.indexOf('window._setWormhole'), gx.indexOf('window._setWormhole') + 1200);
+  /* THE FUNCTION, NOT A FIXED BYTE WINDOW. This sliced 1200 characters from
+     window._setWormhole and broke the moment _setPassage grew an eject branch -
+     the calls it looks for were still there, three lines further down. A window
+     measured in bytes fails on any unrelated edit above the thing it wants,
+     which is the worst kind of check: it goes red on correct code and the
+     pressure is to widen the number until it stops complaining. Brace matched
+     to the end of _setPassage, which is where those calls actually live. */
+  const setW = (function () {
+    const i = gx.indexOf('window._setPassage = function');
+    let d = 0; const start = gx.indexOf('{', i);
+    for (let k = start; k < gx.length; k++) {
+      if (gx[k] === '{') d++;
+      else if (gx[k] === '}' && --d === 0) return gx.slice(i, k + 1);
+    }
+    return '';
+  })();
   ok('toggling the passage refreshes the markets view', /renderMarketsTab\(\)/.test(setW));
   ok('and the shipping view', /window\.renderShippingTab\(\)/.test(setW));
 }
@@ -200,9 +236,20 @@ console.log('\n== The passage is a lane, not property ==');
   ok('the connector is drawn to the gate instead', /function renderPassageLink\(/.test(gx));
   ok('and is drawn again after every lane repaint',
      (gx.match(/renderPassageLink\(\)/g) || []).length >= 3);
-  ok('a sealed passage draws no line at all',
-     /if\(!WORMHOLE_OPEN\) return;/.test(gx.slice(gx.indexOf('function renderPassageLink'),
-                                                  gx.indexOf('function renderPortal'))));
+  // Was pinned to the literal `if(!WORMHOLE_OPEN) return;`. That asserted the
+  // implementation string rather than the guarantee, so moving the seal flag
+  // into the galaxy registry failed a check that had lost nothing. It now
+  // asserts what actually matters: renderPassageLink bails before drawing
+  // anything when the relevant passage is sealed.
+  {
+    const body = gx.slice(gx.indexOf('function renderPassageLink'),
+                          gx.indexOf('function renderPortal'));
+    const guard = /if\(!passageOpen\([^)]*\)\) return;/.test(body)
+               || /if\(!WORMHOLE_OPEN\) return;/.test(body);
+    const guardBeforeDraw = guard &&
+      body.search(/if\(!(passageOpen\([^)]*\)|WORMHOLE_OPEN)\) return;/) < body.indexOf('createElementNS');
+    ok('a sealed passage draws no line at all', guardBeforeDraw);
+  }
   ok('decorative traffic and scoundrels stay off it',
      (gx.match(/laneIsPassage\(l\)\) return;/g) || []).length === 3);
 }
@@ -234,9 +281,16 @@ console.log('\n== Circuit freight works the gate, and the station sees what it c
      /isJadeWorld\(fromId\) \|\| isJadeWorld\(toId\)\) \? JADE_POOL : MERCHANT_POOL/.test(gx));
 
   // A crossing belongs to both sides, or the gate visibly carries nothing.
-  ok('a passage run is tagged to both sectors', /if \(isPassageRun\(fromId, toId\)\) return 'both';/.test(gx));
-  ok('and is shown in either view',
-     /gx === 'both' \|\| gx === activeGalaxy/.test(gx));
+  // These were pinned to the literal tag 'both'. That string was only correct
+  // because there were exactly two galaxies, which made "both" and "everywhere"
+  // the same set. With the Reach they are not, and tagShipGalaxy was showing
+  // Circuit traffic in Khai'sultull space. A run is now tagged with the two
+  // galaxies it actually touches; the guarantee is unchanged.
+  ok('a passage run is tagged to the sector at each end',
+     /a === b \? a : \(a < b \? a \+ '\|' \+ b : b \+ '\|' \+ a\)/.test(gx));
+  ok('and is shown in either view, and only those two',
+     /shipVisibleIn\(gx, activeGalaxy\)/.test(gx)
+     && /function shipVisibleIn\(tag, gx\)/.test(gx));
   ok('drawn anchor-to-gate, since its ends sit in different views',
      /function passageEndpoints\(/.test(gx));
 
@@ -249,7 +303,14 @@ console.log('\n== Circuit freight works the gate, and the station sees what it c
   const scan = gx.slice(scanAt, scanAt + 2600);
   ok('the scan refuses only a run that is wholly inside the Circuit',
      /FJ\.shipGalaxy\(fromId, toId\) === 'jade'/.test(scan));
-  ok('so a crossing, tagged both, is scannable', /=== 'both'/.test(gx));
+  // Verified against the live tagging rule rather than a tag string, so
+  // retagging cannot silently change which runs are scannable.
+  {
+    const sg = (a, b) => a === b ? a : (a < b ? a + '|' + b : b + '|' + a);
+    ok('a crossing is still scannable', sg('coalition', 'jade') !== 'jade');
+    ok('a run wholly inside the Circuit is still refused', sg('jade', 'jade') === 'jade');
+    ok('Reach runs are scannable', sg('khaisultull', 'khaisultull') !== 'jade');
+  }
   const core = fs.readFileSync(ROOT + '/client/assets/core.js', 'utf8');
   ok('and the refusal says sensor range, not registry',
      /outside station sensor range/.test(core) && !/Circuit registry/.test(core));

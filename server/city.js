@@ -289,6 +289,18 @@ export const CITY_COLONIES = {
   fuxi_observatory:  { pop: 95,  capital: 0, jade: 1 },
   wukong_deep:       { pop: 130, capital: 0, jade: 1 },
   chiyou_marches:    { pop: 70,  capital: 0, jade: 1 },
+  // Reach. Present so a captured world has something to become; gated by
+  // isCityColony until the Coalition holds all of it.
+  ks_gate_reach:     { pop: 12,  capital: 0, reach: 1 },
+  ks_02:             { pop: 18,  capital: 0, reach: 1 },
+  ks_03:             { pop: 26,  capital: 0, reach: 1 },
+  ks_04:             { pop: 22,  capital: 0, reach: 1 },
+  ks_05:             { pop: 15,  capital: 0, reach: 1 },
+  ks_06:             { pop: 9,   capital: 0, reach: 1 },
+  ks_07:             { pop: 34,  capital: 0, reach: 1 },
+  ks_08:             { pop: 11,  capital: 0, reach: 1 },
+  ks_09:             { pop: 16,  capital: 0, reach: 1 },
+  ks_10:             { pop: 20,  capital: 0, reach: 1 },
 };
 
 // A Circuit world. Drives the seat gate, the district name pool and the
@@ -334,10 +346,55 @@ export const COLONY_VISUAL = {
   fuxi_observatory:  { layout: 'radial',      terrain: 'ice'     },
   wukong_deep:       { layout: 'terraced',    terrain: 'rift'    },
   chiyou_marches:    { layout: 'archipelago', terrain: 'dust'    },
+  // ── Khai'sultull Reach ──────────────────────────────────────────────────
+  // Authored now, before cities ship. Retrofitting terrain after players have
+  // learned how a world looks means re-authoring a look they already know.
+  // Layouts are placeholders until Prawn city geometry exists; terrain is not.
+  ks_gate_reach:     { layout: 'organic',     terrain: 'dust'    },
+  ks_02:             { layout: 'organic',     terrain: 'dust'    },
+  ks_03:             { layout: 'radial',      terrain: 'dust'    },
+  ks_04:             { layout: 'spine',       terrain: 'veins'   },
+  ks_05:             { layout: 'terraced',    terrain: 'rift'    },
+  ks_06:             { layout: 'organic',     terrain: 'dust'    },
+  ks_07:             { layout: 'archipelago', terrain: 'ocean'   },
+  ks_08:             { layout: 'archipelago', terrain: 'ice'     },
+  ks_09:             { layout: 'organic',     terrain: 'dust'    },
+  ks_10:             { layout: 'radial',      terrain: 'tether'  },
 };
 
+// ── The Reach ────────────────────────────────────────────────────────────────
+// Khai'sultull worlds carry city data so that the moment one is taken there is
+// a city to seed, but they are NOT cities while the brood holds any of them.
+// Until a world is fully Coalition its hive settlement is decoration: no
+// districts, no mayor, no commerce, no charter, nothing to buy or govern.
+//
+// isCityColony is the single predicate every city route already gates on, so
+// making it answer false for an unconverted Reach world closes all of them at
+// once rather than needing a check added to each. The resolver is injected the
+// same way setFactionResolver is, to keep city.js from importing reach.js.
+/* MEMBERSHIP, NOT ORDER. This is a Set and it is asked "is this a Reach world",
+   so the sequence here means nothing - which is why it can stay in id order
+   while REACH_WORLDS is the route. Left alone deliberately when that list was
+   reordered: making it match would imply the two carry the same fact, and the
+   next person to reorder the route would then have two lists to keep in step
+   for no reason. tools/reach-check.mjs asserts the two hold the same MEMBERS. */
+export const REACH_CITY_IDS = new Set([
+  'ks_gate_reach','ks_02','ks_03','ks_04','ks_05',
+  'ks_06','ks_07','ks_08','ks_09','ks_10',
+]);
+let _reachTaken = null;
+export function setReachResolver(fn) { _reachTaken = typeof fn === 'function' ? fn : null; }
+export function isReachWorld(colonyId) { return REACH_CITY_IDS.has(colonyId); }
+// Fails CLOSED: with no resolver installed a Reach world is not a city.
+export function isReachTaken(colonyId) {
+  if (!REACH_CITY_IDS.has(colonyId)) return false;
+  try { return !!(_reachTaken && _reachTaken(colonyId)); } catch (_) { return false; }
+}
+
 export function isCityColony(colonyId) {
-  return Object.prototype.hasOwnProperty.call(CITY_COLONIES, colonyId);
+  if (!Object.prototype.hasOwnProperty.call(CITY_COLONIES, colonyId)) return false;
+  if (REACH_CITY_IDS.has(colonyId)) return isReachTaken(colonyId);
+  return true;
 }
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -742,6 +799,10 @@ export function geometryPayload(colonyId) {
 
 export function seedAllCityStates(seedFn) {
   for (const [id, meta] of Object.entries(CITY_COLONIES)) {
+    // An unconverted Reach world has no city to seed. Seeding one at boot
+    // would create districts nobody can see and a mayoral seat on a world the
+    // brood still holds.
+    if (REACH_CITY_IDS.has(id) && !isReachTaken(id)) continue;
     seedFn(id, meta.pop, meta.capital);
   }
 }

@@ -1,4 +1,22 @@
 
+/**
+ * casino-sudoku.js - Sudoku (client).
+ *
+ * The client no longer generates the puzzle, holds the solution, decides
+ * whether it has been solved, or names a payout. It renders what the server
+ * sends and posts the grid back. Everything that decides cash lives in
+ * server/sudoku.js and the sudoku_start / sudoku_hint / sudoku_finish handlers.
+ *
+ * The old version did all of it locally, which meant two console calls paid the
+ * Insane reward without a cell being filled, every twenty seconds, bounded only
+ * by a payout cap and a cooldown that lived in localStorage.
+ *
+ * It also meant the game REJECTED CORRECT ANSWERS. The generator removed clues
+ * at random with no uniqueness check, so above Easy a board usually had dozens
+ * of valid completions, and the client graded by comparing against its own
+ * stored one. Grading is by validity on the server now, and the generator only
+ * removes a clue while the board still has exactly one solution.
+ */
 (function(){
   const pane = document.getElementById('casino-sudoku');
   if (!pane) return;
@@ -6,13 +24,49 @@
   const TF=(k,fb,v)=>window.tf?window.tf(k,fb,v):fb;
   function sdkDiffName(n){var m={'Easy':'casino.sdk.diffEasy','Medium':'casino.sdk.diffMedium','Hard':'casino.sdk.diffHard','Expert':'casino.sdk.diffExpert','Insane':'casino.sdk.diffInsane'};return T(m[n]||'',n);}
 
+  /* Names and prices only, for the buttons before the lobby answers. Clue
+     counts are not here at all: the board arrives built, and a client that
+     believes it knows how many clues a tier has is a client that can disagree
+     with the server about what it is playing. Rewards are overwritten by the
+     lobby payload, so this list cannot drift away from the price actually paid. */
   const DIFFICULTIES = [
-    { name:'Easy',   clues:46, reward:50,   label:'Ƒ50'   },
-    { name:'Medium', clues:35, reward:200,  label:'Ƒ200'  },
-    { name:'Hard',   clues:26, reward:750,  label:'Ƒ750'  },
-    { name:'Expert', clues:23, reward:2500, label:'Ƒ2,500'},
-    { name:'Insane', clues:17, reward:4000, label:'Ƒ4,000'},
+    { name:'Easy',   reward:50,   label:'Ƒ50'   },
+    { name:'Medium', reward:200,  label:'Ƒ200'  },
+    { name:'Hard',   reward:750,  label:'Ƒ750'  },
+    { name:'Expert', reward:2500, label:'Ƒ2,500'},
+    { name:'Insane', reward:4000, label:'Ƒ4,000'},
   ];
+
+  /* Net: promise wrapper over the sudoku messages. Same shape as the exams and
+     for the same reason, the socket is a stream of unrelated frames so a call
+     has to say which ack is its own. */
+  const PENDING = new Map();
+  let seq = 0;
+  const ACKS = new Set(['sudoku_lobby_ack','sudoku_start_ack','sudoku_hint_ack','sudoku_finish_ack']);
+  function sock(){
+    return window.ws && window.ws.readyState === 1 ? window.ws
+         : (window._ws && window._ws.readyState === 1 ? window._ws : null);
+  }
+  document.addEventListener('fm_ws_msg', function(e){
+    const m = e && e.detail;
+    if (!m || !m.type || !ACKS.has(m.type)) return;
+    for (const [key, entry] of PENDING) {
+      let hit = false;
+      try { hit = entry.match(m); } catch(_) { hit = false; }
+      if (hit) { clearTimeout(entry.timer); PENDING.delete(key); entry.resolve(m.data || {}); break; }
+    }
+  });
+  function call(type, payload, ackType){
+    const w = sock();
+    if (!w) return Promise.resolve({ ok:false, error:'offline' });
+    return new Promise(function(resolve){
+      const key = 's' + (++seq);
+      const timer = setTimeout(function(){ if(PENDING.has(key)){ PENDING.delete(key); resolve({ok:false,error:'timeout'}); } }, 15000);
+      PENDING.set(key, { timer, resolve, match:function(m){ return m.type === ackType; } });
+      try { w.send(JSON.stringify(Object.assign({type}, payload))); }
+      catch(_){ clearTimeout(timer); PENDING.delete(key); resolve({ok:false,error:'offline'}); }
+    });
+  }
 
   function init() {
     if (pane.dataset.inited) return; pane.dataset.inited='1';
@@ -66,9 +120,13 @@
   if(window.applyI18n) window.applyI18n(pane);
 
   // ── State ─────────────────────────────────────────────────
-  let puzzle=[], solution=[], userGrid=[], selected=-1;
-  let diffIdx=1, hintUses=0, playing=false;
-  let sdkRoundId=null; // server round id for the active puzzle
+  /* NO `solution` HERE, and that is the whole point of the rewrite. The client
+     cannot grade what it cannot see, and it no longer needs to. */
+  let puzzle=[], userGrid=[], selected=-1;
+  let diffIdx=1, hintUses=0, hintMax=4, playing=false, busy=false;
+  let sdkRoundId=null;      // server round id for the active puzzle
+  let curReward=0;          // what this board pays now, after hints
+  let cooldowns={};         // diffId -> ms left, refreshed from the lobby
 
   function getBalance(){ return (typeof ME==='object'&&ME&&typeof ME.cash==='number')?ME.cash:0; }
   function setBalance(v){
@@ -77,30 +135,15 @@
     // Legacy {type:'casino',sync} removed — server-authoritative cash.
   }
 
-  // ── Puzzle generator ───────────────────────────────────────
-  function generateSudoku(clues){
-    const b=Array(81).fill(0);
-    function possible(pos,n){
-      const r=Math.floor(pos/9),c=pos%9,br=Math.floor(r/3)*3,bc=Math.floor(c/3)*3;
-      for(let i=0;i<9;i++){
-        if(b[r*9+i]===n||b[i*9+c]===n||b[(br+Math.floor(i/3))*9+(bc+i%3)]===n)return false;
-      }return true;
-    }
-    function fill(pos){
-      if(pos===81)return true;
-      const nums=[1,2,3,4,5,6,7,8,9].sort(()=>Math.random()-.5);
-      for(const n of nums){if(possible(pos,n)){b[pos]=n;if(fill(pos+1))return true;b[pos]=0;}}
-      return false;
-    }
-    fill(0);
-    const sol=[...b];
-    const positions=[...Array(81).keys()].sort(()=>Math.random()-.5);
-    let removed=0,target=81-clues;
-    for(const p of positions){if(removed>=target)break;b[p]=0;removed++;}
-    return{puzzle:[...b],solution:sol};
-  }
+  /* THE GENERATOR IS GONE. It lived here, produced the solution alongside the
+     puzzle, and handed both to code that then decided what the player had won.
+     It is server/sudoku.js now, and it also enforces uniqueness, which this one
+     never did. */
 
   // ── Render ─────────────────────────────────────────────────
+  /* userGrid now starts as a COPY of the puzzle rather than 81 zeroes, because
+     the grid posted back to the server has to be a full board including the
+     givens. A cell is outstanding when it is not a given and still blank. */
   function countEmpty(){ return userGrid.filter((v,i)=>puzzle[i]===0&&!v).length; }
 
   function render(){
@@ -134,74 +177,121 @@
   }
 
   // ── New puzzle ─────────────────────────────────────────────
-  const SUDOKU_COOLDOWN_MS = 30 * 60 * 1000; // 30 min anti-cheat
+  /* THE COOLDOWN IS THE SERVER'S. It used to be a localStorage key, which is to
+     say it was advice: clear the key and the timer never happened. This block
+     only decides what the button SAYS; the server refuses the round either way. */
+  function refreshLobby(){
+    return call('sudoku_lobby', {}, 'sudoku_lobby_ack').then(function(r){
+      if(!r || !r.ok) return;
+      hintMax = r.hintMax || hintMax;
+      cooldowns = {};
+      (r.tiers||[]).forEach(function(t){
+        cooldowns[t.id] = t.cooldownLeftMs || 0;
+        if(DIFFICULTIES[t.id]) DIFFICULTIES[t.id].reward = t.reward;
+      });
+      paintDiffRow();
+    });
+  }
+  function paintDiffRow(){
+    document.querySelectorAll('.sdk-diff-btn').forEach(function(b){
+      const i = parseInt(b.dataset.idx);
+      const left = cooldowns[i] || 0;
+      const span = b.querySelector('span');
+      if(span) span.textContent = left > 0
+        ? TF('casino.sdk.cdShort','{min}m', {min: Math.ceil(left/60000)})
+        : (DIFFICULTIES[i] ? DIFFICULTIES[i].label : '');
+      b.classList.toggle('active', i === diffIdx);
+    });
+  }
+
+  function status(txt){
+    const el = document.getElementById('sdk-status');
+    if(el) el.textContent = txt;
+  }
+
   function newPuzzle(){
-    const d=DIFFICULTIES[diffIdx];
-    const key='sudoku_cooldown_'+diffIdx;
-    const last=parseInt(localStorage.getItem(key)||'0');
-    const elapsed=Date.now()-last;
-    if(elapsed<SUDOKU_COOLDOWN_MS){
-      const remMin=Math.ceil((SUDOKU_COOLDOWN_MS-elapsed)/60000);
-      document.getElementById('sdk-status').textContent=TF('casino.sdk.cooldown','⏳ {name} on cooldown, {min} min remaining.',{name:sdkDiffName(d.name),min:remMin});
-      return;
-    }
-    const gen=generateSudoku(d.clues);
-    puzzle=gen.puzzle;solution=gen.solution;
-    userGrid=Array(81).fill(0);
-    selected=-1;hintUses=0;playing=true;
-    // Return the nominal stake on any prior un-submitted puzzle so the server's
-    // one-open-round-per-game guard doesn't reject this new round.
-    if(sdkRoundId){ CasinoNet.result(sdkRoundId, 1); sdkRoundId=null; }
-    // Open a server-tracked round for this puzzle (nominal Ƒ1 stake, returned in
-    // full on solve or fail so the game stays free; the reward rides the server
-    // 'flat' cap). Non-blocking: the board renders immediately; if the bet is
-    // rejected sdkRoundId stays null and submit simply won't pay out.
-    CasinoNet.bet('sudoku', 1).then(r=>{ if(r&&r.ok) sdkRoundId=r.roundId; });
-    render();
-    document.getElementById('sdk-status').textContent=TF('casino.sdk.fillGrid','{name}, fill the grid, then press Submit.',{name:sdkDiffName(d.name)});
-    document.getElementById('sdk-hint').textContent=T('casino.sdk.hint20','Hint (−20% reward)');
+    if(busy) return;
+    busy = true;
+    const d = DIFFICULTIES[diffIdx];
+    status(T('casino.sdk.building','Building a puzzle...'));
+    call('sudoku_start', { diffId: diffIdx }, 'sudoku_start_ack').then(function(r){
+      busy = false;
+      if(!r || !r.ok){
+        if(r && r.error === 'cooldown'){
+          cooldowns[diffIdx] = r.cooldownLeftMs || 0;
+          paintDiffRow();
+          status(TF('casino.sdk.cooldown','\u23f3 {name} on cooldown, {min} min remaining.',
+            {name:sdkDiffName(d.name), min:Math.ceil((r.cooldownLeftMs||0)/60000)}));
+        } else {
+          status((r && r.error) ? String(r.error) : T('casino.sdk.failed','Could not start a puzzle.'));
+        }
+        return;
+      }
+      puzzle = r.puzzle.slice();
+      userGrid = puzzle.slice();       // givens are in place; empties are 0
+      sdkRoundId = r.roundId;
+      hintUses = 0; hintMax = r.hintMax || hintMax;
+      curReward = r.reward;
+      selected = -1; playing = true;
+      cooldowns[diffIdx] = r.cooldownMs || 0;
+      paintDiffRow();
+      render();
+      status(TF('casino.sdk.fillGrid','{name}, fill the grid, then press Submit.',{name:sdkDiffName(d.name)}));
+      const hb = document.getElementById('sdk-hint');
+      if(hb) hb.textContent = T('casino.sdk.hint20','Hint (\u221220% reward)');
+    });
   }
 
   // ── Submit ─────────────────────────────────────────────────
+  /* The server grades. It answers correct or not correct and never says WHICH
+     cells are wrong, so repeated submissions are worth one bit each against a
+     board with exactly one completion, which is worth nothing. */
   function submit(){
-    if(!playing||countEmpty()>0)return;
-    // Check correctness without revealing right/wrong per cell
-    let correct=true;
-    for(let i=0;i<81;i++){
-      if(puzzle[i]===0&&userGrid[i]!==solution[i]){correct=false;break;}
-    }
-    if(correct){
-      playing=false;selected=-1;
-      const d=DIFFICULTIES[diffIdx];
-      const penalty=hintUses*0.2;
-      const reward=Math.floor(d.reward*(1-Math.min(0.8,penalty)));
-      // Settle server-side: gross = reward + the Ƒ1 nominal stake (returned), so
-      // net credit is exactly the reward. Server caps at the sudoku 'flat'.
-      if(sdkRoundId){ CasinoNet.result(sdkRoundId, reward+1); sdkRoundId=null; }
-      // Start 30-min cooldown on solve
-      localStorage.setItem('sudoku_cooldown_'+diffIdx, Date.now());
+    if(!playing || busy || countEmpty() > 0) return;
+    busy = true;
+    call('sudoku_finish', { roundId: sdkRoundId, grid: userGrid }, 'sudoku_finish_ack').then(function(r){
+      busy = false;
+      if(!r || !r.ok){ status(T('casino.sdk.failed','Could not submit.')); return; }
+      if(!r.correct){
+        status(T('casino.sdk.notQuite','\u2717 Not quite right. Keep checking your work!'));
+        return;
+      }
+      playing = false; selected = -1; sdkRoundId = null;
+      if(typeof r.cash === 'number') setBalance(r.cash);
       render();
-      const hintNote=hintUses>0?TF('casino.sdk.hintNote',' ({n} hint{s} used)',{n:hintUses,s:(hintUses>1?'s':'')}):'';
-      document.getElementById('sdk-status').textContent=TF('casino.sdk.correct','✓ Correct! You earned Ƒ{amt}{note}.',{amt:reward.toLocaleString(),note:hintNote});
-    } else {
-      // Wrong — flash status but don't reveal which cells
-      document.getElementById('sdk-status').textContent=T('casino.sdk.notQuite','✗ Not quite right. Keep checking your work!');
-    }
+      const note = r.hints > 0
+        ? TF('casino.sdk.hintNote',' ({n} hint{s} used)',{n:r.hints, s:(r.hints>1?'s':'')}) : '';
+      status(TF('casino.sdk.correct','\u2713 Correct! You earned \u0192{amt}{note}.',
+        {amt:Number(r.reward||0).toLocaleString(), note:note}));
+      refreshLobby();
+    });
   }
 
   // ── Hint ───────────────────────────────────────────────────
+  /* Capped at four, which is where the penalty already bottomed out. Unbounded
+     hints against a floored penalty was a free auto solve for 20% of the prize. */
   function hint(){
-    if(!playing)return;
-    const empties=[];
-    for(let i=0;i<81;i++)if(puzzle[i]===0&&userGrid[i]!==solution[i])empties.push(i);
-    if(!empties.length){document.getElementById('sdk-status').textContent=T('casino.sdk.noErrors','No errors found!');return;}
-    const pick=empties[Math.floor(Math.random()*empties.length)];
-    userGrid[pick]=solution[pick];
-    hintUses++;
-    const penalty=Math.min(0.8,hintUses*0.2);
-    render();
-    document.getElementById('sdk-hint').textContent=TF('casino.sdk.hintPct','Hint (−{pct}% reward)',{pct:Math.round(penalty*100)});
-    document.getElementById('sdk-status').textContent=TF('casino.sdk.hintUsed','Hint used. Reward reduced to {pct}%.',{pct:Math.round((1-penalty)*100)});
+    if(!playing || busy) return;
+    busy = true;
+    call('sudoku_hint', { roundId: sdkRoundId }, 'sudoku_hint_ack').then(function(r){
+      busy = false;
+      if(!r || !r.ok){
+        if(r && r.error === 'hint_cap')
+          status(TF('casino.sdk.hintCap','No hints left ({n} of {n} used).',{n:hintMax}));
+        else if(r && r.error === 'nothing_to_reveal')
+          status(T('casino.sdk.noErrors','No errors found!'));
+        else status(T('casino.sdk.failed','Could not take a hint.'));
+        return;
+      }
+      userGrid[r.index] = r.value;
+      hintUses = r.hints; curReward = r.reward;
+      render();
+      const pct = Math.round((1 - (curReward / (DIFFICULTIES[diffIdx].reward || 1))) * 100);
+      const hb = document.getElementById('sdk-hint');
+      if(hb) hb.textContent = TF('casino.sdk.hintPct','Hint (\u2212{pct}% reward)',{pct:pct});
+      status(TF('casino.sdk.hintUsed','Hint used. Reward reduced to \u0192{amt}.',
+        {amt:Number(curReward).toLocaleString()}));
+    });
   }
 
   // ── Input ──────────────────────────────────────────────────
@@ -221,8 +311,18 @@
   document.getElementById('sdk-diff-row').addEventListener('click',e=>{
     const btn=e.target.closest('[data-idx]');if(!btn)return;
     diffIdx=parseInt(btn.dataset.idx);
-    document.querySelectorAll('.sdk-diff-btn').forEach(b=>b.classList.toggle('active',parseInt(b.dataset.idx)===diffIdx));
+    paintDiffRow();
   });
+
+  /* Ask the server what is on cooldown as soon as the pane opens, so the tier
+     buttons show a real timer rather than a price the player cannot collect
+     yet. Refreshed on solve, and on a minute tick while the pane is visible. */
+  refreshLobby();
+  if(!window._sdkLobbyIv){
+    window._sdkLobbyIv = setInterval(function(){
+      if(pane && pane.offsetParent !== null) refreshLobby();
+    }, 60000);
+  }
 
   document.addEventListener('keydown',e=>{
     if(!playing||selected<0||puzzle[selected]!==0)return;

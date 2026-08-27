@@ -1958,7 +1958,37 @@ export function isDevAccount(playerId) {
 }
 
 // Sync dev accounts from env on startup — also auto-enrolls them into fleshstation faction
+//
+// TWO AUTHORITIES, ONE COLUMN. This function blanket-resets is_dev and is_admin
+// on every non-owner and then re-flags only the names in DEV_ACCOUNTS. But
+// seed_devaccounts.mjs also sets those flags, and on a server with no .env it
+// has been the ONLY thing setting them. The moment DEV_ACCOUNTS is populated,
+// boot silently strips every account the seeder created that the env list does
+// not happen to repeat. Zharkofin was seeded dev, and the next restart took it
+// away with nothing logged.
+//
+// The seeder now records its accounts under a KV key and this unions that list
+// with the env list before resetting, so neither authority can silently undo
+// the other. An account is stripped only if it appears in NEITHER.
+function seededDevNames() {
+  try {
+    const row = stmt('SELECT v FROM city_kv WHERE k=?').get('seeded_dev_accounts');
+    if (!row || !row.v) return [];
+    const arr = JSON.parse(row.v);
+    return Array.isArray(arr) ? arr.filter(x => typeof x === 'string') : [];
+  } catch(_) { return []; }
+}
+
 export function syncDevAccounts(devNames) {
+  const seeded = seededDevNames();
+  if (seeded.length) {
+    const seen = new Set((devNames || []).map(n => String(n).trim().toLowerCase()));
+    devNames = (devNames || []).slice();
+    for (const n of seeded) {
+      if (!seen.has(n.trim().toLowerCase())) devNames.push(n);
+    }
+    console.log(`[Dev] Env list unioned with ${seeded.length} seeded account(s): ${seeded.join(', ')}`);
+  }
   if (!devNames || !devNames.length) return;
   try { db.exec('ALTER TABLE players ADD COLUMN is_dev   INTEGER NOT NULL DEFAULT 0'); } catch(_){}
   try { db.exec('ALTER TABLE players ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0'); } catch(_){}

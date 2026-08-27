@@ -1,0 +1,19 @@
+{
+  "name": "fleshmarket-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dev tooling for the FleshMarket repo. The SERVER's manifest is server/package.json; this one exists only so the checks in tools/ have their dependencies declared instead of being installed by hand. jsdom is floored at 30 because fleet-check constructs a PointerEvent, which jsdom did not implement until well after 24, and an older one fails the check for a reason that has nothing to do with the code under test. canvas is OPTIONAL, not a devDependency: it is a native build that fails on plenty of machines, it is needed only by tools/citybattle-harness.mjs to draw frames headlessly, and nothing in client/ or server/ imports it - a failed optional install leaves that one tool SKIPPED and every other check running. Nothing here is deployed: ship.sh does a git pull and a pm2 restart and never runs npm at the repo root.",
+  "scripts": {
+    "check": "node tools/run-all.mjs",
+    "test": "node tools/run-all.mjs",
+    "ci": "./test.sh --no-serve",
+    "bench": "node tools/serve.mjs",
+    "frames": "node tools/citybattle-harness.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  },
+  "optionalDependencies": {
+    "canvas": "^3.0.0"
+  }
+}

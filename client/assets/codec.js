@@ -86,8 +86,28 @@
     var me = window.ME || {}, pres = window.FM_PRESIDENT;
     return !!(pres && me.name && pres.name === me.name);
   }
-  function resolveTokens(s){ return String(s == null ? '' : s).replace(/\{name\}/g, fmAddress()); }
-  function repEnabled(r){ return CALLS_ENABLED && !!(r && r.enabled === true); }
+  // {name} is the player. {demand} is whatever demand the GM has posted from
+  // the Prawn War panel, so the envoy says the live one instead of a written
+  // one going stale the moment it is answered.
+  function resolveTokens(s){
+    var out = String(s == null ? '' : s).replace(/\{name\}/g, fmAddress());
+    if (out.indexOf('{demand}') >= 0) {
+      var d = (window._REACH && window._REACH.demand) || null;
+      var t = d && d.text ? d.text
+            : 'Nothing at this time. That is not the same as nothing at all.';
+      out = out.replace(/\{demand\}/g, t);
+    }
+    return out;
+  }
+  // A rep is normally gated by its static `enabled` flag. `gate` lets a rep be
+  // gated on live state instead: the Khai'sultull envoy should not be in the
+  // contacts list until the GM puts it there, and editing shipped data is not
+  // a runtime control.
+  function repEnabled(r){
+    if (!CALLS_ENABLED || !r) return false;
+    if (typeof r.gate === 'function') { try { return !!r.gate(); } catch(e){ return false; } }
+    return r.enabled === true;
+  }
   // Persistent quest status for a quest id, from the server-synced window.FM_QUESTS.
   function fmQuestStatus(qid){
     var list = window.FM_QUESTS || [];

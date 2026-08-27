@@ -88,7 +88,7 @@ Once you've added the deploy key and secrets, go back to your SSH session and pr
 ### Step 7 — Edit your .env
 
 ```bash
-nano /opt/fleshmarket/server/.env
+nano /root/Flesh-Market/server/.env
 ```
 
 Set `DEV_ACCOUNTS`, `PATREON_WEBHOOK_SECRET` (if using Patreon), etc. Then:
@@ -131,8 +131,8 @@ pm2 logs fleshmarket          # live logs
 pm2 restart fleshmarket       # restart after .env changes
 
 # Manual deploy without a push
-cd /opt/fleshmarket && git pull && pm2 reload fleshmarket
+cd /root/Flesh-Market && git pull && pm2 reload fleshmarket
 
 # Backup the database
-/opt/fleshmarket/deploy/backup.sh
+/root/Flesh-Market/deploy/backup.sh
 ```

@@ -1093,7 +1093,8 @@ function drawTerrain(){
     return;
   }
   var base={dust:'rgba(46,34,16,0.55)',veins:'rgba(20,38,24,0.6)',rift:'rgba(22,16,34,0.62)',
-            ice:'rgba(16,38,44,0.55)',tether:'rgba(16,40,26,0.55)'}[Tn]||'rgba(20,38,24,0.6)';
+            ice:'rgba(16,38,44,0.55)',tether:'rgba(16,40,26,0.55)',
+            ocean:'rgba(10,34,52,0.62)'}[Tn]||'rgba(20,38,24,0.6)';
   pth(plate);ctx.fillStyle=base;ctx.fill();
   ctx.strokeStyle='rgba(47,159,74,0.26)';ctx.lineWidth=1;ctx.stroke();
   if(Tn==='dust'){var rng=mulberry32(0xD05);ctx.strokeStyle='rgba(220,170,90,0.10)';
@@ -1124,6 +1125,28 @@ function drawTerrain(){
     for(y4=WH-6;y4>=6;y4-=3)pts2.push([px(chanC(y4)+chanW(y4),y4),py(chanC(y4)+chanW(y4),y4,0)]);
     pth(pts2);ctx.fillStyle='rgba(28,96,126,0.45)';ctx.fill();
     ctx.strokeStyle='rgba(140,225,250,0.4)';ctx.lineWidth=1;ctx.stroke();}
+  // Ocean: open water with a swell running across it and a shelf line. Not ice
+  // channels tinted blue; a world that is water rather than a world with water
+  // on it, which is the difference KS-07 needed.
+  if(Tn==='ocean'){
+    var ro=mulberry32(0x0CEA);
+    ctx.strokeStyle='rgba(90,180,220,0.13)';ctx.lineWidth=1;
+    for(var so=0;so<26;so++){
+      var yb=6+ro()*(WH-12);ctx.beginPath();
+      for(var xo=6;xo<=WW-6;xo+=7){
+        var yy2=yb+Math.sin(xo*0.035+so*1.7)*5.5+Math.sin(xo*0.11+so)*1.8;
+        if(xo===6)ctx.moveTo(px(xo,yy2),py(xo,yy2,0));else ctx.lineTo(px(xo,yy2),py(xo,yy2,0));
+      }
+      ctx.stroke();
+    }
+    glow('rgba(140,225,250,0.7)',8,function(){
+      ctx.strokeStyle='rgba(140,225,250,0.30)';ctx.lineWidth=1.6;ctx.beginPath();
+      for(var xs=6;xs<=WW-6;xs+=6){
+        var ys=WH*0.34+Math.sin(xs*0.026)*16+Math.sin(xs*0.07)*4;
+        if(xs===6)ctx.moveTo(px(xs,ys),py(xs,ys,0));else ctx.lineTo(px(xs,ys),py(xs,ys,0));
+      }
+      ctx.stroke();});
+  }
   if(Tn==='tether'){ctx.strokeStyle='rgba(120,200,150,0.12)';ctx.lineWidth=6;
     for(var a=0;a<8;a++){var th=a/8*6.283+0.2;
       ctx.beginPath();ctx.moveTo(px(WW/2,WH/2),py(WW/2,WH/2,0));
@@ -1701,8 +1724,41 @@ function renderSectorBox(){
   }
   h+='<p class="cynote">'+T('city.worksHint','Returns no commerce. Lowers unrest, raises prosperity, adds local supply, and raises what an invader pays for every point of control here. Never refunded, never salvaged by an occupier.')+'</p>';
   h+=storesHtml(d);
+  h+=contestHtml();
   h+='<button class="cybtn" onclick="window.cityRenameDistrict()">'+T('city.rename','RENAME')+'</button>';
   return h;
+}
+
+// ── Watching the fight for this colony ──────────────────────────────────────
+// A COLONY THAT IS BEING CONTESTED HAS NOWHERE TO LOOK AT THAT, and it is the
+// only part of the war with no picture. The war fund has a number, control has
+// a percentage, capture has a message in the feed, and the fighting those three
+// describe has never been drawn anywhere.
+//
+// This opens the viewer and nothing else. It is not a command, it does not
+// commit anyone, it costs nothing and it changes nothing - the button is shown
+// only when TWO factions actually hold ground here, because a battlefield with
+// one belligerent is a mirror match and the game does not have those.
+function contested(){
+  if(!cData) return null;
+  var c=cData.control;
+  if(!c && window.gState && cOpen) c=window.gState[cOpen];
+  if(!c || !window.CB || !window.CB.rosterFor || !cOpen) return null;
+  return window.CB.rosterFor(cOpen);
+}
+function contestHtml(){
+  var r=contested();
+  if(!r) return '';
+  var api=window.FM_FAC_API;
+  var nm=function(f){ return api?api.short(f):String(f).toUpperCase(); };
+  return '<div class="cykv" style="border-top:1px solid #0a3315;margin-top:6px;padding-top:6px">'
+    +'<span class="k">'+T('city.contested','Contested')+'</span>'
+    +'<span class="v num">'+nm(r.home)+' '+r.homePct.toFixed(0)+'% &middot; '
+    +nm(r.away)+' '+r.awayPct.toFixed(0)+'%</span></div>'
+    +'<button class="cybtn" style="border-color:#4ecdc4;color:#4ecdc4" '
+    +'onclick="window.cityWatch&&window.cityWatch(\''+cOpen+'\')">'
+    +T('city.watchEngagement','WATCH ENGAGEMENT')+'</button>'
+    +'<p class="cynote">'+T('city.watchNote','Shows the ground being fought over. Opens a viewer; commits nothing and costs nothing.')+'</p>';
 }
 
 function storesHtml(d){

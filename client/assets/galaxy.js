@@ -6,10 +6,147 @@
 'use strict';
 
 var activeGalaxy = 'coalition';
-var WORMHOLE_OPEN = (typeof window!=='undefined' && window._WORMHOLE_OPEN===true);
+
+// ── Galaxy registry ──────────────────────────────────────────────────────────
+// activeGalaxy used to be a boolean in a string's clothing: two values, an
+// if/else portalConfig, a ternary for the nebula and a toggle for the swap.
+// A third galaxy breaks every one of those, so the shape moves here first.
+//
+// gate.kind is how you REACH a galaxy from its `from` side:
+//   'map'   - a portal sprite sitting at fixed coordinates on the galaxy map.
+//   'orbit' - a body orbiting inside one colony's SYSTEM view. You have to fly
+//             to the system and find it. Nothing on the galaxy map marks it.
+// ret is the portal that appears on that galaxy's own map to send you home.
+var GALAXIES = {
+  coalition: {
+    id:'coalition', label:'COALITION SPACE', accent:'#4ecdc4', home:true,
+    nebula:'assets/space/backgrounds/blue_purple.png',
+    // Extended upward from -80 so the Abaddon gate and its labels fit. Nothing
+    // else moves; the map just has sky above it now.
+    viewBox:'-150 -210 1200 1030',
+    sealKey:null, anchor:null, gate:null, ret:null,
+  },
+  jade: {
+    id:'jade', label:'JADE CIRCUIT', accent:'#e8e4d8',
+    viewBox:'-150 -80 1200 900',
+    nebula:'assets/space/backgrounds/jade_green.png',
+    sealKey:'jade', anchor:'mozi_array',
+    gate:{ kind:'map', from:'coalition', x:990, y:150, size:120,
+           sprite:'assets/space/planets/jade/galaxy/1.png',
+           sub:'FTL PASSAGE', subSealed:'PASSAGE SEALED' },
+    ret:{ x:990, y:250, size:120, sub:'RETURN' },
+    sealBanner:'PASSAGE SEALED \u00b7 TRADE OPENS WHEN THE CIRCUIT ALLOWS',
+  },
+  khaisultull: {
+    id:'khaisultull', label:"KHAI'SULTULL REACH", accent:'#c2551f',
+    // The Coalition plate, gradient mapped to green on its own luminance. Same
+    // nebula, same structure, same contrast, different colour. The first pass
+    // used a file picked by filename without opening it, which turned out to
+    // be a photograph of an ocean.
+    nebula:'assets/space/backgrounds/khai_green.png',
+    sealKey:'khaisultull', anchor:null,
+    viewBox:'-150 -80 1200 900',
+    // Above Abaddon, on the map. The first pass hid it as a tiny body orbiting
+    // inside Abaddon's system view, which was too small to read and dragged in
+    // the whole system-view teardown path.
+    gate:{ kind:'map', from:'coalition', x:490, y:-72, size:112,
+           sprite:'assets/space/planets/jade/galaxy/1.png',
+           labelAbove:true,
+           sub:'UNCHARTED PASSAGE', subSealed:'NO SIGNAL' },
+    ret:{ x:990, y:250, size:120, sub:'RETURN' },
+    sealBanner:'NOTHING IS ANSWERING ON THIS SIDE',
+  },
+};
+function galaxyOf(colonyId){
+  var m = COLONY_META[colonyId];
+  return (m && m.galaxy) || 'coalition';
+}
+function galaxyDef(id){ return GALAXIES[id] || GALAXIES.coalition; }
+
+// Per-galaxy seal state. The Circuit's flag keeps its original name and DB key
+// so existing saves and the existing /api/dev/wormhole switch keep working.
+var PASSAGE_OPEN = { jade:false, khaisultull:false };
+Object.defineProperty(window,'_PASSAGE_OPEN',{get:function(){return PASSAGE_OPEN;}});
+/* A SEAL IS A RULE FOR PLAYERS AND AN OBSTACLE FOR THE PERSON RUNNING THE GAME.
+   A GM has to be able to stand on a world before he opens it to anyone: check
+   the ground, set the line, watch the first engagement, and only then unseal it.
+   With the seal enforced against everybody that was impossible without unsealing
+   the passage first, which is the one thing he is trying not to do yet.
+
+   ONE PREDICATE, NOT A BYPASS SPRINKLED AT THE CALL SITES. passageOpen is asked
+   by the portal sprite, the lane, the seal banner and swapGalaxy; a dev
+   exception added to the mover alone would move a GM into a galaxy whose map
+   still drew itself as sealed and whose portal home was not rendered.
+
+   It is a VIEWING permission and nothing more. Every server route still checks
+   its own gate, so a dev standing in a sealed Reach can look at it and cannot
+   fund, vote or push through a seal the server is enforcing - and those routes
+   get the same exception explicitly, where it is a decision rather than a
+   side effect of being able to see the place. */
+function devBypassesSeal(){
+  return !!(window.ME && (window.ME.is_dev || window.ME.is_admin || window.ME.is_prime));
+}
+function passageOpen(galaxyId){
+  var d = galaxyDef(galaxyId);
+  if (!d.sealKey) return true;
+  if (PASSAGE_OPEN[d.sealKey]) return true;
+  return devBypassesSeal();
+}
+/* What the SEAL ITSELF says, ignoring who is asking. The banner has to read
+   SEALED for a GM standing in a sealed galaxy, or he cannot tell the state he is
+   about to change from the state he wants. */
+function passageSealed(galaxyId){
+  var d = galaxyDef(galaxyId);
+  return !!(d.sealKey && !PASSAGE_OPEN[d.sealKey]);
+}
+// Portals to draw on the map of `galaxyId`: outbound gates declared with
+// kind 'map' whose `from` is this galaxy, plus this galaxy's own way home.
+function mapGates(galaxyId){
+  var out=[];
+  Object.keys(GALAXIES).forEach(function(k){
+    var d=GALAXIES[k], g=d.gate;
+    if(g && g.kind==='map' && g.from===galaxyId)
+      out.push({ target:k, x:g.x, y:g.y, size:g.size, sprite:g.sprite,
+                 label:d.label, sub:g.sub, subSealed:g.subSealed, accent:d.accent,
+                 labelAbove:!!g.labelAbove, open:passageOpen(k) });
+  });
+  var self=galaxyDef(galaxyId);
+  if(self.ret && self.gate)
+    out.push({ target:self.gate.from, x:self.ret.x, y:self.ret.y, size:self.ret.size,
+               sprite:self.gate.sprite, label:galaxyDef(self.gate.from).label,
+               sub:self.ret.sub, subSealed:self.ret.sub,
+               accent:galaxyDef(self.gate.from).accent, open:true });
+  return out;
+}
+// Gates that live inside a colony's system view. Nothing declares one right
+// now: the Reach gate started as an orbiting body inside Abaddon and was moved
+// onto the map because it was too small to read there. The kind is kept because
+// the registry supports it and a future gate may want to hide.
+function orbitGateFor(colonyId){
+  var found=null;
+  Object.keys(GALAXIES).forEach(function(k){
+    var g=GALAXIES[k].gate;
+    if(g && g.kind==='orbit' && g.colony===colonyId) found={ target:k, g:g, def:GALAXIES[k] };
+  });
+  return found;
+}
+
+// Legacy alias. Read-only: everything now writes through PASSAGE_OPEN.
+Object.defineProperty(window,'_WORMHOLE_OPEN_LIVE',{get:function(){return PASSAGE_OPEN.jade;}});
 window._jadeRerender = function(){ try{ if(typeof gSelected!=='undefined' && gSelected && typeof selectColony==='function') selectColony(gSelected); }catch(e){} };
-window._setWormhole = function(open){
-  WORMHOLE_OPEN = !!open;
+window._setWormhole = function(open){ window._setPassage('jade', open); };
+window._setPassage = function(galaxyId, open){
+  var d = GALAXIES[galaxyId];
+  if(!d || !d.sealKey) return;
+  PASSAGE_OPEN[d.sealKey] = !!open;
+  /* Sealed while somebody is standing in it: send them home. Checked against
+     the galaxy the player is actually looking at rather than against the one
+     being sealed, so a future third galaxy cannot slip through. */
+  if(!open && activeGalaxy!=='coalition' && !passageOpen(activeGalaxy)){
+    /* passageOpen, not passageSealed: a GM who can pass the seal is not ejected
+       by it closing, which is the whole point of the exception. */
+    try { swapGalaxy('coalition'); } catch(e) { console.error('[passage] eject', e); }
+  }
   if(typeof gMapActive!=='undefined' && gMapActive){
     if(typeof renderPortal==='function') renderPortal();
     if(typeof gSelected!=='undefined' && gSelected && typeof selectColony==='function') selectColony(gSelected);
@@ -313,6 +450,125 @@ var COLONY_META = {
         bonus:'Dev accounts only: ⚡ passive income multiplier', contestBonus:'Cannot be contested' },
     ],
   },
+
+  // ─── Khai'sultull Reach (through the Abaddon gate) ───
+  // Ten worlds. Designations, not names: nothing here has been surveyed by
+  // anyone who came back. `khaiName` and `khaiLore` are the truth, revealed
+  // per world by the GM on first capture or first contact. `terrain` drives
+  // both the war layer and, later, the city view, so the same world reads the
+  // same in both places.
+  // No lanes, no companies, no sector bonuses. This is a war map for now.
+  ks_gate_reach: {
+    name:"Sahn'tekk", x:120, y:120, pop:'REDACTED', galaxy:'khaisultull',
+    terrain:'dust', khai:true, revealed:false,
+    khaiName:"The Eleven Days", khaiLore:"The first ground anyone held on this side, for eleven days. The Khai'sultull let it be taken and let it be kept until the crossing schedule was public record. Nothing about the eleven days was a mistake on their part.",
+    lore:"Khai'sultull ground, and they gave us the name themselves through the translation layer without being asked for it. What the name means is not included. Coalition scan returns surface composition and nothing else.",
+    companies:[],
+    planets:[
+      { name:"Tekk'vaar", sector:5, sectorName:'Industrial', icon:'◈',
+        bonus:"The first ground anyone held on this side, for eleven days. Nothing has been built here since.", contestBonus:'Contested ground' },
+    ],
+  },
+  ks_02: {
+    name:"Ussaleth", x:300, y:90, pop:'REDACTED', galaxy:'khaisultull',
+    terrain:'dust', khai:true, revealed:false,
+    khaiName:"What Is Fed", khaiLore:"Farmland by their reckoning. The dust is a crop and the harvest is fed to something that does not surface. Coalition survey teams found the irrigation and could not find the field.",
+    lore:"Named by the Khai'sultull, rendered to us in our own alphabet, with the meaning withheld. The layer will translate a demand and a delivery schedule and not this.",
+    companies:[],
+    planets:[
+      { name:"Ussa Fields", sector:4, sectorName:'Agriculture', icon:'◈',
+        bonus:"Irrigation with no visible crop. Survey teams found the water and could not find the field.", contestBonus:'Contested ground' },
+    ],
+  },
+  ks_03: {
+    name:"Khai'ru", x:470, y:160, pop:'REDACTED', galaxy:'khaisultull',
+    terrain:'dust', khai:true, revealed:false,
+    khaiName:"Mother Seat", khaiLore:"A brood-mother seat, abandoned and kept swept. The Khai'sultull maintain it and will not garrison it. Every demand they have made so far has named this world as non-negotiable without ever saying why.",
+    lore:"The Khai'sultull supplied this name first, before any other, and have never explained why. Coalition scan returns surface composition and nothing else.",
+    companies:[],
+    planets:[
+      { name:"Khai'ru Seat", sector:7, sectorName:'Defense', icon:'◈',
+        bonus:"Swept, maintained, ungarrisoned. Named non-negotiable in every demand so far.", contestBonus:'Contested ground' },
+    ],
+  },
+  ks_04: {
+    name:"Tessul", x:210, y:270, pop:'REDACTED', galaxy:'khaisultull',
+    terrain:'veins', khai:true, revealed:false,
+    khaiName:"The Open Seam", khaiLore:"Exposed mineral seam running four hundred kilometres. The Guild priced it before anyone asked whether it was for sale, which the Khai'sultull have since quoted back at them in Coalition English, verbatim, with the date.",
+    lore:"Named by the brood. The Merchant Guild priced the world before anyone asked what it was called, which the Khai'sultull have since quoted back with the date.",
+    companies:[],
+    planets:[
+      { name:"Tess'orr", sector:5, sectorName:'Industrial', icon:'◈',
+        bonus:"Four hundred kilometres of exposed ore. Priced by the Guild before anyone asked.", contestBonus:'Contested ground' },
+    ],
+  },
+  ks_05: {
+    name:"Zhaal'un", x:640, y:250, pop:'REDACTED', galaxy:'khaisultull',
+    terrain:'rift', khai:true, revealed:false,
+    khaiName:"The Long Answer", khaiLore:"A chasm system with structure at the bottom. The name is a translation the Khai'sultull supplied themselves and declined to explain. Signals go in on every band and come back on one.",
+    lore:"The name arrived intact and the translation did not. Signals go into this world on every band and come back on one.",
+    companies:[],
+    planets:[
+      { name:"Zhaal Floor", sector:6, sectorName:'Tech', icon:'◈',
+        bonus:"Structure at the bottom of the chasm. Signals go in on every band and return on one.", contestBonus:'Contested ground' },
+    ],
+  },
+  ks_06: {
+    name:"Marokketh", x:400, y:380, pop:'REDACTED', galaxy:'khaisultull',
+    terrain:'dust', khai:true, revealed:false,
+    khaiName:"Ground Of No Value", khaiLore:"Open ground, no cover, no reason to fight here and four separate engagements anyway. The Khai'sultull commit to this world in numbers that make no military sense and withdraw from ones that do.",
+    lore:"Named, defended, and worth nothing by any survey the Coalition has run. The Khai'sultull commit here in numbers that make no military sense.",
+    companies:[],
+    planets:[
+      { name:"Marokk Flats", sector:7, sectorName:'Defense', icon:'◈',
+        bonus:"No cover, no value, four engagements. They commit here and withdraw from better ground.", contestBonus:'Contested ground' },
+    ],
+  },
+  ks_07: {
+    name:"Ossuveth", x:760, y:400, pop:'REDACTED', galaxy:'khaisultull',
+    terrain:'ocean', khai:true, revealed:false,
+    khaiName:"The Ministry Beneath", khaiLore:"An ocean world, and the ministry is under it. The Khai'sultull built downward and the water closed over the works without stopping them. Their clerks have not surfaced in eleven years and the accounts have not been late once.",
+    lore:"An ocean world. The name was given freely; what is under the water was not. Coalition scan returns surface composition and a great deal of silence.",
+    companies:[],
+    planets:[
+      { name:"Ossu'thal", sector:0, sectorName:'Finance', icon:'◈',
+        bonus:"Submerged. The ministry is under the water and the accounts have never been late.", contestBonus:'Contested ground' },
+    ],
+  },
+  ks_08: {
+    name:"Nikkathaal", x:150, y:470, pop:'REDACTED', galaxy:'khaisultull',
+    terrain:'ice', khai:true, revealed:false,
+    khaiName:"Cold Tribute", khaiLore:"Frozen and worthless and defended harder than anything except the Threshold. The ice is layered in a way ice does not layer on its own.",
+    lore:"Frozen and named. The Khai'sultull rendered it for us on the first crossing and have not elaborated since.",
+    companies:[],
+    planets:[
+      { name:"Nikka Shelf", sector:5, sectorName:'Industrial', icon:'◈',
+        bonus:"Defended harder than anything but the Threshold. The layering is not natural.", contestBonus:'Contested ground' },
+    ],
+  },
+  ks_09: {
+    name:"Thennsur", x:560, y:540, pop:'REDACTED', galaxy:'khaisultull',
+    terrain:'dust', khai:true, revealed:false,
+    khaiName:"Ninth Concession", khaiLore:"Named for a demand the Coalition has not yet received. The Khai'sultull have been calling it this since before the passage opened, which means they wrote the list first and are working down it.",
+    lore:"The Khai'sultull have been calling it this since before the passage opened, which means the list was written first and they are working down it.",
+    companies:[],
+    planets:[
+      { name:"Thenn'sur", sector:0, sectorName:'Finance', icon:'◈',
+        bonus:"Named for a demand the Coalition has not received yet.", contestBonus:'Contested ground' },
+    ],
+  },
+  ks_10: {
+    name:"Vesskanoth", x:880, y:300, pop:'REDACTED', galaxy:'khaisultull',
+    terrain:'tether', khai:true, revealed:false,
+    khaiName:"Sixteen Names", khaiLore:"An orbital tether anchored to nothing that requires an anchor. Sixteen Khai'sultull broods claim it and none of them garrison it. The translation layer renders all sixteen claims as the same sentence.",
+    lore:"Sixteen broods claim this world and the translation layer renders all sixteen claims as the same sentence. The name is one of them.",
+    companies:[],
+    planets:[
+      { name:"Vesska Anchor", sector:6, sectorName:'Tech', icon:'◈',
+        bonus:"A tether anchored to something that does not need an anchor. Sixteen broods claim it.", contestBonus:'Contested ground' },
+    ],
+  },
+
   // ─── Jade Circuit cluster (central galaxy) ───
   yujing: {
     name:'Yujing', x:500, y:300, pop:'9.2B', galaxy:'jade',
@@ -600,6 +856,21 @@ var COLONY_PLANET = {
   scrub_yard:       {folder:'animated/forest_clouds_2',       frames:120},  // Fog-shrouded shell-company world
   the_escrow:       {folder:'animated/ice',             frames:60},  // Cold deep-ocean data vault world
   margin_call:       {folder:'animated/lava_1',       frames:60},  // Industrial lava smelter world
+  // ── Khai'sultull Reach ──────────────────────────────────────────────────
+  // Terrain here matches COLONY_VISUAL server-side, so the sprite on the map,
+  // the body in the system view and the ground the war renders on are all the
+  // same world. Seven of the ten are desert; the exceptions are the seam, the
+  // rift, the ice world and the hive platform.
+  ks_gate_reach:    {folder:'animated/desert_1',       frames:60},
+  ks_02:            {folder:'animated/desert_2',       frames:60},
+  ks_03:            {folder:'animated/desert_1',       frames:60},
+  ks_04:            {folder:'animated/lava_2',         frames:60},   // veins: exposed seam
+  ks_05:            {folder:'animated/barren_2',       frames:60},   // rift: chasm system
+  ks_06:            {folder:'animated/desert_2',       frames:60},
+  ks_07:            {folder:'animated/ocean_clouds',   frames:120},  // ocean: drowned hive
+  ks_08:            {folder:'animated/ice',            frames:60},
+  ks_09:            {folder:'animated/desert_1',       frames:60},
+  ks_10:            {folder:'animated/barren_4',       frames:60},   // tether anchor
   // ── Jade Circuit cluster ──
   yujing:            {folder:'animated/terran_2',           frames:120},
   tiangong:          {folder:'jade/dyson',                   frames:7},
@@ -617,6 +888,24 @@ var COLONY_PLANET = {
   quanzhou_docks:    {folder:'animated/terran_no_clouds_2',  frames:60},
   zhurong_foundry:   {folder:'animated/lava_3',              frames:60},
   chiyou_marches:    {folder:'animated/barren_3',            frames:60},
+};
+
+// Exposed so the battlefield can look up the SAME sprite folder the galaxy map
+// draws and take its ground colour from that body's own art. Before this the
+// battlefield carried a seven-entry hand-written colour table keyed on terrain
+// SHAPE, and four Reach worlds fought on a colour their planet is not: ks_02
+// and ks_06 are red desert bodies that drew tan, ks_04 is a lava body that drew
+// gold, ks_05 is a teal body that drew violet. One table, one authoring.
+window.COLONY_PLANET = COLONY_PLANET;
+
+// Terrain per Reach world, mirroring COLONY_VISUAL server-side. Exposed so the
+// hive city view draws the same ground the battlefield and the city view do.
+// SHAPE ONLY. Colour comes from COLONY_PLANET now: a terrain key says what
+// cover is shaped like, not what the world looks like, and conflating the two
+// is what let the two authorings drift apart in the first place.
+window.REACH_TERRAIN = {
+  ks_gate_reach:'dust', ks_02:'dust',  ks_03:'dust',   ks_04:'veins', ks_05:'rift',
+  ks_06:'dust',         ks_07:'ocean', ks_08:'ice',    ks_09:'dust',  ks_10:'tether',
 };
 
 var COLONY_BANNER = {
@@ -646,6 +935,12 @@ var COLONY_BANNER = {
   xuanwu_bastion:'space_station_1', lingtai_reach:'forest_1',
   fuxi_observatory:'arctic_1',  quanzhou_docks:'terran_1',
   zhurong_foundry:'lava_1',     chiyou_marches:'barren_3',
+  // Khai'sultull Reach, matched to each world's declared terrain
+  ks_gate_reach:'desert_1',     ks_02:'desert_2',
+  ks_03:'desert_1',             ks_04:'lava_1',
+  ks_05:'barren_2',             ks_06:'desert_2',
+  ks_07:'ocean_1',              ks_08:'arctic_1',
+  ks_09:'desert_1',             ks_10:'barren_3',
 };
 
 // sector id → 16x16 icon filename (no extension)
@@ -738,6 +1033,9 @@ function spFadeNebula(){
 
 // ── Data Maps ────────────────────────────────────────────────────────────────
 var SP_COLONY_SUN = {
+  // Reach. Dim, old stars: nothing out here is a showpiece.
+  ks_gate_reach:8, ks_02:5, ks_03:8, ks_04:12, ks_05:20,
+  ks_06:5, ks_07:18, ks_08:20, ks_09:8, ks_10:15,
   new_anchor:1, cascade_station:8, frontier_outpost:5,
   the_hollow:15, vein_cluster:12, aurora_prime:3,
   null_point:20, limbosis:18, lustandia:6, gluttonis:24,
@@ -819,7 +1117,11 @@ function spSeedSystemStars(){
 
 // ── Open System View ──────────────────────────────────────────────────────────
 // Colonies that ARE a single celestial body — no star + orbiting planets
-var SP_SINGLE_BODY = {lustandia:1, limbosis:1, gluttonis:1, abaddon:1, flesh_station:1, eyejog:1};
+var SP_SINGLE_BODY = {lustandia:1, limbosis:1, gluttonis:1, abaddon:1, flesh_station:1, eyejog:1,
+  // Every Reach world is a single body orbiting its own star. They are not
+  // star systems with a planet list: there is one surface and it is contested.
+  ks_gate_reach:1, ks_02:1, ks_03:1, ks_04:1, ks_05:1,
+  ks_06:1, ks_07:1, ks_08:1, ks_09:1, ks_10:1};
 // Station-orbit: large planet + space station orbiting it, zones as module cards
 var SP_STATION_ORBIT = {aurora_prime:1, the_hollow:1, vein_cluster:1};
 // Which space station image to use per colony
@@ -1503,16 +1805,28 @@ window.spOpenSurface = function(colonyId, planetIdx){
   var secEl = document.getElementById('spHUDSector');
   secEl.innerHTML = '<span style="color:'+f.color+';font-size:.72rem;letter-spacing:.08em">'+sectorLoreName(planet.sector)+'</span>';
 
-  spUpdateHUDControl(colonyId, f, s);
-  spUpdateHUDPrices(colonyId);
-  spBuildFundButtons(colonyId, f, s);
+  // A Khai'sultull world has no market, no Coalition control track and nothing
+  // to fund. Showing four faction bars at 0% and a Fund Faction block on a
+  // brood world is not a neutral default: it tells a player there is a control
+  // track here to buy into, and there is not. Reach worlds get the war.
+  if(m.galaxy==='khaisultull'){
+    spBuildReachHUD(colonyId, planet, planetIdx);
+  } else {
+    spRestoreHUDSections();
+    spUpdateHUDControl(colonyId, f, s);
+    spUpdateHUDPrices(colonyId);
+    spBuildFundButtons(colonyId, f, s);
+  }
 
   // Show inline HUD panel
   var hud = document.getElementById('spSysHUD');
   if(hud) hud.style.transform = 'translateX(0)';
 
   if(spHUDRefreshTimer) clearInterval(spHUDRefreshTimer);
-  spHUDRefreshTimer = setInterval(function(){ spUpdateHUDPrices(colonyId); }, 2000);
+  spHUDRefreshTimer = setInterval(function(){
+    if(m.galaxy==='khaisultull') spBuildReachHUD(colonyId, planet, planetIdx);
+    else spUpdateHUDPrices(colonyId);
+  }, 2000);
 };
 
 window.spCloseSurface = function(){
@@ -1539,11 +1853,465 @@ function spParallax(e){
   });
 }
 
+// ── HUD: the Reach ────────────────────────────────────────────────────────────
+// Three sections, replacing market, control and fund: the world's front, the
+// engagements running on it, and what the settlement is. Zone count is set by
+// the server from the world's population, so a dense world runs three fights
+// and an empty one runs one.
+// spBuildReachHUD writes over the whole section, labels and inner list divs
+// included. The standard updaters write into those inner divs by id, so once a
+// Reach world has been opened the next Coalition world would find them gone.
+// Rebuilding the original markup is cheaper and safer than making three
+// updaters defensive about a container that used to be guaranteed.
+function spRestoreHUDSections(){
+  var pr=document.getElementById('spHUDPrices');
+  if(pr && !document.getElementById('spPriceList'))
+    pr.innerHTML='<div class="sp-hud-label">LIVE MARKET</div><div id="spPriceList"></div>';
+  var cb=document.getElementById('spHUDControl');
+  if(cb && !document.getElementById('spCtrlBars'))
+    cb.innerHTML='<div class="sp-hud-label">FACTION CONTROL</div><div id="spCtrlBars"></div>';
+  var fb=document.getElementById('spHUDFund');
+  if(fb && !document.getElementById('spFundBtns'))
+    fb.innerHTML='<div class="sp-hud-label">FUND FACTION</div><div id="spFundBtns"></div>';
+}
+
+// The script rides in behind the galaxy bundle, so every call site guards. It
+// is decoration on a name that is already legible, which means the correct
+// behaviour when it has not loaded is to render nothing rather than to wait.
+function reachGlyphLine(word, color, scale){
+  if(!window.KhaiScript) return '';
+  var g = window.KhaiScript.glyphs(word, { scale: scale || 0.62 });
+  if(!g) return '';
+  return '<div class="khai-line" title="' + String(window.KhaiScript.reading(word)).replace(/"/g,'&quot;') + '" '
+    + 'style="margin-top:2px;color:' + (color || '#e08a52') + ';opacity:.8;line-height:0">' + g + '</div>';
+}
+
+// ── Push windows ─────────────────────────────────────────────────────────────
+// Rendered from one function used by BOTH the detail panel and the surface HUD.
+// Two copies of this markup is how the WATCH control ended up reachable from one
+// of them and not the other, and a funding control nobody can find is the
+// dead-switch problem with money attached.
+window._REACH_MINE = window._REACH_MINE || {};   // "world:zone" -> my committed total
+
+function reachWinKey(id, zi){ return id + ':' + zi; }
+
+function reachFmtLeft(ms){
+  if(ms <= 0) return 'CLOSING';
+  var s = Math.floor(ms/1000), m = Math.floor(s/60);
+  return m > 0 ? (m + 'm ' + (s%60) + 's') : (s + 's');
+}
+
+// The markup for one window, open or just resolved. `compact` trims it for the
+// surface HUD rail, which is narrower than the detail panel.
+
+/* WAVE STATE, WHICH THE PLAYER PANEL HAS NEVER SHOWN. A zone's control bar
+   moves both ways inside a live wave and says nothing about how much of this
+   ground is permanently ours, which is the only number in the layer that never
+   goes backwards and the reason anyone comes back next week.
+
+   The forming clock is computed from waveAt, which is absolute, rather than
+   from a remaining time that was correct when the payload was built. */
+function reachWaveLine(R, z){
+  var total = (R && R.waves) || 3;
+  var done  = z.cleared | 0;
+  var fms   = (window._REACH && window._REACH.waveFormMs) || 0;
+  var left  = (z.waveAt && fms) ? Math.max(0, z.waveAt + fms - Date.now()) : 0;
+  var pips  = '';
+  for(var i=0;i<total;i++)
+    pips += '<i style="display:inline-block;width:9px;height:4px;margin-right:2px;background:'
+         + (i < done ? '#4ecdc4' : '#26262e') + '"></i>';
+  var tail;
+  if(z.done) tail = 'every wave banked';
+  else if(left > 0){
+    var hh = Math.floor(left/3600000), mm = Math.round((left%3600000)/60000);
+    tail = 'next wave forms in ' + (hh ? hh+'h '+mm+'m' : mm+'m');
+  }
+  else tail = 'wave ' + (done+1) + ' of ' + total + ' is on the ground';
+  return '<div style="font-size:.58rem;color:#4a4842;margin-top:3px;display:flex;'
+    + 'align-items:center;gap:6px"><span>'+pips+'</span><span>'
+    + done + ' of ' + total + ' banked \u00b7 ' + tail + '</span></div>';
+}
+
+function reachWinBlock(id, zi, z, compact){
+  var w = z && z.win;
+  if(!w) return '';
+  var P = (window._REACH && window._REACH.push) || { minFunders:4, cap:2500000, minCommit:100000 };
+  var h = '';
+
+  if(!w.open){
+    var col = w.resolved === 'carried' ? '#4ecdc4' : w.resolved === 'repelled' ? '#c2551f' : '#8a7a6a';
+    h += '<div style="border-top:1px solid #1a1a22;margin-top:6px;padding-top:6px">'
+      +  '<div style="font-size:.6rem;letter-spacing:.14em;color:'+col+'">'+String(w.resolved||'').toUpperCase()+'</div>'
+      +  '<div style="font-size:.62rem;color:#6b7280;line-height:1.5;margin-top:3px">'+(w.outcome||'')+'</div>';
+    if(w.roll && w.roll.length){
+      h += '<div style="font-size:.58rem;color:#4a4842;margin-top:4px">'
+        +  w.roll.map(function(f){ return f.name+' \u0192'+Number(f.amt).toLocaleString(); }).join(' \u00b7 ')
+        +  '</div>';
+    }
+    return h + '</div>';
+  }
+
+  var pct  = w.target > 0 ? Math.min(100, Math.round(w.pool / w.target * 100)) : 0;
+  var fpct = Math.min(100, Math.round(w.funders / P.minFunders * 100));
+  var mine = w.mine || window._REACH_MINE[reachWinKey(id, zi)] || 0;
+  var room = Math.max(0, P.cap - mine);
+  var left = reachFmtLeft(w.closesAt - Date.now());
+  var short = P.minFunders - w.funders;
+
+  h += '<div class="reach-win" data-win="'+reachWinKey(id,zi)+'" data-closes="'+w.closesAt+'" '
+    +  'style="border-top:1px solid #3a1d0c;margin-top:7px;padding-top:7px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">'
+    +  '<span style="font-size:.62rem;letter-spacing:.14em;color:#f0b454">PUSH WINDOW</span>'
+    +  '<span class="reach-win-clock" style="font-size:.62rem;color:#e08a52">'+left+'</span></div>';
+
+  h += '<div style="display:flex;justify-content:space-between;font-size:.6rem;color:#6b7280">'
+    +  '<span>CAPITAL</span><span style="color:#d8d2c4">\u0192'+Number(w.pool).toLocaleString()
+    +  ' <i style="font-style:normal;color:#4a4842">/ \u0192'+Number(w.target).toLocaleString()+'</i></span></div>';
+  h += '<div style="height:5px;background:#0d1017;border:1px solid #1d2029;margin:3px 0 6px;overflow:hidden">'
+    +  '<i style="display:block;height:100%;width:'+pct+'%;background:#4ecdc4"></i></div>';
+
+  h += '<div style="display:flex;justify-content:space-between;font-size:.6rem;color:#6b7280">'
+    +  '<span>FUNDERS</span><span style="color:'+(short>0?'#f0b454':'#4ecdc4')+'">'+w.funders+' / '+P.minFunders+'</span></div>';
+  h += '<div style="height:5px;background:#0d1017;border:1px solid #1d2029;margin:3px 0 6px;overflow:hidden">'
+    +  '<i style="display:block;height:100%;width:'+fpct+'%;background:#f0b454"></i></div>';
+
+  if(!compact){
+    // The muster strip. Sized in CSS pixels and given an integer backing store
+    // so the pixel art lands on whole pixels; a fractional canvas width turns
+    // nearest-neighbour scaling into mush.
+    h += '<canvas class="reach-muster" data-win="'+reachWinKey(id,zi)+'" '
+      +  'data-ratio="'+pct/100+'" width="248" height="46" '
+      +  'style="width:100%;height:46px;display:block;margin:2px 0 6px;'
+      +  'image-rendering:pixelated"></canvas>';
+    h += '<div style="font-size:.58rem;color:#4a4842;margin:-3px 0 6px;letter-spacing:.06em">'
+      +  (pct >= 80 ? 'TWO EMPLACEMENTS FUNDED'
+        : pct >= 40 ? 'ONE EMPLACEMENT FUNDED'
+        : 'NO HARDWARE FUNDED')
+      +  '</div>';
+    h += '<div style="font-size:.6rem;color:#6b7280;margin-bottom:5px">YOUR COMMITMENT '
+      +  '<span style="color:#d8d2c4">\u0192'+Number(mine).toLocaleString()+'</span>'
+      +  '<span style="color:#4a4842"> \u00b7 \u0192'+Number(room).toLocaleString()+' left of your cap</span></div>';
+  }
+
+  if(room > 0){
+    h += '<div style="display:flex;gap:5px;margin-top:6px">'
+      +  '<div onclick="event.stopPropagation();window.reachPush(\''+id+'\','+zi+','+Math.min(room, 500000)+')" '
+      +  'style="flex:1;text-align:center;font-size:.62rem;color:#f0b454;border:1px solid #4a3a1a;'
+      +  'padding:5px 3px;cursor:pointer;letter-spacing:.06em">COMMIT \u0192'+(Math.min(room,500000)/1000)+'k</div>'
+      +  '<div onclick="event.stopPropagation();window.reachPush(\''+id+'\','+zi+',null,true)" '
+      +  'style="flex:1;text-align:center;font-size:.62rem;color:#e08a52;border:1px solid #3a1d0c;'
+      +  'padding:5px 3px;cursor:pointer;letter-spacing:.06em">COMMIT MAX</div></div>';
+  } else {
+    h += '<div style="font-size:.6rem;color:#4a4842;margin-top:6px;text-align:center;letter-spacing:.06em">'
+      +  'YOU ARE AT THE CAP FOR THIS WINDOW</div>';
+  }
+
+  h += '<div style="font-size:.58rem;color:'+(short>0?'#8a6a3a':'#4a4842')+';margin-top:6px;line-height:1.5">'
+    +  (short > 0
+        ? short + ' more separate funder' + (short===1?'':'s') + ' needed or the push never forms and every credit is returned.'
+        : 'Quorum met. If the capital falls short the brood takes ground and the pool is gone.')
+    +  '</div>';
+  return h + '</div>';
+}
+
+// One ticker for every visible window rather than one per block. Windows are
+// rebuilt on every state broadcast, so a per block interval leaks one timer per
+// repaint, which is exactly the bug that drained batteries on the mobile chart.
+if(!window._reachWinTick){
+  window._reachWinTick = setInterval(function(){
+    var now = Date.now();
+    var els = document.querySelectorAll('.reach-win[data-closes]');
+    for(var i=0;i<els.length;i++){
+      var c = els[i].querySelector('.reach-win-clock');
+      if(c) c.textContent = reachFmtLeft(Number(els[i].getAttribute('data-closes')) - now);
+    }
+  }, 1000);
+}
+
+/* Mount a muster strip on every window canvas that does not have one, and
+   retune the ones that do. Rebuilding on each repaint would restart every walk
+   cycle in the line on a two second tick, which reads as a stutter rather than
+   a formation. */
+window._REACH_MUSTER = window._REACH_MUSTER || {};
+function reachMountMusters(){
+  if(!window.FMTroops) return;
+  var els = document.querySelectorAll('canvas.reach-muster');
+  var seen = {};
+  for(var i=0;i<els.length;i++){
+    var el = els[i], key = el.getAttribute('data-win');
+    var ratio = Number(el.getAttribute('data-ratio'))||0;
+    seen[key] = 1;
+    var m = window._REACH_MUSTER[key];
+    if(m && m.el === el){ m.h.set(ratio); continue; }
+    if(m) m.h.stop();
+    var h2 = window.FMTroops.mount(el, { ratio:ratio, slots:9, scale:0.7 });
+    if(h2) window._REACH_MUSTER[key] = { el:el, h:h2 };
+  }
+  // A window that closed took its canvas with it. Stop its loop or the raf
+  // keeps running against a detached node for the rest of the session.
+  for(var k in window._REACH_MUSTER){
+    if(seen[k]) continue;
+    try { window._REACH_MUSTER[k].h.stop(); } catch(e){}
+    delete window._REACH_MUSTER[k];
+  }
+}
+window._reachMountMusters = reachMountMusters;
+if(!window._reachMusterIv)
+  window._reachMusterIv = setInterval(reachMountMusters, 700);
+
+// The war fund, per world. A window is an offensive and this is the standing
+// army: it is what holds a line when nobody is pushing, and the reason a world
+// slips when nobody gives.
+//
+// THE TERMS ARE STATED AT THE POINT OF GIVING and they come from the server
+// rather than being written here, so the interface cannot quietly disagree with
+// the rule. A donation is not a commitment. A window refunds when it goes
+// unanswered because nothing was attempted; this is spent holding ground and
+// does not come back.
+function reachFundBlock(id, R){
+  if(!R) return '';
+  var D = (window._REACH && window._REACH.donate) || { cap:50000000, min:100000, terms:'' };
+  var burn = R.burn || 0;
+  var cover = Math.max(0, Math.min(1, R.cover || 0));
+  var pct = Math.round(cover * 100);
+  var days = (R.daysLeft == null ? -1 : R.daysLeft);
+  var room = Math.max(0, D.roomLeft == null ? D.cap : D.roomLeft);
+
+  var h = '<div style="border-top:1px solid #1a1a22;margin-top:7px;padding-top:7px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">'
+    +  '<span style="font-size:.62rem;letter-spacing:.14em;color:#4ecdc4">WAR FUND</span>'
+    +  '<span style="font-size:.62rem;color:'
+    +  (!burn ? '#4a4842' : days < 0 ? '#4ecdc4' : days < 2 ? '#c2551f' : days < 7 ? '#f0b454' : '#4ecdc4')
+    +  '">' + (!burn ? 'NO WAR HERE' : days < 0 ? 'COVERED' : days.toFixed(1) + ' DAYS') + '</span></div>';
+
+  h += '<div style="display:flex;justify-content:space-between;font-size:.6rem;color:#6b7280">'
+    +  '<span>BALANCE</span><span style="color:#d8d2c4">\u0192' + Math.round(R.fund||0).toLocaleString() + '</span></div>';
+  if(burn){
+    h += '<div style="display:flex;justify-content:space-between;font-size:.6rem;color:#6b7280;margin-top:2px">'
+      +  '<span>BURN</span><span style="color:#e08a52">\u0192' + Math.round(burn).toLocaleString() + ' / day</span></div>';
+    h += '<div style="height:5px;background:#0d1017;border:1px solid #1d2029;margin:4px 0 5px;overflow:hidden">'
+      +  '<i style="display:block;height:100%;width:'+pct+'%;background:#4ecdc4"></i></div>';
+    h += '<div style="font-size:.58rem;color:#4a4842;margin-bottom:5px;letter-spacing:.06em">'
+      +  pct + '% OF THE LINE PAID FOR' + (pct < 100 ? ', THE REST IS GIVING GROUND' : '') + '</div>';
+  }
+
+  if(room > 0){
+    var quick = Math.min(room, 1000000);
+    h += '<div style="display:flex;gap:5px;margin-top:6px">'
+      +  '<div onclick="event.stopPropagation();window.reachFund(\''+id+'\','+quick+')" '
+      +  'style="flex:1;text-align:center;font-size:.62rem;color:#4ecdc4;border:1px solid #1d4a44;'
+      +  'padding:5px 3px;cursor:pointer;letter-spacing:.06em">GIVE \u0192'+(quick/1000)+'k</div>'
+      +  '<div onclick="event.stopPropagation();window.reachFund(\''+id+'\',null,true)" '
+      +  'style="flex:1;text-align:center;font-size:.62rem;color:#e08a52;border:1px solid #3a1d0c;'
+      +  'padding:5px 3px;cursor:pointer;letter-spacing:.06em">GIVE MAX</div></div>';
+    h += '<div style="font-size:.58rem;color:#4a4842;margin-top:5px;line-height:1.5">'
+      +  '\u0192' + room.toLocaleString() + ' left of your daily limit, across the whole Reach.</div>';
+  } else {
+    h += '<div style="font-size:.6rem;color:#4a4842;margin-top:6px;text-align:center;letter-spacing:.06em">'
+      +  'YOU ARE AT YOUR DAILY LIMIT</div>';
+  }
+  if(D.terms)
+    h += '<div style="font-size:.58rem;color:#8a6a3a;margin-top:5px;line-height:1.5">'+D.terms+'</div>';
+  return h + '</div>';
+}
+
+// A vote. ONE DONOR ONE VOTE AND THE AMOUNT IS IRRELEVANT, which the panel says
+// outright, because it is the reason a small donor should bother turning up.
+// The running tally is not shown and is not shipped: what matters to somebody
+// deciding whether to answer is how many, not which way.
+function reachVoteBlock(id, R){
+  var V = R && R.vote;
+  if(!V) return '';
+  var h = '<div style="border-top:1px solid #1a1a22;margin-top:7px;padding-top:7px">';
+
+  if(!V.open){
+    h += '<div style="font-size:.62rem;letter-spacing:.14em;color:#8a7a6a">'
+      +  (V.resolved === 'defaulted' ? 'DECIDED BY DEFAULT' : 'DECIDED') + '</div>'
+      +  '<div style="font-size:.62rem;color:#6b7280;line-height:1.5;margin-top:3px">'+(V.outcome||'')+'</div>';
+    return h + '</div>';
+  }
+
+  var left = reachFmtLeft(V.closesAt - Date.now());
+  h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">'
+    +  '<span style="font-size:.62rem;letter-spacing:.14em;color:#f0b454">A DECISION</span>'
+    +  '<span style="font-size:.62rem;color:#e08a52">'+left+'</span></div>';
+  h += '<div style="font-size:.62rem;color:#d8d2c4;line-height:1.5;margin-bottom:6px">'+(V.question||'')+'</div>';
+
+  (V.options||[]).forEach(function(o){
+    var mine = V.mine === o.id;
+    h += '<div onclick="event.stopPropagation();window.reachVoteCast(\''+id+'\',\''+o.id+'\')" '
+      +  'style="font-size:.62rem;color:'+(mine?'#4ecdc4':'#8a8a80')+';border:1px solid '
+      +  (mine?'#1d4a44':'#1d2029')+';padding:4px 7px;margin-bottom:4px;cursor:'
+      +  (V.canVote?'pointer':'default')+';line-height:1.4">'
+      +  (mine ? '\u25c8 ' : '\u25cb ') + o.label + '</div>';
+  });
+
+  h += '<div style="display:flex;justify-content:space-between;font-size:.6rem;color:#6b7280;margin-top:4px">'
+    +  '<span>ANSWERED</span><span style="color:'
+    +  (V.ballots < V.minBallots ? '#f0b454' : '#4ecdc4')+'">'+V.ballots+' / '+V.minBallots+'</span></div>';
+  h += '<div style="font-size:.58rem;color:#4a4842;margin-top:5px;line-height:1.5">'
+    +  (V.canVote
+        ? 'One vote each. What you gave does not weigh it.'
+        : 'Fund this world to have a say on it.')
+    +  (V.ballots < V.minBallots
+        ? ' Short of a quorum it falls to the default.'
+        : '')
+    +  '</div>';
+  return h + '</div>';
+}
+
+/* THE BROADCAST PAYLOAD IS VIEWER AGNOSTIC. reachPayload(false) ships no
+   viewerId, so after any broadcast a player's own ballot reads as null, their
+   eligibility reads as false, and their remaining daily allowance reads as the
+   full cap. The vote block would tell an eligible funder to go fund the world
+   they had just funded.
+
+   /api/reach/state has existed since the Reach shipped and returns a viewer
+   scoped copy, and nothing has ever called it. This is what it is for. Debounced
+   and stamped BEFORE the request rather than after, so a burst of re-renders
+   cannot stack requests, and the rerender only fires once the state is in. */
+var _reachScopedAt = 0;
+function reachScopeMine(){
+  if(!gToken) return;
+  if(Date.now() - _reachScopedAt < 4000) return;
+  _reachScopedAt = Date.now();
+  fetch(apiBase()+'/api/reach/state',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ token:gToken })})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d || !d.ok || !d.state) return;
+      window._REACH = d.state;
+      if(window._jadeRerender) window._jadeRerender();
+    })
+    .catch(function(){});
+}
+
+window.reachFund = function(id, amount, max){
+  if(!gToken){ if(window.gToast) window.gToast('Log in to fund the war.','#e74c3c'); return; }
+  var body = { token:gToken, world:id };
+  if(max) body.max = true; else body.amount = amount;
+  fetch(apiBase()+'/api/reach/fund',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d.ok){ if(window.gToast) window.gToast(d.msg || 'Refused.','#e74c3c'); return; }
+      if(d.state){ window._REACH = d.state; }
+      if(window.gToast) window.gToast('\u0192'+Number(d.given).toLocaleString()+' to the war fund. '
+        + '\u0192' + Number(d.roomLeft).toLocaleString() + ' left today.', '#4ecdc4');
+      if(window._jadeRerender) window._jadeRerender();
+    })
+    .catch(function(){ if(window.gToast) window.gToast('Failed.','#e74c3c'); });
+};
+
+window.reachVoteCast = function(id, option){
+  if(!gToken){ if(window.gToast) window.gToast('Log in to vote.','#e74c3c'); return; }
+  fetch(apiBase()+'/api/reach/vote',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ token:gToken, world:id, option:option })})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d.ok){ if(window.gToast) window.gToast(d.msg || 'Refused.','#e74c3c'); return; }
+      if(d.state){ window._REACH = d.state; }
+      if(window.gToast) window.gToast(d.msg + ' ' + d.ballots + ' of ' + d.minBallots + ' answered.', '#4ecdc4');
+      if(window._jadeRerender) window._jadeRerender();
+    })
+    .catch(function(){ if(window.gToast) window.gToast('Failed.','#e74c3c'); });
+};
+
+window.reachPush = function(id, zi, amount, max){
+  if(!gToken){ if(window.gToast) window.gToast('Log in to fund a push.','#e74c3c'); return; }
+  var body = { token:gToken, world:id, zone:zi };
+  if(max) body.max = true; else body.amount = amount;
+  fetch(apiBase()+'/api/reach/push',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d.ok){ if(window.gToast) window.gToast(d.msg || 'Commitment refused.','#e74c3c'); return; }
+      window._REACH_MINE[reachWinKey(id,zi)] = d.mine;
+      // The broadcast payload is viewer agnostic, so the server hands back a
+      // viewer scoped copy on the same round trip rather than making the client
+      // ask twice.
+      if(d.state){ window._REACH = d.state; }
+      if(window.gToast) window.gToast('\u0192'+Number(d.committed).toLocaleString()+' committed. '
+        + d.funders + ' of ' + d.minFunders + ' funders.', '#4ecdc4');
+      if(window._jadeRerender) window._jadeRerender();
+    })
+    .catch(function(){ if(window.gToast) window.gToast('Commitment failed.','#e74c3c'); });
+};
+
+function spBuildReachHUD(colonyId, planet, planetIdx){
+  var R = (window._REACH && window._REACH.worlds && window._REACH.worlds[colonyId]) || null;
+  var zones = (R && R.zones) || [];
+  var hive = R ? R.hive : 100, ours = 100 - hive;
+  var st = R ? R.status : 'quiet';
+  var stCol = {quiet:'#555', contested:'#f0b454', held:'#4ecdc4', lost:'#c2551f'}[st] || '#555';
+
+  var pricesEl = document.getElementById('spHUDPrices');
+  if(pricesEl){
+    var ph = '<div class="sp-hud-label">THE FRONT</div>';
+    ph += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">'
+       +  '<span style="font-size:.7rem;color:'+stCol+';letter-spacing:.12em">'+String(st).toUpperCase()+'</span>'
+       +  (R && R.front ? '<span style="font-size:.6rem;color:#f0b454;letter-spacing:.1em">LIVE FRONT</span>' : '')
+       +  '</div>';
+    ph += '<div style="height:9px;background:#0d1017;border:1px solid #1d2029;display:flex;overflow:hidden;margin-bottom:3px">'
+       +  '<i style="display:block;height:100%;width:'+ours+'%;background:#4ecdc4"></i>'
+       +  '<i style="display:block;height:100%;width:'+hive+'%;background:#c2551f"></i></div>';
+    ph += '<div style="display:flex;justify-content:space-between;font-size:.64rem">'
+       +  '<span style="color:#4ecdc4">COALITION '+ours+'%</span>'
+       +  '<span style="color:#c2551f">KHAI\'SULTULL '+hive+'%</span></div>';
+    pricesEl.innerHTML = ph;
+  }
+
+  var ctrlEl = document.getElementById('spHUDControl');
+  if(ctrlEl){
+    var ch = '<div class="sp-hud-label">ENGAGEMENTS ('+zones.length+')</div>';
+    if(!zones.length){
+      ch += '<div style="font-size:.66rem;color:#4a4842;line-height:1.5">No contact on this world.</div>';
+    } else {
+      zones.forEach(function(z, zi){
+        var zc = z.live ? '#f0b454' : '#3a3a34';
+        /* THE ROW WAS CLICKABLE WHETHER OR NOT THE GROUND WAS LIVE. It set the
+           cursor from z.live and then bound the handler unconditionally, so a
+           zone labelled QUIET opened a battle anyway. A cursor is a hint; the
+           handler is the gate. The other watch entry point already did this
+           correctly, which is how it survived. */
+        ch += '<div '+(z.live?'onclick="window.reachWatch(\''+colonyId+'\','+zi+')" ':'')
+           +  'style="border:1px solid '+(z.live?'#4a3a1a':'#1a1a22')+';border-radius:2px;padding:6px 7px;margin-bottom:5px;'
+           +  'cursor:'+(z.live?'pointer':'default')+';background:'+(z.live?'rgba(240,180,84,.05)':'transparent')+'">';
+        ch += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+           +  '<span style="font-size:.72rem;color:'+(z.live?'#d8d2c4':'#6b7280')+';letter-spacing:.05em">'+z.name+'</span>'
+           +  '<span style="font-size:.58rem;color:'+zc+';letter-spacing:.12em">'+(z.live?'LIVE \u25b8 WATCH':'QUIET')+'</span>'
+           +  '</div>';
+        ch += '<div style="height:5px;background:#0d1017;display:flex;overflow:hidden">'
+           +  '<i style="display:block;height:100%;width:'+(100-z.hive)+'%;background:#4ecdc4"></i>'
+           +  '<i style="display:block;height:100%;width:'+z.hive+'%;background:#c2551f"></i></div>';
+        ch += '<div style="font-size:.58rem;color:#4a4842;margin-top:3px">intensity '+z.intensity+'</div>';
+        ch += reachWinBlock(colonyId, zi, z, true);
+        ch += '</div>';
+      });
+    }
+    ctrlEl.innerHTML = ch;
+  }
+
+  var fundEl = document.getElementById('spHUDFund');
+  if(fundEl){
+    var taken = !!(R && R.taken);
+    fundEl.innerHTML = '<div class="sp-hud-label">SETTLEMENT</div>'
+      + '<div style="font-size:.66rem;line-height:1.55;color:'+(taken?'#6c9':'#4a4842')+'">'
+      + (taken
+         ? 'Coalition administration. The hive works are surveyed and chartered.'
+         : 'Hive settlement, unsurveyed. Nothing to govern until the world is taken entirely.')
+      + '</div>'
+      + '<div onclick="window.reachHive&&window.reachHive(\''+colonyId+'\')" '
+      + 'style="margin-top:7px;font-size:.66rem;color:#e08a52;padding:6px;border:1px solid #3a1d0c;'
+      + 'border-radius:3px;text-align:center;cursor:pointer;letter-spacing:.08em">\u25c8 VIEW HIVE WORKS \u2192</div>';
+  }
+}
+
 // ── HUD: Prices ───────────────────────────────────────────────────────────────
 function spUpdateHUDPrices(colonyId){
   var m = COLONY_META[colonyId]; if(!m) return;
   var list = document.getElementById('spPriceList'); if(!list) return;
-  if(m.galaxy==='jade' && !WORMHOLE_OPEN){ list.innerHTML='<div style="font-size:.68rem;color:#8a887e;line-height:1.6">'+((m.companies||[]).join(', '))+'</div><div style="font-size:.62rem;color:#4a4842;margin-top:6px;letter-spacing:.08em">JADE EXCHANGE SEALED</div>'; return; }
+  if(m.galaxy==='jade' && passageSealed('jade') && !devBypassesSeal()){ list.innerHTML='<div style="font-size:.68rem;color:#8a887e;line-height:1.6">'+((m.companies||[]).join(', '))+'</div><div style="font-size:.62rem;color:#4a4842;margin-top:6px;letter-spacing:.08em">JADE EXCHANGE SEALED</div>'; return; }
   var companies = (m.companies||[]).slice(0,6);
   if(!companies.length){ list.innerHTML='<div style="font-size:.68rem;color:#4f8a64">No listed operators</div>'; return; }
   var tickers = window.TICKERS || [];
@@ -1592,7 +2360,7 @@ function spUpdateHUDControl(colonyId, f, s){
 // ── HUD: Fund buttons ─────────────────────────────────────────────────────────
 function spBuildFundButtons(colonyId, f, s){
   var el = document.getElementById('spFundBtns'); if(!el) return;
-  if(COLONY_META[colonyId] && COLONY_META[colonyId].galaxy==='jade'){ el.innerHTML='<div style="font-size:.66rem;color:#8a887e;line-height:1.6">'+(WORMHOLE_OPEN?'Funding active.':'Sealed until the passage opens.')+'</div>'; return; }
+  if(COLONY_META[colonyId] && COLONY_META[colonyId].galaxy==='jade'){ el.innerHTML='<div style="font-size:.66rem;color:#8a887e;line-height:1.6">'+(!passageSealed('jade')?'Funding active.':'Sealed until the passage opens.')+'</div>'; return; }
   var ctrl = {coalition:s.control_coalition||0, syndicate:s.control_syndicate||0, void:s.control_void||0, guild:s.control_guild||0};
   el.innerHTML = ['coalition','syndicate','void','guild'].map(function(fid){
     var fc = FACTIONS[fid];
@@ -1825,20 +2593,28 @@ function poolForLane(fromId, toId, variant){
 // traffic drawn over Coalition space, where the coordinates happen to land.
 //
 // So tag each hull with the sector it flies in and show only the active one.
+// A run belongs to the galaxy at each end. Crossing runs used to be tagged
+// 'both', and tagShipGalaxy read that as "show everywhere": with two galaxies
+// that was correct by accident, because everywhere WAS the two ends. With the
+// Reach it stopped being true, and Circuit traffic started flying through
+// Khai'sultull space. The tag is now the actual list of galaxies a run touches
+// and both filters test membership.
 function shipGalaxy(fromId, toId){
-  // A run through the passage belongs to BOTH sectors: it leaves one and
-  // arrives in the other, and hiding it from either side would mean the gate
-  // never visibly carries anything. Tagged 'both' and shown in either view.
-  if (isPassageRun(fromId, toId)) return 'both';
-  return (isJadeWorld(fromId) || isJadeWorld(toId)) ? 'jade' : 'coalition';
+  var a = galaxyOf(fromId), b = galaxyOf(toId);
+  return a === b ? a : (a < b ? a + '|' + b : b + '|' + a);
+}
+function shipVisibleIn(tag, gx){
+  if (!tag) return false;
+  if (tag === gx) return true;
+  return tag.indexOf('|') >= 0 && tag.split('|').indexOf(gx) >= 0;
 }
 function isPassageRun(fromId, toId){
-  return isJadeWorld(fromId) !== isJadeWorld(toId);
+  return galaxyOf(fromId) !== galaxyOf(toId);
 }
 function tagShipGalaxy(grp, fromId, toId){
   var gx = shipGalaxy(fromId, toId);
   grp.setAttribute('data-gx', gx);
-  grp.style.display = (gx === 'both' || gx === activeGalaxy) ? '' : 'none';
+  grp.style.display = shipVisibleIn(gx, activeGalaxy) ? '' : 'none';
 }
 
 // Where a passage run is drawn. Its two colonies live in different views, so a
@@ -1848,7 +2624,8 @@ function tagShipGalaxy(grp, fromId, toId){
 // the two halves, which is also how it reads in fiction.
 function passageEndpoints(fromId, toId){
   var cfg = portalConfig();
-  var here = isJadeWorld(fromId) === (activeGalaxy === 'jade') ? fromId : toId;
+  if(!cfg) return null;
+  var here = galaxyOf(fromId) === activeGalaxy ? fromId : toId;
   var m = COLONY_META[here];
   if (!m) return null;
   var outbound = (here === fromId);   // leaving this sector, or arriving in it
@@ -2462,6 +3239,25 @@ window.gShipTrafficStart = function() {
   gShipRAF = requestAnimationFrame(shipTick);
 };
 
+// THE ONLY CORRECT WAY TO CLEAR THE FLEET FROM OUTSIDE THIS IIFE.
+// gShipList and gServerShips are var-scoped in here. Code outside the IIFE that
+// writes `gShipList = []` does not clear them; it creates two globals nobody
+// reads, and the IIFE's copies keep every npc id it ever saw. spawnServerShip
+// opens with `if (gServerShips[npc.id]) return;`, so a stale map means the eight
+// second reconcile bails on every ship forever and the fleet never comes back
+// until the page is reloaded. Same shape as gToast never being exported.
+//
+// Resyncing immediately rather than waiting for the next reconcile tick, or a
+// swap leaves the map with no freight on it for up to eight seconds.
+window._fmFleetReset = function(alsoResync) {
+  var g = document.getElementById('gShips');
+  if (g) g.innerHTML = '';
+  gShipList = [];
+  gServerShips = {};
+  clearAmbient();
+  if (alsoResync && gShipActive) syncServerFleet();
+};
+
 window.gShipTrafficStop = function() {
   gShipActive = false;
   if (gShipRAF)       { cancelAnimationFrame(gShipRAF); gShipRAF = null; }
@@ -3011,11 +3807,13 @@ function hookShowTab(){
 // ============================================================
 //  JADE CIRCUIT - second galaxy (Release A: skeleton + portal)
 // ============================================================
+// Kept for passageEndpoints, which needs the Circuit gate specifically: the
+// passage lane it draws is the Cascade-to-Mozi run and nothing else.
 function portalConfig(){
-  if(activeGalaxy==='coalition'){
-    return { x:990, y:150, size:120, target:'jade', label:'JADE CIRCUIT' };
-  }
-  return { x:990, y:250, size:120, target:'coalition', label:'COALITION SPACE' };
+  var gates=mapGates(activeGalaxy);
+  for(var i=0;i<gates.length;i++)
+    if(gates[i].target==='jade'||gates[i].target==='coalition') return gates[i];
+  return gates[0]||null;
 }
 // The passage, drawn as a lane from its anchor colony to the gate. Cascade
 // Station on the Coalition side, Mozi Array on the Circuit side. It is the one
@@ -3026,10 +3824,12 @@ function portalConfig(){
 function renderPassageLink(){
   var g=document.getElementById('gLanes'); if(!g) return;
   var old=document.getElementById('gPassageLink'); if(old) old.remove();
-  if(!WORMHOLE_OPEN) return;
+  var lg = activeGalaxy==='coalition' ? 'jade' : activeGalaxy;
+  if(!passageOpen(lg)) return;
   var anchorId=PASSAGE_ANCHOR[activeGalaxy]; if(!anchorId) return;
   var a=COLONY_META[anchorId]; if(!a) return;
   var cfg=portalConfig();
+  if(!cfg) return;
   var NS='http://www.w3.org/2000/svg';
   var grp=document.createElementNS(NS,'g');
   grp.setAttribute('id','gPassageLink'); grp.setAttribute('pointer-events','none');
@@ -3067,47 +3867,59 @@ function renderPortal(){
   var svg=document.getElementById('galaxySVG'); if(!svg) return;
   var old=document.getElementById('gPortal'); if(old) old.remove();
   renderPassageLink();
-  var cfg=portalConfig();
   var NS='http://www.w3.org/2000/svg';
-  var stroke = cfg.target==='jade' ? '#e8e4d8' : '#4ecdc4';
-  var g=document.createElementNS(NS,'g');
-  g.setAttribute('id','gPortal'); g.setAttribute('cursor','pointer');
-  var halo=document.createElementNS(NS,'circle');
-  halo.setAttribute('cx',cfg.x); halo.setAttribute('cy',cfg.y); halo.setAttribute('r',(cfg.size*0.62).toFixed(1));
-  halo.setAttribute('fill','none'); halo.setAttribute('stroke',stroke); halo.setAttribute('stroke-width','0.8');
-  halo.setAttribute('opacity','0.22'); halo.setAttribute('stroke-dasharray','2 8'); halo.setAttribute('pointer-events','none');
-  g.appendChild(halo);
-  var img=document.createElementNS(NS,'image');
-  img.setAttribute('href','assets/space/planets/jade/galaxy/1.png');
-  img.setAttribute('x',(cfg.x-cfg.size/2).toFixed(1)); img.setAttribute('y',(cfg.y-cfg.size/2).toFixed(1));
-  img.setAttribute('width',cfg.size); img.setAttribute('height',cfg.size);
-  img.setAttribute('opacity','0.82'); img.style.imageRendering='pixelated';
-  img.setAttribute('class','g-portal-spin'); img.setAttribute('pointer-events','none');
-  g.appendChild(img);
-  var t1=document.createElementNS(NS,'text');
-  t1.setAttribute('x',cfg.x); t1.setAttribute('y',(cfg.y+cfg.size*0.62+16).toFixed(1));
-  t1.setAttribute('text-anchor','middle'); t1.setAttribute('fill',stroke);
-  t1.setAttribute('font-size','13'); t1.setAttribute('letter-spacing','2');
-  t1.setAttribute('font-family',"'Courier New',monospace"); t1.setAttribute('pointer-events','none');
-  t1.textContent=cfg.label; g.appendChild(t1);
-  var t2=document.createElementNS(NS,'text');
-  t2.setAttribute('x',cfg.x); t2.setAttribute('y',(cfg.y+cfg.size*0.62+30).toFixed(1));
-  t2.setAttribute('text-anchor','middle'); t2.setAttribute('fill','#666');
-  t2.setAttribute('font-size','9'); t2.setAttribute('letter-spacing','3');
-  t2.setAttribute('font-family',"'Courier New',monospace"); t2.setAttribute('pointer-events','none');
-  t2.textContent = WORMHOLE_OPEN ? 'FTL PASSAGE' : (cfg.target==='jade' ? 'PASSAGE SEALED' : 'RETURN');
-  g.appendChild(t2);
-  var hit=document.createElementNS(NS,'circle');
-  hit.setAttribute('cx',cfg.x); hit.setAttribute('cy',cfg.y); hit.setAttribute('r',(cfg.size*0.6).toFixed(1));
-  hit.setAttribute('fill','transparent'); g.appendChild(hit);
-  g.addEventListener('click',swapGalaxy);
-  svg.appendChild(g);
+  var root=document.createElementNS(NS,'g'); root.setAttribute('id','gPortal');
+  // One <g> per gate. The map used to hold exactly one portal because there
+  // were exactly two galaxies; the Reach adds a third, and its gate is not on
+  // the map at all, so this iterates whatever the registry declares here.
+  mapGates(activeGalaxy).forEach(function(cfg){
+    var stroke=cfg.accent||'#4ecdc4';
+    var g=document.createElementNS(NS,'g'); g.setAttribute('cursor','pointer');
+    var halo=document.createElementNS(NS,'circle');
+    halo.setAttribute('cx',cfg.x); halo.setAttribute('cy',cfg.y); halo.setAttribute('r',(cfg.size*0.62).toFixed(1));
+    halo.setAttribute('fill','none'); halo.setAttribute('stroke',stroke); halo.setAttribute('stroke-width','0.8');
+    halo.setAttribute('opacity','0.22'); halo.setAttribute('stroke-dasharray','2 8'); halo.setAttribute('pointer-events','none');
+    g.appendChild(halo);
+    var img=document.createElementNS(NS,'image');
+    img.setAttribute('href',cfg.sprite||'assets/space/planets/jade/galaxy/1.png');
+    img.setAttribute('x',(cfg.x-cfg.size/2).toFixed(1)); img.setAttribute('y',(cfg.y-cfg.size/2).toFixed(1));
+    img.setAttribute('width',cfg.size); img.setAttribute('height',cfg.size);
+    img.setAttribute('opacity','0.82'); img.style.imageRendering='pixelated';
+    img.setAttribute('class','g-portal-spin'); img.setAttribute('pointer-events','none');
+    g.appendChild(img);
+    // The Abaddon gate sits above the planet, so its labels go above the
+    // sprite too. Below, they land on top of Abaddon's own name.
+    var lab1 = cfg.labelAbove ? (cfg.y-cfg.size*0.62-18) : (cfg.y+cfg.size*0.62+16);
+    var lab2 = cfg.labelAbove ? (cfg.y-cfg.size*0.62-6)  : (cfg.y+cfg.size*0.62+30);
+    var t1=document.createElementNS(NS,'text');
+    t1.setAttribute('x',cfg.x); t1.setAttribute('y',lab1.toFixed(1));
+    t1.setAttribute('text-anchor','middle'); t1.setAttribute('fill',stroke);
+    t1.setAttribute('font-size','13'); t1.setAttribute('letter-spacing','2');
+    t1.setAttribute('font-family',"'Courier New',monospace"); t1.setAttribute('pointer-events','none');
+    t1.textContent=cfg.label; g.appendChild(t1);
+    var t2=document.createElementNS(NS,'text');
+    t2.setAttribute('x',cfg.x); t2.setAttribute('y',lab2.toFixed(1));
+    t2.setAttribute('text-anchor','middle'); t2.setAttribute('fill','#666');
+    t2.setAttribute('font-size','9'); t2.setAttribute('letter-spacing','3');
+    t2.setAttribute('font-family',"'Courier New',monospace"); t2.setAttribute('pointer-events','none');
+    t2.textContent = cfg.open ? (cfg.sub||'FTL PASSAGE') : (cfg.subSealed||'PASSAGE SEALED');
+    g.appendChild(t2);
+    var hit=document.createElementNS(NS,'circle');
+    hit.setAttribute('cx',cfg.x); hit.setAttribute('cy',cfg.y); hit.setAttribute('r',(cfg.size*0.6).toFixed(1));
+    hit.setAttribute('fill','transparent'); g.appendChild(hit);
+    g.addEventListener('click',function(){ swapGalaxy(cfg.target); });
+    root.appendChild(g);
+  });
+  svg.appendChild(root);
   renderSealBanner();
 }
 function renderSealBanner(){
   var svg=document.getElementById('galaxySVG'); if(!svg) return;
   var old=document.getElementById('gSealBanner'); if(old) old.remove();
-  if(activeGalaxy!=='jade' || WORMHOLE_OPEN) return;
+  /* ASKS THE SEAL, NOT THE PERMISSION. With passageOpen here a dev walked into a
+     sealed Reach and the map told him it was open, which is the one reader who
+     most needs to know it is not. */
+  if(activeGalaxy==='coalition' || !passageSealed(activeGalaxy)) return;
   var NS='http://www.w3.org/2000/svg';
   var g=document.createElementNS(NS,'g'); g.setAttribute('id','gSealBanner'); g.setAttribute('pointer-events','none');
   var r=document.createElementNS(NS,'rect');
@@ -3116,9 +3928,10 @@ function renderSealBanner(){
   g.appendChild(r);
   var t=document.createElementNS(NS,'text');
   t.setAttribute('x','500'); t.setAttribute('y','23'); t.setAttribute('text-anchor','middle');
-  t.setAttribute('fill','#e8e4d8'); t.setAttribute('font-size','11'); t.setAttribute('letter-spacing','2');
+  t.setAttribute('fill',galaxyDef(activeGalaxy).accent||'#e8e4d8');
+  t.setAttribute('font-size','11'); t.setAttribute('letter-spacing','2');
   t.setAttribute('font-family',"'Courier New',monospace");
-  t.textContent='PASSAGE SEALED \u00b7 TRADE OPENS WHEN THE CIRCUIT ALLOWS';
+  t.textContent=galaxyDef(activeGalaxy).sealBanner||'PASSAGE SEALED';
   g.appendChild(t);
   svg.appendChild(g);
 }
@@ -3131,17 +3944,58 @@ function applyShipGalaxyFilter(){
   var kids=layer.children;
   for(var i=0;i<kids.length;i++){
     var gx=kids[i].getAttribute('data-gx')||'coalition';
-    kids[i].style.display=(gx===activeGalaxy)?'':'none';
+    kids[i].style.display=shipVisibleIn(gx,activeGalaxy)?'':'none';
   }
 }
 // Test hook: the checks cannot click the portal.
 window._fmGalaxyView = { get:function(){ return activeGalaxy; },
-  apply:applyShipGalaxyFilter, swap:function(){ swapGalaxy(); } };
+  list:function(){ return Object.keys(GALAXIES); },
+  gates:function(id){ return mapGates(id||activeGalaxy); },
+  orbitGate:function(colonyId){ return orbitGateFor(colonyId); },
+  open:function(id){ return passageOpen(id); },
+  apply:applyShipGalaxyFilter, swap:function(to){ swapGalaxy(to); } };
 
-function swapGalaxy(){
-  activeGalaxy = (activeGalaxy==='coalition') ? 'jade' : 'coalition';
+function swapGalaxy(to){
+  // A toggle only ever had one destination. With three galaxies the caller has
+  // to say where it is going; no argument still means "the other one" so any
+  // legacy call keeps its old behaviour.
+  if(!to || !GALAXIES[to]) to = (activeGalaxy==='coalition') ? 'jade' : 'coalition';
+  /* THE SEAL DREW A BANNER AND STOPPED NOTHING. passageOpen was consulted in
+     three places - the portal sprite, the lane to the gate, and a banner reading
+     PASSAGE SEALED - and in none of them by the function that actually moves the
+     player. So the map said sealed and the player was standing on it: every
+     route in, including a stale portal click and any legacy call to the old
+     no-argument toggle, walked straight through.
+
+     Refused here rather than at each caller, because the callers are the thing
+     that keeps growing. The Coalition is always reachable - it is home, and a
+     player who cannot get anywhere is worse than one who got somewhere he
+     should not have.
+
+     AND IT EJECTS. A GM sealing a passage while somebody is inside would
+     otherwise leave them there indefinitely with no lane and no portal to
+     leave by, which is a worse failure than the one being fixed. */
+  if(to!=='coalition' && !passageOpen(to)) return false;
+  activeGalaxy = to;
+  var svg=document.getElementById('galaxySVG');
+  var vb=galaxyDef(activeGalaxy).viewBox;
+  if(svg && vb) svg.setAttribute('viewBox', vb);
   var neb=document.getElementById('gNebula');
-  if(neb) neb.setAttribute('href', activeGalaxy==='jade' ? 'assets/space/backgrounds/jade_green.png' : 'assets/space/backgrounds/blue_purple.png');
+  if(neb) neb.setAttribute('href', galaxyDef(activeGalaxy).nebula);
+  // Wipe the ship layer instead of toggling visibility on it. Ships are pure
+  // decoration and respawn within seconds, and display-toggling depends on
+  // every spawn path having remembered to tag its group. Four spawn paths, one
+  // of which fed a scheduler, and a swap left traffic from the previous galaxy
+  // sitting on top of the new map. Clearing is one line and cannot miss a path.
+  // gShipList is what shipTick iterates. Clearing the DOM without it would
+  // leave the RAF advancing groups that are no longer in the document, so both
+  // go together, exactly as gShipTrafficStop already does it.
+  // Was: clear the layer, then assign gShipList/gServerShips directly. Those
+  // live inside the ship IIFE and are not reachable from here, so the assignment
+  // silently made two globals and the real maps kept every id. The reconcile
+  // then refused to respawn anything, which is why NPC freight disappeared for
+  // the rest of the session after a single galaxy swap. The try/catch hid it.
+  if (typeof window._fmFleetReset === 'function') window._fmFleetReset(true);
   applyShipGalaxyFilter();
   if(typeof spClearAllMapAnims==='function') spClearAllMapAnims();
   gSelected=null;
@@ -3166,8 +4020,30 @@ function renderJadeDetail(id,m){
     +'</div>';
   h+='<div style="font-size:.76rem;color:'+f.dim+';letter-spacing:.14em;margin-bottom:10px">'+T('ui','JADE CIRCUIT','JADE CIRCUIT')+'</div>';
   var banner=COLONY_BANNER[id];
-  if(banner) h+='<img src="assets/space/landscapes/'+banner+'.png" class="space-banner" alt="">';
-  if(pData) h+='<div class="space-detail-planet"><img id="gDetailPlanetImg" src="assets/space/planets/'+pData.folder+'/1.png" style="width:64px;height:64px;image-rendering:pixelated;filter:drop-shadow(0 0 10px '+f.color+')"></div>';
+  if(banner) h+='<img src="assets/space/landscapes/'+banner+'.png" class="space-banner" alt="" '
+    +'onerror="this.style.display=\'none\'">';
+  if(banner || pData){
+    h+='<div class="space-detail-banner" style="position:relative;height:104px;margin-bottom:10px;'
+      +'border:1px solid '+f.dim+';border-radius:2px;overflow:hidden;'
+      +'background:linear-gradient(180deg,#07070e,#0a0a14)">';
+    if(banner){
+      h+='<img src="assets/space/landscapes/'+banner+'.png" alt="" '
+        +'style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;'
+        +'image-rendering:pixelated;opacity:.55" onerror="this.style.display=\'none\'">';
+    }
+    h+='<div style="position:absolute;inset:0;background:linear-gradient(90deg,'
+      +'#05060aee 0%,#05060aaa 46%,'+f.color+'22 100%)"></div>';
+    if(pData){
+      h+='<img id="gDetailPlanetImg" src="assets/space/planets/'+pData.folder+'/1.png" alt="" '
+        +'style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:78px;height:78px;'
+        +'image-rendering:pixelated;filter:drop-shadow(0 0 12px '+f.color+'aa)" '
+        +'onerror="this.style.display=\'none\'">';
+    }
+    h+='<div style="position:absolute;left:12px;top:50%;transform:translateY(-50%)">'
+      +'<div style="font-size:.92rem;letter-spacing:.12em;color:'+f.color+';font-family:\'Courier New\',monospace;text-shadow:0 1px 6px #000">'+nm.toUpperCase()+'</div>'
+      +'<div style="font-size:.56rem;letter-spacing:.20em;color:#7d8794;margin-top:3px;font-family:\'Courier New\',monospace">'+T('ui','JADE CIRCUIT','JADE CIRCUIT')+'</div>'
+      +'</div></div>';
+  }
   h+='<div style="font-size:.78rem;color:#8a887e;line-height:1.6;margin-bottom:12px;border-left:2px solid '+f.dim+';padding-left:8px">'+T('lore',id,m.lore)+'</div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-bottom:12px">'
     +'<div><div style="font-size:.66rem;color:#8a887e;letter-spacing:.08em">'+T('ui','POPULATION','POPULATION')+'</div><div style="font-size:.84rem;color:#d8d4c8">'+m.pop+'</div></div>'
@@ -3195,7 +4071,7 @@ function renderJadeDetail(id,m){
     h+='<div style="font-size:.7rem;color:#8a887e;line-height:1.7;margin-bottom:12px">'+companies.map(function(cn){return T('ticker',cn,cn);}).join(', ')+'</div>';
   }
   h+='<div style="border:1px solid '+f.dim+';background:#12110d;padding:8px 10px;font-size:.7rem;color:'+f.color+';line-height:1.6">'
-    + (WORMHOLE_OPEN ? T('ui','passage_open','The passage is open. Circuit markets and allegiance are active.')
+    + (passageOpen('jade') ? T('ui','passage_open','The passage is open. Circuit markets and allegiance are active.')
                      : T('ui','passage_sealed','PASSAGE SEALED. The Jade Exchange and Circuit allegiance open when the wormhole is unsealed.'))
     + '</div>';
   el.innerHTML=h;
@@ -3217,7 +4093,10 @@ function jadeFactionCard(f){
   // in this row, so the two drew on top of each other.
   h+='<div style="display:flex;align-items:center;gap:8px;flex:0 0 auto">';
   h+='<span style="font-size:.70rem;color:'+f.color+';border:1px solid '+f.dim+';padding:3px 7px;letter-spacing:.08em;white-space:nowrap">'
-    +(WORMHOLE_OPEN?'\u2756 '+T('fac.passageOpen','OPEN'):'\u2756 '+T('fac.passageSealed','SEALED'))+'</span>';
+    /* The SEAL state, not the viewer's permission: this line is a report on the
+       passage and a GM reading OPEN because he personally can pass it is being
+       told the opposite of what he needs. */
+    +(!passageSealed('jade')?'\u2756 '+T('fac.passageOpen','OPEN'):'\u2756 '+T('fac.passageSealed','SEALED'))+'</span>';
   if(isP){
     h+='<div style="font-size:.72rem;color:'+f.color+';border:1px solid '+f.color+';padding:3px 8px;white-space:nowrap">&#10003; '+T('fac.aligned','ALIGNED')+'</div>';
   } else {
@@ -3263,10 +4142,26 @@ function gRenderAll(){
 // Stars
 function seedStars(){
   var g=document.getElementById('gStars'); if(!g||g.childElementCount>0) return;
-  for(var i=0;i<220;i++){
+  // Seeded across the UNION of every galaxy's viewBox, not a hardcoded
+  // 1000x700. Extending the Coalition box upward to fit the Abaddon gate left
+  // the top 210 units and the bottom 120 with no stars at all: two flat black
+  // bands across a map that is supposed to be space.
+  var sx0=1e9, sy0=1e9, sx1=-1e9, sy1=-1e9;
+  Object.keys(GALAXIES).forEach(function(k){
+    var vb=(GALAXIES[k].viewBox||'').split(/\s+/).map(Number);
+    if(vb.length!==4 || vb.some(isNaN)) return;
+    sx0=Math.min(sx0,vb[0]); sy0=Math.min(sy0,vb[1]);
+    sx1=Math.max(sx1,vb[0]+vb[2]); sy1=Math.max(sy1,vb[1]+vb[3]);
+  });
+  if(sx0>sx1){ sx0=0; sy0=0; sx1=1000; sy1=700; }
+  var sW=sx1-sx0, sH=sy1-sy0;
+  // Density held constant against the old 1000x700, so a taller box gets more
+  // stars rather than the same 220 spread thinner.
+  var starN=Math.round(220*(sW*sH)/(1000*700));
+  for(var i=0;i<starN;i++){
     var c=document.createElementNS('http://www.w3.org/2000/svg','circle');
-    c.setAttribute('cx',((Math.sin(i*2.39)*0.5+0.5)*1000).toFixed(1));
-    c.setAttribute('cy',((Math.cos(i*1.61)*0.5+0.5)*700).toFixed(1));
+    c.setAttribute('cx',(sx0+(Math.sin(i*2.39)*0.5+0.5)*sW).toFixed(1));
+    c.setAttribute('cy',(sy0+(Math.cos(i*1.61)*0.5+0.5)*sH).toFixed(1));
     c.setAttribute('r',(0.5+(i%5)*0.38).toFixed(1));
     c.setAttribute('fill','#fff');
     c.setAttribute('opacity',(0.05+(i%7)*0.055).toFixed(2));
@@ -3697,16 +4592,60 @@ function renderDetail(id){
   if(contested) h+='<div style="border:1px solid #f39c12;color:#f39c12;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9888; '+T('galx.contestedWar','CONTESTED, Faction war active')+'</div>';
   if(isFlesh)   h+='<div style="border:1px solid #ffce4d66;color:#ffce4d;font-size:.72rem;padding:4px 8px;margin-bottom:10px">&#9889; '+T('galx.homeOfFlesh','HOME OF MR. FLESH, Cannot be contested or funded')+'</div>';
 
-  // Space Asset: landscape banner
+  // ── Detail banner ────────────────────────────────────────────────────
+  // One banner. The landscape strip and the planet thumbnail used to be two
+  // separate elements, and adding a titled box made three stacked headers.
+  // Landscape is the plate, the world sits on it, the name goes over it, and
+  // a missing landscape degrades to the gradient instead of a broken image.
   var banner = COLONY_BANNER[id];
-  if(banner){
-    h+='<img src="assets/space/landscapes/'+banner+'.png" class="space-banner" alt="">';
-  }
-  // Space Asset: large animated planet in detail panel
   var pData2 = COLONY_PLANET[id];
-  if(pData2){
-    var pColor2 = f.color||'#4ecdc4';
-    h+='<div class="space-detail-planet"><img id="gDetailPlanetImg" src="assets/space/planets/'+pData2.folder+'/1.png" style="width:64px;height:64px;image-rendering:pixelated;filter:drop-shadow(0 0 10px '+pColor2+')"></div>';
+  var isKhai2 = m.galaxy==='khaisultull';
+  var pColor2 = isKhai2 ? '#c2551f' : (f.color||'#4ecdc4');
+  var reachRow = isKhai2 && window._REACH && window._REACH.worlds ? window._REACH.worlds[id] : null;
+  // The name is always theirs: the Khai'sultull built the translation layer and
+  // told us what these worlds are called. What capture discloses is the
+  // MEANING, which is why khaiName reads as a translation and not a name.
+  var bnTitle = m.name.toUpperCase();
+  var bnSub = isKhai2
+    ? ((reachRow && reachRow.revealed && m.khaiName)
+        ? (m.khaiName.toUpperCase() + " \u00b7 KHAI'SULTULL REACH")
+        : "KHAI'SULTULL REACH")
+    : (f.short||'');
+  // Topline strip first, exactly as the Circuit panel does it, then the titled
+  // banner beneath. Merging them into one element lost the wide establishing
+  // shot; keeping only the strip lost the name. Both, in that order.
+  if(banner){
+    h+='<img src="assets/space/landscapes/'+banner+'.png" class="space-banner" alt="" '
+      +'onerror="this.style.display=\'none\'">';
+  }
+  if(banner || pData2){
+    h+='<div class="space-detail-banner" style="position:relative;height:104px;margin-bottom:10px;'
+      +'border:1px solid '+(isKhai2?'#3a1d0c':f.dim)+';border-radius:2px;overflow:hidden;'
+      +'background:linear-gradient(180deg,#07070e,#0a0a14)">';
+    if(banner){
+      h+='<img src="assets/space/landscapes/'+banner+'.png" alt="" '
+        +'style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;'
+        +'image-rendering:pixelated;opacity:.55" '
+        +'onerror="this.style.display=\'none\'">';
+    }
+    h+='<div style="position:absolute;inset:0;background:linear-gradient(90deg,'
+      +'#05060aee 0%,#05060aaa 46%,'+pColor2+'22 100%)"></div>';
+    if(pData2){
+      h+='<img id="gDetailPlanetImg" src="assets/space/planets/'+pData2.folder+'/1.png" alt="" '
+        +'style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:78px;height:78px;'
+        +'image-rendering:pixelated;filter:drop-shadow(0 0 12px '+pColor2+'aa)" '
+        +'onerror="this.style.display=\'none\'">';
+    }
+    h+='<div style="position:absolute;left:12px;top:50%;transform:translateY(-50%)">'
+      +'<div style="font-size:.92rem;letter-spacing:.12em;color:'+pColor2+';font-family:\'Courier New\',monospace;text-shadow:0 1px 6px #000">'+bnTitle+'</div>'
+      // The name in their own hand. The translation layer hands us a
+      // romanisation and withholds what it means, and the script is the
+      // withheld part sitting in plain sight the entire time: every one of
+      // these names is also a figure, and the figure is legible off the hooks
+      // whether or not anyone has been told what the word is for.
+      + (isKhai2 ? reachGlyphLine(m.name, pColor2) : '')
+      +'<div style="font-size:.56rem;letter-spacing:.20em;color:#7d8794;margin-top:3px;font-family:\'Courier New\',monospace">'+bnSub+'</div>'
+      +'</div></div>';
   }
   h+='<div style="font-size:.78rem;color:#777;line-height:1.6;margin-bottom:12px;border-left:2px solid '+f.dim+';padding-left:8px">'+(window.colonyLoreZh?window.colonyLoreZh(id,m.lore):m.lore)+'</div>';
 
@@ -3756,8 +4695,90 @@ function renderDetail(id){
     }
   }
 
-  // Control bars (not for flesh station)
-  if(!isFlesh){
+  // ── Reach worlds show the front, not the four Coalition factions ────────
+  // None of Coalition, Syndicate, Void or Guild holds anything out here, so
+  // four bars reading 0% and a Fund A Faction block are worse than nothing:
+  // they invite a player to pour money into a control track that does not
+  // exist on this side of the passage. Reach worlds get the war instead.
+  if(m.galaxy==='khaisultull'){
+    var R = (window._REACH && window._REACH.worlds && window._REACH.worlds[id]) || null;
+    var hive = R ? R.hive : 100;
+    var ours = 100 - hive;
+    var st   = R ? R.status : 'quiet';
+    var stCol = {quiet:'#555', contested:'#f0b454', held:'#4ecdc4', lost:'#c2551f'}[st] || '#555';
+    h+='<div style="margin-bottom:12px">';
+    h+='<div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+T('galx.theFront','The Front')+'</div>';
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
+    h+='<span style="font-size:.72rem;color:'+stCol+';letter-spacing:.12em">'+String(st).toUpperCase()+'</span>';
+    if(R && R.front) h+='<span style="font-size:.62rem;color:#f0b454;letter-spacing:.1em">LIVE FRONT</span>';
+    if(R && R.revealed) h+='<span style="font-size:.62rem;color:#4ecdc4;letter-spacing:.1em">SURVEYED</span>';
+    h+='</div>';
+    h+='<div style="height:10px;background:#0d1017;border:1px solid #1d2029;display:flex;overflow:hidden;margin-bottom:4px">'
+      +'<i style="display:block;height:100%;width:'+ours+'%;background:#4ecdc4"></i>'
+      +'<i style="display:block;height:100%;width:'+hive+'%;background:#c2551f"></i></div>';
+    h+='<div style="display:flex;justify-content:space-between;font-size:.66rem">'
+      +'<span style="color:#4ecdc4">COALITION '+ours+'%</span>'
+      +'<span style="color:#c2551f">KHAI\'SULTULL '+hive+'%</span></div>';
+    // Hive settlements are decoration until the world is taken entirely.
+    // Partial control is still a war, and a half-held world has no city.
+    // Decoration is still a thing you can look at, though: a brood world has
+    // no city view because it has no city, and that used to mean opening one
+    // showed nothing. VIEW HIVE WORKS shows what is actually down there.
+    var taken = !!(R && R.taken);
+    h+='<div style="margin-bottom:10px"><div onclick="window.reachHive&&window.reachHive(\''+id+'\')" '
+      +'style="font-size:.68rem;color:#e08a52;padding:7px;border:1px solid #3a1d0c;border-radius:3px;'
+      +'text-align:center;cursor:pointer;letter-spacing:.08em">\u25c8 '
+      +T('galx.viewHive','VIEW HIVE WORKS')+' \u2192</div></div>';
+    h+='<div style="font-size:.62rem;margin-top:7px;line-height:1.5;color:'+(taken?'#6c9':'#4a4842')+'">'
+      + (taken
+         ? 'COALITION ADMINISTRATION. The hive works are surveyed and chartered.'
+         : 'Hive settlement, unsurveyed. No charter, no districts, nothing to govern until the world is taken entirely.')
+      + '</div>';
+    if(window._REACH) h+='<div style="font-size:.62rem;color:#4a4842;margin-top:6px;line-height:1.5">'
+      +window._REACH.fronts+' of '+window._REACH.maxFronts+' fronts live across the Reach.</div>';
+    h+='</div>';
+
+    // Engagements. Zone count is set by the server from the world's population,
+    // so this renders what exists rather than a fixed three.
+    var zl = (R && R.zones) || [];
+    h+='<div style="margin-bottom:12px">';
+    h+='<div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'
+      +T('galx.engagements','Engagements')+' ('+zl.length+')</div>';
+    if(!zl.length){
+      h+='<div style="font-size:.66rem;color:#4a4842">No contact on this world.</div>';
+    } else {
+      zl.forEach(function(z, zi){
+        h+='<div style="border:1px solid '+(z.live?'#4a3a1a':'#1a1a22')+';border-radius:2px;'
+          +'padding:6px 8px;margin-bottom:5px;background:'+(z.live?'rgba(240,180,84,.05)':'transparent')+'">';
+        h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+          +'<span style="font-size:.74rem;color:'+(z.live?'#d8d2c4':'#6b7280')+'">'+z.name
+          + reachGlyphLine(z.name, z.live?'#e08a52':'#4a4842', 0.5) + '</span>'
+          +(z.live
+             ? '<span onclick="window.reachWatch&&window.reachWatch(\''+id+'\','+zi+')" '
+               +'style="font-size:.62rem;color:#f0b454;letter-spacing:.1em;cursor:pointer;'
+               +'border:1px solid #4a3a1a;padding:2px 8px">\u25b8 '+T('galx.watch','WATCH')+'</span>'
+             : '<span style="font-size:.6rem;color:#3a3a34;letter-spacing:.12em">'+T('galx.quiet','QUIET')+'</span>')
+          +'</div>';
+        h+='<div style="height:5px;background:#0d1017;display:flex;overflow:hidden">'
+          +'<i style="display:block;height:100%;width:'+(100-z.hive)+'%;background:#4ecdc4"></i>'
+          +'<i style="display:block;height:100%;width:'+z.hive+'%;background:#c2551f"></i></div>';
+        h+='<div style="font-size:.58rem;color:#4a4842;margin-top:3px">intensity '+z.intensity+'</div>';
+        h+=reachWaveLine(R, z);
+        h+=reachWinBlock(id, zi, z, false);
+        h+='</div>';
+      });
+    }
+    // The fund and any live vote are properties of the WORLD, so they render
+    // once below the engagements rather than once per zone.
+    // Pull a viewer scoped copy so the two blocks below know what this player
+    // has already given and already voted for.
+    reachScopeMine();
+    h+=reachFundBlock(id, R);
+    h+=reachVoteBlock(id, R);
+    h+='</div>';
+  }
+  // Control bars (not for flesh station, not for the Reach)
+  else if(!isFlesh){
     if(wc>0) h+='<div style="font-size:.68rem;color:#555;letter-spacing:.08em;margin-bottom:2px">'+T('galx.warChest','WAR CHEST')+'</div><div style="font-size:.82rem;color:#f39c12;margin-bottom:10px">&#401;'+Math.round(wc).toLocaleString()+'</div>';
     h+='<div style="margin-bottom:12px"><div style="font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">'+T('galx.factionControl','Faction Control')+'</div>';
     var detailFactions=['coalition','syndicate','void','guild'];
@@ -3792,10 +4813,25 @@ function renderDetail(id){
 
   // City Charters card (1.2.5.25): assets/city.js owns the section and guards
   // non-city colonies itself.
-  if(typeof window.renderCityCard==='function'&&!isFlesh) setTimeout(function(){ window.renderCityCard(id); },0);
+  // The server refuses every city route on an unconverted Reach world, but the
+  // card is drawn from a client-side summary cache, so it would still render a
+  // CITY CHARTER header and an OPEN CITY button over a world the brood holds.
+  var _cityLocked = (m.galaxy==='khaisultull')
+    && !(window._REACH && window._REACH.worlds && window._REACH.worlds[id] && window._REACH.worlds[id].taken);
+  if(typeof window.renderCityCard==='function' && !isFlesh && !_cityLocked)
+    setTimeout(function(){ window.renderCityCard(id); },0);
+  else { var _stale=document.getElementById('gCityCard'); if(_stale) _stale.remove(); }
 
   // ── Append Galaxy Systems panels (smuggling, blockade, contracts) ──
-  if (!isFlesh) {
+  // A brood-held world has no lanes into it, so it has no smuggling runs, no
+  // blockades to fund and no lane shares to hold. Offering all three on a world
+  // the Coalition does not own is not a harmless default: every one of them is
+  // a button that takes money for something that cannot happen. They return
+  // when the world does, along with everything else a colony has.
+  var _reachRow = (m.galaxy==='khaisultull' && window._REACH && window._REACH.worlds)
+                    ? window._REACH.worlds[id] : null;
+  var _reachLocked = (m.galaxy==='khaisultull') && !(_reachRow && _reachRow.taken);
+  if (!isFlesh && !_reachLocked) {
     var sysDiv = document.createElement('div');
     sysDiv.id = 'gSysPanels_'+id;
     sysDiv.style.cssText = 'margin-top:14px;border-top:1px solid #1a1a2e;padding-top:10px';

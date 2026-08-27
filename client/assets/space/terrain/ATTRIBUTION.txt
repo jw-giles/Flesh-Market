@@ -1,0 +1,205 @@
+FleshMarket - battlefield ground patches
+========================================
+
+WHAT THESE ARE
+Fourteen 512x512 greyscale textures, two per COLONY_VISUAL terrain key
+(<key>_base.png and <key>_rock.png). Each is an 8x8 arrangement of 64px
+seamless top-down tiles, flipped and blended, then reduced to luminance.
+They are tiled by the client with a repeating canvas pattern and given
+their colour at runtime from client/assets/planet-palette.js, so the same
+patch serves a red desert, a teal rift and an ice world.
+
+They are BAKED, not hand-authored. Regenerate with:
+
+    python3 tools/terrain-patches.py <path-to-tile-pack>
+    python3 tools/terrain-patches.py <path-to-tile-pack> --check
+
+The tile pack itself is deliberately NOT in this repo. Only these derived
+patches are.
+
+GRASS IS NOT FROM THE PACK. IT IS GENERATED.
+------------------------------------------
+grass_base.png and grass_rock.png are NOT baked from any tile pack. They are
+produced by tools/terrain-synth.py out of arithmetic: wrapping value-noise
+lattices for the clumping, aligned blade strokes whose direction comes from a
+low-frequency lean field, and a bare-scrape mask. No source art, no pack, no
+licence to resolve.
+
+TWO REASONS THEY EXIST. The pack below has no grass in it at all - the recipe
+is sand, gravel, basalt, snow, water and clay - so a Coalition garden world was
+drawing its fields with dust_base tinted green, which is gravel in a costume.
+And the pack's licence is still unread, so anything derived from it is
+unlicensed. A generated patch fixes both at once and is the only one of these
+files that can ship today without a decision being made first.
+
+They are also authored WIDE: measured, the tinted dust patch spans luminance 41
+to 65, a 24-value range, which is why a plain reads as a flat mat however much
+fine noise is on it. These span roughly twice that, so the crush in
+buildPatterns has something left to crush.
+
+Regenerate and verify with:
+
+    python3 tools/terrain-synth.py
+    python3 tools/terrain-synth.py --check
+
+--check asserts the shipped PNGs are byte-identical to what the generator
+produces, that the tile wraps exactly (the wrap difference must be
+indistinguishable from an ordinary neighbouring-column difference), and that
+the range has not narrowed.
+
+
+SOURCE AND LICENCE - UNRESOLVED, READ THIS
+------------------------------------------
+Source: "114 Free Seamless 64px RPG Tiles" by CODESPREE.
+
+The AUTHOR IS NOW KNOWN and is credited in docs/CREDITS.md and in the
+in-client Asset Credits panel. The copy of the pack as received still
+contained no licence file, so the TERMS remain unread. That means the licence for these derived textures is currently
+UNKNOWN, not permissive. This repository is public. Nothing about baking,
+greyscaling or recombining the tiles changes their copyright status: a
+derived work of an unlicensed asset is still an unlicensed asset.
+
+BEFORE THIS SHIPS, one of the following has to be true, and this file
+updated to say which:
+
+  1. The pack carries a licence permitting derivative use and
+     redistribution (CC0, CC-BY, a commercial asset licence). Record the
+     source, author and licence here, and honour any attribution clause.
+  2. Permission has been obtained from the author in writing.
+  3. These patches are rebaked from art that is owned or clearly licensed,
+     in which case only tools/terrain-patches.py is reused and the RECIPE
+     table is repointed.
+
+Until then, treat this directory as unshippable. The renderer degrades to
+the wireframe cover it used before 1.5.3.0 if these files are absent, so
+removing them breaks nothing but the look.
+
+SECOND ASSET: THE TURQUOISE HOUND TANK - AUTHOR NOW KNOWN
+----------------------------------------------------------
+AUTHOR: Aralepixel ("Turquoise Hound animated pixel art tank shoots and
+walks"). Credited in docs/CREDITS.md and in the in-client Asset Credits
+panel. The LICENCE TERMS are still unread - knowing who made it is not the
+same as knowing what they permit - so the redistribution position below
+stands until those are checked.
+
+client/assets/space/vehicles/hound_walk.png  (from Turquoise-Hound-Walk-Spritesheet.png)
+client/assets/space/vehicles/hound_fire.png  (from Turquoise-Hound-Shooting-Spritesheet.png)
+
+Shipped verbatim, renamed only. The .aseprite and .resprite source files
+were deliberately NOT shipped: they are source art, not a deliverable.
+
+This one arrived NAMED - "Turquoise Hound Tank", with editable Aseprite
+sources - which is more provenance than the tile pack had and is still not
+a licence. Record the author and terms here before this ships, the same as
+above. If it was bought, note where and under what licence; most pixel-art
+vehicle packs permit use in a game but NOT redistribution of the source
+art, and a public repo is redistribution.
+
+Unlike the terrain patches, removing this one does NOT degrade gracefully
+to something equivalent: tanks fall back to the wireframe model they had
+before 1.5.3.1, which still exists and still works, but the sprite line and
+the wireframe line will not match while the sheets are missing.
+
+THIRD ASSET, AND THIS ONE IS SETTLED: THE NATURE PACK
+------------------------------------------------------
+client/assets/space/nature/meshes.json
+  Baked by tools/nature-meshes.py from "Nature Pack Low Poly By RgsDev".
+
+LICENCE: CC0 1.0 Universal (Public Domain Dedication), stated in the pack's
+own License.txt. Redistribution and commercial use permitted; attribution
+not required.
+
+  Author:  RgsDev
+  Contact: rgsdev83@gmail.com  ยท  @rgs_dev
+  Licence: https://creativecommons.org/publicdomain/zero/1.0/
+
+Credited here anyway. Not being obliged to attribute is a poor reason not to.
+
+Only eight meshes are baked (four rocks, two mountain LODs, two cliffs), and
+only the derived meshes.json ships - not the pack, not the .blend, not the
+FBX or OBJ trees. Trees, flowers, mushrooms and grass are deliberately not
+used: the Reach is a brood world and a pine forest on Ussaleth is a
+different game. If a Coalition or Circuit world ever fights a battle,
+revisit that; the pack has the art and tools/nature-meshes.py has the table.
+
+THIS ASSET DOES NOT BLOCK ship.sh. The other two still do.
+
+FOURTH ASSET, AND THE STRICTEST LICENCE YET: THE CREATURE PACK
+---------------------------------------------------------------
+client/assets/space/brood/*.png + geometry.json
+  Baked by tools/brood-sprites.py from "Super Pixel Alien Monster Pack 1".
+
+  Author:  Will Tice / unTied Games
+  Contact: contact@untiedgames.com  -  @untiedgames
+  Licence: http://untiedgames.com/files/license.txt
+
+The pack's own license.txt says, in summary:
+
+  1. You may NOT publicly distribute the contents of this zip file in whole
+     or in part, unless as part of a game or application product.
+  2. Attribution to WILL TICE IN THE CREDITS is required if used.
+  3. Commercial and non-commercial use are both fine.
+  4. Game-making tools are not granted a licence.
+
+Point 1 is the problem and it is explicit in a way the other two were not.
+A public GitHub repository is not a game or application product; it is
+distribution of the contents in part, to anyone, in a form they can take
+the art out of. Baking, renaming and re-tinting does not change that.
+
+TWO THINGS TO DO, AND THE SECOND IS NOT OPTIONAL IF THIS SHIPS:
+  1. Resolve the distribution question. Realistically this means the asset
+     directories stop living in a public repo - see THE PATTERN below.
+  2. Add "Will Tice / unTied Games" to the game's credits. That is required
+     by the licence for USE, independently of the distribution question, and
+     there is currently nowhere in FleshMarket that credits anyone.
+
+The full licence could not be fetched to check the details (the host
+returns 403 to non-browser requests). Read it before deciding.
+
+
+THE PATTERN, WHICH IS NOW THE ACTUAL PROBLEM
+--------------------------------------------
+Three of the four art assets in this game cannot legally sit in a public
+repository, and the one that can is CC0. That is not bad luck with three
+packs; it is what nearly every commercial and semi-commercial art licence
+says. "Use it in your game, do not redistribute the art" is the norm.
+
+Fixing this asset by asset will keep failing. The structural options are:
+
+  a. Make the repository private. Cheapest, and it costs the public repo.
+  b. Keep the repo public and move client/assets/space/{terrain,vehicles,
+     brood} out of git entirely - gitignored, deployed to the VPS by a
+     separate rsync step in ship.sh. The renderer already degrades to
+     wireframe when art is absent, so a clone without the art still runs.
+  c. Replace everything with CC0 or self-owned art, as the nature pack
+     already is.
+
+(b) is the one that keeps both the public repo and the art, and the
+fallback behaviour to make it work is already built.
+
+FIFTH: THE PLANET SPRITES - AUTHOR KNOWN, SAME REPO QUESTION AS THE TROOPS
+--------------------------------------------------------------------------
+client/assets/space/planets/animated/*
+
+AUTHOR: Helianthus Games ("25 Spinning Planets").
+        helianthus-games.itch.io
+
+Credited in docs/CREDITS.md and the in-client Asset Credits panel. Licence
+terms unread.
+
+THIS ONE MATTERS MORE THAN ITS SIZE SUGGESTS. tools/planet-palette.mjs
+samples these sprites to generate every world's ground, sky and rock
+colour, so the battlefield palette is DERIVED FROM this art. If the licence
+ever turns out to forbid derivative works, planet-palette.js is the derived
+work and the whole battlefield colour scheme goes with it.
+
+Like client/assets/space/troops/, this directory is ALREADY TRACKED and has
+already been public for months, so gitignoring it now would not undo that.
+It is not being moved here for that reason. Same call as the troops: it is
+Jacob's, and it is a decision rather than a cleanup.
+
+NOT COVERED BY THAT CREDIT, and now listed as unattributed rather than
+folded into it: static/black_hole, static/tech, jade/dyson, jade/galaxy,
+jade/quasar, suns/, icons/. They share the directory and are not part of
+the pack. Attributing a whole directory because most of it has one author is
+how the wrong person gets credited and the right one does not.

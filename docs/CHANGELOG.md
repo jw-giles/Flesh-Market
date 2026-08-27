@@ -4,6 +4,3647 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.10.1.0 - THE BIG ONE - everything from v1.4.0.4 to here, as one release
+
+**RELEASE BUILD. Hard refresh AND a server restart.** 55 new files and directories, 34 changed, none removed. Full list in `docs/MANIFEST.txt`. Largest additions: `client/assets/reach-battle.js`, `client/assets/reach-hive.js`, `server/reach.js`, `client/assets/city-battle.js`, `client/assets/space/city/`, `client/assets/factions.js`, `server/factions.js`, `server/sudoku.js`, `client/assets/asset-credits.js`, `docs/CREDITS.md`, and the whole of `tools/`. Largest edits: `client/assets/galaxy.js` (+1036), `server/server.js` (+1012), `client/assets/god-panel.js` (+998), `client/index.html` (+313).
+
+*The 132 per-patch entries below are kept: they are where the reasoning lives, and several of them are the only record of a fix that a later patch had to reverse. This entry is the operator's view of the same span.*
+
+*** THIS IS ONE RELEASE, NOT A HUNDRED AND THIRTY-TWO. *** Live is v1.4.0.4, built 2026-08-22. This tree is v1.10.1.0. Between them sit 132 changelog entries, and the per-patch history below is kept because it is where the reasoning lives - but nobody deploying this needs to read 132 entries to know what is about to change on the server, so this is the whole jump in one place. FILE-LEVEL SCOPE, DIFFED RATHER THAN REMEMBERED: 55 files and directories are NEW, 34 are CHANGED, and NOTHING IS REMOVED. The largest single additions are the Khai'sultull Reach (client/assets/reach-battle.js, reach-hive.js, server/reach.js), the city battlefield (client/assets/city-battle.js, client/assets/space/city/), the faction registry (client/assets/factions.js, server/factions.js), server-authoritative sudoku (server/sudoku.js), the asset credits panel (client/assets/asset-credits.js, docs/CREDITS.md), and a 22-file check suite under tools/ that did not exist at all on live. The largest changes to existing files are galaxy.js (+1036 lines), server.js (+1012), god-panel.js (+998) and index.html (+313). *** WHAT A PLAYER WILL SEE. *** A war layer that did not exist: the Khai'sultull Reach, its battlefields, its hive lord and its envoy. City battlefields on settled worlds, built from a modular kit, with a bounded arena and a fixed camera. A galaxy that can be swapped between Coalition and Circuit space, with a sealed passage that actually refuses to let you through. An asset credits panel beside the end-of-day clock naming every artist whose work is in the game. Trial accounts. Server-authoritative sudoku, baccarat, sic bo and solitaire. A chat filter that censors what it flags. Warehouse storage, city charters, index funds, clearance and provenance limits on player-to-player transfers. *** WHAT AN OPERATOR MUST KNOW BEFORE PRESSING GO, AND THIS IS THE PART THAT IS NOT OPTIONAL. *** (1) THE MINING FAUCET IS STILL OPEN ON LIVE, AND THE LIVE CODE SAYS OTHERWISE IN A COMMENT. This was challenged as already fixed and it is half true, which is the dangerous half. A mining fix IS on live: v1.4.0.4 closed the CARGO DRONE case, where deleting the run window on the first positive delta made every later mid-run bank message fall through to a fresh full cap. That fix is real, it is in the live tree, and it carries a long comment saying "THE BUDGET IS PER RUN, NOT PER MESSAGE... Only the end of run settlement closes the window now." THE COMMENT IS TRUE OF THE CASE IT DESCRIBES AND FALSE OF THE ONE STILL OPEN. Read the live handler at server.js:11455-11466: `const run = _miningRuns.get(actor.id)` then `elapsed = run ? ... : MINING_RUN_FALLBACK_SEC` and `already = run ? run.banked : 0`, and at the end `if (reason === 'cargo_drone' && run) run.banked = ...; else _miningRuns.delete(actor.id);`. NOTHING EVER STORES A RUN WHEN ONE DOES NOT EXIST. So a client that never sends a loadout has run === undefined on every message, always takes the fallback branch, and always sees already === 0. With the shipped constants MINING_MAX_YIELD_PER_SEC=400 and MINING_RUN_FALLBACK_SEC=90, cap = min(400*90, 500000) = F36,000 EVERY MESSAGE, forever, with nothing accumulating against it. THE FIX IN THIS RELEASE is four lines at server.js:12095-12104: when no run exists it SEEDS one a fallback-length in the past and STORES it, so that budget is handed over once and then drains. Same arithmetic, one map write, and the faucet closes. tools/mining-check.mjs drives the real handler body rather than matching its text, which is the only reason this was ever found - two prior fixes and a code read all declared it closed while it was live, because the guard and its comment both read correctly. (2) TRIAL ACCOUNTS ARE NOT A DEPLOY RISK AND THIS CHECKLIST WAS WRONG TO SAY THEY WERE. They are already live and already gated - the upgrade route, the locked-trial message and the per-route blocks are all in the v1.4.0.4 tree at server.js:3434-3454. The warning came from a note written when the live version was believed to be v1.3.9.x; it is not, it is v1.4.0.4, and trial accounts landed before the gap rather than inside it. Nothing about the login path changes in this release. (3) TAKE A MANUAL DATABASE BACKUP FIRST. The cron backup exists and has been needed before; a big-bang of this size is not the moment to rely on it alone. (4) READ THE player_cargo REBUILD MIGRATION in server/db.js before going. It runs at boot. (5) ART IS PUSHED SEPARATELY. ship.sh now has a licence gate that refuses to commit if client/assets/space/vehicles, brood or terrain/*.png are tracked, and pushes them to the VPS as a tar-over-ssh step AFTER the git push. A clone without them still runs - reach-battle falls back to wireframe - but the live game needs that step to complete. (6) package-lock.json IS GITIGNORED AT ANY DEPTH NOW. The old rule was server/package-lock.json and stopped covering the case the moment a second package.json existed at the repo root. A stale lock file inside a build zip once cost a multi-hour outage and a restore from the cron backup. *** GM CONTROLS: CHECKED, AND HERE IS WHAT THAT DOES AND DOES NOT MEAN. *** tools/controls-check.mjs traces every control in the Reach and war panels end to end - the panel sends a named command, server.js has a branch for that exact string, the branch calls the reach.js export that does the work, reach.js exports it, and the branch broadcasts where other clients must see the change. 232 assertions, all passing. WHAT IT CANNOT DO IS CLICK THE BUTTON: it proves the wire is continuous, not that the current at the far end is the right shape. The behaviour underneath is driven separately in reach-check.mjs (1091 assertions), which lifts and runs the functions this only proves are reachable. Both are needed and neither is the other. A live GM session should still be walked once by hand after deploy. FULL SUITE AT RELEASE: 22 of 22 checks green, 10699 assertions. Live has no check suite at all, so there is no before number to compare against. *** ON LICENCES: EVERY PACK IS PAID FOR, AND PURCHASE SETTLES USE RATHER THAN REDISTRIBUTION. *** That distinction is not new here - it is the one this repo already made in its own words when the modern city pack was bought: "the purchase settles USE, which is what was missing. It does not settle redistribution." The same reading applies to client/assets/commodities/, which holds 120 renamed icons and is TRACKED in a public repo: buying a pack grants the right to ship the art in a game, and whether the source files may sit in a public git tree is a separate clause in most of these licences rather than a consequence of paying. CraftPix's free file-licence says raw packs may not be redistributed; a commercial tier may say something different, and I do not know which one was bought. SO THIS IS A QUESTION RATHER THAN A FINDING, and it is Jacob's to answer: if the purchased tier permits the source art to be public, commodities/ is fine where it is and nothing needs doing. If it does not, it belongs behind the same gitignore-and-tar-over-ssh route the vehicles, brood and terrain packs already take, and ship.sh's licence gate should name it. The clothing, equipment and vehicle item icons are NOT tracked in either tree and never have been - they live on the server only - so the question does not arise for them. The credit is marked credit-required because the free tier demands attribution; if a commercial tier was bought that flag can come off, and crediting them is right either way. THE ARTIST BEHIND BOTH IS NOW CREDITED PROPERLY: Free Game Assets (GUI, Sprite, Tilesets), itch.io/profile/free-game-assets, for every commodity icon on all three markets and for the clothing, equipment and vehicle icons, marked as credit-required. Four packs named. STILL OPEN AND CARRIED INTO THIS RELEASE, LISTED SO THEY ARE NOT DISCOVERED IN PRODUCTION: minesweeper is still client-checked and needs an incremental reveal protocol rather than a graded submission; the Capital House invite-then-kick wire-tax dodge is unfixed; VPS SSH still allows password auth; git history has never been checked for committed plaintext passwords; a 1.0m to 3.0m bare run remains at junction seams on the organic and archipelago city layouts; and the city battlefield's barriers and rubble are still invented prism geometry rather than kit pieces.
+
+
+## v1.10.0.10 - the screenshot starts saying where it was taken from
+
+Hard refresh, no server restart. Files touched: `client/citybattle-mock.html`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** I CANNOT REPRODUCE THE LADDER AND I AM NOT GOING TO PRETEND OTHERWISE. *** Six camera setups on new_anchor at seed 7, including a marked pass with every ground piece recoloured and a near-vertical top-down of a junction: the kerbs come out as clean continuous lines on both sides of every avenue, the road covers the junction, and nothing is laid at a four metre pitch down one verge. The screenshots plainly show it. The difference is something I do not have - a seed, an avenue, or an angle - and four more guessed cameras is not a method. *** SO THE SHOT NOW SAYS WHERE IT WAS TAKEN FROM, AND THAT IS THE ACTUAL DELIVERABLE THIS PATCH. *** A screenshot of the bench IS the bug report, and until now it carried the build number and nothing else: not the front, not the seed, not where the camera was standing, not the dial positions. That is why five patches went into chasing faults from renders that were never pointed at them, and why the answer came back "cannot reproduce" twice about something in every frame being looked at. The png button now composites a caption strip under the frame carrying build, front (colony#zone), seed, camera x/y/z, yaw, pitch, view radius, road wear, ground tex and tile size. BURNED INTO THE IMAGE rather than only shown in the HUD, because the HUD can be cropped out and routinely is. The HUD also gains a live camera readout so the numbers are visible while flying. WHAT THAT BUYS: any future screenshot is reproducible in one command instead of six guesses. Take the shot with the png button rather than a window grab and the strip comes with it. WHAT WAS RULED OUT, so it is not chased again: the kerb rotation is correct on both sides (verified against the bake - the road-coloured face lands inside the carriageway on 100 per cent of kerbs across all six layouts); the kerb offset straddles the kerb line correctly; no furniture stands on a carriageway on any layout; the road covers every junction; and no ground piece is laid at a four metre pitch on one verge only. Whatever the ladder is, it is none of those. city-battle-check 361 -> 367. Full suite 22/22, 10699 assertions. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.10.0.9 - the kerb straddles the kerb line, and a coverage probe cannot see a colour
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/city-battle-check.mjs`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE BLANK SQUARES ARE THE SECOND HALF OF LAST PATCH'S FAULT: THE KERB WAS ALSO TWO METRES TOO FAR OUT. *** v1.10.0.8 fixed its ROTATION and stopped there. Measured off the bake again: the module is 4m across and the LIP - the vertical face between the pavement deck and the drop - sits at LOCAL Z ZERO, which is the CENTRE of the piece. Two metres of road on one side of it, two metres of pavement on the other. So the centre belongs ON the kerb line at ax + hw, and it was at ax + hw + 2. Placed two metres out, the piece's road half - the ONLY face in it wearing the road colour #585753 - lands entirely on the PAVEMENT, painting a two metre band of road grey down both sides of every avenue and every cross street, broken into module lengths by the junction skips and the corner mitres. That is what makes it read as squares rather than as a stripe, and it is why it turns up at every angle. *** AND THE BARE-RUN SWEEP COULD NEVER HAVE FOUND IT, WHICH IS THE LESSON. *** At ax + hw + 2 the piece still COVERED the ground continuously, its deck meeting the first pavement strip at hw + 4 exactly. Nothing was missing. It was the wrong COLOUR, and a coverage probe does not look at colour - so four patches of chasing this with a coverage probe kept coming back clean while the fault was in every frame. Swept geometrically instead, asking whether each kerb's road half lands inside a carriageway: 555 of 555 kerbs wrong on radial, 526 of 526 on grid, and every kerb on every other layout. ZERO on all six after. The pavement strips move in half a module with the deck, from hw+4..hw+12 to hw+2..hw+10, or the two metres the kerb used to occupy would be bare. The corner mitre straddles its corner on the same convention. *** AND THE ON-ROAD GUARD HAD TO LOSE THE STRADDLING PIECES, WHICH IS A CORRECTION TO SOMETHING I ADDED THREE PATCHES AGO. *** NEVER_ON_ROAD was written when the kerb was believed to sit BESIDE the carriageway, so "its centre is on the road" meant misplaced and had to go. The kerb STRADDLES: half of it is road by design and its centre sits exactly on the kerb line, so testing that centre against |x - ax| < hw is a coin flip on floating point - 5.799999 < 5.8 is true - and it deleted most of the kerbs on terraced and spine. Measured: 542 kerbs down to 198 on terraced and a FIFTY-SEVEN METRE bare run where the walkway should be. PavementCurb and PavementCornerBig are out of the guard; what keeps them out of a junction is the jz/jx gate, which tests the JUNCTION rather than the carriageway and is the right test for it. Pavement is the only piece left in it, being the only one that is pure walkway. MEASURED AFTER, ALL SIX LAYOUTS: kerbs restored to 560/524/470/544/348/529, road-half-on-pavement ZERO everywhere, furniture standing in a road ZERO everywhere. Bare run 1.0m on radial, grid, terraced and spine and 3.0m on archipelago and organic - UP from 0.0 and 1.0 before this patch, because moving the strips in shifted the junction seams. That is a real regression in coverage traded for eliminating a wrong-coloured band on one hundred per cent of kerbs, and it is NOT closed. Recorded rather than rounded away. city-battle-check 353 -> 361. Full suite 22/22. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.10.0.8 - both avenue kerbs were facing backwards, and a check was certifying it
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/city-battle-check.mjs`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE BROKEN ROAD EDGE IS THE KERB, AND IT IS A HUNDRED AND EIGHTY DEGREES. *** Read off the bake face by face this time, because reasoning about it is exactly what got it wrong twice. PavementCurb's pavement deck sits at y=0 over z -100..-10, its lip rises to y=3 across z -10..0, and the ROAD half is at y=-10 over z 0..+100 - and that road half is the ONLY face in the whole piece carrying the road colour #585753. So the road side is +Z and the pavement side is -Z, as a fact rather than an assumption. Rotating by theta maps that +Z to (sin theta, 0, cos theta). On the +x side of an avenue the kerb stands at ax + hw + 2 and the road is toward -X, so theta must be -PI/2. THE SOURCE HAD +PI/2 THERE, AND -PI/2 ON THE -X SIDE: BOTH AVENUE KERBS WERE FLIPPED. What that draws is a road-coloured trench two metres wide sunk twenty centimetres into the PAVEMENT along the length of every avenue, with the raised pavement deck cantilevered out over the carriageway. From a camera standing on that pavement it is a broken road edge with a row of pale squares along it, which is the thing in the screenshot and has been in every screenshot of an avenue since the kerbs landed. THE CROSS STREETS WERE ALWAYS RIGHT, which is why it only ever showed on an avenue: they use PI and 0, the piece's own profile axis is already Z, and no quarter turn is involved - there was nothing to get backwards. *** AND A CHECK ASSERTION WAS ACTIVELY HOLDING THE BUG IN PLACE. *** 'the kerb is turned to run along the street' froze the LITERAL pair `Math.PI/2 : -Math.PI/2`, which IS the flipped pair. Any correct rotation would have failed it. Its own comment said the right thing - "a piece's geometry says which way it faces, and both times it was placed by assuming an axis instead of reading one" - and then it pinned the assumption rather than the geometry. Replaced with one that DERIVES the required angle from the bake: find the road-coloured face, see which side of z it sits on, and require sin(theta) to point it at the street. Same for the cross streets. The piece and its rotation can no longer drift apart if either is re-authored, and the check can no longer certify a flip. THAT IS THE THIRD TIME IN THIS SEQUENCE A GREEN CHECK WAS WRONG RATHER THAN THE CODE: fleet-check asserted about a view it never reached, 'the painted road surface is retired' made a one-off double-draw into a permanent ban, 'the lane count ceilings' asserted a fix I had to reverse a patch later, and now this one asserted a bug. The pattern is the same every time - an assertion written against the LINE that was changed rather than against the property that has to hold. city-battle-check 345 -> 353. Full suite 22/22, 10685 assertions. NOT TOUCHED, SAME AS LAST PATCH: the invented prism props - the blue-grey barriers and rubble - are still the last invented box geometry in a scene built from a kit, and the 1.0m bare run on organic and archipelago is still open. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.10.0.7 - the square spots were my own fix, and the objects in the road were a fixed pitch
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/city-battle-check.mjs`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE SQUARE SPOTS ARE MY OWN FIX FROM LAST PATCH, AND CEILING-AND-CENTRE WAS THE WRONG ONE. *** v1.10.0.6 closed the bare strip along the kerb by overhanging the road past the kerb line, on the stated argument that the overhang lands UNDER the kerb because both share the kit's ten unit drop. IT IS THE OTHER WAY ROUND. PavementCurb carries its own road side at that drop, so an overhanging road tile is COPLANAR with it, and what draws is a dark tab of kerb geometry sitting ON the carriageway - once per four metre module, which is a ladder of dark rungs down the road edge. Those are the square empty spots. I introduced them one patch ago while fixing something else, and a colour-marked render found it in one look after four rounds of reasoning did not. FLOOR PLUS TWO FLUSH EDGE TILES instead. The centred run covers what divides evenly and one extra tile per side sits with its OUTER edge exactly on the kerb line, so the union is exactly the carriageway and nothing crosses it: hw 6.0 gives floor 3 centred +/-6.0 with edges at +/-4.0; hw 6.6 gives floor 3 centred +/-6.0 with edges at +/-4.6 reaching +/-6.6; hw 8.4 gives floor 4 with edges at +/-6.4 reaching +/-8.4. Road over road is invisible - same piece, same colour, same height - so the overlap in the middle costs nothing. Two extra one-face tiles per z step per avenue. *** AND THE RANDOM OBJECTS IN THE ROAD ARE NOT RANDOM. *** The verge furniture and the lamps walk down the avenue at a FIXED PITCH - nine metres for the litter, twenty-two for the lamps - and nothing ever asked whether the next stop was a junction. It is on the avenue's verge, which is correct, and simultaneously in the middle of the cross street's carriageway, which is not. Counted on new_anchor at one camera before the fix: two bins, two fences, two small fences and four lamp posts standing in the road. It is every intersection where the pitch happens to land, which is why it looks arbitrary and is completely deterministic. Both loops test standsInRoad now. Swept after: ZERO furniture on a carriageway on all six layouts. THE MANHOLES STAY - Sewerage is the one piece that belongs on a carriageway, which is why it was moved out of the furniture pool in the first place, and it is placed by the lane loop rather than the verge one. AND A THIRD, FOUND BY THE SAME PROBE: the kerb's junction skip radius was hw + t0*1.6 = 13m while PavementCornerBig only reaches hw + t0 = 10.6m, so the straight kerb was being skipped for 2.4 metres of approach that the corner never covered. That band, between the road edge and the pavement strips at hw+10.6, is KERB-ONLY territory, so what showed there was bare ground - two rows per junction. The skip is hw + t0 now, so the straight kerb stops exactly where the mitre starts. MEASURED ACROSS ALL SIX LAYOUTS AFTER: widest bare run 0.0m on radial, grid, terraced and spine; 1.0m still on organic and archipelago, which are the two highest-jitter layouts at 0.24 and 0.18 - their avenues wander off the ideal line and the junction geometry is laid as if they had not. Down from a full-length strip on every radial world, and NOT closed. Recorded rather than rounded up to zero. A check assertion superseded one patch after it was written: 'the lane count ceilings rather than rounds' asserted the fix rather than the invariant. The invariant is that the road covers exactly the carriageway and nothing crosses it; ceiling was one way to get there and it was the wrong one. 'Does not round' is the part that survives. THE INVENTED PRISM PROPS ARE STILL THERE AND STILL UGLY, and this patch does not touch them: 58 of them at one camera, heights 0.5 to 1.1, all correctly ON the pavement rather than in the road. They are the blue-grey boxes - the intersection barriers and the rubble - and they are the last invented box geometry in a scene built from a kit. The pack has Fence, FenceCorner, FenceSmall, Bin, UndergroundTrashBin, Sewerage, Steps1-3 and three trees, and the barriers use none of them. That is the next piece of work and it is an asset decision, not a bug. city-battle-check 337 -> 345. Full suite 22/22, 10677 assertions. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.10.0.6 - the kerb strip was a rounding, and the horizon learns what the world does for a living
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/city-battle-check.mjs`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE STRIP ALONG THE KERB WAS NOT FOG. IT WAS A ROUNDING, AND IT WAS BARE GROUND. *** lanes = round(GRID.hw * 2 / t0) and the run was laid from ax - hw, so the road covered lanes*t0 metres of a carriageway 2*hw wide and whatever was left over was never tiled at all. What shows through is the PLAIN underneath - the tinted grass patch, which on a garden world is bright green and on any world is the one thing in the frame that is not city. Not fog, not the haze, not a texture: a strip of untiled ground running the entire length of every avenue, hard against the kerb. IT IS INVISIBLE ON HALF THE WORLDS, WHICH IS WHY IT SURVIVED. The gap is exactly 2*hw - round(2*hw/t0)*t0, so it depends entirely on the layout's kerb half-width against the four-metre module: grid hw 6.0 divides exactly and has NO gap, hollow hw 6.2 leaves 0.4m, radial hw 6.6 leaves 1.2m, spine hw 8.4 leaves 0.8m. Swept with a coverage probe over the near field: lustandia clean, yujing and new_anchor both showing a 1m-plus uncovered run at ax+5.5..ax+6.5 across every z row - and both are radial, which is the layout in the screenshot. Every earlier attempt to reproduce this ran on lustandia, which is one of the two layouts where the arithmetic comes out even. CEILING AND CENTRED rather than rounding and hoping: the run is now at least as wide as the carriageway and any overhang lands UNDER the kerb, since the kit's Road sits ten units low and PavementCurb carries its road side at the same drop, so an overhanging road tile is below the kerb that covers it rather than fighting it. One extra one-face tile per avenue on the layouts that need it. Re-swept across all six layouts: widest bare run 0.0m everywhere. *** AND A SKYLINE PER WORLD, OUT OF LORE THE REPO ALREADY HOLDS. *** The skyline was the same city everywhere twice over. The first version was one silhouette recoloured by whoever held the ground; the second varied density and height by POPULATION and by whether the world is Circuit - two dials across thirty-seven colonies, so Nova Reach and Yujing come out the same shape at the same population, which is the definition of generic. THE SECTOR IS ALREADY THE LORE AND IT IS ALREADY IN THE DATA: every front carries a sectorName - Finance, Iron Foundries, Gray Bazaar, Flesh & Gene, Power Cartels, Transit Guild - and ROOF_STYLE and FURNITURE have keyed off it since the kit landed, so a foundry world already gets fencing and service covers where a bank gets railings and signage. The horizon is the one place that never read it. A foundry skyline is stacks and low sheds, a finance capital is crowned towers lit to the top, a bazaar is a jumble of mid-rise with no plan, an agricultural world is a handful of masts. Thirty-seven worlds distinguished from data that already existed, with nothing invented. Mechanically it is a BAND into TOWER_KIND rather than the old two-way nudge: the old bias could only say "taller than average or not", which cannot express "slabs and steps ONLY" or "every kind, evenly". Same five kinds, no new geometry. *** THE PER-COLONY TABLE IS DELIBERATELY NEARLY EMPTY AND THAT IS NOT LAZINESS. *** Jacob is the GM and the author; the lore of a named world is his to state, and filling thirty-seven rows inside a renderer would be writing canon into a file where nobody would ever find it again. SKYLINE_WORLD is the hook. The four rows in it are ones the repo already asserts somewhere else - the Circuit built with time, the frontier built with what it had, the Hollow is a rift world, Flesh Station is Mr Flesh's own - and every other world falls through to its sector. Add a row per world as the lore gets written. IT IS ALSO BACK ON, AS PRISM, AND THAT IS A DIFFERENT DECISION FROM THE ONE v1.10.0.1 MADE. That verdict was about the MODEL style - real geometry at 1400m is a silhouette, every face within a few luminance values of every other, so it arrives as a flat coloured rectangle four hundred pixels wide - and it still stands. It was never a verdict on having a horizon. The note left the condition for earning one back: something that VARIES ACROSS a far facade, because at that range variation is the only thing distance cannot flatten. The prism style does exactly that - three face values per mass, a lighter roof slab so the silhouette edge reads, a window grid, and a mast with a beacon on anything tall - and it is also the only way a crowned tower and a slab differ at all, so the sector table needs it to say anything. One flag either way: if it still reads wrong, skyline: false and the whole thing is gone without touching anything else. city-battle-check 324 -> 337. Full suite 22/22, 10669 assertions. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.10.0.5 - the industrial pack is the pack we have, and the Reach's ground comes back on a dial
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/citybattle-mock.html`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE INDUSTRIAL CITY PACK AND THE CITY KIT ARE THE SAME PACK, AND THAT KILLS THE PREMISE OF THIS PATCH. *** Baked the uploaded IndustrialCityAsset with tools/city-meshes.py --check and it passes BYTE FOR BYTE against the shipped client/assets/space/city/kit.json. 526 meshes, 18990 faces, 23241 verts, 252 with emissive. KIT_ATTRIBUTION.txt has said so since the kit landed: it is Voloshka's "Industrial Low Poly City" and it is what every wall, window, kerb and road tile in the scene already comes from. There is no second, better road set being held back. The pack's ENTIRE road and ground vocabulary is nine pieces: Road (1 face), Pavement (1), PavementCurb (6), PavementCornerBig (17), PavementCornerSmall (19), Crossing (24), DashedLine (6), SolidLine (6), plus RoadSign (25) and BigRoadSign (79). All nine are already placed. Whatever is wrong with the roads, a different pack is not the fix, because there is no different pack. *** AND THE BUG WORLDS' GROUND WAS NEVER REMOVED - ONLY ORPHANED. *** v1.9.9.0 stopped drawing the carriageway and pavement through the band pass and paved them with flat kit tiles, because a 512px patch at TILE_M 6 covers forty-eight metres and smears when the camera stands on it. It deleted nothing. pats() still builds `asph` and `pave` every time it runs - the same CodeSpree sheets the Reach draws, through the same tintedPattern, tinted per world - and buildClips, tessellate, replay, roadClip, paveClip, eachCarriageway and eachPavement have all sat in the file since with NO CALLER AT ALL. The bug worlds' ground was one draw call away, not a rebuild from scratch. IT COMES BACK AS A DIAL RATHER THAN A DECISION, exactly like roadWear and for the recorded reason: this question has been settled by opinion, reversed and settled again, and the pats() notes already record one loop of enlarging the tile to kill speckle and getting smears instead. CB.opt.groundTex blends between flat tiles and the tiled ground; CB.opt.texScale is the smear dial, 1 being a 48m patch and 0.2 a 9.6m one. Two bench sliders with the patch size read out in metres. DEFAULT OFF, so nothing that ships changes until it is looked at. THREE THINGS FOUND BY TURNING IT ON, ALL RECORDED RATHER THAN TUNED AROUND. (1) Only the two PURE SURFACE pieces may stand down for it - Road and Pavement are one flat face apiece with no relief, so a pattern replaces them exactly; the kerb, the mitre, the crossing and the lines all have a PROFILE, and a profile is the thing a ground texture cannot draw. (2) THE LOTS ARE PART OF THE PAVED SURFACE AND THE CLIP DID NOT KNOW IT: eachPavement walks the strips beside the streets, which was all the clip needed while the lots were flat tiles, so standing those down and drawing only the strips left every yard between the buildings showing the PLAIN - green grass inside a city. eachPaved now folds CELLS into the same clip. (3) The far flat fill has to BE the average of the pattern it replaces: the first attempt handed bandPass the plain's ground/haze mix and the near ten metres came out tarmac while everything past it came out the colour of the field outside the city. Graded off the kit's own baked #585753 and #332f2c instead. *** AND ONE BLOCKER THAT IS NOT TUNING AND HAS TO BE SAID: THE PASS IS DRAWN BEFORE THE HAZE AND THE TILES ARE DRAWN AFTER IT. *** frame() runs the ground, then drawRoad, then paintHaze, then the sorted queue - so kit tiles sit ON TOP of the haze and a band pass sits UNDER it. Swap the surface to the pass and the mid-ground dissolves into haze at about forty metres, which is exactly what it does in the test frames. That is a draw-order problem, not a texScale one, and no slider setting fixes it. Moving the pass after the haze is wrong - it has no depth test and would paint over the men and buildings standing on it - so the real options are hazing the street clip separately or drawing the haze in two parts. Not attempted here. A check assertion retired for the right reason: 'the painted road surface is retired' asserted the pass was DELETED, which made "never draw the ground the way the Reach draws it" a permanent rule on the strength of one double-draw fault. The invariant is exclusivity, not absence, and it is asserted that way now. city-battle-check 311 -> 324, full suite 22/22 and 10656 assertions. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.10.0.4 - the credits list closes, and pavement stops being laid over the junctions
+
+Hard refresh, no server restart. Files touched: `client/assets/asset-credits.js`, `docs/CREDITS.md`, `client/assets/city-battle.js`, `tools/city-battle-check.mjs`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE UNATTRIBUTED LIST IS EMPTY AGAIN, AND THE PREVIOUS NOTE'S REASONING WAS RIGHT EVEN THOUGH ITS CONCLUSION IS NOW GONE. *** It refused to fold the black hole, the Flesh Station megastructure, the Jade Circuit dyson and quasar bodies, the suns and the 16px system-view icons into the Helianthus Games credit on the grounds that sharing a directory with the spinning planets is not evidence of sharing an author, and that attributing a directory because most of it has one author is how the wrong person ends up credited. That refusal was correct. It just turned out not to be needed: they ARE Helianthus Games, identified against the itch library every other attribution in the table comes from, so they move INTO that credit rather than being assumed into it. The NOT YET ATTRIBUTED panel disappears because UNKNOWN is empty and the heading already hid itself when it was. THE LIST STAYS IN THE CODE: the next pack that arrives without a name needs somewhere to go, and a section that has to be rebuilt from scratch is a section that gets skipped. Empty is a state, not a requirement. docs/CREDITS.md keeps the heading and records the reversal rather than quietly rewriting history. *** AND THE ROAD REPORT DID NOT REPRODUCE AS DESCRIBED, WHICH IS WORTH SAYING PLAINLY. *** Instrumented before touching anything: every Road tile is laid, every kit name resolves (zero misses), and the carriageway takes its correct baked colour at every distance - road bakes #585753 and renders 45,45,42, pavement bakes #332f2c and renders 26,24,22, and a colour-coded pass with Road red, Pavement green and PavementCurb blue puts every surface exactly where it belongs from the near plane to the fog line. Roads render. WHAT DID TURN UP IS A REAL FAULT AT EVERY INTERSECTION, and it is smaller than it looks. Three separate loops lay Pavement without asking what is underneath, and two of them run through every junction: the avenue's two pavement strips continue across the cross street and the cross street's two continue across the avenue. Pavement wins where they meet because it is HIGHER - the kit's Road sits ten units low, which is exactly the kerb drop and is the whole reason pavement reads as raised with no offset anywhere in the file. Coplanar it would be a z-fighting flicker; twenty centimetres up it is a clean silent overpaint at the darker value, so a strip of junction comes out 26,24,22 instead of 45,45,42. Fixed with one guard inside tile() - a NEVER_ON_ROAD set naming the paving family by PIECE rather than by loop, so a sixth paving loop cannot forget it, with Road, Crossing, DashedLine, SolidLine and Sewerage deliberately absent because they belong on a carriageway. Enforced at the one function that places tiles for the same reason the arena bound is enforced at addCover. MEASURED, AND I FIRST WROTE THIS UP AS THE WHOLE ROAD PROBLEM AND IT IS NOT: same camera, guard off and on, 25588 faces against 25518 - seventy faces - and 16150 changed pixels of 791010, two per cent of the frame, entirely inside one bounding box around the junction. Worth fixing at every intersection in the game; not a road failing to render. If there is a wholesale road failure it is somewhere this instrumentation did not reach. city-battle-check 301 -> 311, full suite 22/22 and 10643 assertions. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.10.0.3 - detail stops depending on its neighbours, and a red check that was lying
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/city-pop-check.mjs` (new), `tools/city-battle-check.mjs`, `tools/fleet-check.mjs`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE POPPING WAS TWO DIFFERENT FAULTS AND ONLY ONE OF THEM WAS A CULL. *** (1) BUILDINGS WERE CULLED ON CENTRE DISTANCE WITH NO REACH TERM, alone among the culls in this file - queueProps has measured reach since it was written, with the comment "so a long block is not culled because its middle is just outside". Buildings never got that treatment and buildings are the largest things in the frame: a forty metre block whose centre sits at 151m is entirely absent, and one step of the camera later the whole facade - walls, windows, roof, parapet - arrives at once, forty metres wide and unmissable. A small prop appearing at the fog line is invisible; a BUILDING appearing at the fog line is the whole complaint. Culled on the half-diagonal now, which is exact because the footprint is axis aligned and the test is a circle. (2) AND THE REST OF IT IS NOT A CULL AT ALL. Two things were decided by a building's POSITION IN THE QUEUE: `rich` was `i < 8`, and the window budget was spent nearest-first down the sorted list. Both make a building's appearance depend on its NEIGHBOURS. Walk four metres, let a block behind you leave the radius, and every building after it moves up one rank - so the ninth becomes the eighth and its whole facade switches window pools, 34/28/22 faces instead of 18/20/20/22, while standing perfectly still at an unchanged distance. Further down the list a building inside the budget falls outside it and goes to blank wall, or the reverse. Nothing moved and nothing crossed the fog line; the queue reshuffled underneath them. THAT is why it reads as textures flickering rather than as things entering view. Keyed on distance both are stable: rich at 62m, shopfronts at 40m, and the budget kept as a CEILING rather than as the decider - which is free, because 16000, 32000 and 64000 were already measured rendering the identical frame. (3) THE SAME FAULT IN A THIRD PLACE: flora was ordered on VIEW Z and the budget spent down that list. View z changes when the camera TURNS - a tree forty metres to your left is at z=40 facing it and z=4 facing away - so turning on the spot reshuffled the whole order and trees at the tail switched on and off while nothing moved. Ordered on world distance now, which does not care which way you are looking, which is the point of a circle. *** MEASURED, AND THE OBVIOUS PROBE WAS THE WRONG ONE. *** Frame-to-frame |delta faces| while walking the camera looked like the natural metric and it is misleading: most of that number is faces crossing the NEAR PLANE, which is normal. Turning on the spot produces a large delta and no popping whatsoever - and by that metric this patch made yaw WORSE (314 to 423 mean) while fixing the thing being complained about. So the probe counts DETAIL STATE FLIPS instead and splits them: a building that entered or left the circle, or whose own distance crossed a threshold, is LEGITIMATE; a building that changed state with neither is SPURIOUS. Spurious per frame, before and after, over three camera walks on three worlds: dolly 0.19 -> 0.00, yaw 0.00 -> 0.00 (turning never popped, it only jittered), strafe 0.27 -> 0.00. tools/city-pop-check.mjs is new and holds that measurement. It RESTATES the two range constants rather than reaching into the module, so city-battle-check ties the literals together - a restated number drifts silently and the pop check would keep passing against its own stale copy. +1834 faces, 30523 to 32357, which is buildings entering earlier rather than more detail per building. *** AND THE fleet-check FAILURE WAS NOT WHAT I SAID IT WAS. *** I reported it last patch as a real, player-visible bug: the galaxy ship layer leaking Coalition hulls into the Circuit view after a swap. IT IS NOT. Instrumented, the block reports activeGalaxy=coalition while asserting about phase=jade: V.swap('jade') is REFUSED when the passage is sealed, PASSAGE_OPEN starts { jade:false }, so the swap did nothing, the view never left coalition, and the check then asserted "the jade view shows nothing tagged coalition" against a COALITION VIEW. The two hulls it reported as a leak were coalition hulls in the coalition view, drawn correctly, and the refusal that kept them there was the seal doing its job. A CHECK THAT SILENTLY TESTS THE WRONG STATE IS WORSE THAN ONE THAT FAILS, because the failure it produces names a bug that does not exist - and this one named a fault on the galaxy map for as long as it has been red. Fixed by asserting the swap before asserting anything about its consequences, opening the passage for the duration and restoring it after, and adding the seal's own behaviour as assertions of its own, which is what the old block was accidentally testing without saying so. One tautology removed with it: the hook is swap:function(to){ swapGalaxy(to); } and returns undefined either way, so a `!== undefined || true` assertion would have passed on a broken seal. THE FULL SUITE IS GREEN FOR THE FIRST TIME IN THIS SEQUENCE: 22/22, 10627 assertions. city-battle-check 295 -> 301, fleet-check 61 -> 67, city-pop-check 12 new. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.10.0.2 - the arena gets edges and the camera stops wandering
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/citybattle-mock.html`, `tools/city-battle-check.mjs`, `tools/citybattle-harness.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE CITY HAD NO EDGES AND NOW IT HAS THE REACH'S. *** The block generator ran cells from x -300 to 300 and z -600 to 900, the front was clamped to a literal +/-58 that no other number in the file agreed with, units spawned anywhere in a 350 metre band, and the camera could walk out of all of it. Nothing threw. It meant the scene had no answer to "how big is this fight", so every system answered separately and none of them matched. THE REACH ANSWERS IT ONCE AND EVERYTHING ELSE READS THE ANSWER: a field is FIELD_W x FIELD_D, units live in normalized coordinates mapped through wx()/wz(), the front is one scalar with a clamped usable travel, and every depth offset in the sim is measured off that scalar rather than off the map. Copied here with one substitution - the Reach's front runs across DEPTH toward the hive and a city's runs across WIDTH along the contested avenue, because that is the axis a single-facing sprite pack can be drawn along. *** TWO EXTENTS, NOT ONE, AND THIS IS THE PART THAT IS EASY TO GET WRONG. *** The Reach deliberately fills five field-widths of ground past the field and its own comment gives the reason: bound the DRAWING as well as the fight and you trade a scene with no edges for a scene with a visible one, where the world reads as a rug on a floor. So ARENA is the GAMEPLAY extent - where cover exists, where units are, how far the front can travel - and the built city keeps running past it into the haze as backdrop. Cover is gated at addCover rather than at its five call sites, because a bound with five copies is a bound with five chances to be forgotten. *** AND THE DEPTH IS CAPPED, WHICH THE FIRST VERSION WAS NOT. *** Derived straight off the last cross street it came out between 326 and 663 metres depending on layout. Swept across all 66 fronts: archipelago 452-468, grid 370, organic 372-391, radial 326-334, SPINE 658-663, terraced 448-452. That is not a bigger arena, it is a mostly invisible one - the locked camera stands at z0+62 with a 150m view radius, so on a spine world five hundred metres of the fight sits permanently in fog and half the army spawns into it. The Reach's field is a flat 320 on every world for exactly this reason: the extent is a property of the ENGAGEMENT, not of the terrain generator that happens to be underneath it. Capped to 330. Width still varies by layout because the front travels across it and that is what a layout should change: 220 to 373. *** THE CAMERA IS FIXED, AND THAT IS THE WHOLE CHANGE. *** It rode four sine terms - yaw, x, z and height, all on different periods - which is what you write when the scene has no edges and you are trying to make one shot feel like several. It cost more than it bought. A camera drifting up and down the avenue re-frames the fight every few seconds, so nothing ever settles and the eye spends the shot re-finding the line instead of watching it; and a moving height plus a moving yaw is exactly the pair that walks the off-axis readout toward the arc where the sprite pack has no drawings. Locked now: fixed standoff at z0+62, fixed height 6.0, fixed pitch, square down the street. The ONLY thing that moves is x, tracking the front - which is not camera motion at all, it is the camera holding still while the battle moves under it. That is the Reach's 'follow', which sits at a fixed offset behind CL.front and does nothing else. AND A CINE MODE, because the locked rig and orbit are both GEOMETRIC and neither knows where anything interesting is. It cuts to the densest knot of men still in contact, holds six seconds, and frames each cut on a FLANK with jitter rather than a random yaw - the Reach's rule, and for the Reach's reason, which is that profile art is only correct from beside the line. Cheaper here than there: the avenue runs the length of the fight, so a cut is a choice of z rather than a choice of position. *** THE BURNT HAULER IS GONE. *** Two untextured prisms in 'rust' parked across the centre avenue, and the last piece of invented box geometry standing in a street built entirely out of a kit. Next to real kerbs, lamps and shopfronts it read as what it was, a brown crate somebody left in the road. ITS COVER SLOTS GO WITH IT, and that is the part worth arguing about. The Reach's rule when its wireframe camps were removed was to keep the data and the AI that reads it and stop drawing the geometry - right when the thing removed was ABSTRACT, because a camp is a claim over ground and the ground can carry it instead. Wrong here: a cover slot is a specific place a man crouches BEHIND something, and a slot with nothing at it puts two soldiers kneeling in open tarmac in the middle of a road. Invisible cover is worse than no cover. WHAT IS LOST, PLAINLY: this was the only hard cover in the open and therefore the only reason anybody was ever in the middle of a street, which is now crossed rather than fought over. Getting it back needs a vehicle MESH rather than another prism, and the modern pack has trucks and forklifts the bake already produces and the shipping subset excludes. That is an asset decision, not a code one. *** THE SKYVIEW IS NOT A TEXTURE PROBLEM. *** A contact shadow is a cheat that works from ONE place: a flat pad around a footprint standing in for the darkening where a mass meets the ground. From eye level that is exactly what it looks like. From overhead it is a black rectangle offset from a building, and a city seen from above becomes acres of flat grey with black mats scattered over it - which is most of what is wrong with that angle. Faded on pitch rather than removed, floored at a tenth, because at the pitch the shipped camera actually uses it is doing its job and it is the cheapest depth in this renderer. MEASURED CONSEQUENCE, FLAGGED RATHER THAN BURIED: gating cover to the arena and capping the depth cuts the cover count, and spine colonies take it worst - 25 to 51 slots for 52 men, where they had 52 to 117. A line with more men than slots degrades to a firing line rather than breaking, since units with no claimable cover advance to the front unaided, but a spine world is thinner than it was. The fix is more slots per building rather than a bigger arena, and it is not in this patch. A stale harness assumption also fixed: the wide/wide_prism style comparison stopped forcing the skyline on when the default went to false, so both frames came out as the same empty sky and the identical-digest warning fired on a comparison that could never differ. It forces it on for the shot and shoots wide_model too. city-battle-check 273 -> 295. PRE-EXISTING AND NOT FROM THIS PATCH: fleet-check still fails 'shows nothing from the other sector' - the galaxy ship layer leaks Coalition hulls into the Circuit view after a swap. Confirmed failing in the untouched v1.10.0.0 zip. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.10.0.1 - the skyline comes back off, and the street gets the detail instead
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/citybattle-mock.html`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `package.json`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE MODEL SKYLINE IS OFF AGAIN, AND THE PICTURE IS THE ARGUMENT. *** Turning the far towers into real geometry was the right experiment and it failed in the wide shot. At 1400m and beyond a 280m tower is a SILHOUETTE: every face on it lands within a few luminance values of every other, the haze wash closes what is left, and what arrives on screen is a flat coloured rectangle four hundred pixels across sitting behind a street that has windows, kerbs, lamps and parapets on it. The slab wins on area and loses on everything else, which is the opposite of what a backdrop is for. THAT IS A LOOK FAILURE AND NOT A BUG, so nothing is deleted: all three styles stay behind CB.opt.skylineStyle and the switch is one line. WHAT IT WOULD TAKE TO EARN IT BACK: something that varies ACROSS a far facade - lit window rows, a vertical value break, a roof line that is not one silhouette - because at that range variation is the only thing distance cannot flatten. *** THE BENCH HUD WAS HARDCODED AND THEREFORE LYING. *** bSky was born class=on and bStyle said glyph while the renderer's defaults were off and model, so the page opened misreporting the two things it exists to look at and the first click on either moved it the wrong way. Both read CB.opt now, and model is in the rotation - it was not, which meant the shipped default was the one style the bench could not switch back to. *** A WINDOW HAS THREE STATES AND ONLY TWO WERE EVER NAMED. *** The kit ships Halflit variants for Window1, 4, 5, 6 and 7 - fourteen pieces - and nothing in the renderer has ever composed that name, so they have sat in the bake unused since the kit landed. They are FREE: Window7Lit is 34 faces and Window7Halflit1 is 34 faces, and every family's halflit carries exactly half its lit sibling's emissive panes. Split three lit, two half, three unlit, which is the same lit-pane area spread over five windows instead of four, so the city does not change brightness. A family with no halflit splits its fallback between lit and unlit rather than defaulting to lit, or the cheap pool - Window10, 8 and 9, none of which ship one - would come out a quarter brighter than the rich pool and the near buildings would read dimmer than the far ones. *** HALF THE DOORS IN THE CITY WERE THE SAME DOOR. *** Door1 and Door2 have no Lit variant; Door3 has no plain variant and exists only as Door3Lit and Door3Unlit. The old composition appended Lit to whichever family it rolled, so three of its six combinations named nothing and the fallback quietly turned all three into Door1 - which took half of every entrance in the city while Door3Unlit was never drawn once. Nothing warned, because a fallback that lands on a real piece never does. AND A MEASUREMENT THAT CORRECTS THIS FILE'S OWN COMMENT: KIT_WINDOW_BUDGET is described in the source as the single biggest lever on how detailed the city looks, and it is not the constraint at all - 16000, 32000 and 64000 all render 28144 faces, because the per-building allowance and the view radius bind first. THE REAL LEVER IS viewRadius: 150 gives 28144 faces, 220 gives 40803, 300 gives 56108. Detail in this scene is bought by drawing more of the city, not by spending more on the part already drawn. city-battle-check 253 -> 273. *** AND THE GROUND FLOOR IS NOT ANOTHER STOREY. *** Every module on a facade came from the same pool, so a building's ground floor was a row of office windows with a door punched in the middle of it. That is what an elevation looks like from four hundred metres up and it is not what a street looks like from a pavement, which is where this camera stands. Window2 is what the pack has for it and it is the one piece the window pools DELIBERATELY EXCLUDE, on the recorded grounds that at 146 faces this scene has no camera close enough for a centrepiece. That was true of it as an UPPER storey window, where it is one cell in a grid of forty. It is not true of a shopfront: nine of its faces are emissive, it is the widest glazing in the kit, and at street level it is the thing directly in front of you. IT GETS ITS OWN BUDGET rather than a share of the window one, because spending it out of KIT_WINDOW_BUDGET would let two near buildings' ground floors starve every upper storey in the frame - trading a detail you can see for a detail you can also see. Spent nearest-first, so it lands on the buildings the camera is standing among and stops. Five in eight lit rather than the facade's three, because a shop at night is lit or shuttered and there is no half-occupied version of it, and on a hash sharing no bits with the facade's so a ground floor does not light in lockstep with the storey above it. +2392 faces, 28144 to 30536, inside the 3000 budget. It also does the job the horizon used to: a lit band running down both sides of the avenue draws the eye along the street, which is where this scene should have been sending it all along. NOT DONE, AND THE REASON IS A MEASUREMENT RATHER THAN A PRIORITY: PavementCornerSmall was listed as an unused junction piece and it is not one. Read off the bake, Big and Small are the SAME 20-unit L in opposite handedness - Big's arms run +X and +Z, Small's +X and -Z - so the four rotations of Big already cover every corner an orthogonal grid has. There is no slot for it and placing one would be decoration invented to use a piece up. The kit trees are also left alone: Tree1 to Tree3 are 627 to 835 faces, and seven of them is a fifth of the current frame for something the nature pack's urban flora row is already spending on. PRE-EXISTING AND NOT FROM THIS PATCH: fleet-check fails one assertion, 'shows nothing from the other sector' - the galaxy ship layer leaks Coalition hulls into the Circuit view after a swap. Confirmed failing in the untouched v1.10.0.0 zip. Nothing here touches it. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.10.0.0 - a skyline of real towers, and a pack that needed a different baker
+
+Hard refresh, no server restart. Files touched: `client/assets/space/city/modern.json` (new, generated), `tools/city-meshes.py`, `client/assets/city-battle.js`, `client/assets/space/city/KIT_ATTRIBUTION.txt`, `client/assets/asset-credits.js`, `docs/CREDITS.md`, `tools/citybattle-harness.mjs`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE MODERN CITY PACK IS IN, AND BAKING IT TOOK TWO THINGS THE PALETTE BAKER NEVER HAD TO HANDLE. *** It ships NO TEXTURES AT ALL - 70 FBX files and not one image - so the palette-UV lookup the kit baker is built around simply does not exist for it. What it does carry is a Material per surface with a DiffuseColor and a LayerElementMaterial assigning one ByPolygon, which is the same information arriving by a different route: ONE FLAT COLOUR PER FACE, the only thing this renderer can draw anyway. *** AND THE FIRST BAKE CAME OUT WITH EVERY BUILDING EXACTLY 2x2 UNITS. *** That is the giveaway: the meshes are authored as UNIT CUBES and all of their shape lives in the Model's Lcl Scaling, which the kit baker never had to read because that pack bakes its transforms into the geometry. Ignoring it does not distort a building slightly - it turns a sixty storey tower and a corner shop into the same box. THE PACK IS ALSO Z-UP: building_12 spans z -1..59 and y -1..1, so the height is on Z. Scale, translate and swap to Y-up in one pass, so nothing downstream has to know which pack a mesh came from. THE SKYLINE IS REAL BUILDINGS NOW. The glyph version was a grid of characters and the prism one was a box; both stood in for towers the game did not have. THE CHEAP ONES ARE THE TALL ONES - building_12 is 30 by 90 by 30 units at FOUR HUNDRED AND TWENTY FACES - because a plain tower is a few extruded boxes while a detailed low-rise is a hundred mullions. A skyline wants the tall cheap ones, which is the opposite of what a street wants, so the two draw from different ends of the same pack. TWO CORRECTIONS AFTER LOOKING AT IT: the ring distances were tuned for flat SPRITES, which read as far away whatever their size, and real geometry does not - a 280m tower at 620m is a building at the end of the street, so the near ring is skipped entirely and the skyline starts where the city ends. And the pack's materials are DAYLIGHT - plain 0.8 grey and a saturated blue glass straight out of a lit viewport - so they are graded to a night value the same way the kit's palette is, or the far city glows brighter than the street in front of it, which is exactly what the first attempt did. LICENCE: PURCHASED, AND THE BLOCK IS LIFTED FOR THE RIGHT REASON. The block was correct while the terms were unknown AND unbought; the purchase settles USE, which is what was missing. It does not settle redistribution - the page still states no terms of any kind - so the posture is the same as the kit's: derived mesh data ships, the source FBX does not, and one message to the author would settle it for a public repo. 38491748 is credited in the panel and in docs/CREDITS.md. NOT TAKEN: the trains, helicopters, tanks and forklifts - good models, 1,500 to 4,000 faces each, and this is a city battlefield rather than a rail yard. They are already baked by the tool; only the shipping subset excludes them. city-battle-check 242 -> 253, and two of its own assertions were retired for the right reasons rather than edited around: one asserted this pack was BLOCKED, which the purchase overturned, and one asserted the skyline was OFF, which stopped being true when it became a different thing to have on the horizon. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.9.9.0 - the lots are paved rather than painted
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/citybattle-harness.mjs`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE GROUND BETWEEN THE BUILDINGS WAS A 512px LUMINANCE PATCH STRETCHED OVER A PLANE, AND AT A STEEP ANGLE OVER A LARGE FLAT AREA THAT SMEARS. *** Measured before assuming: the depth ratio across a ground band is 1.23 looking down, 1.09 steeply overhead and 1.02 straight down - so this is NOT the band affine failing, which was the obvious suspect and would have been the wrong fix. It is a pattern covering forty metres of world being asked to hold up at close range, and no band sizing helps with that. A FLAT-COLOURED FACE CANNOT SMEAR. The lots are paved with the kit's Pavement now - one face per tile, the same surface the kerbs and buildings already sit on - which removes the artifact from the only place it was ever visible, which is inside the city where the fighting is. THE PLAIN OUTSIDE KEEPS THE BAND PASS, deliberately: out there it is forty metres per tile of distant ground and that is exactly what the pattern is for. Radius-culled like everything else, so it is a few hundred tiles in view rather than the several thousand the whole grid would be. The audit gained the camera angle this was reported from - standing on the pavement looking down at it - because that is where a stretched ground pattern is worst and none of the nine existing angles were pointed there. ~27,000 faces at a 150m radius. All 66 fronts render and fight over three consecutive sweeps; ten audit angles render. city-battle-check 239 -> 242. ON THE TWO LARGER SUGGESTIONS, NOT DONE THIS PATCH AND NOT FORGOTTEN: bounding the arena the way the Reach does, and fixing the camera so distance can be traded for detail. Both are right and both change what the scene IS rather than how it looks, so they want a decision rather than an implementation - the notes are in the handover. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.9.8.1 - road wear behind a dial, defaulting to flat
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/citybattle-mock.html`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+ROAD WEAR IS A DIAL NOW, AND IT DEFAULTS TO FLAT. This setting has moved three times in three patches - flat, then jittered because the near road read as a featureless slab, then wider still, and now back to flat - which is a TASTE CALL rather than a correctness one, and a taste call that keeps flipping belongs behind a number instead of in the source. CB.opt.roadWear scales both terms from a single value: at 0 every tile is exactly the palette colour, a poured uniform surface; at about 0.35 there is a hint of variation that shows up close and vanishes at range; at 1 it is the full spread with repair patches cut into it. The patches switch off at 0.5 rather than tapering, because a half strength repair patch is not a subtler repair, it is a smudge. AT ZERO THE PATCH PASS DOES NOT RUN AT ALL, so uniform is also the cheapest setting - one face per tile and nothing else. There is a slider in the bench so the question can be settled by looking rather than by another patch. Everything else is unchanged: ~26,000 faces at a 150m radius, all 66 fronts render and fight, all nine audit angles render. city-battle-check 235 -> 239. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.9.8.0 - skyline off, and three ratios corrected against the author's own city
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/citybattle-harness.mjs`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE SKYLINE IS OFF, AND IT WAS NEVER A PERFORMANCE COST. *** Measured before removing it: 35 cached sprites totalling 1.25 megapixels, 40 drawImage calls, and 2.3ms of a 472ms frame - UNDER HALF A PERCENT. About five megabytes of texture is not a memory problem on any machine that can run the rest of this. It is off because it was ASKED FOR, which is a legitimate reason and a different one, and the toggle is one line in CB.opt. WHAT IT COSTS INSTEAD: the horizon goes flat - the far half of every wide shot is now bare haze, because the glyph towers were the only thing occupying it. The sprite cell also dropped from 7x9 to 5x7, so turning it back on costs about a third of the memory it did. *** THE AUTHOR'S OWN DEMO CITY WAS USED AS A MEASUREMENT, AND IT CORRECTED THREE OF OUR RATIOS. *** Nothing from the paid scene is baked or shipped - that position has not changed and is recorded in KIT_ATTRIBUTION.txt - but COUNTING what the pack's author actually built with their own kit costs nothing and is better evidence than taste. Their city: 738 pavement tiles against 617 of road, so the WALKWAY IS WIDER THAN THE CARRIAGEWAY, where ours had one tile against three lanes - which is why the street read as a road with edges rather than as a street. 55 of Lamp2 against 6 of Lamp1, so the CHEAP 47-FACE POST IS THE STANDARD ONE and the 142-face lamp is the exception; we had that nearly backwards. And roughly two windows for every plain wall, which is a coverage we are still below. IT ALSO SHOWED A PIECE WE WERE NOT USING: Window10 ships Bot, Mid and Top segments that stack into a CONTINUOUS vertical strip up a bay, and their scene uses 373 of the Mid alone - more than any other single piece in the whole city. That is what gives those buildings a curtain wall instead of a grid of punched holes. Whether a bay is glazed is now a property of the BAY, hashed on its index and held all the way up, because a strip that starts and stops halfway is a mistake rather than a variation. THE ROAD IS A SURFACE NOW RATHER THAN A SLAB. The per-tile jitter went from 0.86-1.14 to 0.66-1.28: on a colour as dark as tarmac the old range was four or five values and the carriageway still read as one poured sheet. And ONE TILE IN SEVEN IS A PATCH - real tarmac is not one age, it is the original surface with repairs cut into it, and a repair is darker and squarer than anything weathering produces. One extra face on one tile in seven is the cheapest structure available on a flat plane. ~25,000 faces at a 150m radius. All 66 fronts render and fight; all nine audit angles render. city-battle-check 227 -> 235. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.9.7.0 - three roof families, trees, steps, lamp LOD, and a pack that is not all one scale
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+DETAIL SPENT WHERE THE FRAME BUDGET FREED IT, AND ONE REAL DISCOVERY ALONG THE WAY. *** NOT EVERY PIECE IN THIS PACK IS AUTHORED AT THE MODULE SCALE. *** Measured piece by piece at the 200-unit module scale: a lamp comes out 5.8m, a bin 1.3m, a road sign 4.9m, a fence 2.0m - all correct. A TREE COMES OUT AT 32 METRES. A rooftop barrel is 5.6m and the big one 8.5m, which is a barrel the size of a house. A flight of steps is 6m tall. The kit is modular at module scale and its SET PIECES ARE NOT, so dropping them in at KIT_S lined the street with trees taller than the buildings - which is exactly what the first attempt produced. Scale is a property of the piece now, measured once and recorded in a table, rather than a global anyone can be surprised by. THREE ROOF FAMILIES INSTEAD OF ONE, and they are three SILHOUETTES rather than three surfaces: Roof1 is a low parapet at 4 faces, Roof2 a TALL parapet with railing posts at 26, Roof3 a cornice that PROJECTS past the wall at 7 with its deck raised a notch. That is a bank, a plant room and a pre-war block, and the difference reads at a hundred metres because it changes the OUTLINE. Chosen by sector first and seed second: finance and insurance get the railed parapet, foundries and logistics the plain one. DOORS GET STEPS - a door opening onto bare pavement is a door in a wall, and the kit has three step blocks that make it an ENTRANCE. LAMPS COME IN TWO KINDS, and the cheap one is the point: Lamp1 is 142 faces and Lamp2 is 47, a three-fold difference for something that is a silhouette and two glowing heads past thirty metres. Near posts are detailed, everything behind is simple - three times the lamps for the same faces, and the street stops being lined with one repeated object. Lamp cap 14 to 30, furniture 26 to 46. SERVICE COVERS MOVED INTO THE ROAD, where a manhole is; they were in the furniture pool, which put them on the pavement. TREES ARE IN and they are the most expensive object in the scene at 627 to 835 faces each - more than a whole building's walls - so they are capped at seven and taken nearest-first, planted on the verge between kerb and building line. THE WINDOW BUDGET WENT FROM 7,200 TO 16,000 FACES, which is the single biggest lever on how detailed the city looks because it decides how far back a building still has windows. It was set when the renderer was fighting for frames and that is no longer the constraint. Spent nearest-first on VISIBLE elevations only, so raising it extends detail outward rather than piling it on the front row. Frame cost went from about 14,000 to about 25,000 faces at a 150m radius, and 37,000 looking straight down. THE VIEW RADIUS SLIDER IS STILL THE DIAL if any of that is too much on a given machine, and it now moves considerably more than it used to. All 66 fronts render and fight; all nine audit angles render. city-battle-check 218 -> 227, and three of its own assertions named literals that the roof families and the lamp LOD correctly displaced - rewritten to test the behaviour rather than the string. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.9.6.0 - junctions, cross-street kerbs and edge lines
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE GRID WAS THREE PARALLEL AVENUES, NOT A STREET NETWORK. *** Two omissions, and they are the same omission: the kerbs ran straight through every junction, and the cross streets had no kerb and no pavement at all - only carriageway. Nothing in the code described what happens where two streets MEET, because each avenue had been laid independently and a junction is the one place that assumption breaks. The kit ships every piece needed for it and all three were sitting unused. THE STRAIGHT KERB NOW STOPS SHORT of a crossing rather than ploughing through it. THE CORNERS ARE MITRED with PavementCornerBig - measured off the bake as an OUTER corner carrying the carriageway in its (+X,+Z) quadrant, which fixes all four rotations by evaluation rather than by trying them. That is the fourth piece in this pack placed from a measurement instead of an assumption, and the first three were all placed wrong the first time, so the measurement is now the cheaper habit. CROSS STREETS GET THE SAME KERB AND PAVEMENT the avenues had - and they need NO quarter turn, because a cross street runs along X which is PavementCurb's own axis, only the mirror. A street that had a kerb one way and a raw edge the other read as a service cut through a real road. SolidLine is in as the road EDGE line against the kerb, which is the marking that makes a carriageway look bounded rather than merely dark. Frame cost went from about 12,500 to about 14,200 faces at a 150m radius, and roughly 22,000 looking straight down - the junctions are the most detailed thing in the scene and also the place the eye goes, so that is where the faces should be. STILL UNUSED, AND EACH FOR A STATED REASON: the kit's trees are 627-835 faces EACH and the nature pack draws trees for a fraction; PavementCornerSmall is the INNER corner, which this grid has none of because every block is rectangular; Roof2 and Roof3 are pitched roof families that would suit low buildings and are a look decision rather than a fix; Lamp2 is a cheaper 47-face lamp that would make a good distance LOD against Lamp1's 142. All 66 fronts render and fight, all nine audit angles render. city-battle-check 213 -> 218. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.9.5.0 - the window economy, and the roof pieces the kit had been shipping unused
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/citybattle-harness.mjs`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE ORBIT CAMERA WAS RIGHT AND THE CAUSE WAS THE WINDOW ECONOMY, NOT CULLING. *** Three faults stacked, each found by measuring rather than by looking harder at the frame. (1) WINDOW KINDS COST BETWEEN 18 AND 146 FACES - an eight-fold spread - and the picker sampled all ten UNIFORMLY, so roughly one window in ten cost as much as eight of the cheap ones. That emptied the budget partway down the sorted list and left every building past that point in blank wall, and from orbit, where twenty buildings are in range instead of fourteen, the cliff lands in the middle of the frame. Window2 at 146 faces is now in NEITHER pool: a building's whole allowance buys four of them, which is exactly how the nearest building ended up the blankest thing on screen, and a window that expensive can only be a centrepiece for a camera this scene does not have. (2) *** THE BUDGET WAS BEING SPENT ON ELEVATIONS FACING AWAY FROM THE CAMERA. *** The four sides were walked in a fixed order and windows assigned until the allowance ran out; two of those sides are back-face culled, so a building seen from the front-right spent its allowance on the back and the left, threw every one of those windows away, and put plain wall on the two sides actually on screen. The more modules a building had, the faster it exhausted its allowance on geometry nobody would ever see. Visibility is now tested once per side before anything is spent, and a hidden side is SKIPPED rather than pushed and culled - which is why the frame got cheaper as well as better. (3) A FLAT ALLOWANCE STARVES A TALL TOWER: nine storeys have three times the modules of three and were given the same share, so the biggest thing in the frame stayed the emptiest. The allowance scales with each building's VISIBLE module count now. A THIRD OF THE KIT WAS SHIPPED AND NEVER PLACED, and the roof pieces are the ones that matter: a flat slab is most of what an orbit or overhead camera sees. Roof1 is a four-face edge and Roof1Corner a ten-face corner, so a whole building's parapet costs less than three windows, and RoofBarrel adds eighteen faces of clutter on the near roofs - the one thing that stops a roof reading as a lid. Parapet direction measured off the bake rather than assumed, which is the third time that has been the difference between a piece landing right and landing backwards. NOT TAKEN, AND FOR A REASON: the kit's trees are 627 to 835 faces EACH. Three of them cost more than every window in the frame, and the nature pack already draws trees for a fraction of that. STILL IMPERFECT: one front out of sixty-six intermittently trips the sweep's engagement threshold - it passed three consecutive runs afterwards, so it is a front that engages just after the forty-five second mark rather than a regression, and it is recorded rather than tuned away. city-battle-check 204 -> 213. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.9.4.0 - road grain, sector litter, rooms instead of shells, and a sort that stops popping
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/citybattle-harness.mjs`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+FOUR FIXES, EACH ONE VERIFIED BEFORE IT WAS WRITTEN. (1) *** THE CARRIAGEWAY WAS ONE FLAT COLOUR PER TILE *** and a road of identical tiles is a featureless slab at eye level, which is what the near road looked like. Each tile is now jittered a few percent off its own palette colour - the variation IS the tile, so it needs no texture, no second asset and cannot misalign with anything. Hashed on the tile's position rather than rolled, because a per-frame roll makes a road BOIL. (2) *** A FOUNDRY DOES NOT LITTER LIKE A BANK. *** The kit's bins, fences, signs, steps and sewerage shipped and were never placed. They are weighted by SECTOR now: finance gets railings and signage, a foundry gets fencing and service covers, a bazaar gets bins and steps because a bazaar is where people actually are - and the RATE varies too, so a bazaar verge is crowded and an agricultural one nearly bare. Capped, culled and kept on the pavement, because Bin is 40 faces and RoadSign 25. (3) *** A BUILDING WAS A SHELL YOU COULD SEE STRAIGHT OUT OF. *** Every wall is a single-sided quad with its normal outward, so from inside the box every one faces away, every one is back-face culled, and the camera sees the entire street through its own building. A free camera reaches that state in about a second of flying. I PROPOSED THIS FIX FROM A SCREENSHOT AND THEN CHECKED IT PROPERLY: the first audit camera I placed 'inside a building' was actually outside one, so the harness now asks the renderer for a real building's centre and stands there. Inverting the cull for that one building draws the far walls instead of the near ones, which is what standing in a room looks like; it costs a boolean and is only ever true for a single building. (4) *** THE PAINTER SORT USED EACH FACE'S NEAREST CORNER. *** A long wall seen obliquely has one corner very close and the rest far away, so it sorted as though the whole wall were at its nearest point and popped in front of things it is actually behind - which is the flicker on an orbiting camera, exactly where it was reported. The centroid costs the same and is what the face is actually AT. Still an approximation: painter sorting cannot resolve interpenetrating or cyclically overlapping polygons at all, and that limit is the renderer's, not a tuning knob. Applied to the nature meshes and the prisms as well, since they had the same sort. The audit is nine viewpoints now. All 66 fronts render and fight. city-battle-check 194 -> 204. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.9.3.0 - a multi-angle audit, and the two faults it found immediately
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `tools/citybattle-harness.mjs`, `tools/city-battle-check.mjs`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** A SCENE THAT IS CORRECT FROM ONE ANGLE IS NOT A CORRECT SCENE, AND EVERY FAULT IN THIS RENDERER SO FAR HAS PROVED IT. *** Walls facing inward look fine head-on and hollow from a corner. A kerb laid across the street reads as texture from above and as a ladder at eye level. A roof at the wrong height is invisible until you are over it. So there is a fixed multi-angle audit now - street, eye level, avenue, corner, orbit, overhead, looking up from the kerb, and reversed - rendered together, each checked for a throw and for a frame that draws almost nothing, which is what 'everything got culled' looks like from the outside. Every one of them is a camera somebody will actually put there. IT IMMEDIATELY FOUND TWO THINGS. *** THE KERB WAS RUNNING ACROSS THE STREET. *** Measured off the bake, PavementCurb carries its entire profile on the Z axis - road side at +Z ten units low, pavement at -Z flush, the raised lip crossing between - so the kerb LINE it draws runs along X. An avenue runs along Z, so laying the piece unrotated stepped the kerb across the carriageway every four metres and tiled into a ladder of light and dark rungs down both verges. That is what 'the road looks like stripes' was. SECOND TIME THIS PACK'S PIECES HAVE BEEN PLACED BY ASSUMING AN AXIS INSTEAD OF READING ONE, after the wall elevations, and the lesson is the same both times: the geometry says which way a piece faces and it takes one measurement to ask. *** BUILDINGS OVERHUNG THEIR LOTS BECAUSE NOTHING RECONCILED METRES WITH MODULES. *** The generator sizes a building in metres and the kit builds it in four-metre tiles, so a 17m frontage became four modules laid across 17m of lot and every building overhung its plot by up to half a module - walls standing slightly in the road, unmistakable from above and the reason the blocks looked misaligned in the orbit view. Footprints snap to whole modules now, and they are snapped BEFORE the collision box and the cover slots are built rather than in the placer: making the drawing agree with itself while the simulation kept the old footprint would have been worse than the overhang, because men would take cover against a wall that is not where they think it is. All eight angles render, all 66 fronts render and fight, ~11,000 faces at a 150m radius and ~16,000 looking straight down. STILL OPEN AND SAID PLAINLY: the carriageway is a single flat colour per tile because that is what the kit ships - no grain, no patching - and at eye level the near road is a large featureless area. That is the pack's own look rather than a fault, but it is the next thing worth a decision. The kit's bins, fences, signs, steps and sewerage are still unplaced. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.9.2.0 - buildings closed on all four sides, and the street laid from the kit
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/city-battle-check.mjs`, `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** BUILDINGS WERE OPEN ON TWO SIDES AND THE CAUSE WAS A MINUS SIGN I REASONED ABOUT INSTEAD OF EVALUATING. *** Rotating the kit's wall normal (0,0,1) about Y by theta gives (-sin theta, 0, cos theta). I assigned -PI/2 to the LEFT elevation; that expression evaluates to (+1,0,0), which is the RIGHT one. So both side walls faced INTO the building, were back-face culled, and every block was missing two of its four elevations - which does not look like a rotation bug, it looks like a building you can see straight through, and that is how it was reported. The rotations are asserted as an exact array now so they cannot drift back. THE STREET IS THE KIT'S NOW TOO. Road, PavementCurb, Pavement, Crossing, DashedLine and Lamp1 replace the tinted noise band pass, the flat kerb strips, the painted dashes and the grey prism lamp gantries. Everything sits on the same 200-unit module as the buildings, so the street and the blocks line up BY CONSTRUCTION rather than by two sets of numbers being kept in agreement - which is most of the reason the old road never quite met the pavement. THE ROAD WAS BEING DRAWN TWICE for a moment and it showed exactly what you would expect: a tinted noise pattern under every road tile and a painted dash under every real one. The old surface is deleted, not layered. What survives is the ground plain and the lot fill, because the kit has no piece for either and a band pass is cheap. TILED OVER THE VIEW RADIUS, NOT THE MAP. A road tile is one face and a pavement tile is one - cheap each and ruinous over a field, since four hundred metres square at four metres a tile is ten thousand of them. The tiling follows the same radius the props and flora already do, which is also why the fog exists. THE LAMPS ARE THE EXPENSIVE PIECE AND ARE TREATED AS ONE: Lamp1 is 142 faces, as much as five buildings' worth of walls, so they are spaced, culled to the radius and capped at fourteen. A lamp you cannot see is 142 faces of nothing. All 66 fronts render and fight; the frame is about 11,400 faces at a 150m radius. STILL ROUGH AND SAID PLAINLY: the kerb reads as a repeating stepped profile along both sides rather than a continuous edge, and the pavement strip is darker than it should be next to the lit shopfronts. Both are placement, not geometry - the pieces are right and the way they are laid is not - and the kit's bins, fences, signs, steps, sewerage and trees are still unplaced. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.9.1.0 - the city is built from modules and the texture pipeline is deleted
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/assets/space/city/` (facade sheets removed), `client/assets/space/city/ATTRIBUTION.txt`, `client/assets/coalition-sprites.js` (build stamp), `tools/city-battle-check.mjs`, `tools/city-maps-check.mjs`, `tools/citybattle-harness.mjs`, `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE CITY IS ASSEMBLED FROM SQUARES NOW, AND THE ENTIRE TEXTURE PIPELINE IS DELETED. *** Around 450 lines went with it: the atlas loader, the night bake, the composed cell sheets, the affine texQuad and the roof mapper. All of it worked and none of it could ever be correct - canvas 2D draws an image through an AFFINE transform, a rectangle in perspective is a PROJECTIVE map, and the bowing and hairline seams WERE the residue of that gap. Deleted rather than disabled, because two ways to draw a wall is one for a future patch to pick wrongly. Every wall, window, door and roof is now a 200-unit module from Voloshka's kit whose faces each carry ONE baked palette colour, which canvas fills exactly at any angle and any distance. FOUR THINGS WERE MEASURED RATHER THAN GUESSED AND EACH ONE WAS A BUG. (1) The pieces are authored in the XY plane with their normal along +Z and their origin at the module CENTRE, so the outward direction of each elevation fixes its rotation exactly - front PI, back 0, left -PI/2, right +PI/2. Getting it backwards does not draw a wall inside out, it CULLS it, and a building with half its elevations culled reads as loose cards standing in the street, which is exactly how it first came out. (2) A piece spans half a module either side of its origin, so placing a storey at s*MOD put the ground floor HALF UNDERGROUND. (3) kitB accumulated across setZone and stacked FIVE CITIES on top of each other - which presented as a suspiciously detailed frame rather than as a fault, and the face count halving after the fix is the fix, not a regression. (4) WallBlack is rgb(9,15,11): a daylight colour that at night is a hole in the street. The pack is right to ship it and a night scene is wrong to pick it, so it is excluded by name. FACE COST IS THE WHOLE BUDGET AND THE PIECES ARE WILDLY UNEQUAL - a wall is ONE face, a window TWENTY-TWO, a door sixteen, a roof centre one. Windows are spent nearest-building-first on a budget, and everything past it wears plain wall: same silhouette at distance, and what you lose is what you could not see. The budget was then MEASURED rather than picked - only two of a window's twenty-two faces are glass, so at 2600 the whole street produced twenty-nine emissive faces and read as an unlit city with frames drawn on it. The facade pool retired into the kit's ten coordinated colourways: Circuit worlds draw the colder half, Coalition colonies the warmer, a Gray Bazaar all of them, and a building picks one so every piece on it matches. THE PAPPTIMUS SHEETS ARE DELETED FROM THE TREE AND papptimus STAYS CREDITED. CC BY attribution is owed for USE, the sheets were used for several releases, and dropping the credit because the files left would be reading the licence backwards. All 66 fronts render and fight. city-battle-check 208 -> 182 assertions, and the drop is the point: twenty-six of them guarded code that no longer exists, and each was removed with a note saying what replaced it rather than left to rot green. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.9.0.0 (2026-08-27) - canvas cannot map a texture in perspective, so the city stops using textures
+
+Hard refresh, no server restart. Files touched: `tools/city-meshes.py` (new), `client/assets/space/city/kit.json` (new, generated), `client/assets/space/city/KIT_ATTRIBUTION.txt` (new), `client/assets/asset-credits.js`, `docs/CREDITS.md`, `client/assets/coalition-sprites.js` (build stamp), `tools/city-battle-check.mjs`, `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE CURVED, GAP-FILLED WALLS HAVE ONE ROOT CAUSE AND IT IS NOT TUNABLE: CANVAS 2D CANNOT MAP A TEXTURE ONTO A WALL IN PERSPECTIVE. *** Canvas draws an image through an AFFINE transform only. A rectangle seen in perspective is a general quad, which is a PROJECTIVE map, and no affine can express one. Subdividing makes each piece nearly affine and shrinks the error; it never reaches zero, and what is left IS the bowing and the hairline seams. Every patch to that pipeline - more columns, screen-size caps, matching source slices - was chasing an asymptote. The photo-texture-on-a-box approach was the wrong asset class for this renderer from the day it went in, and the emissive quadrant measurement that revealed the atlas layout should have prompted that question a patch earlier than it did. *** A PALETTE-TEXTURED MESH SIDESTEPS IT ENTIRELY. *** Voloshka's kit UVs every face at a flat swatch in a 1024px palette, so a face has exactly ONE colour - and a flat-filled polygon is something canvas 2D draws EXACTLY, at any angle, at any distance, with no warping and no seams. That is the same path the nature meshes have taken since they shipped, and they have never bowed or gapped once. tools/city-meshes.py is a binary FBX 7.x reader that bakes the kit to the mesh format this renderer already draws, resolving each polygon's UV against palette.png and paletteEmission.png AT BUILD TIME and shipping colours instead of texture coordinates - the runtime does no texturing at all. Sampled at the polygon's UV CENTROID rather than a corner, because the swatches are separated by dark gridlines and a corner sample lands on one often enough to put a black face in the middle of a wall. 526 meshes, 18,990 faces, 252 of them emissive. THE KIT IS A STRICT MODULAR GRID, which is exactly what was asked for: every wall, window, door, roof, road and pavement piece is the same 200-unit tile, so a building is assembled from squares rather than approximated by one. Ten window types with lit, unlit and partly lit variants, three door designs, roof sections, and ten coordinated colour palettes. Proof render attached: three storeys, doors at street level, lit and unlit windows, a roof - flat shaded, no warping, no gaps. *** LICENCES, AND THE TWO PACKS DIFFER SHARPLY. *** Voloshka's free edition states on its own store page that all 526 prefabs and their sources are '100% free to download and use in your personal or commercial projects', tagged Royalty Free. Commercial use is EXPLICITLY GRANTED; redistribution is not addressed, so the FBX and the palette PNGs are not in this repository and only the derived kit.json is - the position the nature pack settled into. The PAID pre-assembled scene is deliberately unused, which is also the better engineering answer: a kit is assembled per colony and a fixed demo scene would be one city on sixty-six worlds. 38491748's pack is BLOCKED: a $2 purchase with NO LICENCE TEXT ANYWHERE on the page and no readme in the archive. That is the tile pack situation again, and that one has blocked ship.sh for months. Nothing from it is baked or referenced, and the check asserts so by name. It also ships no textures at all - 70 FBX and not one image - so every colour would have to be invented, which is a second reason to leave it. WHAT IS NOT DONE: the scene itself still draws the old textured facades. This patch delivers the pipeline, the assets and the licence position, verified end to end; wiring the kit into the block generator and retiring the facade path is the next one, and pretending otherwise would be worse than saying so. city-battle-check 189 -> 208. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.8.4.0 (2026-08-27) - the sheets are atlases, and the walls tore up close
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/citybattle-harness.mjs`, `tools/city-battle-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE SHEETS ARE ATLASES AND I WAS STRETCHING THEM WHOLE. *** Each 256x256 cyber city sheet is a 2x2 grid of 128px CELLS, not one tileable facade: upper-floor windows top-left, shutters and vents top-right, a glazed shopfront bottom-left, double doors bottom-right. Stretching the whole sheet over every storey band therefore put a shopfront AND A PAIR OF DOORS ON EVERY FLOOR OF EVERY ELEVATION. The tell was there the first day and I read past it: the emissive mass measures 94 in the bottom-left quadrant and essentially zero in the other three, which is a sheet telling you where its street level is. COMPOSED NOW, NOT STRETCHED. A facade is built cell by cell - the bottom row of the wall draws from the STREET cells and every row above it from the UPPER cells, and which of the two columns each cell takes is a hash of its own position, so a wall has variation without a roll that would shimmer between frames or make the two elevations of one corner disagree about what floor they are on. Bounded by construction: cells composed at 64px rather than 128 because they are pixel art seen at distance, bays and storeys quantised, and the whole cache dropped on setZone - a few dozen canvases for the city you are looking at rather than an unbounded set for every city. *** AND THE WALLS TORE UP CLOSE BECAUSE THE SUBDIVISION CAP WAS A CONSTANT. *** A quad under perspective is not an affine image of a rectangle, so it is cut until each piece nearly is - and the error is driven by how much DEPTH varies across a piece but only VISIBLE in proportion to how big that piece is ON SCREEN. Standing in the street both terms go up at once: the depth ratio across a near wall is enormous and the wall fills the viewport, so a fixed cap of six columns meant each column was two hundred pixels of pure shear. The cap scales with screen width now, and a wall that is tall on screen is cut vertically as well - the same argument applies to both axes once the camera is close enough to look up. Far walls are unchanged and still cost one quad. A subdivided wall also samples the MATCHING slice of the composed sheet, so it shows the same picture as an undivided one rather than repeating itself per piece. *** ONE THING FOUND AND NOT FIXED, STATED PLAINLY. *** While adding a street-level angle the harness produced two frames byte for byte identical from cameras a hundred metres and forty degrees apart, and kept doing so for every shot after. A clean process renders the same cameras correctly, so it is something the harness accumulates across a long run rather than the renderer ignoring its input - and the ctx save/restore pairs balance, which was the obvious suspect. The cause is NOT FOUND. What is in is a DETECTOR: the writer digests every frame and says loudly when one matches the previous, so this cannot pass silently again, and the street shot is taken early where the run is still honest. That ordering is a workaround and is labelled as one in the file rather than left to look like a preference. city-battle-check 178 -> 189. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.8.3.1 (2026-08-27) - a Path2D has no beginPath, and the harness could not see it
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/citybattle-harness.mjs`, `tools/city-battle-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE BENCH WAS BLACK BECAUSE A Path2D HAS NO beginPath. *** The clip cache added last patch builds the street tessellation once and, where Path2D exists, hands it to ctx.clip directly. The replay helper is called with two different KINDS of target: a canvas context, which needs beginPath before a fresh path, and a Path2D, which IS a fresh path and has no such method. Calling it on the second throws, drawRoad throws, frame throws, and requestAnimationFrame SWALLOWS THE EXCEPTION AND NEVER RE-QUEUES - so the loop dies on its first frame and what you see is a canvas that never draws and a HUD frozen on dashes. It looks exactly like 'nothing loaded' and it was one line. *** AND THE HARNESS COULD NOT SEE IT, WHICH IS THE SECOND TIME. *** node-canvas has no Path2D, so the browser branch was never taken and the sweep stayed green. The first time was COLONY_VISUAL, which the harness supplied for itself out of the source files. Both failures have one shape: THE CHECK AND THE PRODUCT DISAGREED ABOUT THE ENVIRONMENT, and in both cases the harness was the only consumer that could not hit the bug. So the harness now SHIMS a Path2D - deliberately minimal, deliberately not a working path, and deliberately WITHOUT beginPath, so anything that assumes one throws headlessly exactly as it does in Chrome. ctx.clip accepts it and ignores it, which loses the clipping in the headless picture and is the right trade: a slightly wrong frame in exchange for the browser code path being executed at all. CB_NO_PATH2D=1 tests the fallback. Driven: reintroducing the bug now fails the harness with the same TypeError the browser reported. SECOND FIX, AND IT IS THE ONE THAT GENERALISES: a throw inside the render loop used to be a black screen and nothing else - the stack was in the console and nowhere a person testing a renderer would look. The bench catches it, puts the message on screen, and KEEPS RUNNING, because a fault in one frame is not always a fault in every frame and a viewer that gives up is less useful than one that stutters. Had that existed yesterday this would have been a one line report instead of a screenshot of a black canvas. city-battle-check 172 -> 178. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.8.3.0 (2026-08-27) - the ten frames a second, measured; buildings you cannot walk through; view radius and fog
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/citybattle-harness.mjs`, `tools/city-battle-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** PROFILED FIRST, THEN FIXED. THE TEN FRAMES A SECOND WERE TWO MULTIPLICATIONS THAT DID NOT NEED TO EXIST. *** Measured on a real zone: 49,357 clip quads per frame across 1,486 calls to stripPath, and 3,631 texQuad calls - each of which is a save, a four sided path, a ctx.clip, a transform, a drawImage and a restore. ctx.clip is among the most expensive things a canvas can be asked to do and there were three and a half thousand of them. FIRST: bandPass takes a clip CALLBACK and invokes it PER BAND, and the road and pavement callbacks re-tessellated the entire street network every time - six streets, up to 160 segments each, projected from scratch, twenty-five times a frame, twice over. The clip is IDENTICAL for every band; only the rect it is intersected with changes. Built once per frame now into a flat coordinate array and replayed, keyed on the camera so a still view rebuilds nothing, with Path2D used where it exists. 1,486 tessellations became 12. SECOND: a facade was one quad per column PER STOREY PER LAYER - storeys so the windows keep their size, and a second full pass for the emissive because the shade pass sat between them. Both are bakeable: a facade repeated N times vertically is just a taller texture, and if the shade is baked too then the emissive can go on top of it in the same bake. Cached on sheet, storey count and a five step shade bucket, so it is a few dozen canvases for the whole city, each built once. COLUMNS ONLY now. THIRD, AND IT IS THE ONE THAT WAS ASKED FOR: a VIEW RADIUS with fog. A city does not get cheaper by being smaller, it gets cheaper by being NEARER - shrinking the map would cost the front line running through blocks, so the whole city still exists and only what is inside the radius is DRAWN. Men keep fighting in streets you cannot see, which is what a front line is. THE FOG IS NOT A DISGUISE FOR THE CUT, IT IS WHAT MAKES THE CUT LEGAL: its onset is COMPUTED from the radius, so it is already solid where the geometry stops. Wind the radius down and the fog closes with it, nothing to re-tune, because the two numbers are one number. Combined: 3,631 texQuad calls became about 600 and 2,819 polygon fills became about 1,000 - roughly a six fold cut in the operations a browser is slow at. STATED PLAINLY: the harness runs on cairo, which is slow at pattern fills and fast at clips, and a browser is the reverse. The OPERATION COUNTS are the honest metric for a Chrome frame rate; the cairo millisecond total barely moved and would have been the wrong thing to quote. *** BUILDINGS HAVE COLLISION, AND THE FIRST VERSION OF IT TRAPPED EVERYONE. *** Cover slots sit against the outside of a building, so the line LOOKED right while the path to a slot on the far side went through forty metres of concrete. A block grid is the one case where collision is cheap - every building is an axis aligned box, so it is a rectangle test. Only masses above knee height block: a kerb, a barrier and a planter are cover, not walls. But axis rejection alone is not enough and THE SWEEP PROVED IT - one front stopped engaging entirely, with thirty-three of fifty-two units still advancing after forty-five seconds and thirty-two of them more than three metres from the cover they had claimed. A man walking at a wall across his path slides along it; a wall running the wrong way is slid along FOREVER, and a concave corner refuses both axes and stops him for good. COLLISION THAT TRAPS UNITS IS WORSE THAN NO COLLISION. Progress is measured now, and a unit with none for a second and a half commits to a perpendicular DETOUR on a side taken from its index and HELD - re-choosing every frame is how you get a man oscillating in a doorway. The sweep default also rose from thirty seconds to forty-five, because going round a block is genuinely slower than going through it and that is the change working rather than a threshold to hide behind. city-battle-check 154 -> 172. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.8.2.1 (2026-08-27) - the test runner was serving another folder's tree
+
+Hard refresh, no server restart. Files touched: `test.bat`, `test.sh`, `tools/serve.mjs`, `client/assets/coalition-sprites.js` (build stamp), `tools/city-battle-check.mjs`, `client/citybattle-mock.html`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE TEST RUNNER WAS SERVING SOMEBODY ELSE'S TREE, AND THE ORDER OF TWO LINES WAS THE WHOLE BUG. *** test.bat opened the browser and THEN started the server. If a serve.mjs from an earlier session was still holding port 8177 - started from a DIFFERENT, OLDER FOLDER - the new server exited with EADDRINUSE and the tab that had just opened connected to the OLD PROCESS, which served last week's tree perfectly happily. Every symptom pointed at a browser cache and none of it was: the files were current, the cache bust was correct, and A DIFFERENT SERVER ANSWERED. Reproduced end to end - old tree on 8177 serving 1.7.6.0, new tree's server exits 1, curl returns 1.7.6.0 - then fixed. server/start_server.bat has freed its port with netstat and taskkill since it shipped; this ignored the repo's own established pattern and paid for it. THREE FIXES, EACH DOING A DIFFERENT JOB. test.bat now frees the port first, starts the server, POLLS UNTIL IT ANSWERS, compares the build that answered against client/version.json, and only then opens the browser - going red if they disagree. test.sh does the same and, because not every machine has lsof or fuser and the eviction can therefore silently do nothing, it SELF HEALS: it detects that the wrong tree answered and moves to a free port rather than only complaining, then tells you the new URL. Verified against a genuinely stale tree: it detects 1.7.6.0 on 8177 and serves 1.8.2.0 on 8178. And serve.mjs no longer treats a busy port as a one line complaint - it ASKS THE OCCUPANT what build it is serving and says so, because 'something else is on this port' is not actionable and 'the thing on this port is serving 1.7.6.0 from another folder, and that is why your browser shows an old build' is. It also prints the folder and build it is serving on startup, so the very first line of output answers the question. --auto steps to the next free port. city-battle-check 145 -> 154, driving the startup ORDER in both scripts, the build-verification, the self heal, and the busy-port diagnostic - because this bug was two lines in the wrong order and nothing would have caught it. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.8.2.0 (2026-08-27) - the client never had COLONY_VISUAL, every front at once, and a GM wars board
+
+Hard refresh, no server restart. Files touched: `client/assets/space/city-fronts.js` (new, generated), `tools/city-fronts-check.mjs` (new), `client/assets/city-battle.js`, `client/assets/god-panel.js`, `client/index.html`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/citybattle-harness.mjs`, `tools/city-battle-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** A REAL BUG, AND THE HARNESS WAS STRUCTURALLY UNABLE TO SEE IT. *** CB.mapFor derives every front from COLONY_META and COLONY_VISUAL. META is published to the client by galaxy.js. COLONY_VISUAL IS NOT - it is exported from server/city.js and has never been sent to a browser - so in the live client every colony fell through to the grid/dust default: SIXTY-SIX FRONTS COLLAPSING TO ONE, silently, on a code path that renders perfectly and simply describes the wrong world. Driven: without the published table every colony resolves to ONE layout; with it, all six and twenty-three distinct layout/terrain combinations. It survived because tools/citybattle-harness.mjs INJECTS both tables itself, parsed straight out of the sources - the right thing for a harness to do, and it made the harness the one consumer that could never hit the bug. A TEST THAT SUPPLIES THE INPUT THE PRODUCT IS MISSING WILL PASS FOREVER. Fixed with the pattern planet-palette.js already uses: a GENERATED client/assets/space/city-fronts.js, never hand edited, with tools/city-fronts-check.mjs asserting it still matches its two sources. Not a second authority - a published copy of the first, that cannot drift without a check going red. It publishes only what the battlefield needs (visual row, name, space, population, zone names and sectors) and deliberately not lore, companies or coordinates, because shipping those would make it a second copy of COLONY_META rather than an extract. EVERY FRONT AT ONCE, TWO WAYS. tools/citybattle-harness.mjs --all walks all sixty-six zones, renders each, asserts it has buildings, cover, geometry on screen and two sides that actually engage, and writes a contact sheet of the lot. The bench gets a FRONT picker with prev/next and a SWEEP that walks them on a timer - the headless one is the check, this is the look. *** AND THE SWEEP CRIED WOLF ON ITS FIRST RUN. *** It settled for fifteen seconds and reported 58 of 66 fronts as 'never engaged', which read as catastrophic and was the CHECK BEING IMPATIENT: the lines spawn about ninety metres out and must close to a sixty-two metre engagement range, which is a bit over twenty seconds at infantry pace. Driven: 15s = 58 failures, 30s = 0, 60s = 0. Default is thirty and the reasoning is in the file, because a threshold that fails on a working scene teaches you to ignore the sweep. THE GM PANEL GETS A CORPORATE WARS BOARD: every colony, its control split as a bar, and WATCH to open that front. It SENDS NOTHING NEW - every lever is set_colony_control, which the server has accepted since long before this panel, so it is a way to DRIVE the war model rather than a second war model. IGNITE and CALM are labelled test levers: a battlefield needs two factions holding ground before it has anything to draw, and WATCH is visibly disabled where there is no front rather than opening a viewer that will refuse. Council approval is still NOT built, on purpose - it writes to war_fund_pool and triggers onColonyCaptured, which vacates every seat and closes every storefront on a colony, and the four design questions it raises are the user's to answer. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.8.1.0 (2026-08-26) - the bench checks its own build, and climate reaches the sky, the planting and the skyline
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/city-battle-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE BENCH WAS NOT SERVING A CACHED FILE, IT WAS SERVING AN OLD FOLDER, AND THE HUD SAID SO FOR SEVERAL PATCHES WITHOUT ANYONE READING IT. *** tools/serve.mjs already sends Cache-Control: no-store, so a bench on localhost:8177 cannot serve a stale script; a build number of 1.7.6.0 in the corner means the FILES ON DISK are 1.7.6.0. That is unfixable from inside the renderer and it is very fixable from inside the page: the bench now fetches version.json with a no-store request and compares it against the BUILD the loaded scripts actually carry. Equal and the number sits quietly; different and the page gets a RED BAR naming both numbers and saying which folder to check. A bench serving an old tree looks exactly like one serving a current tree - same layout, same controls - and the only tell was a five character string nobody checks. It checks itself now. *** THE SKY WAS A CONSTANT AND IT SHOULD NEVER HAVE BEEN. *** `PAL.sky = [22,34,52]` sat in buildPal with a comment saying it was safe to override because the ground never reads it - which was TRUE and still WRONG. It meant an ice world, a lava world and a garden world all fought under identical skies, so the one part of the frame covering half the screen carried no information about where you were. planet-palette already ships a sky per body sampled off that world's art; it is a DAYLIGHT value, so it is GRADED toward night rather than replaced. Hue and relative saturation are the world's, value is the engagement's - a lava world stays warm, a tundra world stays cold, neither is bright. The zenith is the same grade taken further, so the gradient is that world's sky darkening upward rather than one blue-black everywhere. PLANTING WAS ONE MIX FOR EVERY COLONY, WHICH IS THE SAME MISTAKE AS ONE SKY: identical scrub and broadleaf trees on ice, lava and garden worlds, tinted differently and otherwise the same. reach-battle.js already solved this shape - growth is decided by the TERRAIN KEY, because that key is already the climate statement the palette and the ground patch read. Eight urban recipes now, one per shipped terrain: cactus and dryland scrub on dust, dead standing timber on veins, fungus on rift, snowbanks and winter timber on ice, almost nothing but rubble on a station deck, and a real canopy only on the garden worlds. DENSITY VARIES TOO, not just species - a station with a garden world's density reads as a garden world growing different weeds. THE SKYLINE WAS THE SAME CITY ON EVERY WORLD, IN THE ATTACKER'S COLOUR, which is two errors in one: the far towers are not the army's property, they are the city being fought OVER, and a Circuit capital holding the same ledger for eleven generations does not look like a mining claim from thirty years ago. Colour is the HOLDER's now; density is read from the colony's population string; and Circuit worlds bias toward stepped, tapered and crowned towers while frontier colonies bias toward slabs - the difference between a city built over centuries and one put up in a hurry, bought with a biased index rather than new geometry. city-battle-check 123 -> 131. NOT IN THIS PATCH, DELIBERATELY: the GM war panel and council war approval. Both touch the live economy rather than the renderer, and the design questions they raise are listed in the handover rather than answered by me. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.8.0.0 (2026-08-26) - the bench was serving a remembered 404, and every zone in settled space gets a front line
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/city-maps-check.mjs` (new), `tools/city-battle-check.mjs`, `tools/citybattle-harness.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+*** THE BENCH WAS SHOWING THE OLD BUILD AND IT WAS NOT A STALE SCRIPT - IT WAS A REMEMBERED ABSENCE. *** coalition-sprites.js has warned since it shipped that A BROWSER CACHES A 404 AS READILY AS A 200, and city-battle.js carried NO cache bust on anything: not the terrain patches, not the facade textures, not meshes.json. The grass patches and the whole city/ directory are NEW, so any browser that opened the bench before they landed remembers the miss and never asks again, and the scene renders with the previous build's graphics while the file on disk is current. index.html was never affected because lazyLoad() busts with Date.now(); the BENCH, on plain script tags, was the one surface that could serve yesterday's renderer. Every asset URL busts on FM_BUILD now, and the bench's own four script tags carry a literal that city-battle-check asserts equals version.json - the same arrangement reach-check already enforces on coalition-sprites' BUILD. A SECOND HALF, AND IT IS THE BIG ONE: EVERY ZONE IN SETTLED SPACE NOW HAS A FRONT LINE. Sixty-six battlefields across thirty-five colonies, and NOT ONE IS HAND WRITTEN. That is a deliberate refusal: sixty-six authored maps is sixty-six things to keep in step with tables that already exist, and this repo has learned five times over what happens to the fifth copy of a fact. Everything is DERIVED from data authored long ago. COLONY_VISUAL.layout - radial, grid, archipelago, terraced, spine, organic - has been sitting in server/city.js since before cities shipped, with a comment saying 'layouts are placeholders until city geometry exists'. THIS IS THAT GEOMETRY. It drives avenue count, spacing, jitter, block fill and setback. COLONY_VISUAL.terrain picks the ground patch and the palette body, so a battle on Nova Reach is fought on ice because NOVA REACH IS ICE, not because a battlefield table says so separately. The zone's own sector - Finance, Gray Bazaar, Iron Foundries, Logistics - sets height, lot size, setback and density, because what a district DOES is the best predictor of what its streets look like: a finance district is tall and narrow-lotted, a foundry is low and set back, a bazaar is dense and short. Circuit or Coalition space biases the facade pool. A new colony added to COLONY_META gets a battlefield for free, and moving a colony's terrain moves the ground it is fought on. STATED PLAINLY RATHER THAN DISCOVERED: this is not six bespoke renderers. The layouts modulate ONE street generator, and radial and archipelago are APPROXIMATED inside a rectilinear plan - a colony marked radial gets converging spacing, not a wheel - because the sprite pack needs the fighting to cross the x axis and a true radial street plan would put lanes at angles the art cannot be drawn along. *** ABADDON AND FLESH STATION GET NO BATTLEFIELD, BY NAME. *** They are the only two colonies with no COLONY_VISUAL row and that is not an omission - galaxy.js maps both to a space-station landscape and SP_SECTOR_CITY gives them a null city. They are orbital. Falling through to a default would have produced a perfectly convincing city battle on a station with no surface, which is worse than having none: the picture would be lying about the world, confidently, and nothing downstream could tell. tools/city-maps-check.mjs asserts the derivation is TOTAL over the other thirty-five, that the exclusions are exactly those two BY NAME, and that the maps are actually DIFFERENT - 52 distinct layout/terrain/sector/space shapes across 66 zones, all six layouts and all seven terrains in use. That last assertion matters: if the inputs ever collapse, every zone becomes one city with a different tint and no single screenshot would show it. city-battle-check 103 -> 123. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.7.9.1 (2026-08-26) - papptimus credited, the black roofs fixed, and a credit check that a wrong credit passed
+
+Hard refresh, no server restart. Files touched: `client/assets/space/city/ATTRIBUTION.txt`, `client/assets/asset-credits.js`, `docs/CREDITS.md`, `client/assets/city-battle.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/city-battle-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+CREDIT RESOLVED AND TWO REAL BUGS FIXED. *** THE PACK IS papptimus, CYBER CITY, CC BY 4.0 - https://papptimus.itch.io/cyber-city *** Verified against the store page rather than taken on trust: the itch listing states the asset licence in its own metadata and the author confirms the same licence in the comments there. Credited in THREE places on purpose - the asset directory, docs/CREDITS.md, and the in-client Asset Credits panel, which is the one that matters because CC BY asks for attribution in the medium the work appears in and a text file inside an asset folder is a credit nobody will ever read. asset-credits.js's own header already says exactly this about the creature pack. NOTE FOR NEXT TIME, AND THIS IS THE FOURTH PACK TO ARRIVE THIS WAY: the archive had no licence file, no readme and no author - the terms were on the STORE PAGE, not in the download. AN ARCHIVE IS NOT A LICENCE; THE PAGE IT CAME FROM IS. Record the URL at download and none of this costs anything later. *** BUG ONE: THE ROOFS WERE BLACK HOLES. *** Measured, roof.png has a mean luminance of 37 out of 255 - it is drawn dark, because roofing felt is dark. Running it through the WALL ambient multiply at 0.42 and then a shading fill took it to about 13, so from the orbit camera the city was lit facades with VOIDS on top. The physics point is the one the shading comment already made and the code then ignored: a vertical surface sees half the sky and a horizontal one facing up sees ALL of it, so at night a flat roof is the BRIGHTEST large surface on a building, not the darkest. Roofs take their own ambient now - a lift rather than a multiply, because multiplying by more than one does nothing. The night cache is also keyed on name AND ambient: the roof sheets and the facades are disjoint sets today so a name-only key happened to work, and it would have silently served a wall-lit roof the first time anything shared a sheet. BUG TWO WAS IN THE TESTS, AND IT IS THE MORE EMBARRASSING ONE. The new credit assertions checked that the string 'papptimus' appeared ANYWHERE in asset-credits.js and in docs/CREDITS.md. Driven by tampering with each file in turn, the panel check PASSED with the name field changed to somebody else, because the url and note fields still carried the word. A CREDIT CHECK THAT A WRONG CREDIT SATISFIES IS NOT A CREDIT CHECK. Both match the name field now, and all four tamper cases fail as they should. Dead code removed with them: an unused random alias, two void statements and a parameter nothing read. city-battle-check 98 -> 103. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.7.9.0 (2026-08-26) - real facades, and a CC BY pack we cannot yet credit
+
+Hard refresh, no server restart. Files touched: `client/assets/space/city/` (new: 9 albedo + 9 emissive facades, 2 roof sheets, ATTRIBUTION.txt), `client/assets/city-battle.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/city-battle-check.mjs`, `tools/citybattle-harness.mjs`, `docs/CREDITS.md`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE CYBER CITY PACK IS IN, AND THE BUILDINGS ARE PHOTOGRAPHS OF BUILDINGS NOW RATHER THAN BOXES WITH STRIPES PAINTED ON THEM. Nine 256px albedo facades and their nine matching EMISSIVE maps - black everywhere except lit windows, signage and keypads - plus two roof sheets. That split is exactly what a night scene wants: the albedo is drawn at the ambient value the world is lit at and the emissive is ADDED over the top, so a lit window is a LIGHT SOURCE rather than bright paint and survives both the wall's own shading and the haze that goes over it. SCRAPPED WITH IT: every glazing band and every warm shopfront band. They were prisms wrapped around the shaft to SUGGEST storeys and an occupied ground floor, which is what you do when a coloured box is the only tool you have. Keeping them now would be painting stripes over a picture of a wall. Four prisms per building instead of ten; the detail moved from GEOMETRY into the SURFACE, where it costs a draw rather than a sort, and the frame queue dropped from about 2700 faces to about 2370 while looking enormously better. MAPPING A TEXTURE ONTO A WALL IN CANVAS 2D: canvas can only map through an AFFINE, and a rectangle under perspective is a general quad, so it has to be subdivided until each piece is affine enough. WHICH AXIS IS THE WHOLE TRICK and it is the same fact that made the ground's band pass work - the error lives entirely along the axis where DEPTH VARIES. A wall running along z has depth varying down its LENGTH and essentially constant up its height, so it is cut into columns along its length, and the column count comes from the depth RATIO across the wall: edge-on gets ten, face-on gets one, neither pays for the other. *** AND THE FIRST VERSION MADE THE WALLS TRANSPARENT. *** It drew the albedo at globalAlpha = shade, which at 0.34 read as smoked glass - plausible enough on a cyberpunk street that it took a second look to notice the SKYLINE WAS SHOWING THROUGH THE BUILDINGS. Alpha is not brightness: darkening is a multiply against the pixels, alpha is a hole. The pair is composited once per facade at load into a cached canvas now, which is the third time this renderer has concluded that the right place to pay for a recolour is once, at load, keyed on what varies. ROOFS WERE THE BRIGHTEST THING IN THE SCENE AND THEY WERE BLANK - once the walls became textured, a flat pale cap stopped reading as a roof and started reading as snow, because it was the only large untextured surface left above street level. The pack's two roof sheets go on the trim caps, subdivided both ways because a roof's depth runs front-to-back as well as across. *** THE HARNESS CAUGHT A CRY-WOLF BUG. *** Roofs have no emissive map, correctly - a roof has no lit windows in it - and the loader reported the absence as 'facade textures not found', putting a warning banner over a scene that was working perfectly. 'This file is absent' and 'this file SHOULD be absent' are different states and a loader that cannot tell them apart will cry wolf. *** LICENCE: CC BY 4.0 CLAIMED, AUTHOR NOT SUPPLIED, AND city-battle-check NOW FAILS ON IT. *** This is the most permissive licence this repo has ever received and the one we are closest to breaching. CC BY explicitly permits commercial use, modification and redistribution including in a public repo - more than the troop pack, the tile pack or the tank allow - and it asks for ONE thing in return, which is the one thing we cannot currently do. The archive contained no licence file, no readme and no author name. 'Attribution required' with nobody to attribute is the failure mode of the condition, not a way of meeting it. FOURTH TIME THIS SHAPE HAS ARRIVED, and the first where compliance is one line of text away. The FBX meshes were deliberately NOT taken: binary FBX needs an importer written first, and the meshes are the part of the pack we need LEAST - the building shapes are generated and must stay generated because the block layout places them against streets and cover slots. What was missing was never the boxes, it was the SURFACES on them. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.7.8.0 (2026-08-26) - grass that is grass, things that touch the ground, and a glyph skyline
+
+Hard refresh, no server restart. Files touched: `tools/terrain-synth.py` (new), `client/assets/space/terrain/grass_base.png` (new), `client/assets/space/terrain/grass_rock.png` (new), `client/assets/space/terrain/ATTRIBUTION.txt`, `client/assets/city-battle.js`, `client/citybattle-mock.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/city-battle-check.mjs`, `tools/citybattle-harness.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THREE THINGS, AND THE FIRST ONE IS NEW ART THAT OWES NOBODY ANYTHING. *** THE GRASS WAS GRAVEL WEARING GREEN. *** There is no grass in the terrain pack - the recipe is sand, gravel, basalt, snow, water and clay - so a Coalition garden world drew its fields with dust_base tinted with a forest palette, and that is most of why the plain read flat however much was done to the palette on top of it. tools/terrain-synth.py generates grass_base and grass_rock out of ARITHMETIC: wrapping value-noise lattices for the clumping, aligned blade strokes whose direction comes from a low-frequency lean field so neighbouring blades lie the same way, and a bare-scrape mask because turf is never total. Seamless BY CONSTRUCTION rather than by blending - every octave is a lattice whose period divides the image, so the wrap is exact and there is no cross-faded band to see once it is tiled at forty metres. Authored WIDE: the tinted dust patch spans luminance 41 to 65, a 24-value range, and these span roughly twice that so the crush in buildPatterns has something left to crush. No source art, no pack, no licence to resolve - the only file in that directory that can ship today without a decision being made first. --check asserts the shipped PNGs are byte-identical to the generator, that the tile wraps exactly, and that the range has not narrowed. SECOND, NOTHING IN THE SCENE TOUCHED THE GROUND. Every prism was a flat fill standing on another flat fill with a hard edge between them, so a forty metre tower and a one metre barrier sat on the plane identically - which is to say, hovering. city.js has had the fix since it shipped and this did not: a dark quad on the plate, spread with height, drawn ON THE GROUND PASS rather than in the sorted queue, because a shadow is part of the surface and has to go under the men standing in front of it. And flat fills are why everything read as cardboard: one value per face is right for a diffuse surface under a single distant light and is not what any wall does, because the base sits in bounce from the ground and the sky is a huge source overhead. Walls take a vertical ramp now, GATED ON SCREEN SIZE at 22px so it lands on the couple of hundred faces that are walls and not on the thousands of small mesh faces where the ramp would be under a value per pixel. THIRD, A GLYPH SKYLINE, AS A SECOND STYLE AND NOT A REPLACEMENT. The far city drawn as a grid of characters reads as a readout of a city rather than a picture of one. BAKED ONCE PER TOWER AND BILLBOARDED: twenty columns by forty rows is eight hundred fillText calls per building and thirty buildings is twenty-four thousand a frame, which is not a skyline but a text editor. The towers are hundreds of metres out so the parallax a prism would give across its near faces is under a pixel; a billboard loses nothing visible and costs one drawImage. ASCII rather than box-drawing characters DELIBERATELY - a missing block glyph renders as a tofu box, which on a skyline is indistinguishable from a lit window, so the failure would be invisible and wrong. The technique is decades old and the implementation is ours; nothing is taken from anyone's art, palette or composition, which matters more than usual in a repo where three of four art packs already cannot sit in a public directory. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.7.7.1 (2026-08-26) - the crawling road texture, measured and fixed
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE ROAD TEXTURE CRAWLED UNDER A MOVING CAMERA AND IT WAS MEASURABLE. bandPass approximates a perspective plane with one affine per horizontal band. With zero camera roll a SCANLINE maps to the ground EXACTLY - depth is constant along it - so there is no horizontal error at all, which is why this never showed on the orbiting Reach camera. All of the error is VERTICAL: depth is linearised across the band's height, and band edges are pinned to SCREEN space, so as the camera moves the world slides through them and the piecewise seams crawl. Measured at 1440x810 and a 60 degree vertical fov, as texture slip against the true projection: fixed 26px band 5.94px worst in 18 bands (what shipped); fixed 12px 2.78px in 38; fixed 6px 1.30px in 74; ADAPTIVE 0.81px in 25. The error is not spread evenly - it is concentrated just under the horizon, because that is where depth changes fastest per pixel - so sizing each band by its distance from the horizon puts the small bands exactly where the error is and pays nothing for the rest of the screen. SEVEN TIMES LESS SLIP FOR FORTY PERCENT MORE BANDS, and better than a uniform 6px band costing four times as many. reach-battle.js has the same fixed-band code and the same latent error; it does not show there because that camera orbits above the plain rather than standing on it, and it is NOT changed in this patch. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.7.7.0 (2026-08-26) - a city block instead of a boulevard, a front that moves, and a skyline in the city view's own language
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/city-battle-check.mjs`, `tools/citybattle-harness.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE FIELD IS A CITY NOW, NOT A BOULEVARD WITH A LINE ON EACH VERGE. That read fine and it was not urban: nothing was ever between the two lines except distance, there was no flank that was not the whole flank, and no man ever lost sight of the enemy. An urban front is the opposite of all three - short sightlines, cover that runs out, and ground taken a building at a time. Three avenues running with the camera, three cross streets across it, blocks of buildings in the cells between, and ALLEYS, which are the only way through a block that is not a street. THE AVENUES RUN ALONG Z ON PURPOSE: the sprite pack is single facing, so the fighting has to happen across x for a profile to be the correct drawing of a man, and avenues along z make every street a firing lane pointing the right way. Engagement range drops from 130m to 62m, because a line that engages at field range never bothers to close and closing is the whole behaviour an urban front is supposed to show. THE FRONT MOVES. frontX drifts toward whichever side is winning the exchange; cover is claimable only on your own side of it, so when it moves a rank of corners opens up and the line BOUNDS forward to take them, and a losing side drops slots that are now behind the enemy and falls back. *** AND THE FIRST VERSION OF THAT PARKED THE ENTIRE ARMY IN THE BACK ROW. *** Cover was scored by distance, and the nearest free slot to a man who has just spawned is the one BEHIND him: fifty-two units took the rearmost corners, none came within sixty metres of an enemy, and the harness reported ZERO CASUALTIES AFTER THIRTY SECONDS. That report is the only reason it was caught, because the frame looked completely fine. Front first, distance second. SKYLINE REBUILT IN THE CITY VIEW'S OWN LANGUAGE. The first version was line art and city.js is not: it draws districts as TRANSLUCENT FILLED PRISMS with three face values per mass, a lighter roof slab so the silhouette edge reads, band lines, WINDOWS ON A GRID and a mast with a glowing beacon. The grid is the load-bearing one - a scatter reads as noise and a grid reads as a building, and it is the single thing that made the old skyline look like a wireframe test. *** A REAL TESSELLATION BUG, FOUND BY STANDING IN THE STREET. *** stripPath took a segment COUNT, not a length. Thirty-four segments over a fifteen hundred metre avenue is a forty-four metre segment, and a segment with any corner behind the near plane is dropped WHOLE - so standing anywhere in the middle of one punched a forty-four metre HOLE in the road clip, CENTRED ON THE CAMERA, and the carriageway drew as whatever the ground pass had put there, which on this world is grass. It read as a shading bug. Segments are a fixed world length now and the strip is walked only over the span the camera can see. HAZE IS AIR, NOT GROUND. reach-battle hazes toward `horizon` and that is right there, because on a brood world the lit ground value and the sky are within a few degrees. Here they are not: `horizon` on a garden world is a saturated green, so hazing toward it painted GREEN FOG over a city at dusk and the whole middle distance read as a park. CLEANER SURFACES, AND CONTRAST IS THE DIAL RATHER THAN TILE SIZE - enlarging the tile to kill speckle just turns speckle into SMEARS, the same noise at a scale where each blob is a metre across, which on a pavement reads as damp patches. A CITY BLOCK IS NOT A LAWN: one quad per cell floors the lots, which is the cheapest correction available and does most of the work of making this read as a city rather than a park with offices in it. Building height RISES AWAY FROM THE CONTESTED AVENUE, because a forty metre wall both sides of the fight is a canyon that swallows it - and that is also how a real city is built, so the constraint costs nothing. Street trees pruned to 55% height: the same timber that reads as scenery on the outskirts stands taller than the shopfront behind it and blocks the lane it is planted beside. city-battle-check 48 -> 56. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.7.6.0 (2026-08-26) - no shield troopers in a city fight, and a detail pass on everything behind it
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/city-battle-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+CITY LINES ARE RIFLEMEN AND ENGINEERS, NO SHIELD TROOPERS, and the reason is the shield trooper's own job. v1.7.4.0 settled it: a shield is for stopping the thing that CLOSES, which is why a charging class is weighted at half distance and wins out to twice the range. A city fight between two polities has NO CHARGING CLASS IN IT - both lines are riflemen behind cover trading fire across a street - so he arrives with nothing to bash and falls through to the hold branch, WHICH IS THE STATE THAT PRODUCED THE SIDEWAYS DRIFT. He is not banned as a unit; he is absent because nothing here is his target, and the class table is where he comes back the day a melee class stands on a city line. His 10% goes to the ENGINEER rather than to the riflemen: without the shield the line is one silhouette, and the engineer is the only other shape on the field and the only thing on it that is not a man. DETAIL PASS ON EVERYTHING BEHIND THE FIGHT. Towers: five KINDS - slab, step, taper, twin with a skybridge, crown - because silhouette is the only thing that survives at two hundred pixels and a tenth of an alpha, and thirty copies of one recipe reads as one building repeated BECAUSE IT IS. Plus setback ledges, floor bands, roof plant, masts with guy lines, and MULLIONS on the near ring only: vertical bays are what make a face read as glazing instead of a box with stripes, and they are also one segment per bay per face, so the far ring would pay thousands of segments for lines under a pixel apart. Blocks: floors counted FROM HEIGHT rather than fixed at two fat bands - a 19m block and a 74m block do not have the same number of storeys and drawing them as if they did is what made the rank look like one model at two scales - plus a warm SHOPFRONT at street level (the only warm value down there and the thing that says somebody is inside), a cornice WIDER than the shaft so the roof is an edge rather than a cut, and a second offset mass turning every plan into an L. Street: a walkable PAVEMENT instead of a one-metre kerb line, expansion JOINTS across it (the single cheapest thing that turns a grey ribbon into concrete, because a slab has edges and a ribbon does not), a worn VERGE because real ground does not change material along a ruled line, deterministic PATCHING on the carriageway, and stop bars at the junction. Ground: rubble from the pack's scatter rocks on the CONCRETE ramp rather than the vegetation one, and the low growth weighted up because a field of evenly spaced trees is an orchard. *** AND ONE THING WAS BUILT, MEASURED AND CUT. *** A third full-plane pass at a hundred-metre tile, meant to put broad light and shade under the grain on the sound argument that one frequency never looks like ground. It cost 60ms of a 240ms ground stage under cairo for an effect at a fifth alpha underneath a haze already at three quarters - the worst value of the three passes by a wide margin. Gone, with the argument kept in a comment rather than deleted silently, because somebody will have it again and it has to come from something that is not a third tiled fill. The pavement also caught a real bug on the way: it was borrowing the SCRUB pattern, which is tinted with PAL.rock - the VEGETATION colour on this world - so the concrete came out streaked green. It looked like a shading fault and was a material wearing another material's tint. Detail passes are now DEPTH BOUNDED as well: grain and pavement stop where the haze eats them, the base pass still runs to the horizon because that one IS the ground. city-battle-check 46 -> 48, driving the class table; re-adding the shield trooper takes it to 47/1. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.7.5.0 (2026-08-26) - the city war had no picture, and the two faction id namespaces had never been mapped
+
+Hard refresh, no server restart. Files touched: `client/assets/city-battle.js` (new), `client/index.html`, `client/assets/city.js`, `client/assets/factions.js`, `client/citybattle-mock.html` (new), `client/assets/coalition-sprites.js` (build stamp), `tools/city-battle-check.mjs` (new), `tools/citybattle-harness.mjs` (new), `tools/serve.mjs` (new), `test.bat` (new), `test.sh` (new), `package.json`, `.gitignore`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE CITY WAR HAD NO PICTURE, AND NOW IT DOES. server/city.js has priced faction control at WAR_FUND_BASE_PER_PCT + warRate(cityBook) for a long time, war_fund_pool accumulates it, onColonyCaptured vacates every seat and maybeStripOccupied salvages what a mayor built. The war fund has a number, control has a percentage, capture has a feed line - and THE FIGHTING THOSE THREE DESCRIBE HAS NEVER BEEN DRAWN ANYWHERE. client/assets/city-battle.js is that view and NOTHING ELSE: no second combat model, NO SERVER CHANGE AT ALL. Who is fighting comes from the colony's own control figures in gState; the ground and the attrition are local and decide nothing, exactly as the Reach's ambient attrition does. *** AND IT FOUND A REAL BUG ON THE WAY IN. *** galaxy.js names factions 'coalition'/'syndicate'/'void'/'guild'/'jade'/'fleshstation' and keys every colony control percentage on those; factions.js names the SAME factions 'coal'/'synd'/'void'/'guild'/'jade'/'khai' and keys every uniform on those. NOTHING MAPPED BETWEEN THEM, and THREE OF THE SIX COLLIDE BY LUCK, which is exactly what hid it - 'void', 'guild' and 'jade' work and the other three silently do not. A private table at the crossing point would have been the SIXTH copy of a faction's identity, so `gid` lives on the registry row and FM_FAC_API.fromGalaxy/toGalaxy is the one map. fleshstation maps to NULL DELIBERATELY: it is a station with no kit, and falling back to coal would put Coalition uniforms on a faction that has never had any. NEW IN THE RENDERER, and each is a real gap in reach-battle.js: a MATERIAL PER FACE (paintFace has one ramp, far -> rock, correct where every surface is the same dead mineral and wrong the moment a kerb stands next to a hedge); genTowers, a wireframe skyline where genSpires puts the far scenery; the street, bandPass with a clip plus kerb and lane quads; urban cover; and FLORA urban, a climate row that finally spends the nature pack's trees - baked since the nature pass and never named by any world because the only battlefield was a brood world. FOUR BUGS THE HEADLESS DRIVER CAUGHT THAT A BROWSER HIDES, one of which is in reach-battle.js TODAY: pats() caches an object of NULLS when the sheets have not decoded, because terSheet invalidates PATS from inside its own onload and a build that starts before the sheets land finishes after the invalidation - it survives only because the load order happens to be kind. The band one pixel under the horizon covers 172000 x 56000 world units, FOUR MILLION TILES for a 26px strip; canvas clips it and cairo dies, and it is the most expensive band and the least visible, so past a threshold it fills flat. `horizon` is the planet's LIT GROUND value and not sky - using it as sky put a blue field on the screen. And the tinted base patch spans luminance 41 to 65, a 24-value range, which is why a plain reads as a flat mat: buildPatterns has ALWAYS built a rock pattern that nothing drew, and drawing it at a second tile size and a third alpha puts the variation back with no new texture, load or licence. TESTING IS ONE CLICK NOW: test.bat / test.sh run every suite, draw frames headlessly if node-canvas built, and serve client/ over http - which is required, not preference, because a canvas that has drawn a file:// image is TAINTED, getImageData throws, and every faction silently comes out in the pack's own colours. canvas is an OPTIONAL dependency: it is a native build that fails on plenty of machines, nothing in client/ or server/ imports it, and a failed install leaves one tool SKIPPED rather than the suite broken. *** UNCHANGED AND STILL URGENT: nothing shipped since v1.3.9.x, so the mining_bank_delta faucet is very likely OPEN IN PRODUCTION. ***
+
+
+## v1.7.4.0 (2026-08-25) - the shield line did not engage humans, and it was also the "joined the attacking line" bug
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/reach-depth-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+Both reports were the same block.
+
+### It looked for `MELEE_CLS` and nothing else
+
+`MELEE_CLS` is brood-only: `rush`, `brute`, `leap`, `grub`, `maw`. So a shield trooper facing enemy infantry or an enemy shield trooper found nothing, kept `u.mel` at -1, and fell into the hold branch - drifting sideways along the line past men it should have been bashing.
+
+Humans against humans, the shield line simply did not fight.
+
+### And the hold branch is where the earlier report came from
+
+It marched to `front+0.055` - a hardcoded home-side offset. So an away shield trooper walked **across** the front and stood in the home line.
+
+"Shield enemies seem to join the attacking line" was never a targeting fault. He was doing exactly what he was told. That was reported two patches ago and went unexplained because the diagnostic could not see it; it is `front + dirH*0.055` now.
+
+### No side filter either
+
+`!MELEE_CLS[v.cls]` was the only test, so the nearest rusher was a target whoever owned it - safe only while every melee class was on one side by definition. Put the brood on a home roster and a Coalition shield trooper starts bashing his own escort.
+
+The retained target is re-validated for side as well as death now, so a roster change mid-engagement cannot leave a man locked onto a unit that has become friendly.
+
+### The scan was thirty-four random draws out of seven hundred
+
+Third instance of that pattern in this file, after the flyers and the turret. Even with the class filter fixed it would have missed the man standing next to it most of the time. Driven: the one enemy in a crowd of seven hundred is now found 200/200.
+
+### A preference, not a filter
+
+That distinction is the whole lesson - a filter is what caused this bug. A shield is for stopping the thing that closes, so a charging class is weighted at half distance and wins out to twice the range, while a rifleman at arm's length is still bashed.
+
+Measured at the boundary: rusher at 1.3x wins, at 2.0x ties, at 2.7x loses.
+
+`flash()` was also passing a literal `1` for side, so an away shield trooper struck in home colours.
+
+`reach-depth-check` 4106 to 4118, driving the new search against adjacent enemy shield troopers, friendly units closer than the enemy, the charging-class boundary, out-of-reach targets, aircraft overhead, and a 700-unit crowd. Suite green.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.7.3.0 (2026-08-25) - the huddle: two causes, and moving the line was the smaller one
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/reach-depth-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### Measured before changing anything
+
+The front mapped hive percent onto 0.05-0.95, and at the top of that range there is no field left to stand in. A zone opens at hive 100, so front opened at 0.95, so `roomK` had 0.03 of depth to scale 0.455 of offsets into - and the entire home line occupied **0.011 of the field**. Seven hundred men in a stripe one percent deep.
+
+**But below about hive 50 the front already had all the room it needed and the line still stood in 0.165 of depth**, because that is simply how wide the band was: infantry ran `front+0.015` to `front+0.18` and no further.
+
+So relocating the front fixes the crushed case and does nothing at all for the ordinary one. A line pinned to midfield would have given 0.165 against the 0.138 already visible at hive 60. The band width was the lever that mattered.
+
+| hive | before | after |
+| --- | --- | --- |
+| 100 | 0.011 | 0.121 |
+| 75 | 0.083 | 0.221 |
+| 60 | 0.138 | 0.282 |
+| 50 | 0.165 | 0.305 |
+| 0 | 0.165 | 0.305 |
+
+Range is 0.20-0.80 now, infantry run to +0.32, the hive line to -0.30. Riflemen spread back toward the engineers instead of stacking on the first sixth of the available ground.
+
+**The band widening costs nothing in the scaling budget.** `DEPTH_NEED_HOME` is the widest offset on the side, which is the engineer's 0.40 plus the jade posture - infantry at 0.32 is still inside it, so `roomK` is unchanged and no other band moves. On the hive side 0.30 is exactly `DEPTH_NEED_HIVE`, the struck tank standoff, so that one is at its ceiling and cannot widen further without raising the constant too.
+
+**Not pinned to midfield, deliberately.** The mapping stays a pure function of `z.hive` and stays monotonic, because every camp, every ownership test and the whole advance rule read it. The line still travels 0.60 of the field across a war - more than enough to read who is winning. A front that never moves is a picture that has stopped reporting anything.
+
+### There were two copies of the mapping and only one would have been fixed
+
+`reachWatch` set the front when an engagement opened, and the two second tick set it again from live state, each with its own copy of the clamp. Widening the range in `reachWatch` alone would have looked like it worked for two seconds and then been silently overwritten, every tick, forever.
+
+The duplicate had also been carrying `(Z.hive||50)` since after that bug was found and fixed at the other site in v1.6.3.1. A zone at hive 0 - every hive-held metre taken, the whole point of the layer - fell through to the 50 default and drew its line at midfield on every tick.
+
+Fixing one of two copies is not fixing anything, and this is what that looks like three patches later. One `frontFor()` now, used by both sites, with `typeof` rather than a falsy check and a default that moves *with* the range instead of drifting out of it.
+
+### Checks
+
+`reach-depth-check` used to lift the clamp **expression**, which worked only while the mapping was one inline line - so the expression it tested was not necessarily the one that ran. It lifts and drives the **function** now, and asserts there is exactly one mapping. Plus monotonicity and minimum travel, which are the properties the range exists to preserve.
+
+4101 to 4106. Suite green.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.7.2.0 (2026-08-25) - the flyers were hunting a unit class that no longer exists
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/battle-test.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/faction-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### They looked for `cls === 'heli'` and nothing else
+
+`HELI_SHARE_BENCHED` has been true since the airstrike replaced gunships. That class does not spawn, so the search never found anything, so every flyer fell into the idle branch and drifted along `front-0.16` bouncing off the walls for the entire engagement.
+
+They were not misbehaving. They were looking for something that is not there.
+
+**Armour first, which is what they should always have been for.** A gunship was the only air target on the field, so "hunt the heli" happened to also mean "hunt the thing infantry cannot answer". Tanks and turrets are that thing now: armour is what a line cannot deal with on its own, and something diving it is the reason a push buys air cover. Weighted heli 3, tank 2, turret 1, so a flyer crosses the field for a tank rather than settling on the turret it happens to be over.
+
+It also had **no side filter at all** - any heli within thirty random samples, friendly or not. Harmless only because there was never more than one air unit in play.
+
+### The random sample was the second half of the bug
+
+And it would have survived fixing the first. Thirty draws out of seven hundred units finds one of eight tanks about a third of the time, so a flyer that "targets tanks" by sampling would still spend most of its life idle - the same fault `pickTarget` was fixed for, in a different function.
+
+It reads the `rebuildTargets` spatial index now, widened across the whole field because armour is rare and a flyer is fast: an air unit that will not cross the map for the only tank on the field is an air unit that idles again.
+
+Driven against a 700-unit field: 300/300 finds a target, 300/300 of them armour, zero friendly picks, and with all armour destroyed it falls back to infantry 100/100 rather than idling.
+
+### The turret was scanning the same broken way
+
+Twenty random draws for a "flyer on approach" - which mattered little while flyers never attacked and matters now that turrets are prey. Same index.
+
+It also asked `pickTarget` for **side 1's** enemies whoever owned it, a hardcoded literal that was harmless only because `awayClass` never returns `turret`. A bug waiting on a content change, and the fourth of this exact shape found in this file.
+
+### The shield report is not fixed and is not dismissed
+
+Nothing found so far accounts for it, and the instruments could not tell a faction on the wrong half of the field from one on the right half: `facMix` counts factions and says nothing about sides.
+
+New `_fmReachDebug.sides()`: per-side faction counts, plus `crossed` - the number of men whose faction is not on the roster for the side they are standing on. It should fall to zero as the pre-change seed dies off; anything that **persists** there is the reinforcement path putting a unit on the wrong side, which is the mechanism worth suspecting. Wired into the bench beside the geometry readouts.
+
+`faction-check` 3900 to 3911. Suite green.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.7.1.1 (2026-08-25) - Coalition: one blue, green on every class
+
+Hard refresh, no server restart. Files touched: `client/assets/factions.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/faction-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### One blue, and it is the one it always had
+
+The multi-kit pass gave the Coalition five dye lots, reasoning that a treaty quartermaster issues one coat across nine colonies and gets nine batches of it.
+
+The reasoning held and the picture did not. At field size, five values of one hue read as a line that is unevenly *lit* rather than one with history - and the Coalition is the one faction whose whole identity is being organised. Variation is the Syndicate's trait, and spending it on two factions spends it.
+
+**The shade is matched, not guessed.** The reference was sampled - its three most common uniform colours are `52,70,111`, `31,41,65`, `38,51,81` - and compared against all five kits:
+
+| kit | mean error vs reference |
+| --- | --- |
+| kit0 | 14.7 |
+| **kit1** | **1.4** |
+| kit2 | 12.5 |
+| kit3 | 13.7 |
+| kit4 | 14.8 |
+
+kit1 *is* the standard-issue tint the Coalition wore before the kits existed, so this restores a value rather than inventing one, and the graded output now reproduces the reference exactly.
+
+Kept as `tint`, not a one-entry `kits` array. A faction that issues a uniform and one that does not are different kinds of thing, and "one has a list of length one" loses that. The Syndicate is the only row with kits again, which is the distinction working.
+
+### Green glass on every class
+
+`opticOn` moves from `'augmented'` to `'all'`, so the assault trooper gets the visor.
+
+The old gate said his goggles must stay as drawn because he has a face, and burning them would claim otherwise. That was the right argument *while the optic was red and meant augmentation* - something lit behind the glass. It is green now and means optics: a sensor package, issued kit, no claim about the man wearing it. The argument retired with the colour it was about.
+
+It also matters at field size. The assault trooper is the most numerous unit on any line, so an optic he does not wear is an optic most of the army does not have - the Coalition's two identifying pixels were landing on a minority of it.
+
+Verified on pixels: assault 9 green, shielded enforcer 23 (faceplate and shield panel), unshielded enforcer 8.
+
+### Checks
+
+Three assertions updated, and one was wrong in kind. "Both kitted factions have enough kits" asserted a **count**, which is not the property - what matters is which faction issues a uniform and which does not. It asserts the kind now, and would fail correctly if either changed category rather than throwing on a missing array.
+
+`faction-check` 3911 to 3900 - the removed kit assertions. Suite green.
+
+### Known limit of the contact sheet
+
+`tools/faction-sheet.py` does not transcribe `burnEye`, the per-cell face-finding routine that paints the engineer's single eye pixel. That pixel follows the faction optic correctly in the game and shows as unpainted on the sheet.
+
+Not transcribed on purpose: it is one pixel against a real risk of a divergent second implementation, which is the failure this tool is most exposed to.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.7.1.0 (2026-08-25) - Coalition: multi-shaded blue and a green visor
+
+Hard refresh, no server restart. Files touched: `client/assets/factions.js`, `client/assets/coalition-sprites.js`, `tools/faction-check.mjs`, `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### Blue mass, green glass
+
+At twenty pixels a faction is a colour mass and a couple of lit pixels, and those two should not be doing the same job. Nothing else on the field pairs blue with green.
+
+### The kits are one navy in several dye lots
+
+That is not what the Syndicate's are, and the distinction is the whole reason the Coalition can have kits at all without becoming a second mercenary company.
+
+The Syndicate varies by **hue** - tan against grey against brick - because its men turned up in whatever they owned. The Coalition varies by **value inside one hue**, because a treaty quartermaster issues one coat across nine colonies and gets nine slightly different batches of it.
+
+Measured: the closest Coalition pair sits 18 apart against the Syndicate's 20 to 40. Deliberately tighter, so a Coalition line reads as one army with wear on it rather than as a crowd. Every kit is blue - blue channel highest in all five - and the check asserts it, because one kit drifting off hue turns the army into a crowd.
+
+### Green, not red, and the red was not wasted
+
+The old red said *augmentation*: something lit behind the glass, on the helmeted classes only. Green says *optics* - a sensor package rather than a modified man - which is the more accurate thing to say about a treaty army that fields engineers and turrets. And it frees red entirely for the Syndicate: red is now dominant in exactly one faction's optic.
+
+`opticOn` stays `'augmented'`. The assault trooper has a face, and burning his goggles would claim otherwise; that gate was never about the colour. It also keeps a second axis of distinction from the Syndicate beyond hue - the Syndicate marks every class, the Coalition only the ones behind a helmet - so the two differ on the most numerous unit on the field as well as on the mass.
+
+### The bug this turned up: a hardcoded red eye under a green faceplate
+
+The engineer's painted eye was `EYE_RED`, a constant `[255,78,60]`. That was right for exactly as long as the only faction painting an eye burned red. With a green visor the Coalition engineer would have had a red eye under green glass - one figure giving two answers to the same question.
+
+It takes the faction's own optic now, with the constant kept as a fallback for a faction that paints an eye without declaring one - impossible today, since the caller gates on `ROW(fac).optic`, and a black pixel if it ever happened.
+
+### Three checks fixed rather than the code
+
+One asserted the Syndicate was the **only** row with kits. True, and never the property worth defending: what matters is that the two vary along different axes, so it measures cluster tightness and hue span now.
+
+One used `r > g + 40` for "red" and flagged the Void Collective, whose purple is `186,104,246` - red does beat green by 82, and the highest channel is blue. A discriminator that cannot tell purple from red is not testing what it says; it asks which channel is dominant now.
+
+And a **third fixed-width window** broke. `reach-terrain` matched `coal:` followed by `skin: 'range'` within 400 characters, and the five-entry kits array pushed them apart. A window measured in characters goes red whenever the thing it guards gets more detailed, and the pressure is to raise the number until it stops complaining. It evaluates the registry now.
+
+`faction-sheet.py` emits a squad sheet for any faction with kits, so the Coalition gets one automatically.
+
+`faction-check` 3891 to 3911. Suite green.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.7.0.0 (2026-08-25) - shields match visors, and the Syndicate becomes a company
+
+Hard refresh, no server restart. Files touched: `client/assets/factions.js`, `client/assets/coalition-sprites.js`, `client/assets/reach-battle.js`, `client/battle-test.html`, `tools/faction-sheet.py`, `tools/faction-check.mjs`, `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The shield panel is an optic, not an accent
+
+Splitting them was the wrong reading of the same trooper. The shielded enforcer's faceplate and the panel on the shield he holds up *in front of it* are the same equipment doing the same job: the thing he sees through.
+
+Split across two channels, a Coalition trooper burned his faceplate red and kept a factory-blue panel a hand's width in front of it, and a Guild trooper had a blue visor behind a differently-blue shield. Moved to `OPTIC_SRC`. Accent is now exactly what it says: markings on kit, one source, the engineer's wrist device.
+
+### Mercenaries do not have a uniform, and the first pass gave them one
+
+A single brown tint made the Syndicate a third army in a different colour, standing next to two others that already say that better.
+
+`kits` is a new field: an array drawn per soldier off his own index, so a Syndicate line is a mix of whatever its people turned up in. Five, because three reads as a pattern at forty men and more than five stops reading as one faction. All low-chroma working colours - oxidised tan, washed field grey, faded brick, ex-navy slate, dirty khaki - separated by hue at similar value, so they read as different men in different surplus rather than one man lit five ways.
+
+Skin policy `merc`: the whole human range plus the steel casing in one pool, so roughly one in seven is an android. One draw, seven outcomes, one of which is not a person.
+
+### Red visors, and they are the only thing the company issues
+
+The first cut gave the Syndicate no optic at all, reasoning that a company hiring anyone has nothing to mark its kit with. The reasoning was fine and the picture it produced was not: five mixed coats under the pack's own gold faceplate read as five unrelated men rather than one faction, because nothing in the frame said they were together.
+
+A mercenary company does not issue coats. It issues the thing that identifies you as being on the contract.
+
+**`opticOn: 'all'`, not `'augmented'`, is the load-bearing half.** The Coalition already burns red, so a shade alone would not separate them: two reds at twenty pixels are two reds. What separates them is which classes wear it. The Coalition burns only its helmeted classes and its assault trooper keeps his teal goggles; a Syndicate line with red on every class differs on the most numerous unit on the field.
+
+Shade chosen on measurement: crimson `244,46,74`, luminance 108 against a kit ceiling of 88 so it clears every coat, and 34 from the Coalition's red in RGB - about the most a red can differ from another red while still clearing the coats underneath.
+
+### The bug this turned up: a stride is not a spread
+
+`skinFor` used `(i * 7 + 3) % pool.length`. That is fine while no pool is 7 long and degenerate the moment one is: 7 mod 7 is 0, so every soldier gets index 3. The merc pool is 7. Two hundred men, one face, on the first run.
+
+A bigger prime only moves the collision to a different pool length, so it is a hash now - two rounds of xorshift and a Knuth multiply - which has no relationship to the modulus and spreads a pool of any length, including lengths nobody has written yet. All 35 Syndicate tone-by-kit combinations are reachable and stable per index.
+
+**And the check that should have caught it was measuring the old mechanism.** "A fireteam does not band" asserted under 40 adjacent repeats in 200 - but a stride never repeats consecutively while the multiplier is coprime, so it was really asserting "this is a stride", and any hash fails it. A hash gives random-like adjacency: 1-in-4 for the Guild's four tones is about 50 in 200, which is correct and not banding. Banding is a *run*, so the run is what is measured now, plus per-tone evenness - a hash that spread badly would pass a run test by being uniformly wrong.
+
+### Engine
+
+`kit` is threaded through `tinted` / `drawFrame` / `drawAnchored` and into the cache key, so a Syndicate sheet holds five tinted copies and every other faction still holds one. The key only grows where the faction has kits. `kitOf(u)` mirrors `skinOf(u)`: same index, different salt, fixed for the soldier's life so he does not change coats when he takes cover.
+
+`tools/faction-sheet.py` also emits a squad sheet for any faction with kits: sixteen consecutive soldier indices exactly as `seedField` hands them out, so it is the line as it will actually stand rather than a curated selection of the nicest pairs. Both Python implementations verified byte-equal against the JS on grade output and index selection, including the signed-32-bit modulo the hash depends on.
+
+`faction-check` 3865 to 3891, `reach-check` 1086 to 1088, `reach-terrain` 306 to 308. Suite green.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.9.2 (2026-08-25) - the portrait did not load because there was nothing to press
+
+**Server restart required.** Files touched: `server/server.js`, `client/assets/god-panel.js`, `client/assets/core.js`, `client/index.html`, `client/assets/portrait-manifest.js` (comment), `client/assets/coalition-sprites.js` (build stamp), `tools/faction-sheet.py` (new), `tools/faction-check.mjs`, `tools/reach-check.mjs`, `tools/controls-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### There was no button
+
+v1.6.9.0 shipped the assignment as an HTTP route, `/api/dev/portrait`, with no control anywhere in the panel and a changelog note saying to POST to it.
+
+That is a feature that exists and cannot be used, and it is the exact failure `tools/controls-check.mjs` was written to catch. It sailed past because that file walks **socket commands**, and an HTTP route has no command string to walk. A route nobody can reach is worse than no route: it reads as done.
+
+### And it had to push, and did not
+
+`setPlayerPortrait` writes the row. That changes what the *next login* sends and nothing else - so even a successful call left the target sitting with the old face until they happened to reload. From the outside that is indistinguishable from the write failing, which is what "did not load to the account" looked like.
+
+`broadcastToPlayer` tells the target and they repaint on the spot; a broadcast tells everyone else so the next chat line carries the new face. Scrollback keeps the old one, because each message froze a portrait at post time - deliberate elsewhere in the file and unchanged.
+
+It is a socket command now, on the same `godCmd` path as every other dev control, with a real control in War Controls: player name, portrait id defaulting to the alias `hive`, ASSIGN. The HTTP route is **deleted** rather than kept alongside - two paths for one action is what the `DEV_PORTRAITS` comment already argues against. `hive` resolves server side through `hiveLordPortrait()`, so the panel needs no edit the day a new Khai'sultull portrait lands.
+
+### `tools/faction-sheet.py`
+
+Every faction against every class on one image, so colour can be argued about rather than described.
+
+The recolour was judged three ways and none of them was *looking* at it: `faction-check` drives the grade and asserts a luminance spread, the bench parades five figures at 2.6x behind a running server, and the battlefield draws them at twenty pixels through haze - which is where a mistake is least visible.
+
+4978x3690, six factions by eight cells at 3x. The cells carry the channels: the shielded enforcer has both the faceplate the optic burns and the shield panel the accent marks, the engineer has the wrist device, the assault has skin and goggles at two skin indices, and the Hound is the only thing the hull grade touches.
+
+**Its one real risk is being a second recolour engine.** `coalition-sprites.js` owns `tinted()`; a Python copy that drifted would show a game that does not exist, which is exactly what made the battle bench worthless for three patches running.
+
+So every number is extracted from `factions.js` at run time by brace matching - no colour can be chosen in the tool - and the arithmetic is a transcription kept in the same order of operations: the accent remap runs **before** the grade and skips the pixel entirely, the camo split is decided on **raw** luminance before the lift, and `keep` reads whichever grade is in force. Get any of the three wrong and the sheet is plausible and untrue.
+
+Verified by running both implementations against the pack's six real uniform colours: **byte-equal on all six factions.** `faction-check` asserts the extraction and all three ordering properties.
+
+### Checks
+
+One assertion in `reach-check` named the deleted HTTP route and is updated to the command, plus a new one that the target is told immediately rather than on next login - the half of the bug that would have survived the other half being fixed.
+
+`controls-check` 215 to 228, `reach-check` 1085 to 1086, `faction-check` 3857 to 3865. Suite green.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.9.1 (2026-08-25) - Zharkofin has his face
+
+Hard refresh, plus one dev call. No server restart for the art itself, but `PORTRAIT_SET` is built from the directory **at boot**, so the server does have to come up after the file is in place. Files touched: `client/assets/portraits/prawn_commander.png` (new), `client/assets/coalition-sprites.js` (build stamp), `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+The resolver shipped ahead of the art in v1.6.9.0. The art has landed, so it now returns it.
+
+### Conformed to the pack, not just dropped in
+
+Every one of the 258 existing portraits is exactly 393x397 with the subject run to the bottom edge of the canvas. The source was 111x168 at a different aspect ratio, so a straight copy would have been the one portrait in the set that framed differently from all the others.
+
+The framing is not decoration: `FMPortraitFrame` renders anything without a measured head box 1:1 and no crop, so the canvas *is* the composition.
+
+**Integer NEAREST**, because the art is authored at its own pixel pitch - 36 colours, no 2x or 3x block structure, measured rather than assumed - and a fractional resample would make some source pixels two screen pixels wide and others three, which on pixel art reads as damage. 2x is the largest whole factor that fits: 168x2 = 336 is under 397, 168x3 = 504 is not.
+
+**Bottom-anchored and centred on the silhouette**, not on the canvas, because the figure is not centred in its own source file: the antennae lean and the alpha bbox is asymmetric.
+
+Measured against the pack's own numbers rather than eyeballed:
+
+| | new | pack range | prawn1 |
+| --- | --- | --- | --- |
+| subject top | 0.154 | 0.020 - 0.244 | 0.020 |
+| subject bottom | 396 | 379 - 396 | 396 |
+| head width | 0.28 | 0.29 - 0.55 | 0.29 |
+
+Every measure inside the pack's range and within 0.01 of the drone it replaces - which is the comparison that matters, since it is the same subject family.
+
+### Installing art did not add a costume
+
+`prawn_commander` is on `DEV_PORTRAITS` beside `prawn1`, so it is refused by `/api/portrait` for everyone including devs and never appears in the picker. That is the whole point of the mechanism, and it is exactly what a carelessly regenerated manifest would undo - so the check asserts it explicitly now that the art exists.
+
+### Checks
+
+`reach-check` 1079 to 1085, driven against the real directory. `PORTRAIT_SET` is a fact about the filesystem and not about any source file, so the resolver is lifted and run against the actual listing rather than pattern-matched. It also asserts the canvas matches `prawn1`'s by reading the PNG IHDR, and that the picker still offers zero prawn entries.
+
+**To use:** `POST /api/dev/portrait {player:'Zharkofin', portrait:'hive'}`. The `hive` alias resolves through `hiveLordPortrait()`, so it is the same call that would have given him the drone yesterday and gives him the commander today.
+
+### Noted, not fixed
+
+`tools/sudoku-check.mjs` failed once on a clue-target assertion and then passed 14 consecutive runs, including a deliberate 12-run sample. It is randomised generation and unrelated to this change - but it is a flake in the suite you are about to ship behind, so it is written down rather than smoothed over.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.9.0 (2026-08-25) - force any faction into the war, dev accounts pass both seals, and the hive is not a costume
+
+**Server restart required.** Files touched: `server/reach.js`, `server/factions.js`, `server/server.js`, `client/assets/god-panel.js`, `client/assets/galaxy.js`, `client/assets/portrait-manifest.js`, `client/index.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/controls-check.mjs`, `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `tools/lane-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### Who is in this war
+
+A war-wide belligerent bar above the per-world cards, one button per faction.
+
+**A declaration that changes nothing is a flag, not an event.** `setCoalitionEntry` already made that mistake once: it declared an interstellar power into the war and left every world entirely Jade until somebody dialled ten of them by hand. Declaring here puts the faction on every uncomposed line, through `rosterFromReach` - which is also why the roster had to be the thing the field reads before this was worth building.
+
+**They share the ground Jade is not holding, not Jade's floor.** Jade opened this war and its floor is a rule; what the Coalition and everyone after it divide is the remainder. So a third power visibly costs the Coalition rather than quietly costing Jade:
+
+| | Jade | Coalition | Void |
+| --- | --- | --- | --- |
+| Coalition alone | 60% | 40% | - |
+| Void declared | 60% | 20% | 20% |
+
+**Composed lines are never rewritten.** `rosterOf` returns a hand-composed roster before the derivation runs, so a statement about one battlefield always beats a statement about the war. That is the same guarantee `jadeSet` gives on the scalar model, arriving through a different mechanism because a composed line is a stronger statement than a dial.
+
+The Coalition is **routed, not duplicated** - it has an entry gate, a `jadeSet` interaction and a floor in `effJade`, and a second field would be two authorities on whether it is at war. Jade is refused: it cannot be declared into its own war. The brood is refused: it is what is being fought, not a party that declares. Compose it onto a line in War Controls if that is what you want.
+
+`belligerents` is on the restore list, and was very nearly left off. Off it, a restart would withdraw every declared faction **while leaving the Coalition declared** - a war that half-forgot itself, which is harder to diagnose than one that forgot itself entirely.
+
+### Dev accounts pass both seals
+
+A seal is a rule for players and an obstacle for the person running the game. A GM has to stand in a galaxy before opening it to anyone - check the ground, set the line, watch the first engagement - and that was impossible without unsealing first, which is the one thing he is not ready to do.
+
+One predicate per seal, taking the actor, with an absent actor meaning **no** exception - so a caller that forgets to pass one keeps exactly the behaviour it had rather than quietly opening.
+
+**The banner asks the seal, not the permission.** `passageSealed` is new and separate from `passageOpen`, because a dev walking into a sealed Reach was being told it was OPEN - the one reader who most needs to know it is not. Same for the faction panel line and the colony funding note.
+
+Each server site decides explicitly: six Jade routes and three Reach routes pass the actor; the shared arbitrage board deliberately does not, because publishing sealed prices to everyone listening on that route is not the same act as a GM acting on a colony. `lane-check` now asserts the price board is the only actorless call.
+
+### The hive is not a costume
+
+`prawn1` sat in the ordinary selectable set, so any account could put on the face of the thing the entire war layer is about. The Reach reads as a standing threat because exactly one voice speaks with that face; a station full of them is a joke about the enemy rather than the enemy.
+
+Removed from the picker manifest and refused by `/api/portrait` **for everyone including devs** - two paths for one action is how a costume ends up on an account with no record of who put it there. A new dev-gated, admin-logged `/api/dev/portrait` assigns it.
+
+The PNG stays on disk and stays in `PORTRAIT_SET`, because the boot sweep clears any stored id that no longer names a file and deleting the art would strip the portrait off the account already wearing it.
+
+### The commander art is not in the repo
+
+`client/assets/portraits/` has exactly one Khai'sultull portrait: `prawn1.png`, the base drone. No commander variant exists anywhere in the tree, so what shipped is the mechanism.
+
+`hiveLordPortrait()` resolves to `prawn_commander` if the file exists and `prawn1` if not, and `/api/dev/portrait` accepts `portrait:'hive'` which resolves through it - so the caller need not know whether the art has landed, and nothing needs changing when it does.
+
+**To install:** drop `prawn_commander.png` into `client/assets/portraits/` and restart (`PORTRAIT_SET` is built from the directory at boot), then `POST /api/dev/portrait {player:'Zharkofin', portrait:'hive'}`.
+
+### Checks
+
+`controls-check` 193 to 215, including the share arithmetic driven through the real module rather than read.
+
+**Four checks were fixed rather than the code, and the pattern is worth naming.** Two pinned the restore list by its *last* entry, so appending `belligerents` broke them - a check that goes red when the list it guards is correctly extended argues against extending it. One grepped for `Khai'sultull` and matched the comment explaining why it is gone, for the fifth time in this codebase; it parses the manifest object now, which also tests the thing that actually matters. One text-evaluated `factions.js` with `export` stripped, turning a hoisted const into a temporal dead zone error; it imports the module now, which also means it drives exactly what the server imports.
+
+Suite green: controls 215, reach 1079, faction 3857, terrain 306, lane 58, depth 4101, plus city, lore, mathtest, mining, mobile, sudoku, tutorial and filter.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.8.0 (2026-08-25) - the advance was running backwards, and one control was talking only to the person pressing it
+
+**Server restart required.** Files touched: `server/reach.js`, `server/server.js`, `server/city.js` (comment), `client/assets/god-panel.js`, `client/assets/god-panel.css`, `tools/controls-check.mjs` (new), `client/assets/coalition-sprites.js` (build stamp), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### `REACH_WORLDS` is not a list of worlds, it is the route
+
+Index 0 is where the war starts, `frontAllowed` unlocks each entry off the one before it, and the panel renders in exactly this sequence. So an order that does not match the map is not cosmetic - it inverts the campaign.
+
+It was id order. The map was drawn later.
+
+Measured rather than eyeballed. The passage comes in at the right: the return gate sits at (990,250) and the nearest world is Vesskanoth at (880,300), 121 units away. Sahn'tekk - the world whose id still says `gate` - is at (120,120), 880 units away, the farthest body on the map.
+
+| | | |
+| --- | --- | --- |
+| ks_10 Vesskanoth | 121 | ks_06 Marokketh 604 |
+| ks_07 Ossuveth | 275 | ks_02 Ussaleth 708 |
+| ks_05 Zhaal'un | 350 | ks_04 Tessul 780 |
+| ks_09 Thennsur | 519 | ks_08 Nikkathaal 868 |
+| ks_03 Khai'ru | 528 | ks_gate_reach 880 |
+
+The advance was told to begin at the far side of the Reach and creep back toward the door it came through, and the panel duly refused to open Vesskanoth until Thennsur, most of a galaxy away, was forty percent taken.
+
+**The id `ks_gate_reach` is now a lie and it stays.** It is the primary key of a world in saved state, in the KV store and in `COLONY_META`; renaming it is a migration across three stores to fix a name nobody sees.
+
+`REACH_CITY_IDS` is deliberately **not** reordered. It is a Set, asked "is this a Reach world", so sequence means nothing there - and making it match would imply the two lists carry the same fact, leaving the next person to reorder the route with two lists to keep in step for no reason. The check asserts they hold the same members.
+
+### The route ships on the payload
+
+The panel took its sequence from object key order and its 40% threshold from a literal. Both are server facts, and a client copy is a second authority that silently disagrees the next time the route moves - which it just did, and which is why the panel was listing the advance backwards in the first place.
+
+The card also **states the unlock rule** rather than answering a press with an error naming two world ids, and shows each world's position on the advance.
+
+### The panels
+
+Every row carried its own inline `cssText`, so the label column was 52px here and 42px there and nothing lined up. That is why a card with eight controls read as a wall rather than as eight controls.
+
+A grid now: fixed 74px label column so every label starts at the same x, fixed right-aligned tabular value column so numbers can be compared down the card instead of read one at a time, and only the middle stretches - which is where the sliders are, and the one thing that should differ per row.
+
+Four sections - GROUND, THE WAR, WHAT IT COSTS, WHAT IS STANDING - because these cards mix four unrelated jobs and a GM scanning for the fund should not have to read past the posture toggle. Engagements are indented onto their own grid, since a flat run of zones under a flat run of worlds gave nothing to say where one world's ground stopped.
+
+Disabled controls say why on the card. A dead control with no reason attached is one a GM goes hunting for an explanation for.
+
+### The bug the new check earned itself on
+
+`reach_garrison` replied with `ws.send` to the socket that sent it and never broadcast.
+
+Garrison is what `forcesFor` reads to decide how hard the brood pushes back. So a GM raising it mid-session changed the fight for himself and for nobody else - and it went unnoticed for exactly the reason it is hard to catch: the panel it is pressed from is the one surface that *did* update. Every other `reach_*` write broadcasts. This was the single exception.
+
+### `tools/controls-check.mjs`
+
+193 assertions walking all fifteen controls end to end: the panel function exists, it sends the named command, the server has a branch for that exact string, the branch calls the `reach.js` export, `reach.js` exports it, and it **broadcasts** rather than echoing to the sender.
+
+Plus the other direction - no command on the wire without a sender, no inline `onclick` naming a function that does not exist - because a handler with no button is a feature that cannot be used, which is the same waste as a button with no handler and much harder to notice.
+
+It cannot click the button. It is a wiring check, not a behavioural one: it proves the wire is continuous, not that the current at the far end is the right shape. The model underneath is driven in `reach-check`. Both are needed and neither is the other.
+
+**Four of its own assertions were wrong and were fixed rather than the code.** It guessed the export name from the command name (`setHive`, which is `setControl`), guessed the import alias by convention (`reachFlipWorld`, which is `reachFlip`), sliced on a single-space literal against column-aligned assignments, and looked for `reach_disarm` only in `god-panel.js` when it is sent by an inline `onclick` in `index.html`. A check that dictates naming, or reports formatting as breakage, is worse than no check: the pressure is to change the code to suit it.
+
+Suite green.
+
+**Nothing has shipped since v1.3.9.x**, so the `mining_bank_delta` faucet is very likely open in production - and this is the patch before a VPS deploy.
+
+---
+
+## v1.6.7.1 (2026-08-25) - sealed means sealed, quiet means quiet
+
+**Server restart required.** Files touched: `server/reach.js`, `client/assets/galaxy.js`, `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/reach-check.mjs`, `tools/lane-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+Three holes, all of them the same shape: the flag exists and nothing consults it.
+
+### The seal drew a banner and stopped nothing
+
+`passageOpen` was consulted in three places - the portal sprite, the lane to the gate, and a banner reading PASSAGE SEALED - and in none of them by `swapGalaxy`, which is the function that actually moves the player. So the map said sealed with the player standing on it, and every route in walked straight through: a stale portal click, the legacy no-argument toggle, all of it.
+
+Refused in `swapGalaxy` rather than at each caller, because the callers are the thing that keeps growing. The Coalition stays always reachable - a player who cannot get anywhere is worse than one who got somewhere he should not have.
+
+**And it ejects.** Sealing a passage while somebody is inside would otherwise strand them with no lane and no portal to leave by, which is a worse failure than the one being fixed. Checked against the galaxy the player is looking at rather than the one being sealed, so a future third galaxy cannot slip through.
+
+### No zone is born live any more
+
+`blankZones` seeded `live: i === 0 ? 1 : 0`. The first zone of every world came up live at seed.
+
+So even after v1.6.7.0 stopped the gate world opening its own front, ten worlds each had a running engagement underneath - because `live` was never a consequence of the war having started. It was a property the ground was born with. That is the Jade-versus-brood fight you could watch on a war nobody had declared.
+
+**The front is what makes ground live now.** Opening lights the first zone that is not already finished; closing quiets every zone on the world. `cleared` - the banked progress - is untouched by both, so a front closed and reopened resumes rather than starting the world again.
+
+`setWaves` had the same hole through a different command: raising the wave count re-opened cleared ground whether or not a front stood over it. Gated on `w.front` too.
+
+### A cursor is a hint; the handler is the gate
+
+The engagement row set its cursor from `z.live` and then bound the click handler unconditionally, so a row labelled QUIET opened a battle anyway. The other watch entry point already did this correctly, which is how it survived.
+
+`reachWatch` now also refuses a world with no front. That is a stronger statement than "no live zone" and it is the one the GM actually makes, so a future path that lights a zone without opening a front cannot put a battle on screen behind his back.
+
+### Checks
+
+`reach-check` 1051 to 1068, with the fresh seed **driven**: `blankState` lifted and run, asserting zero fronts, zero live zones, every world quiet and the Coalition undeclared all at once. That conjunction is the property; three separate literals that each look right are not.
+
+One assertion in `lane-check` had to be fixed rather than the code. It sliced a fixed 1200 characters from `window._setWormhole` and went red when `_setPassage` grew the eject branch - with the calls it wanted still present, three lines further down. A window measured in bytes fails on any unrelated edit above the thing it wants, and the pressure is then to widen the number until it stops complaining. Brace matched to the end of the function now.
+
+Suite green.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.7.0 (2026-08-25) - the Reach takes the banner, not the wire, and a fresh Reach is quiet
+
+**Server restart required.** Files touched: `server/server.js`, `server/reach.js`, `client/assets/core.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The prawn war was competing with market news as if it were market news
+
+The feed is a wire: rotations, fills, cargo, blockades, dozens of lines an hour, and a headline's whole life is the few seconds before the next one pushes it up. A Khai'sultull transmission or a front being overrun scrolled past at the same weight as a fund buying two hundred shares, and then it was gone.
+
+**Not one of the eight call sites changed.** They already carried `cat:'reach'`, which is the only reason this is a seam and not a rewrite.
+
+### Two layers, not one
+
+The GM's own breaking banner is a deliberate act with no timer on it, and a war that silently ate it would make the panel unreliable in exactly the moment a GM is leaning on it.
+
+So a Reach line sits on top for 45 seconds and then stands down to whatever the GM had set, untouched underneath. Set a banner during a firefight and you get it back when the shooting stops.
+
+**Last one wins rather than a queue.** A queue would hold a line about a push window behind four others, and a banner is a statement about *now*.
+
+Precedence lives in one function so the init payload, the broadcast and the stand-down cannot disagree - the sort of thing that only shows up when both layers happen to be set. The stand-down is scheduled rather than computed at read time, because the banner is pushed: nobody asks for it, so nothing would notice the expiry until the next unrelated broadcast.
+
+### The array is the archive and the feed is not
+
+A Reach line is still filed, so `/state` and the snapshot stay complete and a front that fell is still findable. But `wireHeadlines` filters `cat:'reach'` out of both places a feed is handed out.
+
+Without that, a player joining an hour later gets a war headline pushed into a market scroll - the same bug, deferred to reconnect. Sliced after the filter, not before, or a burst of Reach traffic empties the thirty a new client gets.
+
+Client side: same element, same geometry, same tone colours. Only what it calls itself. A Khai'sultull transmission carrying the word BREAKING reads as a market event, which is the confusion that put these lines in the wire to begin with. Falls through to the old label on a server that does not send `src`.
+
+### A fresh Reach is quiet
+
+`blankState` opened the gate world at seed, on the reasoning that ten quiet worlds read as a war that has not started.
+
+The causality was backwards. That reading is *correct* when the war has not started, and what was actually wrong is that a server coming up for the first time was already fighting somebody - there was no moment left for a GM to declare anything.
+
+Every world now stays at `front 0` / `status quiet`, and the gate opens through `reach_front` like every other front, so the first fight is a decision on the record rather than a side effect of seeding. `frontAllowed` already returns true at index 0, so starting the war needs no override.
+
+**Scoped to a fresh seed.** `blankState` runs when there is no saved Reach; an existing save keeps whatever fronts it has, because rewriting live war state to enforce a new default is a migration and this is not one. A GM who wants an existing Reach quiet closes its fronts from the panel.
+
+### Checks
+
+`reach-check` 1031 to 1051. One assertion asserted the opposite seed behaviour and is **inverted with its reasoning recorded**, not deleted.
+
+The routing is driven rather than matched: `pushHeadline` and its helpers are lifted and run, confirming a Reach line never broadcasts as news, stays out of the wire, stays in the archive, and outranks the GM banner while live.
+
+Suite green.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.6.1 (2026-08-25) - humans against humans loaded wireframes
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### `sprAnim` named the animation off `u.side`
+
+Third time this exact mistake has surfaced. The first two fixes went to the class table (`awayClass`) and the sprite gate, while this - the thing that actually names the animation - was left asking `u.side === -1`.
+
+Put a polity on the away line and every one of its soldiers arrives at `sprAnim` with cls `inf`, `enf` or `eng`, gets routed into `broodAnim` because of its **side**, finds no `BROOD_SPRITE` entry for a rifleman, and returns null. `queueSprite` reports failure and the unit drops to the wireframe path.
+
+Which sheet pack a unit draws from is its faction's question. It is asked that way in all three places now: the class table, the sprite gate, and the animation picker.
+
+### And the wireframe path had exactly two faction colours
+
+`pInf`/`pTank`/`pHeli`/`pKnife` for the Coalition, `jInf`/`jTank`/`jHeli`/`jKnife` for Jade, selected by `const jd = u.fac === 'jade'` - a two-way switch on a six-way fact.
+
+So a Void rifleman that fell to wireframe drew in Coalition blue. That is the blue stick figures in the screenshot, and it is precisely the "same unit changes faction when it gets far enough away" failure the `FAC` comment warns about, arriving through the fallback path instead of through the tables.
+
+Both halves of the picture: one root cause, and one consequence of it that would have outlived the fix.
+
+`pathsFor(fac)` allocates a set on demand, so a field with one faction a side pays for two sets and not six, and the stroke loop walks what was actually allocated rather than a hand-written list of which factions exist - two named blocks meant a third faction on the field drew in the first one's colour.
+
+The named Coalition set is deleted rather than kept. A named set for one faction sitting beside a per-faction allocator is a second authority on where that faction's geometry goes. What remains is genuinely not per faction: brood classes, which have one faction by definition, and the dead, who have none that matters at forty percent alpha.
+
+### Checks
+
+`reach-check` 1027 to 1031. Two assertions pinned the two-faction path layout and are **updated, not deleted**: the property they defend - a path strokes in one colour, so a faction needs its own - is unchanged, and now holds for six instead of two.
+
+A new assertion pins the animation picker to the faction, so this cannot come back a fourth time.
+
+Suite green.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.6.0 (2026-08-25) - the terrain, which was three silent fallbacks stacked
+
+Hard refresh, no server restart. Files touched: `client/battle-test.html`, `tools/bench-manifests.mjs` (new), `client/assets/space/bench-manifests.js` (new, generated), `client/assets/coalition-sprites.js` (build stamp), `tools/faction-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+Reported five times. I fixed something else four of those times. The fault was three separate silent fallbacks, none of which errors and all of which draw something plausible.
+
+### The bench never loaded the planet tables
+
+This one was wrong over http as well as off the disk.
+
+`paletteFor()` reads `window.PLANET_PALETTE` and `window.COLONY_PLANET`; `terrainKey()` reads `window.REACH_TERRAIN`. All three come out of `planet-palette.js` and `galaxy.js`, and the bench loaded neither. Every lookup missed and the field fell through to `TERRAIN_COL` - the legacy hand-written table whose own comment records that four of ten Reach worlds fought on a colour their planet is not.
+
+Measured, before and after:
+
+| world | key before | rock before | key after | rock after |
+| --- | --- | --- | --- | --- |
+| ks_02 | dust | 150,124,86 | dust | 255,138,76 |
+| ks_04 | dust | 150,124,86 | veins | 249,137,99 |
+| ks_05 | dust | 150,124,86 | rift | 91,178,157 |
+| ks_07 | dust | 150,124,86 | ocean | 41,183,255 |
+| ks_08 | dust | 150,124,86 | ice | 156,157,171 |
+
+**All ten worlds resolved to one tan.**
+
+**And the terrain key was wrong, which is worse than the colour.** The key decides what cover is *shaped* like. Collapsed to `dust`, ks_04 generated boulders and craters where the game generates seams, ks_05 instead of chasms, ks_07 instead of pressure terraces. Seven of ten worlds were generating the wrong cover geometry - so every judgement made on this bench about bounding, cover claiming or collision was made on ground the game does not have.
+
+### No rock meshes, no brood geometry
+
+`loadMeshes()` fetches `nature/meshes.json`; the catch sets `_meshPend = 2` with the comment "wireframe keeps the field". `loadBrood()` fetches `brood/geometry.json`; same shape.
+
+**`fetch` is blocked on `file://`.** So every rock, ridge and block drew as an untextured prism - the flat tan slabs - and every creature fell to wireframe. Those are the wireframe enemies.
+
+Both modules already carried an override for exactly this case: `FM_NATURE_SRC` and `FM_BROOD_GEOM` take an object and skip the fetch.
+
+### The fix
+
+`tools/bench-manifests.mjs` generates `client/assets/space/bench-manifests.js`, carrying four things: `COLONY_PLANET` and `REACH_TERRAIN` lifted by brace matching from `galaxy.js` (7215 lines and a map renderer, none of which belongs on this page), plus the two manifests as objects.
+
+Generated, not hand-copied, and asserted current. Brood geometry has been regenerated twice already, and a bench holding a stale frame index would strobe or walk into the next creature's attack row rather than fail visibly.
+
+### The banner I shipped last patch was wrong
+
+It said "terrain and pricing are all unaffected by this". The same origin rules that block `getImageData` block `fetch`; terrain and the brood are hit *harder* by `file://` than the uniforms are. It was telling a reader the opposite of what they were looking at.
+
+A banner that names what is fine has to be right about it, or it is worse than no banner.
+
+Three new status rows - `PLANET PALETTE`, `ROCK MESHES`, `BROOD SHEETS` - one per fallback, so the next one names itself instead of being reported five times as "the terrain is wrong".
+
+### Checks
+
+`faction-check` 3783 to 3857, including the palette driven through the real `paletteFor` and `terrainKey` against the bench's globals: ten worlds, six distinct rock colours, five terrain keys, none left on the fallback tan.
+
+One assertion had to be fixed rather than the code, for the fourth time in this file: it compared filenames with `indexOf` and matched the header comment sitting above every script tag, reporting a loading order that was not the loading order. Compared as script tags now.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.5.4 (2026-08-25) - the taint banner names the actual address
+
+Hard refresh, no server restart. Files touched: `client/battle-test.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/faction-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+v1.6.5.3 shipped the banner saying `http://localhost:<port>/battle-test.html`. That is a thing to go and look up, which is one step more than most people take when a banner is already telling them something is broken.
+
+`server.js` defaults to `PORT 7777` and mounts `client/` at the root, so the address is knowable. It is written out now, with the launcher to run first.
+
+**Mirrored, not trusted.** `faction-check` asserts the number in the banner against the `const` in `server.js`, and asserts the static mount is still at `/` so the path resolves. Same discipline the pricing block gets against `reach.js`: two files that have to agree, with nothing but attention holding them together otherwise.
+
+The banner also states plainly which readouts are unaffected - geometry, AI counters, roster, terrain and pricing - because a banner that overstates gets dismissed, and everything on that list is genuinely accurate under the taint.
+
+`faction-check` 3779 to 3783. Suite green.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.5.3 (2026-08-25) - the bench was not outdated, it was running from a file:// URL
+
+Hard refresh, no server restart. Files touched: `client/battle-test.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/faction-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+Reported outdated three times. The screenshot settled it: turquoise Hounds and five identical uniforms in the parade, which is exactly what the game looked like before the faction pass landed, and is why it kept reading as stale.
+
+### One root cause, whole picture
+
+`tinted()` reads the sheet back with `getImageData` to remap skin, optics and accents by exact palette value. A canvas holding an image loaded from `file://` is tainted by the browser's origin rules, `getImageData` throws `SecurityError`, and the catch returns the raw image.
+
+That catch is **correct for the game** - a tint that throws must not lose the figure - and it is indistinguishable on screen from a build with no factions in it.
+
+`tintedPattern`'s brightness probe throws for the same reason and grades the ground blind, which is the washed-out flat terrain in the same screenshot. Turquoise armour, one uniform for five polities, no visors, no skin tones, flat ground: all of it, one cause.
+
+**There is no client-side fix.** `fetch` and `XHR` are blocked on `file://` in Chrome as well, so the pixels cannot be reached by any route. The client already serves `client/`, so the answer is to open `http://localhost:<port>/battle-test.html` rather than the file on disk.
+
+What *is* fixable is the silence.
+
+### Probed functionally, not by sniffing the protocol
+
+`location.protocol === 'file:'` would be a proxy for the thing that matters, and wrong in both directions: a browser with local file access enabled recolours fine from `file://`, and a misconfigured host can taint over http.
+
+So the bench asks the question directly. `tinted()` returns a new canvas per faction when the remap ran, and the same underlying `<img>` for every faction when it threw. Two factions whose kit could not look more different handing back one identical object is the failure, stated exactly.
+
+Void and Guild are the probe pair because neither can take `tinted()`'s early "nothing to do" return: both carry a tint, a skin policy and an optic.
+
+### A banner, not a status row
+
+This is the third silent degradation in this bench in three patches:
+
+| patch | failure | what it rendered |
+| --- | --- | --- |
+| 1.6.5.1 | missing script tag | three factions instead of six |
+| 1.6.5.2 | mis-spelled hook key | a dash, reading as "nothing happening" |
+| 1.6.5.3 | tainted canvas | the pre-faction build |
+
+All three rendered something plausible instead of an error, and the first two were missed because the warning was a small row in a scrolling panel. This one shouts across the top of the page, names the fix rather than only the fault, and **scopes the damage honestly**: geometry, AI counters, roster and pricing are all unaffected by the taint, and a banner that overstates gets dismissed.
+
+### Checks
+
+`faction-check` 3763 to 3779.
+
+One assertion had to be fixed rather than the code, for the third time in this file: it scanned for `location.protocol` and matched the comment explaining why it is not used. A check that cannot tell a branch from a description of one forces the history out of the file to go green. Comments are stripped, and a second assertion now requires the explanation to stay.
+
+Suite green: 4101 depth, 1027 reach, 3779 faction, 305 terrain, plus city, lane, lore, mathtest, mining, mobile, sudoku, tutorial.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.5.2 (2026-08-25) - the AI half of the bench, which the last patch left out
+
+Hard refresh, no server restart. Files touched: `client/battle-test.html`, `client/assets/reach-battle.js` (seven new hooks, pause and step in the loop), `client/assets/coalition-sprites.js` (build stamp), `tools/faction-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+v1.6.5.1 fixed the bench's faction rendering and shipped it as though the job were done. Every instrument for judging *behaviour* was still missing.
+
+### The lever it never had
+
+Tempo, pause and single step.
+
+Bounding overwatch, cover claiming, suppression and target acquisition all resolve faster than a person can follow at the shipped 0.24 tempo. What gets reported instead is an impression of the aggregate - "the line looks static", "men turn around at random" - and those impressions have been wrong here in both directions already. Heading churn was measured and turned out not to separate two implementations at all, because most units are bounding and their facing follows their movement either way.
+
+At a fifth speed a bound is a man walking to a rock, and either he arrives on his own side of it or he does not.
+
+**The camera keeps running while the sim is held**, deliberately. A frozen field you cannot orbit is a screenshot; orbiting a held exchange is most of the value. Nothing in the client can set the hold flag - `reachWatch` never touches it and the god panel has no path to it - so a shipped build runs the branch with a flag that is always zero.
+
+### Seven counters that were never readable
+
+`stepField` writes `bound`, `cover`, `supp`, `melee`, `air`, `shield` and `kills` every frame. Exactly one of them reached a human: `coverCount`, through the fps line, behind a debug flag.
+
+`bound` is the one that matters. The comment on that block claims roughly a third of the line is moving at any moment; measured, it was eleven percent, and the fix was tuning a phase window against a number nobody could see.
+
+`aimQuality`, `states`, `nades`, `built` and `probe` were all already there and none was shown. `aimQuality` is what the "men turn around at random" complaint is actually about: whether a man is shooting at the enemy who is genuinely nearest. `states` is per class, because an aggregate hides the case that matters - a class that never bounds and one that never holds average out to a line that looks fine.
+
+### New hooks
+
+`tempo(v)`, `pause(on)`, `step(n)`, `field()`, `slots()`, `terrain()`, `forceAwayClass(cls)`.
+
+`slots()` is cover supply against demand, the pressure the whole bounding model sits under: sixty positions contested by two hundred and thirty units is what collapsed the line onto a few rocks and is why `terCount` went up.
+
+`terrain()` reports features by kind and how many of them block, which is how you check the claim that collision is keyed on kind and therefore covers all seven terrains, rather than trusting it.
+
+`forceAwayClass` is the mirror of `forceCoalClass`, which only ever had the home side. Fine while the away side was always creatures; not fine now.
+
+### Two bugs in the bench code itself
+
+Both caught by reading rather than by running.
+
+The AI panel guessed `exactlyNearest` against a hook returning `exactNearest`, with a fallback chain - so it would have shown a dash forever and read as "nothing is happening" rather than as a typo. That is precisely the silent-miss failure this bench exists to catch.
+
+`kills` is cumulative and sits beside six per-frame counters. Reading it as a rate would have shown a number that only ever climbs and called it attrition. It is differenced.
+
+### Checks
+
+`faction-check` 3718 to 3763. It now asserts every key the bench reads against the hook's own return literal - the same class of check as the pricing mirror against the server - plus a duplicate-key check on the debug object. Two keys of the same name in one object literal is not an error in any mode; the later one silently replaces the earlier, and that killed a richer `counts()` for six versions.
+
+One assertion had to be fixed rather than the code: it scanned for `f.` and matched the fob local three functions away, demanding that `field()` return `type` and `length`. A check that cannot tell two scopes apart fails on correct code, which is the worst kind, because the pressure is then to delete it.
+
+Suite green: 4101 depth, 1027 reach, 3763 faction, 305 terrain, plus city, lane, lore, mathtest, mining, mobile, sudoku, tutorial.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.5.1 (2026-08-25) - the bench was rendering the fallback, not the game
+
+Hard refresh, no server restart. Files touched: `client/battle-test.html` (rebuilt), `client/assets/reach-battle.js` (two inspection hooks), `client/assets/coalition-sprites.js` (build stamp), `tools/faction-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The bug was a missing script tag
+
+`battle-test.html` never loaded `assets/factions.js`. Both consumers of the registry hold a fallback for the frame before it arrives - `FAC_FALLBACK` in the battlefield, the `fac === 'coal'` path in `skinOf` - so the bench drew **three factions instead of six**, the pre-registry skin path, and **no optic or accent remap at all**.
+
+It looked entirely fine. That is the point: a missing script tag is a quieter version of the bench embedding its own copy of the renderer, which is the one thing that file's header has warned against since it shipped. The registry now has a status row, in red, saying `FALLBACK ONLY` when it is absent.
+
+### The roster editor
+
+Weight boxes per faction per side, written in the server's wire shape and nothing else: normalised and ordered heaviest first, the way `rosterWire` does it. The bench must not teach a convention the God panel does not use.
+
+**No bench-only entry point into the faction model.** A composed line is written to `world.roster` and picked up by `applyWorks` on the renderer's own two second tick, so it turns over as men die rather than teleporting. There is no path into the faction model here that the game does not also take.
+
+Presets: `REACH` (all-Jade against the brood, the war as it stands), `COAL+JADE`, `VOID v GUILD`, `3-WAY HOME`, `SYND v VOID`.
+
+`VOID v GUILD` is the regression test a human can see. Two polities, no brood anywhere. Before `awayClass` routed on faction, every Guild soldier on that away line would have been a crawling horror.
+
+### The parade
+
+One figure per faction at 2.6x, drawn through `FMTroops.drawFrame` - the same call the muster strip and the battlefield make, so a faction that looks wrong here looks wrong in the game.
+
+A recolour cannot be judged at field size. A soldier is twenty pixels; the black armour and the brown armour only separate at 4x, and the optic is two pixels.
+
+The shielded enforcer is the figure on purpose: he is the only class carrying **both** accent channels - the faceplate the optic remap burns and the shield panel the accent remap marks - so one silhouette shows whether either landed. The engineer alternates in for the wrist device. Skin index is pinned to 0 so it is a uniform comparison and not a skin one.
+
+### Two hooks for two invisible bugs
+
+`_fmReachDebug.depth()` reports the front and the deepest and shallowest live unit per side, plus a count of anything off the field. A tank that reversed off the map is off the map, which is exactly why nobody saw it for as long as they did.
+
+`_fmReachDebug.stuck()` counts live units standing inside a solid hull. A body half inside a rock looks like a body beside a rock.
+
+Both should read zero. Drag `HIVE HOLDS` to 95 and then to 5; `OFF FIELD` must stay 0 at both ends.
+
+### The field readout was lying by omission
+
+Its label table named nine classes. `broodClass` alone returns eight, four of which were missing - so a field full of brutes and leapers read as `no contact` in the one readout that exists to say what is on it. All fourteen are named now, with a per-faction mix beside them, which is the readout the roster editor is useless without: setting a line is a request, and watching the numbers cross is watching reinforcement honour it.
+
+### Preserved verbatim
+
+The pricing mirror block. `reach-check` lifts it out of the HTML and evaluates it against the server, and it caught a two-release drift once already.
+
+`faction-check` 3683 to 3718. Suite green: 4101 depth, 1027 reach, 3718 faction, 305 terrain, plus city, lane, lore, mathtest, mining, mobile, sudoku, tutorial.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.5.0 (2026-08-25) - War Controls: any faction, any battlefield, either side
+
+**Server restart required.** Files touched: `server/reach.js`, `server/server.js`, `client/assets/reach-battle.js`, `client/assets/god-panel.js`, `client/index.html`, `client/assets/coalition-sprites.js` (build stamp), `tools/faction-check.mjs`, `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+v1.6.4.0 shipped the roster primitive with nothing reading it and no tab, deliberately. This is the other half: the field reads a roster, so the buttons move men.
+
+### Nothing was migrated, and presence is the switch
+
+`w.jade`, `w.jadeSet` and `w.jadeFwd` are persisted state on a database that has not seen a deploy in seventy versions. Rewriting persisted state is the single most expensive kind of change to get wrong here: a bad migration is not a bug you patch, it is a restore from the cron backup.
+
+So the switch is presence, which is the pattern `jadeSet` already established in that file:
+
+| state | behaviour |
+| --- | --- |
+| no `w.roster` | a Reach world. The roster is derived on read. Nothing stored, every existing save identical. |
+| `w.roster` set | a GM composed a line. It is the authority, and `effJade` derives *from* it. |
+
+One authority per world either way, never two. **Revert deletes the roster and the derived answer comes back exactly**, because nothing was ever overwritten to produce it. That is what makes composing a line safe to experiment with on a live stream.
+
+### `side === -1` meant brood by coincidence
+
+This was the deepest thing in the pass. The away side had always been the brood, so the class table, the sprite gate and the animation router all asked `side === -1` and got the right answer by accident of there never having been anything else on that half of the field.
+
+Put the Syndicate on the away line and every one of their soldiers would have been a crawling horror.
+
+`awayClass` routes on the faction now. A brood faction draws creatures; a polity draws infantry - riflemen, shield troopers and the occasional engineer, because there is no funding on the away side and nobody is buying the enemy gunships. That is what a garrison is.
+
+**Faction is drawn before class at both spawn sites.** The class table depends on it, so the other order gives a Syndicate soldier a crawling horror's class and then a uniform, which is the same bug arriving one line later. The sprite gate names the faction too, rather than the side.
+
+### Posture generalised
+
+The forward offset read `u.fac === 'jade'` on one branch and `jadeFrac > 0` on the other. Two spellings of the same Jade case, and neither survives a line with no Jade on it.
+
+The roster names the forward faction, so the question is simply whether this man is it. Zero when a side has one faction, because a posture is a relationship between two parts of a line and a line with one part has none.
+
+### The tab
+
+Three commands: `war_roster` (world, side, entries), `war_roster_clear`, `war_forward`. Entries are sanitised at the socket boundary as well as inside `setRoster`, because that is the untrusted edge and `setRoster` is also reachable from code that has already been trusted. All three broadcast, because every open battlefield restocks its line from the mix as men die.
+
+**An empty side is refused.** A battlefield with nobody on one half is not a state the renderer has a sensible reading of: the band clamp would have a front with no army behind it and reinforcement would restock from a mix with no members.
+
+**The brood is not special-cased out of the home side.** A GM can fight alongside the Khai'sultull. The layer's own intended end state has the hive lord keeping a third to two thirds of its worlds and persisting as a standing power, and a power that persists is one that can be allied with. Refusing it in `setRoster` would be that file deciding a story question that belongs to the GM.
+
+**Weights, not percentages.** Three and one means three quarters and one quarter; the server normalises on read and never on write, so a GM never has to think about whether the numbers add up to anything. Faction labels wear their own line colour in the panel, because composing a line *is* choosing what the field will look like, and naming the colours in words somewhere else is how a panel and a battlefield end up disagreeing.
+
+**A separate tab from Prawn War, deliberately.** The Reach is one war with a named enemy and a story; this is the general machinery. The moment players fight each other, the Reach becomes one thing this tab can express rather than the frame the whole layer sits in, and filing it under the shrimp would have made the faction war a feature of the bug war forever.
+
+Both tabs render from one payload. A second fetch is a second thing that can be stale by a different amount than the tab beside it.
+
+### Checks
+
+`faction-check` 3660 to 3683, asserting every link in the chain end to end - button, pane, command, handler, model, field - because "a control wired to nothing" is the specific failure this tab was held back a patch to avoid.
+
+`reach-check` and `reach-terrain` both carried assertions pinning the old two-faction spellings. **Updated, not deleted:** the properties they defend are unchanged.
+
+Suite green: 4101 depth, 1027 reach, 3683 faction, 305 terrain, plus city, lane, lore, mathtest, mining, mobile, sudoku, tutorial.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.4.0 (2026-08-25) - six factions instead of two, and a roster primitive underneath
+
+No server restart. `server/factions.js` is new and is not imported by anything yet. Files touched: `client/assets/factions.js` (new), `server/factions.js` (new), `tools/faction-check.mjs` (new), `client/assets/coalition-sprites.js`, `client/assets/reach-battle.js`, `client/index.html`, `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### A faction lived in five places
+
+`FAC_TINT`, `HULL_GRADE`, `AUG_RED` and `SKIN_TONES` in the sprite layer; `FAC` in the battlefield; plus four separate `fac === 'coal'` tests deciding whether a soldier gets a skin tone, whether his optics burn, whether his eye is painted, and whether his tank keeps its tracks.
+
+Nothing checked that any of them agreed, and the failure mode is specific rather than theoretical. Infantry draw as sprites near the camera and as wireframe past the size cutoff, so a tint table and a colour table that disagree make **the same soldier change faction as he walks away from you**.
+
+The battlefield already said the right thing about this in a comment and then did not do it: *"side stops meaning Coalition and starts meaning belligerent A and B."* That was true of `side`. It was not true of anything else.
+
+One row per faction now. The four equality tests became fields, because each was really asking a question a faction should answer about itself.
+
+| faction | armour | skin | optic | accent |
+| --- | --- | --- | --- | --- |
+| Jade Circuit | as drawn | one nation, one tone | none | none |
+| Coalition | blue | full range | red, helmeted classes only | none |
+| Void Collective | black | steel casing | purple | purple |
+| Syndicate | brown | full range | as drawn | none |
+| Merchant Guild | desert camo | darker half of the range | blue | none |
+
+### The engineer's blue pixels are on his wrist, not his chest
+
+The shipped comment says otherwise, and it reasoned from the row number alone: *"the figure spans rows 16 to 47, his face is at rows 21-23, and the blue sits at rows 30-32 - mid-torso."*
+
+The rows are right and the conclusion does not follow, because it never looked at the column. On `engineer_idle` cell 0 the figure's torso at row 30 spans x 9 to 20; the blue sits at x 30 to 32, at the extreme forward edge of the silhouette, on the arm he is holding out. It is a gauntlet device. The torso at that row has no blue on it at all.
+
+This is not pedantry about a comment. That reading is why `paintsEye` exists: the first pass recoloured this blue, got "a man with a red light on his sternum", concluded the pixels could not be an optic, and went off and built a per-cell face-finding routine instead. The eye routine works and stays. The premise underneath it is corrected, and the wrist device is now the secondary channel this pass needed.
+
+### Two accent channels, because they are two different sentences
+
+**Optic** is what is behind the glass, which is a statement about whether these soldiers are people. **Accent** is equipment marking, which is a statement about whose kit it is. Measured sources:
+
+- `(194,134,42)`/`(143,96,26)` enforcer faceplate, rows 20-24, over the eyes. He is fully helmeted, so this is his face.
+- `(128,157,160)`/`(86,125,121)` assault goggles, rows 20-21, directly above his skin. **Nothing has ever touched these.**
+- `(100,138,194)`/`(61,96,147)` engineer wrist device; also the unshielded enforcer's pauldron.
+- `(51,81,111)`/`(70,98,103)` the shield panel, present only on `enforcer_shielded_*` sheets, which is what identifies it.
+
+`opticOn: 'augmented'` is what preserves the shipped Coalition exactly. The assault trooper has a face, so his goggles are not a place to make a claim about whether he is a person. A faction of machines has no such distinction and takes `all`.
+
+### Two bugs the driven check caught that a code read did not
+
+Both were in tables that described themselves correctly.
+
+**The Void Collective was dark and also flat.** The first grade, `0.44/0.46/0.55` with a lift of `0.17`, produced a luminance spread of 23 against Jade's 61 when driven against the pack's six real uniform colours. A heavy lift on a small multiplier compresses the range instead of moving it, and a figure whose shading spans 23 values has no readable limbs at twenty pixels; he is a silhouette that happens to be dark grey. Dark is a multiplier problem and flat is a lift problem, and lift was being asked to solve both. Now `0.66/0.68/0.84` with a lift of `0.04`: spread back to 40, darkest uniform value at 25.
+
+**The Guild's camo break was outside the art.** `at: 96` reads like a sensible midpoint of 0-255. The pack's uniform colours span luminance 28 to 89, so every uniform pixel fell below 96, took the split grade, and the base grade never ran once. The result was a flat brown that the table called camouflage. Moved to 58, which sits between the coat's shadow cluster (28-42) and its lit cluster (67-89), where the art's own value structure already has a break.
+
+### The roster primitive
+
+`server/factions.js` defines the shape the player-versus-player war needs, and reproduces the current one exactly before anything moves onto it.
+
+**A line is a list of shares, not a number.** `w.jade = 0.4` says "40% of the friendly line is Jade and by elimination the rest is the Coalition", which only parses because there are exactly two candidates and the reader knows which. A list says who is there and how much, for any number of parties including one.
+
+**Side stays +1 and -1 and stays arithmetic.** That is not a style preference: `u.side` is used as a number in the damage path (`-p.side` selects who a blast hurts) and in two dozen band expressions. A third value there breaks combat in ways that do not show up until somebody watches a specific blast. So a roster has exactly two sides forever, and a three-way war is a temporary alignment on those two rather than a third value of `side`.
+
+`rosterFromReach` is asserted against the lifted live `effJade` across its whole input range, including the `JADE_MIN` floor - which the check caught being dropped, and which is applied in the bridge rather than the primitive because "Jade never leaves its own war" is a fact about the Khai'sultull war and not about rosters.
+
+### Nothing is migrated onto it yet, and there is no War Controls tab yet
+
+Deliberately. `effJade`, `jade_commit` and `coalition_enter` are untouched and remain the live path for the Reach. The god panel's own Reach comment names the reason: *"the war layer is not in the build yet, and a switch wired to nothing rots untested. That is exactly how the trial gate sat broken across 120 routes for four patches while static checks passed."*
+
+A War Controls tab that can put any faction on any battlefield is the next patch, once a roster is what the field actually reads.
+
+### Checks
+
+`tools/faction-check.mjs`, 3660 assertions, including the grade applied to the pack's real uniform colours and a pairwise test that no two factions wear the same uniform at distance.
+
+Fourteen assertions in `reach-check` and `reach-terrain` pinned the old table shapes. They are **updated, not deleted**: the properties they defend are unchanged. `reach-terrain` 300 to 305.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.3.1 (2026-08-25) - armour reversing off the map, and ground that was scenery to the pathing
+
+No server change. No restart required. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js` (build stamp), `tools/reach-depth-check.mjs` (new), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+Two reports, one patch. They are not related to each other, and the first one is not a sprite fault this time.
+
+### The tanks were reversing out of the world, and the default was not the problem
+
+v1.6.3.0 fixed a mirrored Hound. This is the geometry underneath it, and it is a different fault with the same symptom, which is why it survived that patch.
+
+`CL.front` is `z.hive/100` and nothing else. `server/reach.js` seeds every zone at `hive:100` and relights a cleared one at `hive:100`, so the first thing anyone ever sees on a new front is `front = 0.95`, the top of the clamp. Not an edge case. The default state of every zone that has just opened.
+
+Every depth offset in `stepField` was a flat constant added to `front`:
+
+| offset | at front 0.95 |
+| --- | --- |
+| tank standoff | 1.15 |
+| tank standoff, struck | 1.25 |
+| engineer band ceiling `+0.40+fwd` | 1.41 |
+| infantry band ceiling `+0.18` | 1.13 |
+
+`wz(y) = (1-y)*FIELD_D` maps anything past 1 to negative z: behind our own baseline, on top of the camera. Nothing clamped it.
+
+So the tank did not disappear. It drove out of the world and kept fighting. Still alive, still in `units`, still acquiring, still firing, still counted in the reinforcement mix against funding a player had just committed. The armour was bought and then parked off screen.
+
+The mirror case is equally real and only looks rarer because a zone has to be nearly won to reach it: at `front = 0.05` a spitter's band floor is `-0.17`, and the brood walks off the far edge.
+
+**Pinning the line to midfield would have hidden this rather than fixed it.** `front` is not a starting position; it is a pure function of server control, which is the one property the camp code exists to preserve (a client that decides where the line sits is a second authority on ground state). A midfield default would have stopped the picture reporting who holds the zone, and would have left the same units leaving the field from the other edge as soon as a push landed.
+
+**Scaled, not clamped.** Offsets are multiplied by the room that actually exists behind the line. A clamp puts the engineer, the tank and the rifleman all on 0.98 and the line loses its layering exactly when it is most pinned; scaling collapses them proportionally, so an army with its back against the baseline reads as stacked up with no depth. That is what pinned looks like. A hard rail at `Y_LO`/`Y_HI` sits underneath, so the next depth-offset mistake is a unit pressed against the baseline rather than one driving off the map still shooting.
+
+### Ground is solid now, on all seven terrains
+
+The cover half of terrain has worked for a long time: `genTerrain` hangs two firing positions per metre of frontage off every feature, `pickFeature` walks a fireteam to one weighted toward its objective, `COVER_STOP` eats frontal fire at a claimed slot. None of that was rebuilt.
+
+What was missing is that a unit which had not claimed a slot walked straight through the rock the slot was on. Riflemen crossed station decking. Tanks drove through chasms the generator's own comment calls impassable.
+
+- **Blocking is keyed on kind, not on map.** `TERRAIN_KIND` already gives all seven terrains their vocabulary out of one shared set of kinds, so a rule on kind is automatically a rule on dust, veins, rift, ice, station, tether and ocean at once, with no per-world table to drift out of step.
+- **Craters stay passable, on purpose.** Shallow, and the only feature on the field you fight from inside rather than behind. Making it solid would turn the one thing that reads as shelter into a wall men walk around. Chasms, at five to nine deep, do block.
+- **The hull is the generating ellipse, deliberately inside the jittered mesh.** The outline reaches `w*0.5*1.22` on its widest lobe; slots sit at `cy +/- h*0.52`. A hull that matched the lobes would leave men unable to reach the cover the same rock provides. Asserted across all 52 features on all 7 terrains.
+- **One resolution pass, after the whole unit loop.** There are four places in `stepField` that write a position and the next branch somebody adds will be the fifth. A pass that runs after all of them cannot be forgotten by code that does not exist yet.
+- **One look-ahead so a column rounds a ridge instead of scraping along it.** Push-out alone makes a man walk at a rock, stop, and slide sideways along its face. Not a path search: seven hundred units cannot afford one, and the line already has objective-directed lateral motion for a detour to ride on.
+
+Air is unaffected. Projectiles are unaffected: terrain occlusion on rounds would change the whole fire economy and is a separate job, not something to fold into this.
+
+### Three faults the numeric harness found that a code read did not
+
+`tools/reach-depth-check.mjs` lifts the real expressions out of `reach-battle.js` by regex and **evaluates them**, rather than matching the text around them. That distinction is the entire reason the file exists: two previous fixes in this codebase read correctly and were live.
+
+1. A hive tank scaled against `DEPTH_NEED_HIVE = 0.22`, taken off the spitter band, still crossed the far edge from hive 8 through hive 31. The struck-tank standoff is 0.30. The constant was wrong the moment the standoff was made side-aware. It is the maximum over every offset measured off front on that side now, standoffs included, and the drift between the two is asserted.
+2. Overlapping features left a unit stuck after a single push pass. `genTerrain` scatters 52 hulls with no separation rule, and a seam on veins runs to 0.30 wide, so clearing the rock a man is in routinely put him inside the next one. Four sweeps with an early bail, measured rather than guessed.
+3. `(z.hive||50)` cannot distinguish a cleared zone from a missing field. A zone at hive 0, which is every hive-held metre taken and the whole point of the layer, fell through to the 50 default and drew its line at midfield. The picture said the fight was even on ground that had just been won. Same for a zone quieted to intensity 0.
+
+4101 assertions. `reach-terrain` 300/300 and `reach-check` 1025/1025 unchanged.
+
+### Left alone, deliberately
+
+The jade-forward posture offset is `-0.055` against an infantry band floor of `0.015`. It is larger than the floor it is added to, so jade-forward already stands home infantry roughly 0.04 past the front, on ground `campOwner` says the hive holds, at **every** front position and not only at the extremes. The band clamp hides it now, which is exactly why it is written down here instead. That is a posture design question, not an edge-of-map one, and it is not being redesigned inside a bug fix.
+
+**Unchanged and still urgent:** nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.3.0 (2026-08-24) - blue bullets, backwards tanks, a gun that fired every ten seconds
+
+No server change. No restart required. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `tools/battle-bench.html` (regenerated), `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+Three separate causes behind three symptoms.
+
+### The blue bullets were the muzzle flash, not the tracer
+
+Friendly flashes and impacts go through a path stroked pale cyan - the colour of an energy weapon, on an army whose sprite sheets draw brass and powder.
+
+The tracers were made warm two patches ago and this was missed, so the shot itself was amber and the flash at both ends of it was blue. Warm now.
+
+### The Hound is drawn facing left
+
+The battlefield mirrors everything on one rule, and that rule assumed art drawn facing right - which is true of the troop pack and false of the tank. So every tank on the field was reversed: driving forward and shooting over its own engine deck.
+
+It read as plausible because a tank is near enough symmetrical in silhouette at field size and the gun is thin.
+
+Which way a sheet's art faces is a property of the **sheet**. That is the same shape of assumption as the anchor and the pixel density before it - one property of one sheet taken as a property of the renderer - and it is the third time this pack has produced that mistake. `faceLeft` is declared per sheet now and the mirror asks.
+
+### The firing animation was effectively never seen
+
+A second fault under the same complaint. The sheet was chosen off `u.fire`, a recoil term that decays in about a hundred milliseconds, while `hound_fire` is twenty frames at 55ms - eleven hundred milliseconds of muzzle flash and clearing smoke. It was cut off two frames in, and the tank snapped back to walking mid-flash.
+
+Driven off `fireAt` now, the same stamp the frame picker already used, with the duration named once instead of implied in two places that disagreed.
+
+### And the cadence was set for a different game
+
+Eight to fourteen seconds between rounds. That was chosen when armour was a rare wireframe silhouette and each shell was meant to land as an event; a funded push now puts a dozen Hounds on the field with a firing animation, and at that rate most of them are idle most of the time.
+
+Four and a half seconds. Still far slower than a rifle at three, so a tank still reads as heavy - it is the cadence of a gun being reloaded rather than of one being parked.
+
+Measured on the bench: `hound_fire` is 8.7% of Hound frames, from effectively zero.
+
+Two assertions pinned the old behaviour - the flip expression and the sheet choice - and are updated. The properties they defend are unchanged.
+
+`tools/reach-terrain-check.mjs` 293 to 300. Suite 15 of 15, 1977.
+
+### Unchanged and still urgent
+
+Nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.2.1 (2026-08-24) - the Coalition toggle did nothing visible
+
+**Server restart required.** `blankWorld` gains `jadeSet`, `setJade` records it, `setCoalitionEntry` applies an entry mix. Files touched: `server/reach.js`, `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `tools/battle-bench.py`, `tools/battle-bench.html` (regenerated), `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The button was working
+
+It flipped `coalIn` and the label changed. But `coalIn` only gates whether a world's jade share *means* anything, and the share itself sits at `1` from `blankWorld` - so `effJade` returned an all-Jade line and the only thing that changed was a caption.
+
+Measured on the bench: `jade 265 / coal 0` before, and `jade 265 / coal 0` after.
+
+### The same trap was in the game, and worse there
+
+A GM could declare an interstellar power into the war and watch nothing happen on any of ten worlds until they went and dialled each one by hand. The declaration is the event; it should look like one.
+
+Untouched worlds now take a default mix on entry - 60% Jade, because it is still their war and they opened it, and the Coalition is the one that arrived late. Worlds the GM has explicitly dialled keep their value.
+
+That is what `jadeSet` exists for. There is no value of `jade` that can mean "unset", so "has anyone touched this" had to become a flag rather than a comparison against 1. The move is logged, so the GM knows what shifted rather than discovering it.
+
+**Withdrawal does not put them back**, deliberately. Leaving the dials where they are means re-declaring restores the war as it was rather than resetting it, and `effJade` already returns 1 while `coalIn` is 0 whatever is stored.
+
+After: `jade 155 / coal 110` on a seven-hundred unit field.
+
+### Tested by driving it, not by matching text
+
+`setCoalitionEntry` is lifted and run headless against real state: an untouched world gains a share, a world deliberately set to all-Jade is left alone, a world already dialled to a mix is left alone.
+
+The bench duplicates `COAL_ENTRY_JADE` because it has no server, and `reach-check` asserts the two agree - so it cannot drift silently the way the four terrain tables once did.
+
+New `facMix()` on the debug hook. The Coalition toggle is exactly the kind of control whose effect is easy to assert and hard to see, so it gets a number rather than only a screenshot.
+
+`tools/reach-check.mjs` 1009 to 1025. Suite 15 of 15, 1970.
+
+### Unchanged and still urgent
+
+Nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.2.0 (2026-08-24) - the whole pack, and the bench was lying again
+
+No server change. No restart required. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `client/assets/space/nature/meshes.json` (18 new meshes), `tools/nature-meshes.py`, `tools/battle-bench.html` (regenerated), `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### "Dead and bare only" was too narrow a rule
+
+It was written to stop a pine forest appearing on Ussaleth, and that instinct is still right. But it also banned the **cactus** - and a cactus is exactly what a desert world wants, and says nothing whatever about pine forests. The rule was banning a category when the thing it actually cared about was climate.
+
+Growth is decided per terrain key now, which is already the climate statement the palette and the ground patches read:
+
+```
+dust     cacti, dead palms, dry scrub, tufts
+veins    dead pines, snapped trunks, bare bushes  - no cacti
+rift     fungus, scrub, a dead willow
+tether   dead broadleaf, snapped trunks, scrub
+ocean    fungus, tide-line scrub, a dead palm
+ice      snow-loaded bushes, winter trees         - no timber, no cacti
+station  almost nothing
+```
+
+Nothing can appear on a world whose recipe does not name it. That is a stronger guarantee than a blanket ban and a more useful one, because it can say yes.
+
+Fourteen meshes became thirty-two: five kinds of dead standing timber, four bare simple trees, two winter forms, the cactus, four bushes, two snow bushes, grass, two mushrooms, two snow rocks and a third cliff. The pack's willows and oaks run to a thousand faces each and are out on cost alone.
+
+### Height is a property of the mesh, not a shared roll
+
+Every prop took the same one-to-five metre range, which put mushrooms the size of trees next to bushes the size of mushrooms. A cactus is 1.8 to 3.4 metres, a dead pine is five to nine, a tuft of grass is knee high. Those are facts about the object rather than about where it happens to be standing.
+
+### The budget is in faces now, not props
+
+Cacti are 436 faces and dead pines 247, against a bush at 22. "How many props" stopped being a useful cap the moment the pack was used properly: sixty bushes and sixty cacti are the same count and a twentyfold difference in cost.
+
+Props are sorted by depth and drawn until the budget is spent, so the expensive ones near the camera are always drawn and the first thing dropped is the furthest - which is also the right order visually, because that is where they are least visible. Per world: 34 to 64 generated, 16 to 36 drawn.
+
+### The bench was under-reporting again, and this is the second time
+
+There were **two `counts:` keys in one object literal**. Two keys of the same name is not an error in any mode - the later one silently replaces the earlier - so the rich `counts()` written for the bench in 1.5.6.0 has been dead ever since. Every reading taken from it came from a four-line version that reported class tallies.
+
+Class tallies look entirely plausible. Nothing ever looked wrong.
+
+The first time was `_animSeen` missing anything that bypassed `queueSprite`, which made the egg clutches report as not drawing while they were drawing correctly. Same pattern, and worth naming: **an instrument that returns a plausible subset of the truth is more dangerous than one that returns nothing**, because nothing prompts a question and a plausible subset does not. A check now asserts there is exactly one `counts` key.
+
+### One of my own assertions failed correctly
+
+It sliced `FLORA_MIX` with an unanchored `indexOf`, and `dust:` and `veins:` also appear in the terrain colour fallback and in `KIND_MESH` - so it read the wrong table and truthfully reported no cacti in it. Anchored to `FLORA_MIX`, with the reason written where the next person slicing a table by key name will hit it.
+
+`tools/reach-terrain-check.mjs` 282 to 293. Suite 15 of 15, 1955.
+
+### Unchanged and still urgent
+
+Nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.1.0 (2026-08-24) - the men stopped turning round, and the war starts at the gate
+
+**Server restart required.** `server/reach.js` gains `frontAllowed` and `setFront` takes a force flag. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `client/assets/god-panel.js`, `server/reach.js`, `server/server.js`, `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `tools/battle-bench.html` (regenerated), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### Why the men turned round at random
+
+Two faults compounding, and neither is in the facing code, which was doing exactly what it was told.
+
+**`pickTarget` was a random sample.** It drew twenty-six units out of about seven hundred and took the nearest of *those*. The odds a sample of twenty-six contains the actual nearest enemy are small, so every shot picked a different, usually distant, enemy - and the shooter turned to face it. Not a facing bug: a facing instruction being handed a new random direction every few seconds.
+
+**Facing was a side effect of shooting.** `u.aim` was only written when a round was fired, so between shots a man faced `front`, snapped to a random enemy when his weapon came ready, then snapped back. The snapping back was as visible as the snapping out.
+
+Both come from the same missing thing: knowing who is actually nearest, cheaply, all the time. Thirty-two columns across the field, rebuilt once per step; a query reads its own column and widens outward until a further ring could not beat what it has. Facing then follows the enemy rather than the trigger, re-acquired on a jittered timer so a line does not re-acquire in lockstep, and a man shoots at what he is already looking at.
+
+**Measured, with a negative control, and the first metric was wrong.** Heading churn does not separate the two implementations - most units are bounding and their facing follows their movement either way, so both read 0° median. What separates them is aim quality:
+
+```
+                        old      new
+exact-nearest target    28.6%    53.8%
+mean distance ratio     1.19     1.04
+units holding a target  7        39
+```
+
+Small samples - those are single-frame counts - and an indirect metric. It measures the mechanism rather than the complaint, and the mechanism is what changed.
+
+### The war advances from the gate
+
+Everything in the Reach arrives through `ks_gate_reach`, so a front on Vesskanoth with the gate world untouched is an army that skipped nine worlds to reach the tenth. The map was already telling that story - ten worlds in a line from a jump point - and nothing enforced it.
+
+A world may open a front once the world before it in `REACH_WORLDS` is at least 40% taken. **An advance, not a whitelist**: a whitelist would need editing every time the war moved, this needs nothing. "Broken into" rather than "taken", because waiting for full capture means one world at a time forever and the point is a front that creeps.
+
+A fresh state opens the gate world and nothing else.
+
+The GM override is deliberate. Shift-click Open Front forces it, and forcing is logged so an out-of-order front shows in the digest rather than looking like the rule failed. Jacob runs this war live; a rule that cannot be broken from the panel is a rule that will be in the way during a session it was never written for.
+
+### The Hound wears its faction
+
+It matched neither army. Coalition got the flat faction tint - a full luminance recolour - so its tracks and road wheels turned blue along with its hull, a tank painted like a toy. Jade got the art untouched, which is **turquoise**, while Jade infantry are olive: the armour and the men it was supporting were different colours.
+
+The hull separates the same way skin did, and for the same reason - the sheet is a sixteen-colour palette. The hull is a saturated teal family; the running gear is neutral grey at effectively zero saturation. So: recolour anything saturated, leave anything neutral alone. Tracks stay tracks.
+
+The orange marker and the blue lamp survive by hue, and that is deliberate rather than an oversight of the rule. They are the only pixels on the vehicle whose hue is not the hull's, which makes them the parts that read as *equipment* rather than as paint. Repainting them with the hull is how a vehicle stops having any.
+
+**And Jade could not reach the tint path at all.** `tinted()` returned the raw image when a faction had no `FAC_TINT` entry, and Jade has none by design - it wears the art as drawn. That is why the Jade Hound stayed turquoise while Jade infantry were olive. The gate is now "does this faction need anything doing to *this sheet*", not "does it have a tint". An assertion pinned that bug and is corrected with the reason attached.
+
+`tools/reach-check.mjs` 999 to 1009; `tools/reach-terrain-check.mjs` 271 to 282. Suite 15 of 15, 1944.
+
+### Unchanged and still urgent
+
+Nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.6.0.0 (2026-08-24) - the Coalition is people, the Circuit is a nation
+
+No server change. No restart required. Files touched: `client/assets/coalition-sprites.js`, `client/assets/reach-battle.js`, `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `tools/battle-bench.html` (regenerated), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The palette is what makes this precise
+
+The troop pack is a twelve-colour indexed palette. Skin, the shield trooper's faceplate and the engineer's optics are exact RGB values that appear nowhere else, so they can be remapped **by equality** rather than by a hue-and-saturation test that would catch a patch of webbing on the wrong frame.
+
+Measured across every troop sheet:
+
+```
+(238,188,154) + (217,160,102)   skin, on assault and engineer only
+(194,134,42)  + (143,96,26)     the shield trooper's faceplate
+```
+
+The enforcer has no skin on any frame - he is fully helmeted - so that faceplate *is* his face, and remapping it is the whole of his red eyes.
+
+### Six tones for the Coalition, one for the Circuit
+
+Coalition infantry draw a skin tone per soldier; Circuit infantry all wear the tone the art ships with.
+
+That is setting rather than decoration. The Coalition is a treaty of colonies and the Jade Circuit is one nation, so "everyone looks the same" is a **statement about the Circuit**, not an omission - and it is why its branch returns a constant rather than a narrower range of its own.
+
+A tone is fixed for a soldier's life, taken from his index. A per-spawn roll would change his face when he takes cover, dies, or is reinforced back onto the field, which reads as a different man arriving. The step is prime against the tone count so a fireteam does not walk the list in order and band.
+
+**Skin is remapped before the faction tint and skips it entirely.** The tint is a luminance recolour, so running it over a face paints the man blue along with his coat - which is exactly why this could not just be another `FAC_TINT` entry.
+
+The cache key gains the skin variant, but only where it can change anything. Keying every sheet on it would hold six identical copies of the enforcer.
+
+### Augmentation is the other half of the same statement
+
+Coalition shield troopers and engineers are augmented; Circuit soldiers are not. So the Coalition's optics burn red and the Circuit's stay as drawn. One faction's soldiers have something behind the glass; the other's have eyes.
+
+Kept hot rather than merely red: these are two to five pixels on a figure twenty pixels tall, and at that size a dark red is indistinguishable from rust on the helmet.
+
+### The engineer's blue pixels are not an eye, and my first pass assumed they were
+
+Measured against `engineer_idle`: the figure spans rows 16 to 47, his face is at rows 21 to 23, and the blue sits at rows 30 to 32. It is a **chest device**. Recolouring it produced a man with a red light on his sternum, which is a different sentence.
+
+He has no dedicated eye colour to remap either. His whole face is seven pixels of the two skin values, in a palette that never spent one on an iris.
+
+So the eye is **painted**, per cell, from his own face's bounding box: one row below the top of the head - the top row is brow and hairline, and a red pixel there reads as a hat - at the forward-most skin pixel. That lands on the face wherever the face is, in every frame of every animation, with no per-animation offset table to keep in step. Verified across idle and walk.
+
+The chest device is left alone, so the one red thing on him is the eye.
+
+The muster strip wears the same faces as the field now. Left at the default it mustered six identical pale soldiers next to a mixed line, which reads as a preview of a different army than the one funding buys.
+
+### Caught in passing
+
+A second `var g2` in the eye block was the same variable as the pixel loop's green channel, because `var` hoists to the function. Harmless in that order, and exactly the kind of thing that stops being harmless when someone moves a block. Renamed.
+
+Five assertions in `reach-check.mjs` pinned the old signatures. The property they defend is unchanged - a cache key must name everything that varies - and skin is simply a third thing that varies.
+
+`tools/reach-check.mjs` 993 to 999; `tools/reach-terrain-check.mjs` 255 to 271. Suite 15 of 15, 1916.
+
+### Unchanged and still urgent
+
+Nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.5.9.1 (2026-08-24) - the planet artist, and what crediting them exposed
+
+No code change beyond the credits. Files touched: `client/assets/asset-credits.js`, `docs/CREDITS.md`, `client/assets/space/terrain/ATTRIBUTION.txt`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `tools/battle-bench.html` (regenerated), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### Helianthus Games
+
+The spinning planets: every world on the galaxy map and in system view.
+
+That credit matters more than its size suggests. `tools/planet-palette.mjs` **samples those sprites** to generate every world's ground, sky and rock colour, so the entire battlefield palette is a derived work of this art. If those terms ever turn out to forbid derivatives, `planet-palette.js` is the derived work and the battlefield colour scheme goes with it. Recorded in `ATTRIBUTION.txt` where it will actually be found rather than only in a changelog.
+
+Their pixel fonts are not used here and are not claimed.
+
+### Writing the credit exposed three more gaps
+
+The black hole, the Flesh Station megastructure, the Circuit's dyson and quasar bodies, the suns and the 16px system icons all sit in `client/assets/space/planets/` and are **not** part of that pack. They were hidden behind the planets - a directory that mostly has one author reads as if it entirely does.
+
+They go back on the unattributed list rather than getting folded into someone else's credit. Attributing a whole directory because most of it has one author is how the wrong person gets credited and the right one does not.
+
+### A check I wrote last patch fired, and it was asserting the wrong thing
+
+It asserted the unattributed list was **empty**. So it failed the moment the list correctly stopped being empty: it was telling me not to admit something I had just found out.
+
+Empty is a state, not a requirement. What has to hold is that the list is *honest* - whatever the client admits, `docs/CREDITS.md` admits too, and the panel shows the heading when there is something under it and hides it when there is not. That is what it asserts now.
+
+Suite 15 of 15, 1900.
+
+### Unchanged
+
+`client/assets/space/planets/` is already tracked and has been public for months. Same position as `client/assets/space/troops/`: gitignoring it now would not undo that, so it is not being moved, and that is a decision rather than a cleanup.
+
+Nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.5.9.0 (2026-08-24) - the assets 404'd, and the bench could not have caught it
+
+No server change. No restart required. Files touched: `client/assets/coalition-sprites.js`, `client/assets/reach-battle.js`, `client/assets/planet-palette.js` (regenerated), `client/assets/space/nature/meshes.json` (6 new meshes), `tools/planet-palette.mjs`, `tools/nature-meshes.py`, `tools/battle-bench.html` (regenerated), `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### Why nothing rendered in game
+
+`srcFor` turns a name into a URL through `geom(name)`, and `sheet()` resolves an animation to its **sheet** first. The sheet key had no `GEOM` entry, so it fell through to the default base and every brood sheet was requested out of `assets/space/troops/`. All of them 404'd, and every creature silently fell back to wireframe.
+
+**The bench could not have caught this, structurally.** It inlines every sheet into `FM_TROOP_SRC` keyed by filename, and `srcFor` consults that map *before* it touches `geom`. The one code path a self-contained bench can never exercise is the one that turns a name into a URL - and that is exactly the path that broke.
+
+That is a real limit of the tool, not a mistake in how it was used, and it needed a test that does not need a browser. `tools/reach-check.mjs` now resolves every animation the manifest declares through the real `srcFor` and checks the file is on disk. Negative control: reintroducing the fault fails three assertions. Also verified against a real HTTP server, where every sheet now returns 200.
+
+### Every planet had dark ground, and it was baked in at generation
+
+`tools/planet-palette.mjs` normalizes every entry to a fixed target luminance. That is deliberate and it is what keeps the hues stable across bodies - but it means `ground` and `horizon` carry a world's **colour** and no information about how **bright** it is. All ten Reach worlds clamped to the same value, and hue was the only thing separating them.
+
+The unnormalized art mean was already being computed. It was going into a comment. It ships as a field now, and ground brightness comes off it:
+
+```
+ice          0.47      teal rift    0.46
+tan dust     0.37      ocean        0.33
+red desert   0.22      tether       0.16
+```
+
+Hue still comes from the normalized entry, because a mean drifts toward whichever hemisphere was lit and the normalized values were derived precisely to be stable against that. Value from one, colour from the other.
+
+The value-crushing itself is retired. It existed in 1.5.2.0 so a one-pixel wireframe stayed legible against the plain; every unit is an opaque sprite now and an opaque sprite reads against anything. The reason expired and the code outlived it. Ground roughly doubled, and mesh shading widened to match - left alone, the crags read as black paper cut-outs on a lit desert.
+
+### More of the terrain pack
+
+Dead snags and dry scrub: six new meshes, 22 to 247 faces.
+
+**Dead and bare only**, and that is a setting decision rather than a budget one. A pine forest on Ussaleth is a different game; a stand of dead trunks on a world the brood has been living on for years is the setting.
+
+Which world gets what is authored per terrain key - ice gets almost nothing and no trees, because a snag on an ice sheet is a question the setting does not answer; ocean gets scrub at the tide line and no snags. Everything takes the world palette like the rocks do, with one tone term keeping growth a shade under rock, because dead matter is not stone. It shares the cover mesh path rather than copying it: two back-face culls is two places for it to be wrong in a way nobody sees.
+
+### The brood is graded per creature
+
+A pure luminance recolour threw away hue entirely, so a crawler, a hopclops and a grub were the same colour at three brightnesses and a hundred of them read as one substance.
+
+Two changes. A `keep` term lets some of the pack's own chroma back through, so a yellow eye stays yellower than the carapace around it - that is variation the artist put there and the tint was discarding. And the tint is per sheet, spreading the brood across a warm range: crawlers red-orange, hoppers a sour yellow, flies deep red, grubs brown.
+
+The range stays inside amber on purpose. They have to read as one faction against Jade's green and the Coalition's blue at twenty pixels, so this is variety inside a hue rather than a second palette.
+
+### Gunships benched
+
+One flag, `HELI_SHARE_BENCHED`. The model, the flight code, the brood air arm that hunts them and the funding curve are all kept and all still correct. This is waiting on art, not a removal, and restoring it is a number rather than a rewrite.
+
+Jet airstrikes are untouched, which is the part that matters. Funding has to buy something you can see, and jets crossing the field with bombs answer "what did my credits do" more loudly than four loitering gunships ever did - so the visible payoff survives the removal.
+
+One assertion had to move with it: "armour and air are what money buys" cannot be tested through a share pinned at zero. It is asserted through armour now, with the gunship curve checked below the clamp, so restoring the flag restores a *tested* feature rather than an untested one.
+
+`tools/reach-check.mjs` 986 to 993; `tools/reach-terrain-check.mjs` 238 to 253. Suite 15 of 15, 1897.
+
+### Unchanged and still urgent
+
+Nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.5.8.0 (2026-08-24) - the wireframe scenery is gone, the bugs are the right size
+
+No server change. No restart required. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `client/assets/asset-credits.js`, `client/assets/space/brood/` (6 new sheets), `client/assets/space/terrain/ATTRIBUTION.txt`, `docs/CREDITS.md`, `tools/brood-sprites.py`, `tools/battle-bench.html` (regenerated), `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### Why the flyers looked unreplaced, and it was one number
+
+The whole brood pack shared 32 pixels per world unit. A space fly is 16px tall, so it was **half a metre tall**, and the size cutoff then dropped it to a wireframe past about a third of the field. Tiny where you could see it, wireframe where you could not - which reads exactly like art that was never wired in.
+
+The projectile hit the same wall a patch earlier and I gave it a special case. The special case *was* the symptom. A pixel density is a property of a **sheet**, not of a pack.
+
+Every sheet is sized now by what the creature is, against a two metre rifleman:
+
+```
+horror   a spider you would not step over    1.6m / 3.2m
+hopclops a crouched thing the size of a dog  1.5m / 2.8m
+fly      wingspan wider than a man is tall   1.4m / 2.9m
+grub     low, long, waist height             1.0m
+egg      chest height in a clutch            2.4m
+```
+
+Large and small share a density on purpose, so "large" comes out exactly twice the size and means the same thing everywhere. Creatures are roughly 2.7x their old size.
+
+The wireframe cutoff drops from 3px to 2px. It is a screen size and that is right, but it was tuned against troop sheets whose cell is 64px tall; a brood cell is 12 to 48, so the same threshold retired a creature at a third of the distance it retired a rifleman.
+
+### The wireframe scenery is gone
+
+Camps, works, hive settlements and mound domes. Line drawings on a field where everything else is now art do not read as stylisation, they read as a placeholder somebody forgot.
+
+Removed rather than restyled, because there is no art for any of them and inventing some means four more assets to licence.
+
+**Their data is untouched, and the check now guards that instead of guarding the drawing.** `works[]`, `mounds[]`, `camps[]` and `hiveCities[]` are still generated, still stepped, and the AI still reads them - rushers still path to hive settlements, works still bonus the push. Only the drawing stopped. `gCamp`, `gWork`, `gMound` and `gHiveCity` are left defined and unreferenced on purpose: they are the only record of what those things looked like, and the moment there is art, one function brings the whole thing back.
+
+A mound still shows. As its egg clutch, which is art, and which is the only part of a spawning mound anyone needed to see.
+
+### Camps were the only picture of zone control, and they were the wrong picture
+
+A strip of props across the field, each owned by one side, flipping as the front passes over them. That is a capture-point game. It says the fight is about a fixed number of discrete things, and the Reach is a world taken over weeks by grinding waves.
+
+Control is drawn on the ground now, and the ground is already a band pass:
+
+**The held band.** Everything short of the front tinted toward the holding faction, fading as it approaches the line. That is "how much of this ground is actually ours", continuous, moving when the war moves rather than in six steps.
+
+**Pressure at the objectives.** A patch per objective whose colour is who is winning and whose intensity is how **even** it is. Twenty against twenty is a battle; twenty against nobody is a car park, and the second should be quiet even though it is busy. That is what camps were reaching for and could not express, because a camp has two states and a fight has a temperature.
+
+No art, no flags, and it is still pure decoration - control arrives over the wire and this draws it.
+
+### More of the pack
+
+The large grub arrives as `maw`: the rarest thing on the ground and the toughest, and having both sizes means the small grub reads as its young rather than as the only kind there is. Small and large egg. Five splatter variants instead of one, picked off the unit's own index so a corpse does not change shape while you look at it, with the large variants going to the large creatures because a brute should not leave a rifleman's mark.
+
+Eleven sheets became seventeen.
+
+### Credits complete
+
+**CodeSpree** made the 114 Free Seamless 64px RPG Tiles the ground textures derive from. **RGS_Dev** is the nature pack, corrected from the shortened form I had.
+
+The unattributed list is empty. The section stays in the code: the next pack that arrives without a name needs somewhere to go, and a heading that has to be rebuilt from scratch is a heading that gets skipped. The panel hides it while it is empty, and a check fires if it stops being empty without being noticed.
+
+`tools/reach-check.mjs` 979 to 986; `tools/reach-terrain-check.mjs` 230 to 238. Suite 15 of 15, 1878.
+
+### Still wireframe, and I have no art for it
+
+The Coalition gunship. It is the last wireframe unit on the field. It is also what funding visibly buys - an unfunded push is infantry, a funded one lands tanks and gunships - so removing it to make a screenshot cleaner would delete a payoff the whole funding model exists to show. It needs a side-on animated sprite of a gunship or attack helicopter; nothing in any pack here has one.
+
+### Unchanged and still urgent
+
+Nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.5.7.0 (2026-08-24) - every brood class is a creature, and the credits name everyone but one
+
+No server change. No restart required. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `client/assets/asset-credits.js`, `client/assets/space/brood/` (2 new sheets + geometry), `client/assets/space/terrain/ATTRIBUTION.txt`, `docs/CREDITS.md`, `tools/brood-sprites.py`, `tools/battle-bench.html` (regenerated), `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The spitter gets a body, and refusing it one was wrong on the numbers
+
+The reasoning in 1.5.5.0 held on its own terms: nothing in the pack fires anything, the projectile art is a round with no shooter, and a creature shooting from an idle pose looks worse than a wireframe does.
+
+I applied it to a class carrying **299 of about 380 brood units**. Four in five of the enemy stayed a wireframe, so the field read as "the bugs are still wireframes" no matter how many creature types were wired in behind it. A principle that is right about one unit and wrong about the other seventy-nine percent of the army is wrong.
+
+And the reading was available. The hopclops **is** a ranged creature: one huge eye, an open mouth, and no strike animation at all, which is the shape of something that hits you from over there. The pack shipping projectile art with no shooter attached is the other half of the same sentence.
+
+So the small hopclops spits and uses its jump and fall frames to move between firing positions; the large hopclops is the leaper. Same creature, two sizes, two jobs, which is what the pack drew.
+
+They hop for different reasons and the code says which. The leaper's gate is "am I going somewhere"; the spitter's is "have I just given away where I am". Gating both on movement left the spitters - which mostly hold a firing position - sitting perfectly still and never using the frames the creature is built around.
+
+### The brood round is art
+
+The wireframe claw was written because a straight segment read as an energy bolt from a species that has no energy weapons. The pack ships an actual organic round, which says the same thing without being assembled from three segments.
+
+Queued into the sorted sprite list rather than stroked, so a round passing behind a rock is behind it. The claw never was, because a batched stroke has no depth. It survives as the fallback for a sheet that has not decoded yet, so a slow load is a moment of wireframe rather than a brood that stopped shooting.
+
+**It needed its own pixel density, and finding out why took a run.** A round is drawn at 8px because it is a small *sprite*, not because it is a quarter of a metre wide. At the brood pack's 32 px per world unit that is exactly what it became, the size cutoff threw almost every round away, and the wireframe kept quietly drawing them: six rendered as art in a nine second run. Projectiles are 10 px/unit now, and 219 rendered in ten seconds.
+
+### Credits
+
+Everyone from the library is in. The two that close real gaps:
+
+**AL_Core** - Sci-Fi Animated Army Squad - is the Coalition and Jade Circuit infantry. **Aralepixel** is the Turquoise Hound. Both were on the "no recorded author" list since the art landed.
+
+Also **NickyBHobbying** (Merchants and Scoundrels, *and* the Verbattan Shipyards Fleet - the ambient defence fleet was theirs too), **Webtential**, **subotai**, **Hanker**, **almostApixel**, **Free Game Assets**, **heondu**, **Poly Haven**, and **AntonXCM** for the Anti Kvak face.
+
+One asset remains unattributed and is still listed rather than omitted: the 64px seamless tile set the ground textures derive from, which arrived with no licence file, no readme and no author name.
+
+**Knowing who made something is not knowing what they permit.** `ATTRIBUTION.txt` records Aralepixel and AL_Core and says plainly that their terms are still unread, so the redistribution position is unchanged and the gitignore stays.
+
+`tools/reach-check.mjs` 970 to 979; `tools/reach-terrain-check.mjs` 221 to 230. Suite 15 of 15, 1861.
+
+### Unchanged and still urgent
+
+Nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production.
+
+---
+
+## v1.5.6.0 (2026-08-24) - Asset Credits, and the mobs finished
+
+No server change. No restart required. Files touched: `client/assets/asset-credits.js` (new), `client/assets/eod-timer.css`, `client/index.html`, `client/assets/core.js`, `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `docs/CREDITS.md`, `tools/battle-bench.py`, `tools/battle-bench.html` (regenerated), `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### Asset Credits
+
+The 1.5.5.1 credits sat in the tab row. They are an **Asset Credits** button beside the end-of-day clock now, styled off the timer's own vocabulary rather than the generic `.btn`, because a button in a different visual language inside that wrap reads as something that fell out of the toolbar.
+
+The tab row is where you go to *do* something; this is a standing statement about the game rather than a place to spend time. It is also the one surface a licence obliges to exist, so it belongs somewhere the next tab cannot crowd it out.
+
+**One table, not markup.** Every credit is a row in `client/assets/asset-credits.js` and the panel is generated from it, so adding an asset is one object and cannot half-land - there is no second place to forget.
+
+Loaded eagerly. No lazy loader, no fetch. A credit that depends on a loader firing is a credit that can silently not be there.
+
+`reach-check` asserts every name in the table also appears in `docs/CREDITS.md`. The two are hand-maintained and would drift in the direction of the client having *fewer* names, which is the direction nobody notices. Will Tice is marked required-by-licence; RgsDev is marked not-required and credited anyway.
+
+**Unattributed art is listed, not omitted**, with an invitation to come forward. A credits panel that quietly leaves people out reads as complete, and a reader has no way to tell that apart from "nobody else contributed".
+
+Names are escaped before they reach `innerHTML`.
+
+### The mobs, finished
+
+**Spawning mounds get an egg clutch.** The data model has always called them spawning mounds and the wireframe drew a closed dome, which is a building. The pack ships an egg, so what a spawning mound looks like is eggs.
+
+Positions are seeded off the mound's own seed, so a mound is the same mound every time the zone is opened, and they sit *around* the dome rather than on it: a clutch at the foot reads as something the mound produced, a clutch on the crown reads as decoration.
+
+The hatch animation exists and is deliberately unused. A mound that hatches on a loop is a mound perpetually about to do something. It is being kept for the moment a wave actually spawns off a node, which is what it is for.
+
+**A dead brood unit splatters.** No creature in the pack has a death animation, and the generic wireframe X that every other unit dies as reads as a casualty *marker* rather than as a thing that just burst. One-shot off `deadAt`, held on its last frame, because the mark stays on the ground for as long as the corpse counts toward attrition and a looping splatter is a puddle that keeps exploding.
+
+### The bench was lying to me, and that is the more important finding
+
+`_animSeen` is incremented inside `queueSprite`. The egg clutches push straight into `_sprites`, so they reported as **not drawing** across three runs while they were drawing correctly the entire time. I chased a bug that did not exist.
+
+A readout that silently under-reports is worse than no readout: it says "broken" about something that works, and it is trusted precisely because it is the tool you reach for when you cannot tell by eye. Anything bypassing `queueSprite` counts itself now.
+
+Related, and the same shape: the bench defaulted to `nodes: []` and `fobs: []`. That is a legal state and it is also the one state in which several systems draw nothing at all, so a bench starting there quietly tested less than it looked like it did - the clutches never appeared once, and nothing was wrong. Both are seeded now and MOUNDS / WORKS are toggles.
+
+`counts()` reports mounds, works, objectives and dead, so an empty one is visible rather than inferred.
+
+`tools/reach-check.mjs` 958 to 970; `tools/reach-terrain-check.mjs` 211 to 221. Suite 15 of 15, 1843.
+
+### Unchanged and still urgent
+
+Nothing has shipped since v1.3.9.x, so the `mining_bank_delta` faucet is very likely open in production. Read the deployed handler.
+
+---
+
+## v1.5.5.1 (2026-08-24) - the art leaves git, and the game has credits
+
+No server change. No restart required. Files touched: `.gitignore`, `ship.sh`, `docs/CREDITS.md` (new), `client/index.html`, `client/assets/core.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `tools/battle-bench.html` (regenerated), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+Two blockers, not two features. Neither is worth much on its own and together they are the difference between a build that can ship and one that cannot.
+
+### The licence problem was never about any one pack
+
+Three of four art assets forbid redistributing the art and this repository is public. That is not bad luck with three packs - "use it in your game, do not redistribute the source art" is what nearly every commercial art licence says. Fixing it pack by pack would have kept failing, one pack at a time, forever.
+
+So the art stops living in git. `client/assets/space/vehicles/`, `client/assets/space/brood/` and `client/assets/space/terrain/*.png` are gitignored, and `ship.sh` pushes them to the VPS over ssh as a separate step after the git push. The live game has the art; the public repo never does.
+
+**A clone without them still runs.** The wireframe fallback built in 1.5.3.0 as a load-failure path turns out to be the thing that makes this whole approach workable - it was written so a slow asset could not blank the field, and it happens to be exactly what a checkout with no art needs.
+
+The CC0 meshes stay tracked, and so does `ATTRIBUTION.txt`. A settled licence means the art belongs in the repo like any other source, and ignoring the whole terrain directory would have taken the licence position out with the art.
+
+### The gate runs before the commit, because there is no undo
+
+Deleting art after it has been pushed does **not** remove it. It stays in history and stays fetchable. So `ship.sh` now refuses to commit if any of the restricted directories is tracked, and it checks before `git add -A` rather than after.
+
+Verified by running it: against a repo with tracked art it stops with the untrack command in the message, and it clears once the files are untracked.
+
+Three details worth keeping:
+
+`tar` over ssh rather than `rsync`, because tar and ssh are the only two things this deploy has ever assumed are on the box, and a step that works until someone rebuilds the VPS without rsync is a worse step.
+
+Never `--delete`. This only adds and overwrites. A bug in the local file list should cost a stale asset on the server, never a wiped one.
+
+The restart is last, after both the pull and the art. Restarting between the two serves a client that asks for sheets still in flight.
+
+### Credits, which one licence requires and none of them had
+
+The creature pack's licence requires attribution to **Will Tice** in the credits. That applies to **use**, independently of anything to do with redistribution - and FleshMarket credited nobody anywhere. The obligation was simply unmet.
+
+New `docs/CREDITS.md` and a Credits tab in the client. Static markup, no loader, no lazy script: it is a legal obligation and the one thing on the page that must not depend on a fetch succeeding.
+
+**The file admits what it does not know.** The troop sprites, the tank sheets and the tile pack the ground is derived from have no recorded author and may well require attribution too. A credits list that quietly omits people reads as complete, which is worse than one that says it is not.
+
+`reach-check.mjs` asserts every name in the file appears in the client. A credit survives one refactor and quietly does not survive the next, nothing about the game breaks when it goes, and nothing would ever tell you.
+
+### Three of my own assertions failed on my own prose
+
+Searching `ship.sh` for `rsync` and `.gitignore` for `space/nature` found the comments explaining that both are deliberately **not** used. The assertions failed on the very text documenting the decision they were checking.
+
+That is the third time this exact mistake has landed in this suite. Comments are stripped before matching now, and the reason is written at the point where the next person will hit it rather than in a changelog nobody reads while writing a regex.
+
+### Unresolved, and these are decisions rather than work
+
+**If any of the 1.5.3.0 through 1.5.5.0 builds was already committed and pushed, gitignoring now does not remove that art from history.** It needs history rewriting - `git filter-repo` or a fresh repo - and until then the art is still fetchable from the public remote. Check `git log --stat -- client/assets/space/vehicles` before assuming this patch closed it.
+
+`client/assets/space/troops/` has an unknown licence and has been public for months. It is deliberately **not** gitignored here. Adding it would not undo the history, would not tell us the licence, and would quietly change the status of an asset that has been shipping since long before any of this. That is a call to make deliberately, not a cleanup to slip into a patch.
+
+`tools/reach-check.mjs` 937 to 958. Suite 15 of 15.
+
+---
+
+## v1.5.5.0 (2026-08-24) - the brood has bodies, and the bench is in the repo
+
+No server change. No restart required. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `client/assets/space/brood/` (new, 9 sheets + geometry), `client/assets/space/terrain/ATTRIBUTION.txt`, `tools/brood-sprites.py` (new), `tools/battle-bench.py` (new), `tools/battle-bench.html` (new, generated), `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The roster comes off the art, not off a wishlist
+
+A creature can only credibly do what it has frames for, so the animation sets decided the classes rather than the other way round.
+
+`crawling_horror` has idle, move and **attack**. It has a strike, so it is the melee rusher: small is the existing rush, large is a new brute that takes the same job slower and with more to chew through.
+
+`space_fly` has attack_start, attack_**loop** and attack_end. A start, a sustained loop and an end is a strafing run, not a peck, so it replaces the flyer wireframe and plays the three phases in order rather than looping one. Small is the flyer, large is a wing: rarer, twice as hard to bring down, hits twice as hard.
+
+`hopclops` has jump and fall and **no strike**. That is a leaper: it closes in bounds and hits on arrival. The arc is real vertical motion, not a cosmetic bob, because the animation is picked off the sign of the vertical velocity and a fake arc would show the jump frame on the way down.
+
+`grub` has idle and move **only**. So it is a body: slow, tough, and it hurts you by arriving. That is a real unit and an honest reading of art with two animations, rather than inventing an attack it cannot show.
+
+**The spitter stays a wireframe.** Nothing in the pack fires anything - the projectile art is a round with no shooter - and giving the spitter a hopclops body that shoots from an idle pose would look worse than the wireframe does.
+
+### An animation and a file stopped being the same thing
+
+Every troop animation is its own PNG and the Hound's two are as well, so keying the image on the animation worked for both. The brood pack ships one sheet per creature with one animation per row, which is a better shape and one that assumption cannot express: nine creatures would have become thirty-odd files, each a re-crop of a sheet that was already correct.
+
+Geometry gained a `sheet` field and the loader keys the image on that, while everything else still keys on the animation. Nothing about the existing path changed.
+
+**Frame counts come from the pack's own index, never from the image.** Rows are not the same length: crawling_horror's attack is nineteen frames and its move is eight, on a sheet as wide as the longest row. Dividing the width would count every short row's trailing blank cells as frames. That is exactly what made the Hound strobe in 1.5.3.1, and here it would have been four times worse.
+
+Three bugs of the same shape, found and fixed while wiring it: `ready()` not resolving through the image key reports every brood animation not-ready forever, and `queueSprite` then drops the unit off *both* the sprite and the wireframe path; a row-pinned animation wrapping downward walks into the next creature's attack; and the tint cached per animation holds four identical copies of one sheet.
+
+### The bench caught the real one in a single glance
+
+The sprite gate asked the **Coalition's** table about a brood unit, got nothing, and sent every creature to the wireframe branch with its sheets sitting decoded and unused. Thirty-one brutes and thirty-eight leapers alive on the field, and not one brood animation in the seen list. That is a bug that looks completely fine on screen - the creatures were drawing, as wireframes, exactly as they always had.
+
+Related: melee was gated on the string `'rush'` in six separate places, so three new creatures walked to contact and then stood there. It is a set now, and a new creature needs one edit rather than six.
+
+### Colour is a hex value, not an art pass
+
+The pack ships green, blue and violet themes and none of them is Khai'sultull, so the same luminance recolour that gives the Coalition its blue gives the brood its amber.
+
+**The cost is real and is not a bug.** A luminance recolour keeps shading and throws away hue, so the hopclops loses its yellow eye and the crawling horror its pink carapace. The brood's wireframes were already monochrome amber so the field stays coherent, but if a creature ever has to keep two hues, that is the decision to revisit rather than the place to add a special case.
+
+The first pass was too bright. A warm lift put the creatures at roughly the same value as the tinted ground on a dust world, and a hundred of them read as scribble on sand. At field size, value separation *is* the silhouette and hue does almost nothing for it. Dark and saturated now, below the plain rather than above it.
+
+### The bench
+
+`tools/battle-bench.py` bakes `tools/battle-bench.html`. It was already the tool that answered every "does this look right" question since 1.5.2.0, and it lived outside the tree where nobody but its author could run it.
+
+Self-contained on purpose: every sheet, patch and mesh inlined as base64, so it opens from disk over `file://` with no server and no asset directory. The failure it has to survive is a missing asset path, and a bench that silently falls back to wireframe while you are trying to look at a sprite is worse than no bench.
+
+It runs the **shipped** renderer, inlined verbatim, and binds the **real** panel markup from `client/index.html`. A bench with its own renderer tests the bench, and a copied panel drifts until a button the renderer still writes to no longer exists.
+
+Controls: world picker; Coalition entry and Jade share; live sliders for push funding, zone control and intensity; force-the-whole-line-to-one-class; live per-class counts; and an animations-seen readout, which is the panel that caught the gate bug.
+
+### Licence: the pattern is now the actual problem
+
+The creature pack is unTied Games / Will Tice. Commercial and non-commercial use are both fine, **attribution in the credits is required**, and public distribution of the contents in whole or in part is **not** permitted except as part of a game or application product.
+
+A public GitHub repository is not a game product; it is distribution of the contents in part, to anyone, in a form they can take the art out of. Baking, renaming and re-tinting does not change that.
+
+That is now three of four art assets that cannot legally sit in a public repo, and the one that can is CC0. This is not bad luck with three packs - "use it in your game, do not redistribute the art" is what nearly every commercial art licence says. Fixing it asset by asset will keep failing. `ATTRIBUTION.txt` records the three structural options; the one that keeps both the public repo and the art is to gitignore the asset directories and rsync them separately, and the fallback behaviour that makes a clone-without-art still run is already built.
+
+Separately and independently: the credits requirement applies to **use**, not just distribution, and FleshMarket currently credits nobody anywhere.
+
+`tools/reach-terrain-check.mjs` 175 to 211. Four assertions in `reach-check.mjs` were pinning the old roster and are inverted. Suite 15 of 15, 1800.
+
+### Still open
+
+The strafing run, the leaper's bound and the brood composition are structurally in place and **not tuned against a real engagement**. Hop cadence, strike timing and how rare a brute should feel are all numbers set by argument rather than by watching. That is what the bench is for.
+
+---
+
+## v1.5.4.0 (2026-08-24) - cover with a silhouette, hive on the horizon, a line with width
+
+No server change. No restart required. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `client/assets/space/nature/meshes.json` (new, generated), `client/assets/space/terrain/ATTRIBUTION.txt`, `tools/nature-meshes.py` (new), `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The prisms looked like brick loaves, and that was inherent
+
+Not a shading problem. A prism is a footprint pushed straight up: flat top, vertical walls, one silhouette from every angle. Thirty-four of them on a plain reads as masonry dropped on the ground, and no amount of tinting the sides fixes a shape that has no shape.
+
+Cover is low-poly meshes now, flat-shaded per face from the same planet palette the ground uses, so no world needs its own art. The generator is untouched: a feature still has a kind, a footprint, a height and a set of cover slots, and the AI still reads all four. Only what gets drawn at that spot changed, which is why nothing about cover behaviour moved with it.
+
+Face count is the entire budget, because canvas fills one polygon per call and a mesh is priced in draw calls per instance per frame. Rocks at 7 to 40 faces do scatter; mountain LODs at 103 to 205 do major cover; the 350-plus cliffs are baked but reserved for distance. Back-face culling in world space, before any projection work, removes about half of what is left.
+
+**Two sizing mistakes, both found by looking at it.**
+
+Driving the horizontal scale from the footprint made a boulder fifteen metres across and four tall. A slab, not a rock, and it dominated the field so completely that the men fighting over it were incidental. The footprint is a *gameplay* extent - it is what the cover slots are laid out along - and it was never sized to be a silhouette. Height leads now; the footprint stretches it by a bounded factor so a wide ridge is still wider than a boulder.
+
+The prism side shading range turned a mesh into hot metal. A mesh presents faces at every angle, so the same range that read as gentle shading across four flat walls puts all the top faces near maximum at once. Narrower and darker.
+
+Faces are stroked in their own fill colour, which is not decoration: canvas antialiases polygon edges, so abutting faces of one mesh leave a hairline of whatever is behind them along every shared edge, and the mesh looks cracked.
+
+### The horizon has hive on it
+
+Six brood spires stand well beyond the fighting: too far to reach, too far to shoot, there to say the hive goes on past the ground being contested and that what is being taken is one clearing in something much larger.
+
+**The first version drew pyramids.** A ring of base points and straight lines to a tip is a cone, and a cone on a skyline is Egypt, not a hive. What makes the brood's architecture read is that it is grown, so the silhouette comes from a profile sampled up the height instead: flared foot, pinched waist, leaning tip, with a per-spire noise phase so six mounds are six shapes rather than one mound drawn six times.
+
+**And they were invisible.** Amber line work at a third alpha against Ussaleth's amber sky: drawn every frame, could not be seen. A distant mass is a dark shape against the sky before it is any kind of detail, so the body is filled at a darkened horizon value and the ribs go over it.
+
+They are deliberately the hive's own language rather than scenery mountains. A nature-pack peak on the skyline would have been cheaper and would have said the wrong thing, which is that the far country is empty.
+
+### The line had depth and no width
+
+The band clamp has always decided how far up the field a man may stand, and it does that well: nobody wanders into the hive and nobody sits at the baseline. Nothing at all decided where he stood *across* it. A unit with no cover slot took `u.x += u.vx * dt` and bounced off the field edges. That is a random walk, so the whole army diffused into an even wash of men from one flank to the other. Correct depth, no shape, and at field size it reads as a crowd milling in a strip rather than as a line fighting for anything.
+
+An objective is a named piece of ground both sides want. Units are assigned one, converge on it, and hold it, which produces the three things that were missing and could not be got by tuning the wander: concentration, so the gaps between are actually empty and the eye can find the fight; contest, so a front is a set of places under pressure rather than a depth band with a gradient; and persistence, so somebody has to arrive and push the holders off.
+
+They are derived from the terrain the generator already made, so a rift world contests chasm mouths and a dust world contests ridges, with no per-world data.
+
+Bucketed across the frontage rather than taken top-N by size, because size alone clustered every objective into whichever corner the generator happened to put its wide features in and the rest of the field went back to being empty for a different reason. A bucket with no cover in it still gets an objective: open ground between two strongpoints is exactly the ground an attack goes through.
+
+Cover choice is biased toward the objective, weighted below the distance term. That is what makes a fireteam bound from cover to cover in a *direction* instead of digging in behind whatever rock it happened to be standing by and stopping. A man does not walk past three rocks to reach the fourth because it is nearer the flag.
+
+Orders are reviewed on a long, jittered timer. Fixed for life, a unit walks to its objective and stays there while the front moves past, which is the other half of the same complaint; unjittered, a line re-tasks in unison and visibly swaps flanks.
+
+Loads are recounted each step rather than incremented on assignment. A count kept by bookkeeping drifts the moment a unit dies, is reinforced or is reclassified, and a crowding term computed from a drifted count is worse than none - it pushes men away from ground that is actually empty.
+
+### Licence: one settled, two still blocking
+
+The nature pack is **CC0 1.0 Universal** by RgsDev, stated in the pack's own `License.txt`. Public domain dedication: redistribution and commercial use permitted, attribution not required. Credited in `ATTRIBUTION.txt` anyway, because not being obliged to is a poor reason not to. This asset does not block `ship.sh`.
+
+Only the derived `meshes.json` ships - not the pack, not the `.blend`, not the FBX or OBJ trees. Trees, flowers, mushrooms and grass are deliberately unused: the Reach is a brood world and a pine forest on Ussaleth is a different game. If a Coalition or Circuit world ever fights a battle, revisit that; the pack has the art and `tools/nature-meshes.py` has the table.
+
+**The terrain patches and the Hound are unchanged and still block `ship.sh`.**
+
+### Still open
+
+The gunship wireframe reads as a tangle of lines at close range. It predates all of this and was not touched, but it is now the least finished thing on the field.
+
+`tools/reach-terrain-check.mjs` 149 to 175. Suite 15 of 15.
+
+---
+
+## v1.5.3.1 (2026-08-24) - the Hound, and the colours the other way round
+
+No server change. No restart required. Files touched: `client/assets/coalition-sprites.js`, `client/assets/reach-battle.js`, `client/assets/space/vehicles/` (new, 2 sheets), `client/assets/space/terrain/ATTRIBUTION.txt`, `tools/reach-check.mjs`, `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+**The licence position from 1.5.3.0 is unchanged and now covers a second asset. Read the bottom before `ship.sh`.**
+
+### The Hound
+
+The Turquoise Hound replaces the wireframe tank. Two sheets: walk at 250x200, four frames, one row; fire at 400x200, eight columns by three rows.
+
+The firing sheet declares **twenty frames, not the twenty-four its grid holds**. The last four cells of the bottom row are empty, and a naive `cols * rows` plays four blank cels at the end of every shot, which on screen reads as the tank vanishing between rounds.
+
+Firing is a one-shot, driven off a new `u.fireAt` stamp, holding its last frame when the smoke clears. Run as a free-running cycle at the troop pack's frame rates it re-fires about three times a second and the tank is a strobe.
+
+There is no death sheet. A dead Hound holds its last firing frame rather than naming a sheet that does not exist, because `sprAnim` returning a missing animation takes the unit off the wireframe path without putting it on the sprite path, and it disappears from the field entirely.
+
+### Sheet geometry stopped being global
+
+`CELL_W`, `CELL_H` and `PAD` were constants because every sheet was a man: 80x64 cells, sixteen pixels of left pad, one row, a figure standing with his feet at a known spot. A vehicle is none of those.
+
+Pitch, grid, ground contact anchor and pixels-per-world-unit are properties of the sheet now, through `FMTroops.geom`. The three constants stay exported because callers use them and because they remain exactly right for every troop sheet.
+
+**Pixels per world unit is the one that matters.** The troop pack draws a two metre man in thirty-two pixels, so sixteen. The Hound is drawn finer: two hundred and one pixels nose to tail for a hull about ten metres long with the gun forward, so twenty. Rendering each at its own density is what makes them agree on screen. Forcing one number on both makes whichever lost the argument permanently the wrong size, and a tank the size of a man is the more embarrassing of the two ways to get that wrong.
+
+### The mirror moved into the sheet layer
+
+The battlefield translated by the CELL WIDTH and flipped the context. That is correct only while every figure is centred in an 80px cell.
+
+The Hound is centred in neither of its cells, and **not in the same place in the two of them**: its tracks sit at x 64-230 walking and 214-380 firing. A cell-centred mirror slid the tank sideways every time it turned around, and slid it by a different amount depending on which animation was playing.
+
+`drawAnchored` mirrors about the sheet's own ground contact point, which is the only point that has to stay still. Anchors are measured off the tracks rather than guessed: 147,159 walking and 297,159 firing, both bottoming on row 159.
+
+### Faction colours, inverted
+
+The art ships green. The troop pack is dark olive (mean 48,55,46) and the Hound is dark teal (43,73,73). That is Jade Circuit, whose war this is and whose line is the only one on the ground until the Coalition declares, so **Jade wears the art as drawn and pays no tint at all**.
+
+Steel is retired. It was written when the Coalition was the default force and Jade was the guest wearing a recolour of its kit. With the roles inverted, tinting the majority faction every frame to make it look like the pack with its colour removed is work done to make the art worse.
+
+**The Coalition is blue, and specifically not cyan.** `FAC.coal`'s old wireframe teal sat a few degrees from the Hound's own turquoise, so a Coalition tank and a Jade tank would have been the same vehicle in two shades of one hue at field size. Blue against green against the brood's amber is three hues that survive haze, distance and a tinted ground.
+
+The wireframe `FAC` table moved with the tints. Those are not decoration: infantry draw as sprites near the camera and as wireframe past the size cutoff, so if the two disagree a unit changes faction when it walks far enough away.
+
+### One real trap
+
+`tinted()` read `fac === 'coal' ||` **before** consulting `FAC_TINT`. Adding a coal tint would have been silently ignored: a hex value sitting in the table that never reaches a pixel, with no error and nothing to debug except a tank that stayed green.
+
+No faction is hardcoded as the identity now. A faction is untinted when, and only when, it has no entry in the table.
+
+### Four assertions were pinning the old model
+
+The steel tint, the coal short-circuit, the cell-width mirror, and a sheet check that assumed 80x64 with 16px pad and one row for everything in the manifest. All four were faithful descriptions of the model this patch inverts.
+
+The sheet check came back **stronger**, not weaker. It used to verify one hardcoded pitch; it now measures every sheet against its own declared geometry, both ways - the sheet must be large enough for the declared frame count, and the frame count must not exceed what the grid holds - plus an anchor-inside-the-cell bound. That is the thing that silently rots when art is replaced.
+
+`tools/reach-terrain-check.mjs` 133 to 149. Suite 15 of 15.
+
+### Verification
+
+Checked on a sprite bench rather than by reading: every frame of both sheets in both factions, a flip test with the anchor drawn as a line that must not move between the pair or between the two animations, and a scale-agreement row putting tank and infantry at the same pixels-per-world-unit from their own sheet densities. Then in the real renderer at close range.
+
+### LICENCE: STILL UNRESOLVED, NOW TWO ASSETS
+
+The terrain patches remain in the position 1.5.3.0 left them. The Hound arrived NAMED, with editable Aseprite sources, which is more provenance than the tile pack had and is still not a licence.
+
+Most pixel-art vehicle packs permit use in a game but not redistribution of the source art, and a public repo is redistribution. `client/assets/space/terrain/ATTRIBUTION.txt` now covers both assets.
+
+Note the asymmetry: deleting the terrain patches degrades cleanly to the 1.5.2.0 wireframe ground. Deleting the Hound leaves tanks on the old wireframe model, which still works, but the sprite line and the wireframe line will not match while the sheets are missing.
+
+---
+
+## v1.5.3.0 (2026-08-24) - ground under the war
+
+No server change. No restart required. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `client/assets/space/terrain/` (new, 14 baked patches + ATTRIBUTION.txt), `tools/terrain-patches.py` (new), `tools/reach-terrain-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+**READ THE LICENCE SECTION AT THE BOTTOM BEFORE RUNNING `ship.sh`.**
+
+1.5.2.0 gave the plain the world's own colour. It was still a flat colour with wireframe outlines on it. This gives it a surface, and gives cover a body.
+
+### Ground
+
+Fourteen 512px greyscale patches ship in `client/assets/space/terrain`, two per `COLONY_VISUAL` terrain key (`<key>_base.png`, `<key>_rock.png`), baked by `tools/terrain-patches.py` from a 64px seamless tile pack. The 114-file source pack does not ship.
+
+They are greyscale on purpose and it is not a size trick. The client tints at runtime with the `color` composite, which takes hue and saturation from the fill and luminosity from underneath, so a patch with no hue of its own takes all of its colour from `planet-palette.js`. One patch set covers a red desert, a teal rift and an ice world without repainting a pixel, and covers every Coalition and Circuit colony too when the faction war wants them. `station` and `tether` are baked now for that reason, ahead of any world using them.
+
+### Mode 7, and why it is exact here
+
+The camera has no roll, so `R[1]` is zero, so a ray's vertical component depends only on the screen ROW and never on the column. Every pixel across one scanline therefore meets the ground plane at the same depth, and the map from screen x to world position along that row is exactly affine.
+
+So a band is one transformed `fillRect` of a repeating pattern rather than a per-pixel sample: about 250 draw calls a frame against 600,000.
+
+**The moment anything rolls the camera this becomes wrong, silently, as a shear.** Nothing in this renderer rolls. If something ever does, this path has to become quad subdivision and there is no cheap patch for it.
+
+### Four metres is a compromise and it is written down
+
+A 64px tile of this kind is drawn as roughly one pace. The field is 420 by 320 world units, which is about 420 metres across.
+
+```
+1.5m  59,640 tiles   honest scale, grain invisible past thirty metres
+4m     8,400 tiles   grain survives to mid field, tile = squad frontage
+12m      933 tiles   tile is larger than a tank, reads as aerial photography
+30m      154 tiles   one tile is a city block
+```
+
+Four is the only setting that works, and the constant carries that argument in the source so nobody tidies it later. Tile COUNT is a non-issue: baked as a repeating canvas pattern, 60,000 tiles cost exactly what 64 do. What repetition costs is banding, which is why the patch is 8x8 with per-cell flips and a low-alpha sprinkle pass.
+
+### Cover, and the ordering problem it creates
+
+Wireframe prisms were outlines you could see through, so nothing occluded anything and nothing needed sorting. Solid geometry has no such luxury, and getting the order wrong is not subtle: a rifleman behind a six metre ridge draws on top of it and reads as a ghost.
+
+The split is by surface, not by object.
+
+TOPS are horizontal planes, so they go through the same band pass at their own height, quantised into five height buckets. Five passes for the whole field rather than thirty-four, and a top drawn at most a metre from where it belongs, which is invisible against a surface with its own relief.
+
+SIDES are vertical, so they cannot be a plane pass at all. Back-face culled, flat-shaded by facing, with a vertical gradient for free ambient occlusion. Crucially they go into the SPRITE QUEUE, which is the only depth-sorted list this renderer has. That is what buys back occlusion: what actually hides a man standing behind a ridge is the ridge's near face, and that face now sorts against him and paints over him.
+
+HOLES are filled with the SKY colour at depth-scaled opacity rather than with black, so a chasm on Zhaal'un is a teal shadow and one on Ussaleth is a red one. Black would read as a hole cut out of the world rather than as a hole in the ground.
+
+**Stated rather than discovered later:** wireframe units draw in three batched depth bands, not painter-sorted, because batching is what keeps a four hundred unit field at twelve stroke calls. So a tank or a brood rusher behind a ridge still draws over it. Infantry are the numerous ones and the ones that get lost behind cover, so this is most of the value for none of the rewrite. The rest waits until the unit pipeline is worth unbatching.
+
+### Three bugs, all found by looking at it
+
+Every one of these passed a syntax check, and none of them would have been caught by reading the code.
+
+FIRST, sides came out hotter than the tops they support. Shading ran 0.42 to 1.0 of the way toward the ROCK value, and on a world whose rock is (255,138,76) that made every wall brighter than the sunlit surface above it. Thirty-four features of glowing orange cardboard. A horizontal face catches the sky and a vertical one does not; that is not an art preference, it is where the light is. Range is 0.10 to 0.40 now, anchored on the GROUND value so a shadowed wall is the same material as the plain it stands on.
+
+SECOND, patch brightness was a multiply by `wantLum * 255 * 1.9`, where 1.9 was tuned by eye against one patch on one world. The patches do not share a mean: sand ash is lit far brighter than basalt, so the same multiplier washed out one world's plain and blacked another's. Measured by a 1x1 downscale now, with a screen pass as well as a multiply so a patch DARKER than the world it covers can come up rather than only down.
+
+THIRD, `PAL` was cleared on world change and `PATS` was not. Opening Nikkathaal after Ussaleth gave an ice world grey cliffs standing on red desert, because the sides read the palette live and the ground and tops held a cached tint. Both cleared in the same place now, and the check counts the clear sites rather than matching one of them.
+
+### The fallback is the old look
+
+Patches missing, failed to load, or absent from the build drops straight back to the 1.5.2.0 wireframe cover, and takes the solid sides down with it so the field is never quads floating on a flat colour. Verified by running the harness with the art removed, not by reading the guard.
+
+`tools/reach-terrain-check.mjs` is at 133 assertions. Suite 15 of 15.
+
+### LICENCE: UNRESOLVED. DO NOT SHIP YET
+
+The tile pack arrived with no licence file, no readme and no author name. That makes the licence of these derived patches UNKNOWN, not permissive, and this repository is public. Baking, greyscaling and recombining does not change the copyright position: a derived work of an unlicensed asset is still an unlicensed asset.
+
+`client/assets/space/terrain/ATTRIBUTION.txt` records the position and lists the three ways out. The check asserts the word UNRESOLVED is still in that file, which is a reminder and explicitly NOT a licence check.
+
+Until it is settled, delete `client/assets/space/terrain/` before shipping. It costs the look and nothing else.
+
+### Next
+
+Detail passes on the features, and the heightfield, which is still the thing that should land before troop AI.
+
+---
+
+## v1.5.2.0 (2026-08-24) - the planet under the war, and whose war it is
+
+Server restart required. Files touched: `server/reach.js`, `server/server.js`, `client/assets/reach-battle.js`, `client/assets/reach-hive.js`, `client/assets/galaxy.js`, `client/assets/god-panel.js`, `client/assets/planet-palette.js` (new, generated), `client/index.html`, `tools/planet-palette.mjs` (new), `tools/reach-terrain-check.mjs` (new), `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+Two defects. Neither touches a money path, so severity is cosmetic and narrative rather than economic. Both were certain rather than likely: they fired on every world, every time.
+
+### The battlefield had no planet on it
+
+A Reach engagement drew stroked wireframes on `#04050a`. No ground, no sky, no horizon. Every world was the same black void, which is the strongest available statement that where you are fighting does not matter, and the whole premise of the Reach is that it does.
+
+Underneath that, the colour a world's terrain stroked in came from a seven-entry table keyed on the terrain SHAPE key. That table and the planet sprite the player had been looking at ninety seconds earlier in the system view were two separate authorings, and they had drifted. Sampled off the shipped frames, in hue degrees:
+
+```
+ks_05  barren_2  art (131,253,224) TEAL    old table drew VIOLET   109 deg out
+ks_08  ice       art (226,229,254)         old table drew CYAN      36 deg out
+ks_02  desert_2  art (228, 76, 40) RED     old table drew TAN       24 deg out
+ks_06  desert_2  art (228, 76, 40) RED     old table drew TAN       24 deg out
+ks_04  lava_2    art (197, 96, 53) ORANGE  old table drew GOLD      21 deg out
+```
+
+Five of ten. This was reported as four in the working session and that was wrong; ks_08 is also out, at 36 degrees, and it was missed because ice reads plausible next to cyan by eye. The measurement found it and the eye did not, which is the argument for the measurement.
+
+### Colour is generated from the art now
+
+`tools/planet-palette.mjs` decodes the PNG frames directly (zlib, no dependencies), samples the lit disc across six frames per body, and emits `client/assets/planet-palette.js`. The battlefield looks a world up by the same `COLONY_PLANET` folder the galaxy map draws it from. There is no second authoring left to drift.
+
+SHAPE STAYS HAND-AUTHORED. `terrain` (dust, veins, rift, ice, ocean, station, tether) is a cover vocabulary, and how a rift world fights differently from a dust world is a real design decision. Nothing generated touches it.
+
+VALUE IS CRUSHED ON PURPOSE. A sky at the sprite's own luminance is a sky you cannot see a stroked wireframe against. Hue is at full fidelity and value is forced into a legible band, so the worlds are darker than orbit implies. That is a rendering constraint and it is stated in the tool header rather than hidden in a magic number.
+
+A first pass at the luminance transform scaled channels and clipped, which IS a hue shift, which is the exact failure this file exists to stop: `barren_4` came out (255,64,66) with red pinned at the ceiling. Fixed by pinning at the ceiling and desaturating the rest of the way, which is what a real surface does under more light.
+
+Added on top: sky and ground gradients split at a horizon computed from camera pitch (`H/2 + tan(pitch) * focal`, which is where any ray with `dy=0` lands against the basis this renderer already builds), a horizon line, and a distance haze laid over the terrain and under the units. `reach-hive.js` takes the same palette, so a world cannot change colour between being surveyed and being fought over.
+
+### The Coalition was fighting a war it has not joined
+
+`blankWorld()` seeded `jade: 0` and the renderer defaulted `var jadeFrac = 0`, so a world the GM had never touched, or a battlefield opened before any payload arrived, drew a full Coalition line. `facOf` defaulted to `'coal'`. The strike feed, the funding strip and the works and camp colours were hardcoded COALITION strings.
+
+The Reach war is Jade Circuit's. Their FTL programme made the contact believing it was reaching other humans; the brood came back down the line at them. The Coalition is a bystander with an interest until it declares.
+
+### Entry is one switch for the whole Reach
+
+`coalIn` at the state root, not per world: a polity cannot be at war on Ussaleth and at peace on Khai'ru. Per-world `jade` stays as the commitment dial, meaning how much did they send HERE. Everything reads `effJade(s, w)`, which returns 1 while `coalIn` is 0 regardless of what is stored, so a dial set before entry cannot leak a Coalition uniform onto the field.
+
+`JADE_MAX = 0.75` becomes `JADE_MIN = 0.25`: the same constant, "neither faction carries the whole line alone", with the roles the other way round.
+
+`setJade` REFUSES rather than clamps before entry. Clamping would take the dial, write a dead value and report success; the GM would set three worlds to 40 percent, see nothing change on any of them, and have no way to find out why.
+
+A CARRIED support vote enters the Coalition. The `jade` vote preset already asked whether the Coalition answers, and answering yes moved a depth offset and nothing else, which made it a poll with a camera angle attached. Carried only, never defaulted: an empty room must not be able to walk a polity into an interstellar war. The GM switch stays authoritative in both directions, and withdrawing keeps every stored dial rather than clearing it.
+
+`reviveAsCoalition` is renamed `reviveAsHome`. Its first line already assigned `u.fac` from `jadeFrac`, so the name asserted a uniform the body did not necessarily give it. That is what let the wrong default read as correct to anyone checking.
+
+### The checks
+
+NEW `tools/reach-terrain-check.mjs`, 98 assertions.
+
+`effJade` is LIFTED FROM SOURCE AND DRIVEN, not text-matched. Nine cases across the entry gate, including an absent dial, a zero dial, a garbage dial and a null state, all of which must come back as an all-Jade line before entry.
+
+The hue assertion compares the battlefield's rock stroke against the sampled art in degrees, tolerance 20. The NEGATIVE CONTROL runs the retired hand-written table against the same art and requires at least three worlds to fail; it currently fails five. Without that control the hue assertion is measuring nothing.
+
+THREE ASSERTIONS IN `reach-check.mjs` WERE PINNING THE BUG. They asserted `jade: 0` in blankWorld, a 0.75 ceiling, and a payload that clamped the raw dial, and all three were faithful descriptions of the wrong model. A check defends what it was told to defend. They are inverted, with a note saying so, so the next reader does not take their previous green as evidence the old default was considered.
+
+`tools/planet-palette.mjs --check` fails if the committed palette is stale, and the terrain check shells out to it.
+
+Suite 15 of 15, 1582 assertions.
+
+### Still open
+
+Not verified in a browser. The horizon maths and the haze band are the parts most likely to read wrong in motion, and no amount of assertion covers "does it look like a planet".
+
+---
+
+## v1.5.1.4 (2026-08-23) - the mining faucet was never closed
+
+Server restart required. Files touched: `server/server.js`, `tools/mining-check.mjs` (new), `client/assets/coalition-sprites.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### It was declared closed twice, and reported closed a third time by me
+
+The first fix retired the client-reported TOTAL, `mining_bank` with a `sync` field, in favour of a bounded delta protocol. Correct as far as it went.
+
+The second kept the run window open across cargo drone banks, because deleting it on the first positive delta meant every later message fell through to a fresh full fallback budget. Its comment described that failure mode precisely, and the code closed exactly one path to it: the window was still deleted on any settlement that was NOT a drone, and a client that never sent a loadout at all never had a window to delete in the first place.
+
+Then last session I read the handler, saw the guard, read the comment above it, and reported the item closed. That was a code read presented as a verdict. Running it takes a minute and I did not.
+
+### What was actually live
+
+A positive `mining_bank_delta` with no open run took `MINING_RUN_FALLBACK_SEC` as its elapsed time and `0` as already banked, so every such message was handed a full Ƒ36,000 budget. Nothing decremented anything. Traced against the shipped arithmetic:
+
+```
+no loadout, same message repeated
+  msg 1  36,000     msg 2  36,000     msg 3  36,000  ...
+at the 30 message per second socket limit
+  one second  1,080,000
+  one minute  64,800,000
+  one hour    3,888,000,000
+```
+
+The war layer's entire daily burn on a contested world is Ƒ240m. This minted sixteen times that per hour, per connection.
+
+The honest shape leaked too: loadout, settle, and then every message after the settlement found no window and took the fallback again.
+
+### The fix
+
+THE WINDOW IS A TOKEN BUCKET AND IS NEVER CLOSED ON A CREDIT. Budget accrues at `MINING_MAX_YIELD_PER_SEC` from the moment the run opened, every credit for every reason is deducted from it, and the only thing that resets it is a loadout, which starts a new run from zero elapsed and therefore zero budget rather than a full one.
+
+A message arriving with no open run still gets one grant, seeded a fallback length in the past: that case is real, since a restart clears the map mid run, and it is also exactly the forgery shape, so it happens ONCE and leaves the budget spent instead of refilling on every message.
+
+MESSAGE COUNT STOPS MATTERING, which is the property rather than "the cap is smaller". Traced after the fix:
+
+```
+no loadout, same message repeated
+  msg 1  36,000     msg 2  4     msg 3  4  ...
+an hour flat out at the socket limit      500,000   (the per run ceiling)
+twenty loadout resets, 600 messages         8,000
+optimal cycling                           396 F/sec against a 400 F/sec design rate
+```
+
+HONEST PLAY IS UNTOUCHED, also traced: a five minute run claiming Ƒ42,000 pays Ƒ42,000 in full, and four mid run cargo drone banks plus a final settlement all pay.
+
+### The check
+
+`tools/mining-check.mjs`, 20 assertions. Every one DRIVES the real handler body, lifted out of `server.js` by span, rather than matching its text. Matching its text is what missed this twice: the guard is present and the reasoning above it is correct, and the bug is only visible if you run the state machine and ask what happens on the second message, or on the first one from a client that skipped the loadout.
+
+Negative controls, five mutations, all five bite. Restoring the shipped code prints `3,888,000,000 vs ceiling 500,000` in the failure detail.
+
+One assertion was wrong on the first attempt and worth recording: the rate check ran nine cycles of twenty one minutes, which is 3.15 hours, and then divided by three. It reported 1,500,000/hr against a 1,440,000 ceiling and read as a breach when the real figure was 396 Ƒ/sec against a 400 Ƒ/sec design rate. A rate assertion has to divide by the clock that advanced, not by the number it meant to run.
+
+### One number worth revisiting
+
+`MINING_MAX_YIELD_PER_SEC` is 400, justified as 2.5x headroom over a physically impossible 160 Ƒ/sec so that it never clamps real play. That reasoning was written when it was a PER MESSAGE clamp. It is now a SUSTAINED RATE CEILING, which is a different thing: it is what a forger can hold indefinitely, Ƒ1.44m an hour, against roughly Ƒ576k an hour for a flawless honest run that nobody achieves. It is read from `process.env.MINING_MAX_YIELD_PER_SEC`, so it can be lowered without a patch.
+
+Suite: 14 of 14 green, 1581 assertions.
+
+---
+
+## v1.5.1.3 (2026-08-23) - sudoku was broken twice, and each failure hid the other
+
+Server restart required. Files touched: `server/sudoku.js` (new), `server/server.js`, `client/assets/casino-sudoku.js`, `tools/sudoku-check.mjs` (new), `tools/mathtest-check.mjs`, `deploy/update.sh`, `deploy/setup.sh`, `deploy/setup_github.sh`, `deploy/DEPLOY_README.md`, `deploy/GITHUB_DEPLOY.md`, `client/assets/coalition-sprites.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The security failure
+
+The browser generated the puzzle, held the solution, decided whether it had been solved, and told the server what to pay. Standing between that and an open faucet: a Ƒ4,200 payout cap, a 20 second minimum round duration, and a cooldown in localStorage. Two console calls paid the Insane reward without a cell being filled, every twenty seconds, and the cooldown was one key deletion away.
+
+### The correctness failure, which is the reason the first one mattered less than it looks
+
+The generator removed clues at random with NO UNIQUENESS CHECK, and the client graded by comparing the player's grid against its own stored solution cell by cell.
+
+Measured, by running the shipped generator rather than reading it, the share of boards with exactly one completion:
+
+| tier | clues | uniquely solvable | median completions |
+|---|---|---|---|
+| Easy | 46 | 53% | 1 |
+| Medium | 35 | 10% | 4+ |
+| Hard | 26 | 0% | 50+ |
+| Expert | 23 | 0% | 50+ |
+| Insane | 17 | 0% | 50+ |
+
+So above Easy a genuinely correct solve was told "Not quite right" unless it happened to reproduce the one hidden grid, which it essentially never did. Forging the payout was close to the only way anybody was ever paid for a Hard board.
+
+IT ALSO INVERTED THE LADDER. A seventeen clue board with fifty completions is EASIER than a forty six clue board with one, because almost anything consistent finishes it. Insane paid Ƒ4,000 for the softest puzzle on the menu.
+
+### Why they had to be fixed together
+
+Grading by validity is the correct grade, and it cannot ship on top of a generator that emits ambiguous boards: it turns "nobody can win Hard" into "everybody wins Insane". Removal now preserves uniqueness, checked with a solution counter that stops at two.
+
+THE CLUE COUNTS MOVED AS A CONSEQUENCE, not as a balance pass. Greedy uniqueness preserving removal bottoms out around 24 to 27 clues, so the ladder is the range it can actually reach: 46, 39, 33, 29, 26. Measured 25 puzzles per tier, every tier hits its target 25 times out of 25, all boards uniquely solvable, worst case 274ms at the hardest tier against a 250ms budget that bounds it. Blowing the budget leaves a few extra clues, which makes the board easier and never invalid.
+
+REWARDS ARE UNCHANGED at 50/200/750/2500/4000. The tiers are ordered by real difficulty now, which they were not before, so the existing prices sit on a ladder that means something for the first time. COOLDOWNS ARE UNCHANGED at thirty minutes; what changed is that they live on the server. A cooldown in localStorage is advice.
+
+### The rest of the hardening
+
+HINTS ARE CAPPED AT FOUR, which is where the penalty already bottomed out. Unbounded hints against a floored penalty was a free auto solve for 20% of the prize: eighty one hints and the board fills itself, with nothing past the fourth costing anything. The cap is one below the number of steps, so the last hint a player can take is the last one that leaves them something.
+
+A REVEALED CELL CANNOT BE WRITTEN OUT OF THE SUBMISSION. Without that, four hints could be taken and then the submitted grid could carry the player's own working in those cells, so the reveal was free.
+
+ONE ROUND KEY PER TIER. A single `sudoku` key meant one cooldown and one payout cap across all five tiers, so the backstop on an Easy round was the INSANE reward: a forged Easy settlement paid Ƒ4,200 for a Ƒ50 puzzle. Every tier is in `SERVER_SETTLED_GAMES`, so `casino_result` cannot reach one, and the retired `sudoku` key refuses to open a new round the way `mathgame` does.
+
+The reward arithmetic is a fraction rather than a decimal. Written as `1 - used * 0.2`, four hints on the Ƒ4,000 board produced `0.19999999999999996` and floored to Ƒ799 instead of Ƒ800. Found by an assertion that expected the round number.
+
+### The deploy scripts pointed at a path nothing serves from
+
+`APP_DIR` was hardcoded to `/opt/fleshmarket` in `update.sh`, `setup.sh` and `setup_github.sh`, while the live server runs from `/root/Flesh-Market`. `backup.sh` and `pull_backup.sh` had it right and took an override; the other three did not.
+
+THE FAILURE MODE IS NOT AN ERROR. rsync CREATES a missing destination, so `update.sh` on the VPS built a second, dead copy of the app at a path nothing serves, and then called `pm2 reload` on the real process. It refuses now if the target has no `client/version.json` in it, refuses to sync a checkout onto itself, and takes ownership from whoever owns the install rather than from a username baked into the script.
+
+The documents say `/root/Flesh-Market`, and say plainly that `./ship.sh` is the routine path and these scripts are for standing a server up from nothing.
+
+### What the negative controls cost
+
+Eleven mutations. Three walked through, and ALL THREE WERE BAD TESTS rather than gaps in the code.
+
+Two proved nothing. "Overwriting a given is rejected" altered one given inside the stored solution, which the row and column rules reject anyway, so the assertion passed with the givens check deleted. It submits an unrelated valid grid now, which is the actual attack and the case where that check is load bearing. And the control for equality grading used a mutation that could never fire.
+
+The third had its combinatorics backwards. The ambiguous board for the validity test was hand constructed from a swappable rectangle, and a swap only survives the box constraint when the two rows are in the SAME band; the search required different ones, so it never found anything and the test quietly ran against a board with one completion. It strips cells until the counter says two now, which is shorter than the condition and cannot be wrong about it.
+
+An assertion in `tools/mathtest-check.mjs` pinned the whole `SERVER_SETTLED_GAMES` literal on one line and failed when the set grew a third source and had to be broken across lines. The property it protects was untouched, so it was restated whitespace insensitively rather than deleted.
+
+`tools/sudoku-check.mjs` is 56 assertions. Suite: 13 of 13 green, 1561 assertions.
+
+---
+
+## v1.5.1.2 (2026-08-23) - the chat filter never censored a leet spelling
+
+Server restart required. Files touched: `server/chat-filter.js`, `tools/filter-check.mjs` (new), `client/assets/coalition-sprites.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### What was actually happening
+
+`filterChat` normalised the message, TESTED each pattern against the normalised copy, and then REPLACED against the original. A pattern that only matched BECAUSE of normalisation cannot match the original, so that replace was always a no op. The else branch existed for exactly that case and re ran the identical failed replace, then set `flagged` regardless.
+
+The result was a filter that detected every leet spelling, returned success, logged the incident to the admin feed, and let the text through unchanged.
+
+MEASURED BEFORE THE REPAIR, by running it rather than reading it: 51 of 51 terms with a leet variant were flagged and published. 49 of 51 with a SINGLE substituted character. One digit defeated the whole filter.
+
+FOUR CALLERS TAKE `.clean` WITH NOTHING BEHIND IT: player bios, global chat, whispers, and the council chamber floor. Names and Fleshbook were never exposed, because both run `isTextClean` and reject the write outright rather than relying on the censor. This was flagged as a known hole when Fleshbook got its rejection layer and deliberately left for later, on the grounds that changing `filterChat` changes chat and bio behaviour for everyone. It is later.
+
+### The repair
+
+The normalised copy is the same LENGTH as the original, character for character, so an index into one is an index into the other and a match found in the normalised copy can be cut out of the original. Matches are collected as ranges, overlapping ranges are merged, and the ORIGINAL is spliced at those ranges, so casing and punctuation outside a match survive and the message still reads as the person wrote it.
+
+THAT PROPERTY IS GUARANTEED RATHER THAN ASSUMED. A plain `toLowerCase()` is not safe here: a handful of characters lowercase into two UTF-16 units, and one of those in a message slides every index after it and cuts the wrong span out. `normalizeIndexed` only takes a substitution when the source is one unit and the replacement is one unit. The length is then CHECKED at the call site, and a mismatch falls back to the canonical only behaviour rather than splicing at indices it cannot trust.
+
+Verified over the term list: canonical, fully leet, single character leet, mixed case over leet, and separator obfuscation are all censored. Verified for what must NOT change: clean text comes back byte identical, casing around a censored match is preserved, and an astral code point or a two unit lowercase does not slide the indices.
+
+SWEPT 6360 STRINGS of the game's own shipped prose for false positives. Zero. The repair widened what gets CENSORED and not what gets DETECTED, so it can only over censor where the old filter already over flagged, but a false positive here shows up as an item name full of asterisks in front of everyone and was worth measuring rather than arguing.
+
+### The check
+
+`tools/filter-check.mjs`, 32 assertions, picked up automatically by `run-all` since it discovers `tools/*-check.mjs`.
+
+Every assertion DRIVES the module. That is the whole point: the bug survived because nothing ran the function. Read on the page, the old implementation looks right, since there is a normalise step, a test, a replace and a flag, all present and in a sensible order.
+
+NO SLUR APPEARS IN THE FILE. Every probe is built from the module's own term list at run time, so the corpus stays in one place and the check stays readable over someone's shoulder.
+
+Negative control: restoring the implementation that shipped fails five assertions and names the leet counts.
+
+### What the negative controls cost
+
+Two mutations walked through, and both were real findings rather than gaps in the check.
+
+THE `lastIndex` RESETS ARE DEAD CODE. Removing either one passed everything. `exec` returning null resets `lastIndex` to 0 by contract, and the loop runs until null, so nothing is left dirty on the code as written. One reset stays, because the guarantee lives in the loop rather than in the line: the day someone adds an early exit, a cap on hit count or a break on a long message, `lastIndex` is left mid string and the NEXT message with the same slur comes back clean. A filter that works once is worse than one that does not work. No assertion covers that line and removing it still passes, which is stated in the source rather than papered over, because an assertion that cannot fail is not coverage.
+
+OVERLAPPING TERMS WERE BEING CENSORED TWICE. Two entries in the list end with another entry, so a message containing the longer one produces a match on the whole phrase and a second on the trailing word, over the same span. That path had no probe. It does now, built from the list rather than hardcoded, and removing the merge fails it with a doubled run of asterisks.
+
+`tools/filter-check.mjs` is 32 assertions. Suite: 12 of 12 green, 1504 assertions.
+
+---
+
+## v1.5.1.1 (2026-08-23) - works you can see, and a wave that costs time
+
+Server restart required. Files touched: `server/reach.js`, `server/server.js`, `client/assets/reach-battle.js`, `client/assets/galaxy.js`, `client/assets/god-panel.js`, `client/battle-test.html`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The works stand on the ground
+
+FOUR WORKS HAVE BEEN MECHANICALLY LIVE SINCE THE FOB VOTE SHIPPED and none of them existed as an object. A bastion raised the armour ceiling, a pad cut the strike timer, a cut softened a repel and a spire discounted every push on the world, the payload carried `fobs` and `nodes` per world, and `reach-battle.js` read neither. A player could vote for a Spire, get the discount, and never once see the thing they bought.
+
+They are drawn now, and they are four different KINDS of object rather than four variations on a compound. A bastion is walls with corner towers and armour staged inside. A pad is a flat strip with a mast and a parked airframe on it. A cut is a trench and nothing above grade, the one silhouette defined by what is missing from it. A spire is a lattice mast at twenty five units, the tallest thing on the map, which is the point of a relay. Silhouette carries the identification because there is no text layer on this field and adding one for four structures is not worth the pass.
+
+A BROOD MOUND IS NOT THE BROOD CAMP. `gCamp` already drew a low spined mound for held ground, so a node needed to read as a different object or the feature would have been invisible: taller, closed, ribbed in the hive cities' idiom, with one maw facing the Coalition end and drag trails leading out of it. A mound is the reason a world costs more and it should look like a source.
+
+THEY SEED NO COVER AND NO FIRING POSITIONS, which is the opposite of the call made for hive cities and worth stating. A hive city has no server side effect at all, so cover is the only way it can mean anything. A work already means something the server computes. Handing it cover as well prices one structure twice, once in a number the server owns and once in a simulation the client runs, and the two would never agree.
+
+Position seeds from each work's own identity rather than its index in the array. Raiding a pad out of the middle would otherwise renumber every work after it and rearrange the field for a reason no viewer could account for.
+
+### A wave takes twenty hours to form
+
+THE ONLY THING IN THIS LAYER THAT SPENDS THE CLOCK RATHER THAN CREDITS. Nothing gated on time before this, so a zone could be opened, carried, banked and opened again inside one sitting, and three waves could fall in an evening on ground meant to cost weeks.
+
+TWENTY HOURS AND NOT TWENTY FOUR, deliberately. A day length timer pins every wave on the Reach to the same hour of the clock, which quietly makes the war an event for whichever timezone that hour suits. Twenty precesses: a wave that formed this evening forms mid afternoon next time and in the morning after that, and nobody has to be awake at a fixed hour to be there when the ground opens.
+
+A REPEL IS NOT GATED. `openWindow` used to stamp `waveAt`, which made the field mean two different things and, under this gate, would have locked a zone out after a loss. The room already paid the pool and already lost the ground; charging them a day for it as well charges twice for one failure. `waveAt` moves when a wave comes up and at no other time.
+
+BE HONEST ABOUT WHAT THIS IS. The GM is the only actor who can open a window at all and `force` is one argument away, so this is a default rather than a rule. It states the intended pace and makes running past it a deliberate act that lands in the log as `[FORCED, wave unformed]`, which is worth having. It is not a constraint on anyone who wants to ignore it.
+
+### waveAt finally has readers
+
+It shipped in 1.4.9.x annotated "when the current wave came up, for duration on the strip" and no strip ever read it. The suite asserted the field existed, which is the identical shape to the `voice` tag fixed last release.
+
+It gates `openWindow` on the server, and both panels count down from it. The payload ships `waveFormMs` once at the top rather than a per zone remaining figure, so a countdown stays correct between broadcasts instead of showing a number that was true when the state was sent.
+
+THE PLAYER PANEL NOW SHOWS BANKED WAVES. A zone's control bar moves both ways inside a live wave and says nothing about how much of that ground is permanently taken, which is the only number in the layer that never goes backwards and the reason anyone comes back next week. It is not on the compact system strip: a twenty hour countdown does not change what anyone does in the next five minutes.
+
+### The raid stopped lying
+
+`fobBonus` counts a TYPE once, and both callers pushed into `w.fobs` directly, so a duplicate could be created from either. The duplicate itself was harmless. What was not harmless is that `raidFob` spliced one instance and returned "destroyed. Ground unchanged." while `fobKinds` still saw the type and every effect stayed live. A no op that reports success is worse than a no op.
+
+One `placeFob`, both callers through it. The ballot offers only what is not already standing, put together in `reach.js` beside the effect table rather than written out a second time in the sweep, which had been offering a bastion on worlds that already had one. With all four standing no ballot is put and `pendingFob` is cleared, which it had to be or the sweep would reopen a vote on that world every tick forever.
+
+### What the negative controls cost
+
+Eight mutations, and two walked straight through their assertions.
+
+Commenting out the one call that drives works from the payload PASSED. The assertion was a substring match and a comment satisfies it, which is exactly the vacuous pass mode this suite exists to find, caught by the control rather than by review. Assertions on call sites now run against comment stripped source, verified against a line comment, a block comment and outright deletion.
+
+Index seeded positions PASSED, because the mutation appended a work and appending renumbers nothing already in the array. Removal is the harder half. The assertion raids one out of the middle now and index seeding fails it naming the two works that moved.
+
+A third control did not fail, it KILLED THE SUITE. Making `genWorks` touch `slots` threw inside lifted code and the run died before the summary printed, so every assertion after that section reported nothing at all. A checker that stops is worse than one that fails, because a failure is visible. Driven sections are contained and report the cause by name.
+
+One assertion was deliberately NOT written. Mounds are only appended singly or removed for a whole zone at once, so no removal can renumber a survivor and index seeding would be stable for them. A stability test there could not fail, and a test that cannot fail is worse than no test because it looks like coverage.
+
+`tools/reach-check.mjs` is now 929 assertions. Suite: 11 of 11 green, 1472 assertions.
+
+---
+
+## v1.5.1.0 (2026-08-23) - a tag nothing reads is not a tag
+
+Hard refresh, no server restart. Files touched: `client/assets/core.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+1.5.0.9 ADDED A `voice` FIELD TO THE REACH TRANSMISSION so the client could tell the Jade envoy from the hive lord, and the client read nothing. The handler hardcoded `KHAI'SULTULL:` and the brood's `bad` tone, so the first thing Circuit Envoy Sarn ever said would have arrived attributed to the enemy, in the enemy's colour, saying the opposite of what it meant.
+
+Shipping a field and reading it are two separate pieces of work, and last release only did the first. The changelog for it said the payload was tagged so the client could distinguish the two, which was true and useless.
+
+The two voices are split now. Jade speaks in its chamber colour, and an untagged transmission still resolves to the hive lord, which is every message sent before the tag existed and every message a stale client sends.
+
+FOUND BY AUDITING THE PREVIOUS PATCH, not by the suite. The assertion checked that the field was sent and never that anything consumed it, which is the same shape as the dead export, the two routes with no caller, the viewer scoped endpoint nobody called, and the commitment dial that lived only in a console. The suite proves code does what it claims and has no way to see that nothing reaches it. Both ends are asserted now.
+
+Verified by breaking it: making the handler ignore the tag fails the new assertion.
+
+`tools/reach-check.mjs` is now 861 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.5.0.9 (2026-08-23) - the Jade voice, and votes that land somewhere
+
+Server restart required. Files touched: `server/reach.js`, `server/server.js`, `client/assets/god-panel.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE CHAMBER VOICE NEEDED NO CODE, and that is worth more than the code it saved. `gmRegents` is `COUNCIL_SEATS.filter(sd => seatView(sd).regent)`, and the Jade seat view returns `regent: true` unconditionally, so adding the chair last release put Circuit Envoy Sarn in the GM's voice picker by itself. That path was derived where the chair position map was hand kept, which is exactly why one absorbed a fifth seat without noticing and the other rendered a chair at `seatX[undefined]`.
+
+WHAT WAS ACTUALLY MISSING IS THE OTHER SURFACE. The hive lord has spoken into the war feed since the Reach shipped, through `reach_say`, and Jade had no way to say anything at all. `jade_say` transmits as the envoy and tags the payload so the client can tell the two voices apart rather than rendering an ally in the brood's colour.
+
+A VOTE THAT CHANGES NOTHING IS A POLL. Two of the three kinds have been inert since the primitive shipped, which was flagged at the time and is fixed here.
+
+A Jade request moves who holds the forward band. Support puts the Coalition up beside them; declining leaves Jade holding it alone, which is the posture they were already in. One number, and the battlefield shows the answer without a word of UI.
+
+AN ACCEPTED DEMAND CLOSES THE FRONT. That is what makes a demand a decision with a price rather than a line of dialogue. `fundBurnPerDay` returns zero on a world with no front, so the burn stops, the fund stops draining and the ground stops slipping, all through machinery that already exists. Traced: Ƒ288m a day before, nothing after. The GM can reopen it; the room chose to stop.
+
+NO VOTE OUTCOME TOUCHES BANKED CONTROL, which is the invariant the whole layer rests on. A ceasefire stops a war and does not hand back the ground the war already took.
+
+That assertion was wrong on the first attempt in a way worth recording. It was written as `!/z\.hive\s*=/`, which only catches a write through a receiver spelled exactly `z`. The mutation used to test it named the variable `z0` and walked straight through, and `const zone = ...; zone.hive = 100` would have too. It is written without a receiver name now and fails for `z0`, `zone` and `theZone` alike. The check was name dependent where the property is not.
+
+The dead switch check was widened to the jade namespace and immediately caught `jadeSay` defined with nothing calling it, which is the same omission the handler check caught for `jade_commit` last release. Both directions now cover both namespaces.
+
+`tools/reach-check.mjs` is now 859 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.5.0.8 (2026-08-23) - the Jade chair, and Mr Flesh above the room
+
+Server restart required. Files touched: `server/db_council.js`, `server/server.js`, `client/assets/council.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE ROWS ARE A RULE, NOT AN ARRANGEMENT. The front row is every chair a player can take and the back row is every chair no player can take, derived from the seat's own mode as shipped by the server. The previous layout was a hand kept map of four seat ids to pixel positions, and adding a fifth id rendered a chair at `seatX[undefined]`. A rule cannot put a seat in the wrong row and cannot leave one unplaced.
+
+Front row is three and back row is two, so the back chairs sit in the horizontal gaps between the front ones. That is what lets each row carry its own name plate band without the two bands ever crossing: a back plate sits above the top of a front chair, and never shares an x range with one.
+
+MR FLESH IS NOT A SEAT. He is not in `COUNCIL_SEATS`, has no mode, and cannot be bought, counted, voted for or signed with. He owns the house the chamber sits in, and putting him in the seat list would have made him a fifth vote in every place that iterates chairs. He is drawn as a fixture, centred above the middle front chair, which is the Presidency, so the composition says what the lore says: the house sits over the elected.
+
+His portrait is the Preserved Brain item art resolved through the item catalog, which is his canonical portrait everywhere else in the client. The obvious guess of a `portraits/` file would have rendered a broken image rather than nothing, because `portraitSrc` returns a path string whether or not the file exists and the guard around it only tests for null.
+
+JADE WEARS A MUTED JADE RATHER THAN ITS BATTLEFIELD GREY. Grey is right on the field, where it separates two armies. Against four saturated faction colours in a lit room it reads as disabled rather than allied, which is the opposite of what an ally at the table should look like.
+
+The canvas grows from 260 to 320 and the panel height cap grows with it, so the room keeps its size rather than rendering a fifth smaller inside the old box.
+
+THREE PER SEAT MAPS STILL HAVE TO BE FED and the suite asserts all three. Row capacity, because the rows have fixed width and a seat beyond it is dropped by `slice` and then skipped by an undefined guard, vanishing without an error. Short name, because a missing one falls back to a full label that collides with its neighbour. And colour, because a missing one strokes as `undefined` and renders an invisible chair rather than throwing.
+
+The colour check exists because removing Jade's colour passed everything on the first attempt.
+
+An assertion added last release had to be restated rather than kept: it checked that every seat id appeared in the literal position map, and the map is derived now. The property it protected moved rather than disappeared, so it is asserted in its new form.
+
+`tools/reach-check.mjs` is now 848 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.5.0.7 (2026-08-23) - seat modes, and why the Jade chair is not in this patch
+
+Hard refresh, no server restart. Files touched: `server/db_council.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE JADE CHAIR IS A LAYOUT JOB AND NOT A DATA CHANGE. `client/assets/council.js` positions the chamber from four-entry maps keyed by seat id. `seatX`, `seatY`, `SHORT` and `SEAT_COLOR` are all hand placed, the inner two chairs sit 156px apart, and the plate text is sized against a nineteen character label because the middle two plates collided at full length. Adding a fifth id to `COUNCIL_SEATS` renders a chair at `seatX[undefined]`, and the graphic breaks with nothing thrown and nothing logged.
+
+That coupling was real and undocumented, and it is the reason the seat is not in this release. Adding it would have looked like a two line change and shipped a broken chamber.
+
+WHAT IS HERE IS THE HALF THAT MAKES IT CHEAP LATER. How a chair is held is stated per seat now, rather than implied by absence from a list: `presidency`, `purchasable`, `never`, `gm`. Two of those rules previously existed only as "not in `PURCHASABLE_SEATS`", which is a fact about a different array rather than a statement about the seat, and the Guild's rule in particular read as an omission rather than a decision.
+
+`PURCHASABLE_SEATS` is derived from those modes instead of being kept by hand, so a seat cannot be described as purchasable in one place and something else in another. The derived list is byte identical to the literal it replaces, so nothing in this patch changes behaviour.
+
+THE `gm` MODE HAS NO SEAT YET. It exists because the Jade Circuit is meant to take a chair as an ally and to become purchasable later, and adding a mode is a word where unpicking a hardcoded exception is a refactor.
+
+The suite asserts that every seat declares a mode, has a position on the chamber graphic, and has a short name that fits the plate. Verified by adding `jade` to `COUNCIL_SEATS` as a data change alone, which fails all three and names the seat in each.
+
+`tools/reach-check.mjs` is now 843 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.5.0.6 (2026-08-23) - route reachability, and Jade becomes state
+
+Server restart required. Files touched: `server/reach.js`, `server/server.js`, `client/assets/reach-battle.js`, `client/assets/god-panel.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THREE FINDINGS IN A ROW WERE CODE THAT EXISTED AND WAS WIRED TO NOTHING: a dead export, two player routes with no caller anywhere in the client, and a viewer scoped endpoint that had never been called by anything. The suite is good at proving code does what it claims and has no way to notice that nothing reaches it. The GM side has had a reachability check since `turret_deploy` and it has now caught four separate omissions. Every Reach HTTP route is checked the same way.
+
+THAT CHECK FOUND ITS OWN BUG ON THE FIRST RUN. The first version tested `clientSrc.includes(route)`, a bare substring match. Renaming a caller to `/api/reach/statex` left it passing, because the orphaned route's own name is a prefix of the typo. Any route would be considered reached by a caller to a longer path sharing its prefix. A check with a vacuous pass mode is precisely the thing this section exists to find. Matched with the closing quote now, and verified by the same mutation, which names the orphan.
+
+JADE WAS A CONSOLE CALL AND NOTHING ELSE. `window.reachJade` shipped with the faction seam and set commitment and posture on the client only. It did not survive a refresh, no other player saw it, and a GM setting it on one machine changed nothing for anyone watching. Same shape as the unreachable routes: the seam was right and nothing was wired to it.
+
+Commitment and posture are world state now, bounded by `JADE_MAX` so Jade never carries the whole line alone, shipped in the payload, and read by the battlefield from there. The console override stays, because the bench has no server and poking at it live is useful.
+
+`jade_*` IS A SEPARATE COMMAND NAMESPACE FROM `reach_*`, deliberately, even though both write into the same war. When the faction war eventually happens, the Jade panel has to be able to point at a different enemy without being untangled from Reach state. Separating them now costs nothing; separating them later is a refactor.
+
+The handler reachability check was widened to cover that namespace and immediately caught `jade_commit` shipping as a handler with no control.
+
+One assertion was attempted twice and then removed rather than fixed a third time: a regex over this file's own source proving the handler matcher mentions jade. That is a claim about spelling rather than behaviour, and the property is already covered where it matters, verified by the check failing on `jade_commit` before the control existed.
+
+`tools/reach-check.mjs` is now 836 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.5.0.5 (2026-08-23) - the fund and the vote become reachable
+
+Hard refresh, no server restart. Files touched: `client/assets/galaxy.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+`/api/reach/fund` AND `/api/reach/vote` HAD NO CALLER ANYWHERE IN THE CLIENT. Two releases of donation and vote machinery existed on the server, were asserted, were correct, and could not be touched from inside the game. Both render in the Reach world panel now.
+
+ONCE PER WORLD, NOT ONCE PER ENGAGEMENT. A fund and a vote belong to the world; rendering them beside each zone would have shown one copy per engagement and implied three separate funds on Ossuveth.
+
+THE FUND BLOCK shows balance, daily burn, coverage as a bar, and days of cover, which is the number that actually reads as a deadline. It gives at a fixed amount or up to the daily limit, and it states the no-refund terms pulled from the payload rather than written into the panel, so the copy cannot drift away from the rule it describes.
+
+THE VOTE BLOCK lists the options, marks the one this player chose, and shows how many have answered against the quorum and never which way, which is the same rule the funder roll follows. It says outright that the amount given does not weigh the ballot, because that is the entire reason a small donor should bother turning up, and it will not be inferred from a design document nobody reads.
+
+A SECOND DEAD ROUTE TURNED OUT TO BE THE FIX FOR A BUG THE FIRST ONE CAUSED. `reachPayload(false)` ships no `viewerId`, so after any broadcast a player's own ballot reads as null, their eligibility reads as false, and their remaining daily allowance reads as the full cap. The vote block would have told an eligible funder to go and fund the world they had just funded, and the fund block would have offered a daily limit they had already spent.
+
+`/api/reach/state` has existed since the Reach shipped, returns a viewer scoped copy, and had never been called by anything. That is precisely what it is for. It is called when the panel renders, debounced, and the timestamp is written before the request rather than after, so a burst of re-renders cannot stack requests against a slow response.
+
+Verified by breaking it: moving the debounce stamp after the request fails one assertion, and dropping the terms line from the panel fails another.
+
+`tools/reach-check.mjs` is now 828 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.5.0.4 (2026-08-23) - audit: peace was minting a war chest
+
+Server restart required. Files touched: `server/reach.js`, `tools/reach-check.mjs`, `client/assets/coalition-sprites.js`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+A QUIET WORLD WAS BANKING THE TAX. `tickFunds` computed `net = FUND_TAX_PER_DAY - burn` and applied it unconditionally, so a world with no burn accrued the full tax every tick, forever. The tax exists to offset a burn. A world with nothing to pay for has nothing to offset, and accruing there is a war chest built by peace.
+
+THE SCALE IS THE PROBLEM, NOT THE PRINCIPLE. `MAX_FRONTS` is 2 and there are ten worlds, so most of them sit quiet for months at a time. Ninety days of quiet banked about Ƒ8.6b, which is forty five days of contested cover before a single player had done anything. Every world opened later in the campaign would have arrived pre-funded, and the donation loop, the fund draining, the slip when it runs dry, none of it would have engaged there for weeks. The mechanism would have looked broken rather than generous.
+
+Accrual is gated on `burn > 0` now. Donations still land on a quiet world untouched, because pre-funding one before the front opens is a real thing to want to do; they are simply not minted by the passage of time.
+
+808 ASSERTIONS DID NOT NOTICE. The suite passed identically before and after the fix, which is the more useful half of the finding.
+
+TEN ABSENCE CHECKS RAN AGAINST IDENTIFIER-BOUNDED SLICES AND ONE GUARDED ITSELF. If a terminator moves above its start anchor, or an anchor is renamed, the slice is the empty string, and `!/anything/.test('')` is true. Every absence check on a vacuous span is a silent yes. Last release proved the mechanism is real, when deleting a dead export broke one of these slices; it failed loudly only because the terminator vanished outright rather than moving earlier. A `span()` helper now asserts the region resolves before anything is asserted about what is in it, and the nine unguarded sites route through it. Verified by relocating `blankState` above `donate`, which now reports a zero length span rather than quietly passing the refund check.
+
+THE VOTER LEDGER WAS UNBOUNDED. Every commit and every donation wrote an entry and nothing ever removed one, so it grew for the life of the world while `voteEligible` only ever read the last fourteen days of it. Pruned on write, bounded by the eligibility window rather than by how long the campaign has run.
+
+One assertion written in this patch was itself wrong on the first attempt: the obvious regex for "the ungated line is gone" also matches the gated line, since the assignment still starts a line inside the block. Rewritten as a position test, and confirmed against the restored bug.
+
+`tools/reach-check.mjs` is now 816 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.5.0.3 (2026-08-23) - audit: the bench was pricing a different war
+
+Hard refresh, no server restart. Files touched: `server/reach.js`, `client/battle-test.html`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+`battle-test.html` MIRRORS THE SERVER'S PRICING so that what the bench shows costs what the game charges, and that mirror has been asserted since the bench shipped. The server then gained wave garrison escalation in 1.4.9.5 and a Spire discount in 1.5.0.1. The bench stayed on the raw garrison with no multiplier through both, so for two releases it priced a war that was not being run.
+
+THE ASSERTION WENT ON PASSING THE WHOLE TIME. It looked for the base formula terms in both files, and both files still contained them. A mirror check that verifies the shape of one factor cannot notice a second factor appearing on one side only, and this is the exact failure the check existed to prevent.
+
+Every factor is named on both sides now and checked individually against the server's own constant, so a change to `WAVE_GARRISON_STEP` or the Spire price on one side fails here. On top of that both sides are priced end to end and compared across 45 combinations of garrison, control and banked waves.
+
+THE FIRST VERSION OF THAT FIX WAS ALSO WRONG, AND ONLY RUNNING THE HISTORIC BUG AS A CONTROL FOUND IT. It called the bench's helper functions directly, which proves the helpers agree with the server and proves nothing about whether the bench uses them. Reverting `retarget()` to the exact bug this section was written for still passed. That is the same gap as the original assertion, one level in: pieces verified, wiring assumed. The real call site is driven now, and both the historic bug and dropping the discount at the call site fail it.
+
+`addNode` WAS EXPORTED AND NEVER CALLED, superseded by an inline push in `resolveWindow` when that was written. Removed.
+
+DELETING IT BROKE A RAID ASSERTION THAT SLICED FROM ONE NAMED EXPORT TO ANOTHER. `indexOf` returned -1, the slice ran to end of file, and it failed on unrelated code. It failed loudly this time, which is luck: had the terminator moved earlier rather than disappearing, the slice would have shrunk and the assertion would have passed on a region no longer containing the function. Bounded structurally now, to the next export rather than a named one. The same pattern is used in several other places in the suite and is worth revisiting.
+
+THE BENCH'S FAKE PAYLOAD PREDATED WAVES, THE FUND AND WORKS. `forcesFor` reads coverage off the zone, and an absent field reads as zero, so the bench rendered a skeleton where the game now shows a standing line. Zone and world shapes are current, with a comment saying they have to stay that way.
+
+`tools/reach-check.mjs` is now 799 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.5.0.2 (2026-08-23) - the digest
+
+Server restart required. Files touched: `server/reach.js`, `server/server.js`, `client/index.html`, `client/assets/god-panel.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE MOST USED THING ON A GM PANEL IS NOT A CONTROL. Somebody running the whole game drops into the Reach every few days and needs what changed and what is waiting on him before a single slider is worth showing. The digest sits above every control on the tab, because it gets read a hundred times for every time garrison is touched.
+
+TWO HALVES, AND THE SECOND MATTERS MORE, so it comes first. What happened is history and reads as a list. What needs you is a decision currently waiting and is the only part that costs anything to miss: a vote closing short of quorum, ground held with no work chosen for it, a fund that is dry or under three days of cover, and a window heading for a refund for want of funders.
+
+THE MARK MOVES AFTER THE READ. Opening the panel hands back everything since the previous visit rather than blanking it on arrival, and it is kept per actor against that actor's own last visit rather than globally. `seen` is on the load merge list beside `donors`, without which a restart would silently reset every GM to seeing the entire log again.
+
+THREE EVENTS THE DIGEST NEEDS WERE NOT BEING RECORDED AT ALL: a banked wave, a brood mound raised, and a brood mound cleared. All three are exactly what a returning GM wants to know and none of them wrote a line. A world going dry is now logged too, on the TRANSITION rather than every tick, because that path runs every thirty seconds and a line per tick would bury the log it exists to summarise.
+
+THE LOG HOLDS 200 ENTRIES RATHER THAN 40. Forty was a session's worth, written when the log was a record of GM actions during a sitting. A war that runs unattended for a week generates more than that, and the window has to be wider than the absence it describes or the digest silently truncates the thing it is for.
+
+Three existing assertions needed updating and all three were pinning source text rather than properties: a payload signature that gained a parameter, a conditional that was refactored into a named flag, and a merge-list literal. That is the third patch running where exact-text assertions aged against a change they should have survived, which is now a pattern rather than an incident.
+
+A fourth check fired that had not before, catching the panel reaching for an element that did not exist in the markup, which is precisely what it is for. The container is in `index.html` now rather than being built on the fly, and the render guards on it as a condition rather than returning early, since a missing digest must not take the world list down with it.
+
+Verified by breaking it: moving the seen mark above the read fails one assertion, and restoring the early return fails another.
+
+`tools/reach-check.mjs` is now 791 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.5.0.1 (2026-08-23) - what a cleared wave leaves standing
+
+Server restart required. Files touched: `server/reach.js`, `server/server.js`, `client/assets/reach-battle.js`, `client/assets/god-panel.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+A CLEARED WAVE HAS TO LEAVE SOMETHING OR THE STRUCTURE IS A BAR THAT REFILLS. Banking a wave queues a work, the sweep opens the vote for it so a wave cleared at four in the morning still gets one, and resolving that vote raises the FOB. It raises one even when the vote resolved by default, because the ground was taken either way and the reward is not forfeit for a quiet room.
+
+FOUR TYPES, EACH DOING SOMETHING SPECIFIC so that losing one is a specific loss rather than a number going down. Bastion raises the armour ceiling. Pad raises the air ceiling and shortens the gap between airstrikes, which had been a flat 24 to 46 seconds regardless of anything. Cut blunts what a repelled window takes back. Spire makes ground on that world cheaper to push, because you can see what you are attacking.
+
+EACH TYPE COUNTS ONCE PER WORLD. A second Bastion is a second thing to defend, not more armour. Without that rule, four types across five cleared waves is a multiplier stack landing on the same two ceilings that already had to be corrected once, when a funded field converged on about seventy five tanks and read as an armour column with some infantry attached.
+
+A FOB RAISES A CEILING AND NEVER ADDS A SHARE. Funding still decides where inside the range a field lands; the work decides how high the range goes. Adding flat share instead would put armour on an unfunded field, which says money is not what buys a tank.
+
+THE BROOD BUILDS ITS OWN RATHER THAN HOLDING ONE OF OURS. A repelled window leaves a spawning mound on that ground, and carrying a push there clears it. Mounds are mass and only mass, they stack, and they are bounded. That is the asymmetry that stops brood passives compounding without limit across a year long campaign: Coalition works are permanent because the Coalition is attacking and ground taken stays taken, brood works are durable but reclaimable because the brood is defending and defenders can be dug out. Mass is also the only brood passive that cannot create a dead end, since more brood is always answerable with more force, where a stacked price penalty could put a world past reach with no counterplay at all.
+
+A RAID COSTS THE WORK AND NEVER THE GROUND. `raidFob` does not touch `hive`, any zone, or any banked wave, and the suite asserts the absence rather than trusting the intent. A lever that can be pulled at any moment and unwinds weeks of real time is the one shape of mistake this layer cannot absorb.
+
+Two existing assertions needed loosening, both for the same reason as before: they pinned whole expressions that now carry a multiplier on the outside, when the property they protect is which garrison figure goes in. A third check fired that had not fired before, catching a panel function defined with no control calling it, which is the mirror of the handler-reachability check and caught a half wired manual placement.
+
+Verified by breaking it: letting duplicate works stack fails one assertion, and letting a raid nudge world control fails another.
+
+`tools/reach-check.mjs` is now 775 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.5.0.0 (2026-08-23) - donations, and the cap that makes the burn mean something
+
+Server restart required. Files touched: `server/reach.js`, `server/server.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE CAP IS PER PLAYER PER DAY AND IT IS GLOBAL. Not per world. A per world cap lets a single wallet give the daily maximum on every world at once, which across ten worlds is ten times the figure the burn was ever reasoned against. The entire arithmetic of this layer is minimum funders equals burn divided by cap, and a cap that multiplies by the number of open fronts is not a cap.
+
+AT THE CURRENT PROVISIONAL FIGURES, HOLDING ONE FRESH CONTESTED WORLD FOR A DAY TAKES SIX DONORS AT THE CAP. That relationship is asserted rather than left implicit, with a sane band around it, so editing `DONATE_DAILY_CAP` or `FUND_BURN_PER_DAY` on its own fails the suite instead of quietly turning the fund into a whale button. Raising the cap tenfold, which is the obvious thing to do if donations feel slow, drops it to one donor and fails.
+
+THE FLOOR IS 100k, THE SAME AS THE WINDOW'S, AND DELIBERATELY LOW. A high minimum excludes exactly the small donors whose count is the thing that matters. At these burn figures their credits are marginal regardless; what a small donor brings is a head, and heads are the scarce resource this whole design is built around. Charging admission for one is the wrong trade.
+
+A DONATION IS NOT A COMMITMENT AND NEVER COMES BACK. A window refunds when it goes unanswered, because nothing was attempted. A donation is consumed by time passing and there is no state in which it returns. `DONATE_TERMS` ships in the payload rather than living in client copy, so the interface cannot quietly fail to say so, and nothing in the donate path constructs a refund.
+
+GIVING TO A WORLD EARNS A SAY ON IT. The same voter record with the same recency rule that funding a push there writes, so the vote does not care which way a player got involved.
+
+THE DONOR LEDGER IS ON THE LOAD MERGE LIST, and would have been a restart-shaped cap reset without it. It sits at the state root beside `log` and `armed` rather than on a world, because the thing it bounds spans the whole Reach.
+
+The route mirrors `/api/reach/push` in every respect that matters: guests refused, sealed passage refused, give-max resolved server side against both the remaining cap and the wallet, and the debit taken only after `donate()` has accepted, since every rejection inside it runs before it touches state.
+
+Verified by breaking it three ways: dropping `donors` from the merge list fails one assertion, raising the cap to 500m fails the funders-per-world relationship at one donor, and moving the debit above the accept fails the ordering check.
+
+`tools/reach-check.mjs` is now 753 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.9.9 (2026-08-23) - one vote, three jobs
+
+Server restart required. Files touched: `server/reach.js`, `server/server.js`, `client/assets/god-panel.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+WHICH FOB GOES UP, HOW THE COALITION ANSWERS THE HIVE LORD, AND HOW IT ANSWERS JADE are the same shape of question three times over: a decision somebody has to make, which the GM would otherwise be making alone, at midnight, on behalf of a room whose mind he has to guess. One primitive serves all three and the panel opens any of them in one click.
+
+ONE DONOR, ONE VOTE, AND THE AMOUNT IS IRRELEVANT. Weighting a ballot by credits would rebuild the whale button inside the mechanism built to prevent it, and it would rebuild it somewhere far less visible than a funding bar. This is `PUSH_MIN_FUNDERS` carried from the window to the fund: money buys sustain, heads buy direction. Nothing in the vote path reads an amount and the suite asserts it.
+
+ELIGIBILITY IS RECENT RATHER THAN EVER. Fourteen days of having funded that world, written at commit time rather than derived from a window's funder roll, because that roll is trimmed to twelve names for display and eligibility must not depend on a display concern. A player who funded once in January does not decide FOBs in November, and every vote becomes a reason to have been involved lately, which is the recurring pressure the fund needs and does not otherwise have.
+
+A TIE GOES TO THE DEFAULT, AND THAT HAD TO BE COMPUTED RATHER THAN FALLEN INTO. The first implementation seeded the running best from the default's own count and took the first strict improvement, which hands a two-two split to whichever option happens to sit earlier in the list. The outcome would have depended on the order the options were typed in. That was caught by tracing the tally through six ballot shapes, not by reading the code, which looked correct and had a comment claiming the behaviour it did not have. Joint leaders are collected now: exactly one leader carries, more than one means the room did not choose, and the default is what the room gets when it does not choose.
+
+A LIVE TALLY IS NOT SHIPPED, only how many have answered. Same rule `winView` already follows for the funder roll: what matters to somebody deciding whether to answer is how many, not which way. A running tally is pressure and a bandwagon. Counts ride along once the vote has resolved and is history rather than pressure.
+
+VOTES RESOLVE ON THE CLOCK, from the same sweep that resolves windows and ticks the fund. Nothing in this layer may block waiting for the GM: run out of clock with nobody answering and the default lands and the war continues. FOB votes default to Bastion. A demand defaults to REFUSED, because a demand that passes by silence would teach players that not turning up concedes territory.
+
+The player route moves no money, so there is no debit path and no refund path. It refuses guests exactly as `/api/reach/push` does.
+
+Verified by breaking it: restoring list-order tie resolution fails two assertions, and shipping the tally while a vote is open fails another.
+
+`tools/reach-check.mjs` is now 734 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.9.8 (2026-08-23) - the war fund
+
+Server restart required. Files touched: `server/reach.js`, `server/server.js`, `client/assets/reach-battle.js`, `client/assets/god-panel.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE COALITION HAS A MILITARY BUDGET AND IT TICKS UP ON ITS OWN, because a government funds its own army and the war should not stop because nobody logged in. The tax is a fixed figure. The burn scales on the same two terms `pushTarget` scales on, garrison and zone control, which means taxes cannot arithmetically cover a contested world and come nowhere near a hard one. The Coalition holds what it owns. Players pay for everything past the border.
+
+THE DRAIN IS THE MECHANISM RATHER THAN A COST BOLTED ONTO ONE. A fund that empties is what makes a world slip, and it does that with a cause a player can name instead of through a decay constant nobody can see. This replaces the flat decay proposed earlier in design and is strictly better: identical behaviour, visible reason, one fewer invented number.
+
+THE SLIP CANNOT EAT A BANKED WAVE. It is bounded per day, it skips any zone with a window open and any zone that has cleared all its waves, and it writes only `z.hive`. `worldHive` floors world control on `cleared`, so a month of neglect costs the live wave and cannot cost the campaign. That safety property shipped in 1.4.9.5 and is what makes it safe to let ground move on its own now.
+
+THE FIELD NO LONGER FALLS BACK TO A SKELETON BETWEEN PUSHES. `forcesFor` takes the greater of the open window's ratio and the fund's coverage, so a funded world holds a real line with nobody pushing and a dry one thins out by itself. Previously the moment a window resolved the Coalition presence collapsed to the unfunded floor, which read as the war stopping rather than as the war continuing without an offensive on.
+
+NOTHING PAYS OUT. `reach.js` still moves no cash and the suite asserts it, same invariant as the Council Chamber treasuries: a pool that funds troops and can also be drained back out is a laundering route rather than a war fund.
+
+THE TICK RIDES THE WINDOW SWEEP, for exactly the reason that sweep is a sweep rather than a timer. PM2 forgets `setTimeout` on restart, and a fund that quietly stops ticking is a war that freezes with nobody noticing.
+
+TWO FIGURES ARE PROVISIONAL AND LABELLED AS SUCH IN THE SOURCE. `FUND_TAX_PER_DAY` and `FUND_BURN_PER_DAY` are the only numbers in this file not derived from the numbers around them; they are set by how much money actually moves through the playerbase in a day, which is a question about the live database. Conservative until measured. As they stand: a quiet world burns nothing, a fresh contested world burns 288m a day against a 96m tax so taxes carry about a third, a hard world burns 403m, and a nearly held one burns 180m.
+
+PLAYER DONATIONS ARE NOT IN THIS PATCH. The fund is GM fed, through a numeric input on the world row that shows balance, daily burn, days of cover and coverage percentage. The donation route moves player money and belongs in its own patch alongside the daily cap and the donor eligibility that the vote will share.
+
+Verified by breaking it: letting the slip hit a zone with a live window fails one assertion, and letting it decrement a banked wave count fails another.
+
+`tools/reach-check.mjs` is now 714 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.9.7 (2026-08-23) - Jade Circuit is dark steel
+
+Hard refresh, no server restart. Files touched: `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE TINT SHIPPED IN 1.4.9.6 WAS WRONG AND RENDERING IT AGAINST THE REAL SHEETS IS WHAT SHOWED IT. A partial `source-atop` fill toward a mid grey does not desaturate, it compresses: darks lift, lights drop, and the entire figure lands in a narrow band around the fill value. At field size the turret nearly disappeared and the enforcer's shield stopped reading as a separate object from his body. The assertions all passed, because they checked the cache key and the wiring, which were right. Nothing in a static check can tell you a colour looks wrong.
+
+LUMINANCE IS PRESERVED AND ONLY HUE IS DISCARDED, with a faint cool cast on top. Every shading step in the original survives, which is what keeps a figure legible at 32 pixels, and the result is genuinely colourless rather than a muted green that reads as Coalition infantry in bad lighting.
+
+ARITHMETIC, NOT A BLEND MODE. `globalCompositeOperation = 'saturation'` would be shorter and would render slightly differently depending on how a browser implements it. `getImageData` is the same everywhere, runs once per faction and animation behind the cache, and lets the preview be generated from the shipped coefficients rather than from a re-typing of them. Alpha is never written, so a figure keeps its own edge and no silhouette leaks into the transparent margin.
+
+THERE IS NO LIFT, AND THAT IS MEASURED. The open question was whether a dark faction sinks into a near black field. The battle host is `#04050a`, luminance 5.3. Coalition infantry average 52.2 across their opaque pixels. Jade at zero lift averages 51.0. Jade is exactly as visible against that background as the Coalition already is, so the brightening step that existed to prevent sinking was solving a problem that does not exist, and it is gone.
+
+Verified by breaking it: writing alpha in the tint loop fails one assertion, and changing the lift off zero fails another.
+
+`tools/reach-check.mjs` is now 693 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.9.6 (2026-08-23) - faction is not side, and a tint is not a second art pass
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+`u.side` IS `+1` AND `-1` IN TWO DOZEN PLACES AND IS USED ARITHMETICALLY, including `-p.side` in the damage path. Putting a third value there to represent a third army breaks combat in ways that do not announce themselves at the point of the change. Faction is a separate tag. Side is which line you are on, `fac` is whose uniform you are wearing, and two factions can share a side, which is the entire point.
+
+Jade and the Coalition both sit on `side === 1`, so targeting, cover, damage, band clamps and reinforcement are untouched by this patch. `pickTarget` already skips anything matching the shooter's side, so allies never shoot each other and the alliance costs nothing in the combat path.
+
+IT ALSO BUYS THE FACTION WAR LATER FOR FREE, which is the actual reason to do it this way. `side` stops meaning Coalition and starts meaning belligerent A and B; `fac` says who is standing there. Coalition against Jade becomes `side 1 fac coal` against `side -1 fac jade`, on the same arithmetic, with no combat code touched.
+
+COLOUR KEYS ON FACTION NOW, EVERYWHERE. Four hardcoded literals are gone from the draw call, including the brood's amber, which is a faction colour and not "whatever side minus one happens to draw as". Adding a faction is a row in the `FAC` table rather than a hunt through the render for cyan. Jade gets its own `Path2D` set for the wireframe classes, because a path strokes once in one colour; twelve more path objects and no extra per-unit work, since the band a unit lands in is still decided once from its depth.
+
+FOUR COALITION CLASSES ARE SPRITES rather than wireframes, so a second faction in the same kit is pixels, not a stroke colour. A second set of sheets on disk means an art pass for every faction forever. `tinted()` composites `source-atop` at partial alpha, so the sheet's own alpha survives untouched, no silhouette leaks into the transparent margin, and the original shading reads through, which is what keeps a tinted sheet looking like armour instead of a decal. Every faction after the first is a hex value.
+
+THE CACHE KEY IS FACTION PLUS ANIMATION, and it is settled here rather than retrofitted. Keying on the animation alone works perfectly right up until two factions are on screen at once, at which point whichever drew first wins the cache entry and the other wears its colours. That is a bug that looks like it works, which is the expensive kind. A tint that throws returns the untinted sheet, because `drawFrame` returning false after a unit has been claimed off the wireframe path makes that unit vanish from the field entirely.
+
+POSTURE IS A DEPTH OFFSET AND NOTHING MORE. Whether the Coalition supports Jade or leads the charge is the question of who stands nearer the enemy, and the band clamp at the aimed-fire block already decides that. One number, and the picture answers the question without a word of UI. `window.reachJade(frac, forward)` retunes the next arrivals rather than repainting the field, so the line turns over from grey to teal across a reinforcement cycle exactly the way funding composition already drifts.
+
+JADE SHIPS AT ZERO. Nothing on the field changes until the dial is turned, so this patch is a seam rather than a feature.
+
+Two existing assertions failed and both were over-specified rather than wrong: they pinned the literal path array name in a dispatch arm when the property they exist to protect is that the band gets passed to the drawer. Faction routing made the path an expression, and pinning its text would have failed on every future faction for no reason. Loosened to the property.
+
+Verified by breaking it: collapsing the tint cache key to the animation name fails one assertion, and dropping the faction from the sprite queue fails another.
+
+`tools/reach-check.mjs` is now 690 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.9.5 (2026-08-23) - waves, and control that banks rather than averages
+
+Server restart required. Files touched: `server/reach.js`, `server/server.js`, `client/assets/god-panel.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+A ZONE IS NOT TAKEN IN ONE CAMPAIGN. Clearing it banks a wave and the next forms behind it, so a world is many battles across weeks rather than one fight with nine rounds in it. Each zone carries `cleared`, which only ever goes up, and `waveAt`, which is when the current wave came up and is what the duration line on the player strip will read.
+
+THE MEAN WAS THE PROBLEM. `w.hive` was `Math.round(w.zones.reduce(...) / length)`, the flat mean of live zone control, and that was exactly right while a zone was fought once. It hands back won ground the instant waves exist: a fresh wave opens at 100 and the mean reads the planet as untouched again, so clearing a wave would have moved the world backwards.
+
+Control is banked waves plus progress inside the current one, floored on `cleared`. Ground inside a live wave moves both directions, which is what gives a defensive campaign something real to defend, and no reverse inside that wave can subtract from a wave already banked. Traced across a three wave zone: 100 fresh, 80 with the first wave mostly won, 67 once it banks, 67 again after the second wave collapses back to full brood control, then 33, then 0. A world reads zero only when every zone has cleared every wave, which is what `fireConversion` already keys on, so conversion needed no change.
+
+GARRISON ESCALATES PER WAVE BANKED. The brood digs in as it is driven back: twelve points per cleared wave, so a three wave zone is priced against 50, then 62, then 74. It is applied at the `pushTarget` call site through `effGarrison(w, z)` rather than by mutating `w.garrison`, which keeps the GM's figure the GM's figure and keeps `pushTarget(garrison, zoneHive)` on its original signature, so the bench's mirrored pricing formula in `battle-test.html` stays valid. A repelled window is scaled by the escalated figure too.
+
+`reach_waves` IS A REAL CONTROL, bounded 1 to 12, with a numeric input on the world row that also shows each zone's banked count. Raising the count re-opens ground that had cleared, which is deliberate and is why it is a separate command rather than a side effect of something else: a world grows because you decided it should, not because a table said so.
+
+THREE EXISTING ASSERTIONS FAILED ON THIS CHANGE AND ALL THREE WERE RIGHT TO. Two encoded the old averaging rule and were updated to the new one. The third demands every server handler be reachable from the panel, and it is the reason `reach_waves` did not ship as a command with no control, which is the exact fault that check was written for after `turret_deploy`.
+
+Verified by breaking it: reverting `worldHive` to averaging fails two assertions, and pricing a push against the unescalated garrison fails one. Worth recording that a first attempt at a negative control did not bite, because the banked floor turns out to be over-determined: `clampPct` on `z.hive` already guarantees the live term is never negative, so removing either of the two explicit guards leaves the property standing. The guards stay as statements of intent, but the assertion that proves the ratchet is the one that drives `worldHive` end to end, not the one that reads its source.
+
+`tools/reach-check.mjs` is now 669 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.9.4 (2026-08-23) - a zone is never silently dropped, and the strip stops quoting the renderer
+
+Server restart required. Files touched: `server/reach.js`, `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE BUG THIS FIXES HAS NOT HAPPENED YET, which is the only reason it was cheap. `loadReach` rebuilt every world's zone array against `zoneCount(id)` and copied only the indices below that figure. That was the right repair for exactly as long as `REACH_POP` was the only thing in the system that could set a zone count: a stored array disagreeing with the table was stale, and rebuilding it was maintenance.
+
+It stops being right the moment anything else can add a zone. A fourth battle opened on a world would live in memory, be written to the KV on the next save, and then be dropped by this loop at the next cold start, taking its live window and every credit committed to it. Nothing would log, because from inside the loop it is indistinguishable from the maintenance it used to be. The population figure is a FLOOR now rather than a target: `Math.max(w.zones.length, zoneCount(id))`, pad up, never shorten, and a zone leaves only when something asks it to. Verified against `ks_06`, whose population of 9 implies one zone: a stored array of four reconciles to four.
+
+THE FIELD SHARE LINE IS GONE FROM THE PLAYER STRIP. `coalFrac` is a rendering ratio that decides how many wireframes get drawn, and the force model comment says outright that the field is a picture. Printing it as "62% OF THE FIELD IS OURS" invited players to read the wireframes as a casualty count, which they are not and were never claimed to be.
+
+WHAT A LINE ON THAT STRIP HAS TO EARN is a change in what somebody does in the next five minutes. Money in and money needed already passed. The funder count now shows against `PUSH_MIN_FUNDERS`, because it is the one number on screen that can tell a player the missing input is their own attendance rather than their credits, which is the entire reason the minimum exists. Time remaining is shown while a window is open.
+
+`win.outcome` IS ON SCREEN AT LAST. The server has been writing a plain readable sentence into it since windows shipped, describing exactly what happened and why, and nothing has ever displayed it. A player arriving between windows saw an idle progress bar and no account of the last fight. `minFunders` rides at the root of the payload under `push` rather than on the window, so reading it off the window yielded zero silently; it is read from the root now, guarded with a `typeof` check because the suite lifts `forcesFor` out and runs it headless, where a bare `window` reference throws.
+
+FPS, UNIT COUNT, COVER COUNT AND CAMPS HELD were frame diagnostics wearing a player's clothes. Two describe the renderer and two describe a simulation this file calls a picture. They are kept, because the first phone that stutters will want them, and moved behind `window._fmReachStats`.
+
+`tools/reach-check.mjs` is now 648 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.9.3 (2026-08-23) - the brood's air arm, shots that reach it, and one skeleton
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+FLYERS WERE A FLAT SEVEN PERCENT. A gunship never exceeds three and a half even fully funded, so the sky held anywhere from two to nine flyers for every gunship, and the unit built to hunt gunships was the first thing you noticed on that side of the field. That is not an answer to air, it is an air force with an infantry problem attached.
+
+Funding buys the Coalition its gunships. Nobody buys the Khai'sultull anything, which is the entire point of `reviveAsHive` having no funding term, so the brood's equivalent lever is the world's own garrison. `applyGarrison()` derives the flyer share from it on the SAME CURVE `heliShare` uses against funding: 0.8 percent at an empty garrison, 3.6 at a full one, which is the gunship's exact range. Spitters absorb the difference automatically, being the else branch of the brood draw.
+
+A ROUND FIRED AT SOMETHING IN THE AIR NOW GOES UP. `fire()` has accepted a target altitude as its ninth argument since it was written and has been storing it on the round ever since. No call site ever passed one. No line in the draw ever read one. Tracer height was `1.4+arcA+(p.z?p.z*(1-k):0)`, which runs from the shooter's altitude DOWN to the ground and stops there, so every shot at a gunship or a flyer was a line skimming the dirt underneath it while the thing overhead came apart on its own.
+
+WHAT WAS MISSING WAS ONLY THE SHOT. `pickTarget` never excluded airborne units and never needed to: it matches on x and y, and a flyer holding station at `front-0.16` sits inside a rifleman's 0.24 band. Infantry have been selecting flyers, firing at them and killing them this whole time. The kill was real and the tracer was pointed at the ground. Same shape of fault as the grenade timer decremented in the wrong block and the turret sheet that was preloaded and never drawn: plumbing that shipped connected at one end.
+
+ONE SKELETON FOR THE BROOD. The blade trooper is drawn from the rifleman's skeleton on purpose, because they are the same soldiers with different kit and a shared frame is what makes a mixed line read as one army rather than two unrelated sprite sets. The brood had no such frame. A rusher was one flat diamond and a spitter was a different flat diamond, two shapes that happened to share a colour.
+
+THE SPITTER IS THE UNIT THE PLAYER ACTUALLY SEES. Rushers are three in ten and flyers are now under four in a hundred, so the else branch takes very nearly two thirds of that side of the field. The majority unit was eight segments on three legs at every range: the most numerous thing out there was the worst drawn thing out there, and the rusher rebuild in 1.4.9.2 widened that gap instead of closing it. It is built on the rusher's frame now, with a swollen abdomen carrying the acid and a dorsal spout instead of arms, and it takes tiers: 38 near, 26 mid, 8 far.
+
+Segment counts across the brood, measured by instrumenting the real functions: Scythe 44/29/10, Censer 38/26/8, Lancet 37/24/6. No class on the field is untiered any more, on either side.
+
+`broodFrame` sits AFTER `gSpit` in the file and the suite asserts it. The gunship's own assertions slice from `gHeli` up to the first `gSpit`, so anything placed in that span silently widens the slice and the gunship checks begin passing against text that is not the gunship.
+
+`tools/reach-check.mjs` is now 635 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.9.2 (2026-08-23) - the brood takes level of detail tiers
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE BROOD NEVER TOOK A TIER. Every Coalition class did, and the dispatch handed the depth band to each of them. The three hive drawers were handed nothing, so a rusher at two hundred units cost exactly what a rusher at ten did. That is backwards. The far band is where almost every unit on the field actually is, and it is the band where none of the detail survives to be seen.
+
+THE RUSHER IS AN INSECT NOW. It was a flat diamond, two claws and four sticks: ten segments, drawn identically at every distance. It has an abdomen and a thorax that meet at a waist, a head whose mandibles hang open while it runs and close when it makes contact, two scythe arms that rotate about a real elbow so the edge leads rather than sliding sideways on a sine, and six legs on an alternating tripod where the front and rear of one side travel with the middle leg of the other. 44 segments near, 29 mid, 10 far.
+
+TEN IS EXACTLY WHAT THE OLD MODEL COST, at every distance, so the swarm at depth is not one segment more expensive than it was this morning. Everything the rebuild adds is spent inside the near band, where a handful of rushers are, and none of it is spent where most of them are. That is the whole reason the tiers were built into it rather than retrofitted after, which is the mistake the gunship rebuild had to pay for in 1.4.8.2.
+
+THE FLYER IS THE ONLY UNIT REGULARLY SEEN AGAINST EMPTY SKY. Everything else has terrain behind it to hide a poor silhouette in. It has four wings running on the same period offset by about a sixth of a cycle, so the four never resolve into two, a segmented abdomen tapering into the sting, a head with mandibles, and legs carried tucked instead of hanging. 37 near, 24 mid, 6 far. Six is three FEWER than the flat model it replaces, because at that range a flyer is a cross with a tail and the claws were never visible in the first place.
+
+THE SWING STOPS AT THE FAR TIER. The claws animated off `Math.sin(u.ph*7)` regardless of distance, and at two hundred units that amplitude lands under a pixel. It is the same fault as the one pixel cover twitch removed from the sprite path in 1.4.8.9, reached from the other direction: an animation too small to see is cost with no picture attached. A far model holds its pose.
+
+THE ORDER OF THESE FUNCTIONS IS LOAD BEARING and is now asserted. The gunship's own assertions slice the file from `gHeli` up to the first `gSpit`, so a model moved into that span would silently widen the slice and the gunship checks would start passing against text that is not the gunship. Both rebuilt bodies sit beyond `gSpit`, and the suite fails if either moves.
+
+`tools/reach-check.mjs` is now 621 assertions. Verified by dropping the band from the rusher's dispatch arm and by adding a segment to its far tier, each of which fails one assertion, then restoring. Suite: 11 of 11 green.
+
+---
+
+## v1.4.9.1 (2026-08-23) - camps, as a display of server control
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `client/battle-test.html`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+FIVE CAMPS ACROSS THE DEPTH OF THE FIELD, seeded per zone so the same ground always has the same map. Who holds each is a pure function of the hive control the server sent: a camp behind the front is ours, a camp beyond it is theirs, and that is the entire rule.
+
+THE CONSTRAINT IS THE FEATURE. The obvious build of this is camps captured client-side which then decide where the front sits, and that version is the wrong one: it makes the client an authority on ground state the server already owns. Two authorities on one number is precisely how a client starts disagreeing with the server about who holds a zone, and this renderer has never done that. So nothing in the camp code may write `CL.front` or any world control. The suite asserts it by scanning the block, and making a camp assign the front fails the check.
+
+WHAT THAT BUYS. The camps ARE the conquest read. As the server reports hive control falling, camps flip one by one from the near end of the field to the far, and the flip is the picture of the fall rather than a cause of it. A flip is presentation only: a flash, a blast, and a highlight for a couple of seconds.
+
+REINFORCEMENTS RALLY ON THE REARMOST CAMP HELD. This is what makes a camp read as a spawn point without being one in any authoritative sense. The camp is derived from the server's front, so where men appear is derived from it too, and pushing the line forward visibly moves where your reinforcements come from. Hold no camps and they arrive at the map edge exactly as before. The brood does the same from its own end.
+
+A COALITION FIREBASE AND A BROOD CAMP ARE DIFFERENT KINDS OF THING. A revetment with tents and a mast against a mound with spines. The point of the feature is telling who holds what across the depth of the field at a glance, which fails if both sides build the same shape in different colours.
+
+VERIFIED ACROSS THE WHOLE CONTROL RANGE rather than at one value: 0 camps held at 95% hive, 1 at 80, 2 at 60, 3 at 40, 4 at 20, 5 at 5. And moving to another value and back reproduces the same ownership exactly, which is what "pure function" has to mean in practice.
+
+The bench lists every camp with its depth and owner, so the derivation can be watched directly against the HIVE HOLDS slider.
+
+`tools/reach-check.mjs` is now 608 assertions. Suite: 11 of 11 green, 1151 assertions.
+
+---
+
+## v1.4.9.0 (2026-08-23) - battle behaviour pass
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE CROUCH-AND-SLIDE HAD TWO CAUSES AND ONE ROOT. The pose was chosen from `u.st` and `u.sup`, and neither of those tracks movement. `u.sup > 900` is a suppression LEVEL, not a state, so a unit bounding while suppressed played the crouch and slid across the ground in it. And `S_PINNED` moves every frame but had no animation case at all, so it fell through to idle and slid too.
+
+Rather than adding cases, movement is MEASURED: each unit's displacement since last frame, smoothed, taken once at the top of its turn. Every branch below is covered by that, including the ones that `continue` early and any added later. The walk pose follows it, the animation frame rate follows it, and a crouch is only used while the unit is genuinely still.
+
+COVER WAS BEING HOARDED BY UNITS THAT SHOULD NOT WANT IT. Measured: twelve of twelve tanks and twenty-seven of twenty-seven engineers were sitting in cover slots, while a hundred and ninety riflemen competed for the sixty positions that exist on the map.
+
+Armour has its own branch now. It holds a standoff line, traverses along it looking for an angle, backs off when it has just been hit, and never claims a slot. A tank hiding behind a boulder was wrong twice over: armour does not do that, and every slot it took was one a rifleman needed.
+
+Engineers do not claim slots either, and the rule now lives where CLAIMING happens rather than where releasing does. Releasing the slot inside the engineer branch had achieved nothing, because the generic path immediately claimed another one on the next line.
+
+A THIRD OF THE RIFLEMEN NEVER TAKE COVER AT ALL. With cover everywhere, sixty percent of the line was static behind a rock at any moment, which is a firing line rather than an assault. Every third rifleman advances and fires from the open, so there is always a body of men moving forward for the rest to support.
+
+THE BOUNDING CYCLE WAS LYING IN ITS OWN COMMENT. It claims roughly a third of the line is moving at any moment. Measured, it was eleven percent: the phase window is nine seconds wide and the holds are long, so a team waits out most of its own turn. Faster cycle, shorter holds for the men who never dig in, and it is twenty-five percent now.
+
+BIGGER GROUND. 300x230 to 420x320, with fifty-two terrain features instead of thirty. The bunching was partly a supply problem and no amount of behaviour tuning fixes sixty positions shared between two hundred and thirty units.
+
+GUNFIRE IS WARM. The cyan tracer is gone entirely. Sprite units already stopped drawing one in v1.4.8.1, so what was left was the tank and the gunship firing cyan lines, which is the colour of an energy weapon. A wireframe shooter also gets a muzzle flash of its own now, since unlike a sprite it has no sheet with one painted in: a tank was firing a line out of a silent hull.
+
+THE ARMOUR CEILING WAS TUNED, NOT THE MECHANISM. The field converges on the funded shares over a few minutes, because reinforcement replaces losses at the CURRENT shares rather than the ones the field was seeded with. That drift is the funding display doing exactly what it should. But at seventeen percent a fully funded field converged on about seventy-five tanks, which is an armour column with infantry attached. Four to eleven percent now, which is eighteen tanks unfunded and forty-eight fully funded.
+
+`tools/reach-check.mjs` is now 597 assertions. Suite: 11 of 11 green, 1140 assertions.
+
+---
+
+## v1.4.8.6 (2026-08-23) - completion pass on the Reach battle
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+This is the finished state rather than another increment. Four defects, all found by running the bench for ninety seconds and watching the numbers, not by reading the code.
+
+NOTHING REINFORCED THE BROOD. `reinforceToward` only ever replaced Coalition losses. A zone held for a few minutes therefore drained to an all-Coalition field chasing a handful of survivors: measured over sixty seconds, the brood went from 442 to 310 and was heading to zero, on ground the server still calls contested. That is a picture of a war already won, which is the opposite of what the front is for.
+
+The brood is topped up toward its share of the field now, from GARRISON and never from funding, because nobody buys the Khai'sultull anything and their replacement rate should be the same number that already decides how hard they push back. Both revive passes share one cursor over the dead list, or the two sides would fight over the same corpses. The field now sits at roughly 443 to 295 and stays there.
+
+THE GRENADE TIMER WAS DECREMENTED IN THE WRONG PLACE. `u.nade` was reduced inside the aimed-fire block, which is only reached after the weapon cooldown has elapsed. So it lost one frame of time per three seconds of real time: a four second timer took twelve and a half minutes, slow by a factor of a hundred and eighty-eight. Grenades shipped in v1.4.8.0 and had never once been thrown. A cooldown counts seconds, so it is decremented where seconds are counted. Five to twenty are now in the air at any moment.
+
+THE EMPLACEMENT CEILING WAS BLOWN THROUGH TWICE OVER. It was a flat 48, which is a seventh of the Coalition standing perfectly still, and it now scales with what funding actually bought: six to twenty. It was also only checked when a build STARTED, and a build takes 1.4 seconds, so thirty engineers could all begin one in the same frame while the count was under the ceiling and all thirty would finish. A limit of twenty produced thirty-seven guns. It is re-checked at completion, and a new gun is counted the moment it exists rather than at the next frame's recount. Holds at exactly twenty now.
+
+TROOP SHEETS CARRY A BUILD STAMP. A browser caches a 404 exactly as readily as a 200, and these are the only assets in the client that were added after players already had the page cached, so a host that served a miss once has clients that will never ask for that file again however many times it is deployed afterwards. Sheet urls now carry the build version. The constant is bumped by hand, which would rot, so the suite asserts it equals `client/version.json`.
+
+ON THE FOUR MISSING SHEETS: `apply.sh` was tested against a repo deliberately missing all four, and it restores every one of them. The build and the apply step were never at fault, so a cached miss is the remaining explanation and the stamp is the fix for it.
+
+`tools/reach-check.mjs` is now 580 assertions. Suite: 11 of 11 green, 1123 assertions.
+
+---
+
+## v1.4.8.5 (2026-08-23) - the crash, and the check that should have caught it
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+`gTurret` WAS DELETED BY ACCIDENT IN 1.4.8.4. Rebuilding the tank replaced the span of text from `function gTank(` up to the gunship header comment, and `gTurret` had been inserted inside that span back in 1.4.7.0. It went with the tank.
+
+WHY NOTHING CAUGHT IT, which matters more than the deletion. A `case` arm calling an undefined function is valid JavaScript right up until that arm runs. `node --check` passes. Every regex assertion in the suite passes. And the arm only executes when a turret EXISTS and its sprite sheet is unavailable, which is a narrow window: a few seconds into a funded battle, at the exact moment the first emplacement goes up. So it survived a release, then took the entire render loop down with a `ReferenceError` on the frame the first gun was built.
+
+IT ALSO EXPLAINS THE EARLIER REPORT. With the turret sheets 404ing on the live host, every emplacement takes the wireframe path rather than the sprite one, so the live client would hit this immediately rather than rarely. The missing assets and the crash were the same fault wearing two faces.
+
+REPRODUCED BEFORE FIXING. The bench was run headless with a real error handler: clean at one through five seconds, `ReferenceError: gTurret is not defined` at six, on the frame turret count went from zero to one. After the fix, twelve seconds clean with twenty-seven emplacements standing.
+
+THE CHECK NOW RESOLVES THE CALL GRAPH INSTEAD OF GREPPING FOR STRINGS. Every `gXxx` called anywhere in the renderer must have a definition. Every dispatch arm must name a defined function. And every class the simulation can seed must have either a dispatch arm or a sprite path, because a class with neither draws as nothing at all. Verified by deleting `gTurret` a second time: `node --check` still passes, and four assertions fail.
+
+`gTurret` is rebuilt to the standard the rest of the units now hold rather than restored as it was: a baseplate on legs, a collar, a receiver with an ammo feed, a barrel that recoils, and a mast that RISES as the emplacement deploys rather than popping in at full height.
+
+`tools/reach-check.mjs` is now 566 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.8.4 (2026-08-23) - armour and gunships carry their detail
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+DETAIL HERE IS NEARLY FREE, which is why it goes here. There are a dozen tanks and two gunships on a field of seven hundred units, against two hundred and fifty riflemen, and they are the units the cinematic camera actually gets close to. Measured: 0.26ms a frame for every tank and gunship on the field at full detail, one and a half percent of a sixty frame budget. The infantry pass costs roughly five times that.
+
+THE TANK WAS A BOX WITH A SMALLER BOX ON IT AND A LINE FOR A GUN. Twenty-four segments, and from any angle except dead side-on it read as a crate. It is a hundred and four now, and the parts were chosen for what they do at a distance rather than for completeness: a raked glacis so the front plate is not flat, sponsons bracketed over the tracks, running gear with five road wheels between a drive sprocket and an idler and the track line resting over the lot, a six sided turret so it is not a second crate, a bustle rack, a cupola, an exhaust and an antenna.
+
+THE MANTLET IS THE ONE THAT MATTERS. The old gun was a segment sliding back and forth through open air, which is what recoil looks like when there is nothing for the barrel to recoil INTO. There is a mantlet face on the turret front now and the barrel moves through it while the mantlet stays put.
+
+THE GUNSHIP went from fifty segments to seventy-six. Engine housings either side of the mast with exhaust stacks venting aft, which is the mass that makes it look powered rather than like a cabin with a fan on top. A sensor ball under the nose, which is what a gunship actually aims with. A horizontal stabiliser and a shroud around the tail rotor.
+
+AND THE ROTOR DISC CONES. The blades sit slightly below the hub and the roots angle up to meet it, rather than the whole disc lying dead flat. That coning is most of what separates a helicopter from a spinning cross, and it costs four segments.
+
+ALL THREE LEVEL OF DETAIL TIERS ARE KEPT ON BOTH, and the far tier is deliberately unchanged: at two hundred metres none of this survives, so the cheap silhouette is still the right answer there. The check asserts the tiers are monotonic, that the near tier is actually detailed, that the far tier stays cheap, and puts a ceiling on the whole-field cost so a future detail pass has a number to check itself against. Verified by flattening the tank's tiers, which fails two assertions.
+
+`tools/reach-check.mjs` is now 560 assertions. Suite: 11 of 11 green, 1103 assertions.
+
+---
+
+## v1.4.8.3 (2026-08-23) - the stutter, and a gunship worth looking at
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE STUTTER WAS THE FRAME INDEX, NOT THE MOVEMENT. `sprFrame` offset the animation counter by `u.ph`, which reads like a per-unit phase and is not one: `u.ph` is ADVANCED every step, because it drives the idle bob and the rotor spin. So the frame index was being pushed by a term that moves on its own. A five frame per second idle actually cycled at about twenty-seven, unevenly, which is why a line of men standing still looked like it was vibrating.
+
+The offset is `u.i` now, the unit's index in the array: fixed for its whole life, different for every unit, which is the entire job of a phase offset. Measured before and after against the intended rate: 27.4 fps, then 4.8, against an intended 5.
+
+THE IDLE BOB WENT WITH IT. A stationary unit in cover was nudged by `sin(u.ph) * 0.0004` every frame. That is sub-centimetre in world terms and would be invisible on its own, but the sprite layer rounds to whole pixels, so it landed as a one pixel twitch flicking on and off rather than as a settle. A man holding a position is still; his animation is what should move.
+
+I CHECKED A SECOND SUSPECT AND LEFT IT ALONE. Sprite scale is not rounded, so a stationary man under a moving camera changes drawn size occasionally. Measured: about 0.4 size changes per second from a sub-metre camera dolly. That is perspective doing its job, and quantising the scale would trade a rare sub-pixel change for a rarer but larger jump, which is worse. Also worth recording that the first thing I suspected, the mirror flip flapping near an end-on camera, was modelled and produces zero flips. It was not the cause.
+
+THE GUNSHIP STAYS WIREFRAME AND NOW EARNS IT. The reference link could not be opened, it is behind pixiv's login, and rebuilding a named artist's specific design is not something to do regardless. The technical reason matters more: a gunship holds a lateral orbit and reverses at the field edge, so it is flying left half the time and right the other half, while the camera orbits independently. Two facings cannot cover that, and no side-view pack contains a banked frame. A still rotor also reads as a crashed helicopter, and a wireframe disc can actually turn.
+
+So it got rebuilt instead. It was twelve segments: a flat quad, a boom, two skids and a two-line rotor, with no silhouette from any angle. It is fifty now, on the same three level of detail tiers the infantry uses. A hexagonal faceted hull that reads as a fuselage from any angle the orbit can reach, a canopy, a chin turret slung under the nose that recoils with the hull, stub wings carrying pods, a boom that tapers to a fin, a tail rotor turning on its own axis, a four blade main disc on a mast and hub, and skids on struts rather than two lines floating under the belly. The far tier keeps the old cheap silhouette, since at two hundred metres none of it survives anyway.
+
+`tools/reach-check.mjs` is now 543 assertions. Suite: 11 of 11 green, 1086 assertions.
+
+---
+
+## v1.4.8.2 (2026-08-23) - a battle test bench that lives in the repo
+
+Hard refresh, no server restart. Files touched: `client/battle-test.html` (new), `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+`client/battle-test.html`, served at `/battle-test.html`. You had not missed it: what existed was a download I rebuilt by hand each patch, with the renderer inlined into it. That is the version of this idea that fails. It meant every change needed me to remember to re-inline, and it was one forgotten rebuild away from testing a copy of the code that no longer existed anywhere. It is also why the sprites did not appear in it: an inlined page has no `assets/` directory beside it, so every sheet 404ed.
+
+THE BENCH LOADS THE REAL MODULES with plain script tags. `assets/coalition-sprites.js` then `assets/reach-battle.js`, in that order because the renderer asks the sprite module whether a sheet is ready. Nothing is copied, inlined or reimplemented, so what runs on the bench is byte for byte what runs in the game, and the check asserts it: the file must contain the script tags and must NOT contain `stepField` or `seedField` or its own `window.FMTroops`.
+
+IT RESOLVES ART FROM THE REAL PATH. It sits beside `index.html`, so `assets/space/troops/*.png` resolves exactly as the client does. A sheet missing on a server shows as missing here, listed by name, which makes it a deploy check as well as a design bench. That is directly useful for the four sheets currently 404ing on the live host: load the bench there and it will name them.
+
+THE ONLY THING IT FAKES IS `window._REACH`, the payload the server normally pushes down the socket, in the same shape `reachWatch` reads. It opens no socket, fetches nothing and writes nothing anywhere. That is the entire seam between the bench and the game.
+
+CONTROLS: funding from nothing to overfunded, hive control, garrison, intensity, three worlds including a two-zone one, all four camera modes, reseed, survey mode, and forcing the whole Coalition line to one class so a line of shield troopers or a line of riflemen can be judged on its own. A live class census read from the renderer rather than recomputed, and a sprite sheet status line.
+
+ITS PRICING MIRRORS THE SERVER. The bench computes `pushTarget` so the funding slider means something, and that formula has to track `server/reach.js` or the bench prices ground differently from the game. Verified equal at all twenty sampled garrison and control combinations, and asserted structurally so a change to one without the other fails.
+
+`tools/reach-check.mjs` is now 530 assertions. Verified by swapping the two script tags, which fails the ordering assertion. Suite: 11 of 11 green, 1073 assertions.
+
+---
+
+## v1.4.8.1 (2026-08-23) - look where you like, and stop firing lasers
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/index.html`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE CAMERA WAS NEVER FIXED, IT WAS UNREACHABLE. Orbit has supported unbounded 360 yaw since it was written. The problem is that cinematic is the default, it cuts to its own hotspots on a timer, it ignores the drag completely, and the only way out was keys 1 to 4 on a canvas with no visible controls. Pulling on the view did nothing and it read as a locked camera, which is a fair reading.
+
+Dragging now takes the view: a pointer down while in cinematic or follow hands control to orbit. The overlay has real camera buttons. Orbit height was clamped to a band that kept it above the action and now runs from below the dust line to high overhead.
+
+WHAT 360 COSTS, said plainly. The sprites are single facing and mirror on a flank test, so looking straight down the axis of advance shows a profile where a front or a back belongs. That is a limitation of the art and not of the camera. It is better to let somebody look and see it than to lock them out of half the field to hide it, and the cinematic default still frames from the flank where the art is correct.
+
+THE BLUE GUNSHOTS WERE TWO SETS OF BULLETS FOR ONE SHOT. The shooting sheets have the muzzle flash and the bullets painted into them; that is precisely why the pack ships No Flashes and Bullets variants, for people who intend to draw their own. This renderer was drawing the sheet's bullets AND a wireframe tracer over the top, and the tracer is a bright cyan line, which is why a rifle line looked like it was firing lasers. A round now records whether a sprite already drew it and skips the tracer if so. Tanks keep theirs, because a tank is still wireframe and has nothing else to show for a shell.
+
+THE BROOD THROWS BARBS, NOT BOLTS. A spit round was a straight bright segment. That reads as an energy weapon, and nothing in the Khai'sultull design has one anywhere: they are a clerical species with claws. It is a thrown claw now, a curved barb built from three segments and spun end over end along its arc, about three quarters of a world unit across against a two unit man. Verified in isolation for shape, scale and that the spin actually changes the geometry rather than being a value nothing reads.
+
+`tools/reach-check.mjs` is now 518 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.8.0 (2026-08-23) - engineers build the guns, riflemen throw grenades
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+WHY `turret_deploy` 404ED, first, because it is the more useful finding. The check added in v1.4.7.1 walks every animation name and asserts the file is on disk, and it only scanned `reach-battle.js`. That sheet was named in the preload list inside `coalition-sprites.js`, which the check could not see. Both files are scanned now, and a second assertion catches the shape directly: a sheet that is preloaded but never drawn is bandwidth for nothing and is exactly what that one was.
+
+THE WARNING ITSELF WAS ALSO WRONG. It fired once globally, so a single message could mean one missing file or an entire missing directory, and those need completely different fixes. It warns per sheet now with a running count.
+
+EMPLACEMENT COUNT WAS A FLAT SHARE OF THE FIELD, which produced guns that nobody had put there. Engineers build them now. An engineer walks his band, stops when the position is short of guns, plays the placing animation, and an emplacement comes up where the technician is standing. The placing animation is doing real work rather than decorating a spawn.
+
+THAT SCALES ON BOTH LEVERS, which is what was asked for. Funding decides how many guns each engineer may run: one when nothing is funded, up to three when the window is covered. How many engineers are alive is the disposition of the force. Measured in the harness: one emplacement built off five engineers unfunded, thirty built off twenty-six engineers at full funding. A gun being bolted down does not shoot, and there is a hard ceiling on emplacements as a rail on the draw loop rather than a design number.
+
+GRENADES ARE THROWN AT A CROWD, NOT ON A TIMER. That is what makes them read as a decision: one goes out because a knot of rushers formed in front of a rifleman, and you watch the knot come apart. The pack ships the throw, the arc, the landing and the burst and all four are used. Damage runs through the same `damageNear` an airstrike uses, so a grenade cannot invent a kill rule of its own.
+
+THE CROWD PROBE NEVER FIRED IN ITS FIRST FORM, and the arithmetic is worth writing down. Twenty-six random draws out of seven hundred units, needing four of them to land in a box holding a few percent of the field, clears its own bar under one percent of the time. A rifleman would have thrown roughly once every hundred probes, which at one probe every couple of seconds is once an hour. The mechanic would have shipped and been invisible. It strides the array from a rotating offset now, which covers the whole field evenly over a handful of frames for the same cost and cannot get unlucky. Verified in isolation against a synthetic field: it triggers on every probe when a crowd is in front and on none when the same enemies are scattered.
+
+HIT REACTIONS. The pack ships them, nothing was using them, and they are most of what makes a line look like it is taking casualties rather than quietly deleting men. Stamped inside `hurt()` rather than at each caller, because every path that damages anybody goes through that one function.
+
+`tools/reach-check.mjs` is now 504 assertions. Verified by preloading a sheet nothing plays and by letting a deploying turret fire, each of which fails one assertion, then restoring. Suite: 11 of 11 green, 1047 assertions.
+
+---
+
+## v1.4.7.2 (2026-08-23) - the sprite classes behave like what they are
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+FOUR DEFECTS, ONE CAUSE. `turret`, `eng` and `enf` were added to the force model in v1.4.7.0 without being added to the simulation, so all three fell through to the generic infantry path. That path was harmless while every unit was a wireframe stick figure and stopped being harmless the moment `u.st` began choosing an animation frame.
+
+EMPLACEMENTS WERE GUNS THAT HAD NEVER FIRED. The infantry path puts a unit into `S_BOUND`, claims it a cover slot and walks it there at `u.sp`. A turret's speed is zero, so it never arrived, never left `S_BOUND`, and bounding units do not fire. Every emplacement on the field was therefore a weapon that had never shot at anything, playing a walk cycle on the spot, while holding a cover position a rifleman could have used. They have their own branch now: hold where they were dug in, release the slot, and reach further than a man because that is the entire point of an emplacement.
+
+SHIELD TROOPERS WALKED FOREVER. Their branch set no state at all, which did not matter while nothing read the state to pick geometry. So they kept the `S_BOUND` they were seeded with permanently, whether they were closing on a rusher, standing on the line, or hitting something. The state is the animation now, so it has to be true, and it is set at all three.
+
+AND BASH WAS THE WRONG ANIMATION FOR MOST OF ITS DURATION. `u.mel` is set the instant a rusher is picked out of the field, which can be a third of the map away, and the animation was keyed on that alone. Shield troopers were swinging at air the whole way in. Bash is a contact animation now.
+
+I ALSO HALVED THEIR SPEED WHEN I RENAMED THE CLASS, and that broke the one job they exist to do. Blade troopers ran at 0.0022 because they have to catch a rusher before it reaches the riflemen; I gave the shield line 0.0011 on the reasoning that a shield is heavy, which is true and irrelevant next to being unable to intercept anything. Restored to 0.0019.
+
+ENGINEERS FOUGHT LIKE RIFLEMEN. An engineer is a technician with a carbine, and his emplacements are behind the firing line, so his band sits deeper than the infantry's instead of on top of it.
+
+Verified by instrumenting per-class state in the live harness rather than by reading: emplacements went from 26 of 26 stuck bounding with zero targets to 26 of 26 holding and acquiring, and shield troopers now move between states instead of sitting at 45 of 45 bounding.
+
+`tools/reach-check.mjs` is now 488 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.7.1 (2026-08-23) - a missing sprite sheet stops being silent
+
+Hard refresh, no server restart. Files touched: `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE STANDALONE HARNESS DREW NO SPRITES, and the interesting part is why nothing noticed. `BASE` resolves to `assets/space/troops/` relative to the page. Inside the client that is correct and always was. Beside a downloaded HTML file it points at nothing, so every sheet 404ed, every Coalition unit took the wireframe fallback, and no warning was logged, no counter moved, no pixel looked broken. The page rendered a perfectly good battle that was not drawing what it claimed to be drawing.
+
+THE TEST WAS INCAPABLE OF CATCHING IT. The jsdom harness stubbed `Image` with a fake that fired `onload` on a timer regardless of `src`. That proved the sprite code path executed and proved exactly nothing about whether any art existed. A stub that cannot fail is not a test of loading, and this one had been reporting eight thousand successful draws against images that were never fetched.
+
+THE FALLBACK MADE IT WORSE, which is worth saying plainly because the fallback is otherwise correct. Reverting to wireframe when a sheet is not ready is the right behaviour: it is what keeps the field populated while the art decodes. But a correct fallback with no signal attached converts a hard failure into a soft one, and a soft failure that looks identical to success is the kind that survives a release.
+
+THREE THINGS CHANGED. `srcFor()` resolves a sheet through an optional `FM_TROOP_SRC` map, so a page with no assets directory can supply its own; the harness now inlines the nineteen sheets it can reach as data URLs and is genuinely self-contained. `onerror` warns once, naming the url it could not fetch. And the suite now extracts every animation name the battlefield is capable of asking for and asserts the file is on disk, so a class that reaches for a sheet which will never load fails the checks rather than reverting to wireframe forever.
+
+The client default path is untouched and asserted, because it was never the thing that was wrong.
+
+`tools/reach-check.mjs` is now 476 assertions. Suite: 11 of 11 green.
+
+---
+
+## v1.4.7.0 (2026-08-23) - the Coalition line is drawn from the sprite pack
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `client/assets/coalition-sprites.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+BLADE TROOPERS ARE RETIRED. The Coalition ground line is now Assault riflemen, Enforcer shield troopers, Engineers and their emplacements, drawn from the pixel pack. Tanks, gunships and every Khai'sultull unit stay wireframe, exactly as asked.
+
+THE SHIELD LINE INHERITS THE BLADE TROOPER'S JOB, code and all. It holds just behind the firing positions and goes out to meet any rusher that closes, which is what the line needed in the first place: infantry in cover cannot defend themselves at contact range and were simply being overrun. `ENF_SHARE` is a constant 0.18 for the same reason `knifeShare` was a constant: a shield line is what a Coalition line is made of, not something bought. What credits buy is tanks, gunships, engineers and emplacements.
+
+THE SINGLE-FACING PROBLEM IS SOLVED RATHER THAN IGNORED, and it took two things. A profile sprite is correct from either flank, so a unit's forward vector is taken into view space and the sprite is mirrored when that vector points left of screen. That buys two of the eight rotations this kind of art normally ships with. The remaining six are the ones where the camera looks up or down the axis of advance, and there is no art for them, so CINEMATIC NO LONGER PICKS A RANDOM YAW. It picks a flank, with jitter. That is a genuine constraint on the camera, and it is also how anyone would frame a line of infantry on purpose, which is why it costs nothing to watch.
+
+TWO REAL BUGS, BOTH FOUND BY TESTING RATHER THAN READING.
+
+The first: `queueSprite` claimed a unit for the sprite layer before checking the sheet was decoded, and `drawFrame` only reports failure after the fact. By then the unit had been taken off the wireframe path, so it was drawn as neither and simply vanished from the field. Nothing in this file loads an image either, so on a real client the sheets would never have decoded at all and the entire Coalition ground line would have been invisible. It now asks first, falls back to wireframe until the sheet is ready, and preloads on opening an engagement.
+
+The second is a design flaw rather than a typo. Reinforcement could only fill DEAD slots, and `seedField` fills every slot alive, so a freshly opened engagement has no corpse to recycle. Funding it in the first minute placed nothing whatsoever, which is precisely the moment somebody who just committed credits is watching for their money to do something. Emplacements and engineers now fill their quota FIRST and may grow the unit array when there is no corpse free, bounded at twelve percent over the cap, and only for the quota. Plain bodies still wait for a slot, because bodies are what attrition is for.
+
+AN EMPLACEMENT IS DUG IN, NOT MARCHED ON. It has no speed, so arriving at the rear edge like walking reinforcements would leave it sitting there for the whole engagement. Turrets are placed near the front instead.
+
+SPRITES ARE OPAQUE AND THEREFORE SORTED. Unlike the stroked wireframes they cannot be batched, so they are collected with their view-space depth and painted back to front once per frame. They are drawn after the wireframes, which means a tank between the camera and a rifleman does not occlude him. That is tolerable only because the wireframes are line art with nothing to occlude: you see the tank's edges through the man rather than the man through a solid tank. Fixing it properly means one sorted list for both and giving up the batching that makes seven hundred wireframes cheap.
+
+`tools/reach-check.mjs` is now 470 assertions. Suite: 11 of 11 green, 1012 assertions.
+
+---
+
+## v1.4.6.1 (2026-08-23) - Coalition troops muster in the push window
+
+Hard refresh, no server restart. Files touched: `client/assets/coalition-sprites.js` (new), `client/assets/space/troops/` (new, 66 sheets), `client/assets/galaxy.js`, `client/index.html`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THREE CLASSES AND A TURRET. Assault with a rifle, Enforcer with a riot shield and a bash, Engineer with a deployable emplacement, plus grenades and full death, hit, cover, sit and stand-up sets. Sixty-two animations, 114kb.
+
+THEY ARE NOT IN THE BATTLEFIELD, and that is the decision worth writing down rather than the code. The pack is SINGLE FACING: every frame is a right-facing profile. `reach-battle.js` runs an orbiting camera, and a billboarded profile sprite under an orbiting camera shows a man walking sideways past the viewer no matter which way he is actually heading. Doom shipped eight rotations per pose to solve precisely this; this pack has one. There are also no Khai'sultull sprites anywhere in it, so a side-on battle view would be pixel art on one side of the line and wireframe on the other.
+
+SO THEY WENT WHERE THE ART ACTUALLY FITS. A side-on formation is what these sheets are, and the push window is the one surface in the game that needs a picture of a Coalition formation and nothing else. It answers the question a player is really asking before they commit, which is not how full the bar is but what their money puts on the ground.
+
+THE STRIP IS DERIVED FROM THE MODEL, NOT DRAWN BESIDE IT, and the first version of it was wrong in a way worth keeping the record of. It scaled the shield line with the funded ratio and gated an engineer at eighty-five percent. That looked correct and told a different story than the battlefield, where `knifeShare` is a CONSTANT and what credits buy is `armShare` and `heliShare`. Blade troopers are not bought with money; they are part of any Coalition line. So turrets now stand in for the armour and air the strip has no sprites for, an engineer turns up because somebody has to place them, and the shield line stays flat across the whole funding range. The check asserts that agreement rather than the artwork: if the battlefield's shares change and the strip does not, it fails.
+
+FRAME COUNTS ARE MEASURED, NOT ASSUMED. Every animation sheet is `(width - 16) / 80` frames, which was derived by finding the transparent gutters in the pixel data rather than by guessing at divisors of the sheet width. Three `*_static.png` files break the rule because they are pose reference art with a different pitch, and they are deliberately absent from the manifest. The suite re-measures every declared animation against its PNG header on every run, so a manifest entry cannot silently drift from the art and draw the wrong frame forever.
+
+THE ANIMATION LOOPS ARE REUSED ACROSS REPAINTS. The window panel rebuilds on a two second tick, and mounting a fresh strip each time would restart every walk cycle in the line, which reads as a stutter rather than a formation. Live handles are keyed to their canvas and retuned in place, and a strip whose window has closed has its `requestAnimationFrame` loop stopped rather than left running against a detached node for the rest of the session.
+
+`tools/reach-check.mjs` is now 463 assertions. Verified by disabling emplacements (three fail) and by drifting one frame count off its sheet (one fails), then restoring. Suite: 11 of 11 green.
+
+---
+
+## v1.4.6.0 (2026-08-23) - the field reflects what was paid for it
+
+Hard refresh, no server restart. Files touched: `client/assets/reach-battle.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE BATTLEFIELD WAS 350 V 350 NO MATTER WHAT. Not affected by who held the zone, not affected by whether a single credit had been committed. The push window shipped in v1.4.5.0 and the thing it was supposed to change looked identical before and after. A funding mechanic whose effect is invisible is a progress bar.
+
+TWO THINGS MOVE THE FIELD NOW, and they are different kinds of thing.
+
+CONTROL SETS THE BASELINE. Holding more of a zone means having more on it. That is not a reward, it is what holding ground means, and it applies whether or not a window is open. On ground the brood entirely holds the Coalition fields 196 of 700; on ground we mostly hold, 350.
+
+FUNDING IS THE LEVER, and it is deliberately the larger of the two, because it is the one players actually pull. A fully funded push on brood-held ground takes the Coalition from 196 to 378. The check asserts that funding outweighs control rather than leaving the claim in a comment where nothing can contradict it.
+
+IT IS A RATIO AGAINST THE TARGET, NOT A COUNT OF CREDITS. The window target already scales on garrison and on how much of the zone the brood still holds, so pool over target is the honest measure of whether enough was brought for THIS ground. Ƒ7m against a cheap zone and Ƒ7m against Vesskanoth are not the same push and must not draw the same one.
+
+COMPOSITION UNLOCKS, NOT ONLY COUNT. Armour runs 5% to 17% and air 1% to 6% across the funding range. Infantry is the floor and always turns up; a tank is a thing somebody paid for. Watching gunships appear over a line that had none is a clearer signal than a bar filling, and it is the same information.
+
+REINFORCEMENTS WALK ON. Committing mid engagement used to have no path at all, and the obvious one, reseeding, is wrong: it teleports every surviving unit back to the baseline and restarts the fight, which reads as the viewer glitching rather than as help landing. Arrivals now revive dead slots at the Coalition back edge and walk in, capped per tick so a large commitment lands as a stream rather than a pop.
+
+THEY REUSE DEAD SLOTS RATHER THAN GROWING THE ARRAY. Nothing is spliced out of the unit list when it dies, so the list is a fixed set of slots with a dead flag, and taking one back is the cheapest correct way to add a live unit. The draw cost stays flat no matter how long a window is funded, which matters because that loop is the heaviest thing in the client. Reinforcement only ever ADDS: a window closing does not vaporise men already on the ground, and attrition is the sim's job.
+
+A REFUNDED WINDOW BUYS NOTHING. Carried and repelled windows still count toward the field, because in both cases the credits were spent. An unanswered window, which is one that never met the funder minimum, and a cancelled one do not count at all, because every credit went back. That falls straight out of the sink rules and the check pins all four cases.
+
+NOTHING HERE IS AUTHORITATIVE, and the file already states the rule this obeys: a client-computed number that cannot change a quantity a player can withdraw is a picture. Every input is a number the server sent and the only output is how many wireframes get drawn.
+
+THE CHECKS EXECUTE THE MODEL RATHER THAN GREPPING IT. Both functions are pure, so the suite lifts them out of the file and runs them across the control range, the funding range, overfunding, a zero target, a missing zone and all four resolution states. A regex can tell you a constant exists; it cannot tell you that 150% funding does not put 900 men on a 700 man field.
+
+ONE OF THE NEW ASSERTIONS WAS TOO WEAK AND WAS CAUGHT BY TESTING IT. The no-reseed check looked at a window of text near the tick, so it passed when a `seedField()` was planted one call deeper inside `reinforceToward`. It now slices the two functions that must never reseed and checks their bodies, and bounds the total number of `seedField()` call sites. Verified by planting the reseed and confirming it fails.
+
+`tools/reach-check.mjs` is now 444 assertions. Suite: 11 of 11 green, 987 assertions.
+
+---
+
+## v1.4.5.5 (2026-08-23) - one command for the suite, and it admits what it skipped
+
+No client or server code changed in this patch. No restart, no refresh. Files touched: `package.json` (new), `tools/run-all.mjs` (new), `tools/mobile-check.mjs`, `.gitignore`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+`npm run check` RUNS EVERYTHING AND REPORTS WHAT DID NOT RUN. Thirteen tools meant reading thirteen tails by hand, and three of them needed jsdom and died with a module-not-found stack that reads as a broken tool rather than a failing assertion. The runner classifies every `tools/*-check.mjs` as PASSED, FAILED or SKIPPED, and SKIPPED is a first-class outcome printed loudly rather than a shrug. A suite that quietly shrinks is worse than one that fails, because a shrinking suite still prints green. That is exactly how the swap bug survived with a correct assertion sitting right on top of it.
+
+Simulations and audits are deliberately not included. They print numbers a human reads and folding them in would mean inventing a pass condition they do not have.
+
+jsdom IS NOW DECLARED rather than installed by hand, in a new root `package.json` that exists only for tooling. The server's manifest is still `server/package.json` and nothing here is deployed: `ship.sh` does a git pull and a pm2 restart and never runs npm at the repo root. It is floored at 30 because `fleet-check` constructs a `PointerEvent`, which jsdom did not implement until well after 24; pinning an older one fails a check for a reason that has nothing to do with the code under test, which was worth finding out here rather than on the next person's clone.
+
+MOBILE-CHECK NEVER EXITED ON SUCCESS, found within a minute of the runner existing. `pretendToBeVisual` keeps a `requestAnimationFrame` timer alive, and the file called `process.exit` only inside its failure branch. So a FAILING run terminated cleanly and a PASSING run hung forever, which is precisely backwards. Every hand run of it went through `| tail`, which prints the result and hides the hang, so it looked healthy for as long as nothing ran it from a script. It now closes the window and exits both ways. Three seconds instead of never.
+
+TWO CHECKS HAVE BEEN SMALLER THAN THEY LOOKED. With jsdom genuinely present, `lore-check` runs its behaviour section and goes from 38 assertions to 48, and `mobile-check` contributes 105 that were never being counted. Neither was failing. Both were quietly asserting less than the output implied.
+
+THE PACKAGE-LOCK IGNORE WAS TOO NARROW. It read `server/package-lock.json`, which was correct while there was one manifest and stopped covering the case the moment a second one existed at the root. A stale lock shipped inside a build zip once cost a multi-hour outage and a database restore from the cron backup, so the rule is now a bare `package-lock.json` matching any directory.
+
+NOT CHANGED, AND DELIBERATELY: the Zharkofin title colour stays a general rule rather than being scoped to that one account. An equipped gifted title outranks the dev default because the dev colour is a default costume and a gifted title is a chosen one. Scoping it to a name would buy nothing today, since no other operator account is seeded with a gifted title, and would cost the next GM character a patch. If a dev is ever granted one in game and does not want the change, they equip a different title.
+
+Suite: 11 of 11 green, 959 assertions. city 84, city-shortcut 20, fleet 62, guest, lane 54, lore 48, mathtest 77, mobile 105, mobile-136 71, reach 416, tutorial 22.
+
+---
+
+## v1.4.5.4 (2026-08-23) - the script conforms to the sheet
+
+Hard refresh, no server restart for this patch alone. Files touched: `client/assets/khai-script.js`, `docs/lore/khaisultull-alphabet.svg` (new), `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE SHIPPED SCRIPT WAS A RECONSTRUCTION AND IT WAS WRONG. v1.4.5.0 built the sign inventory by deriving it from the phonology, because the original sheet had been generated to a scratch directory that does not survive. The result was internally consistent, rendered every canon name, passed every check, and was wrong in almost every particular. That is the failure mode worth naming: a self consistent invention is indistinguishable from the real thing from the inside, and only the authority tells them apart.
+
+WHAT IT GOT WRONG. It made the glottal stop a MARK; it is SIGN ZERO. It invented a bare `z` that does not exist in the inventory. It missed `aa` as a mark in its own right, which is what makes Nikkathaal and Zhaal'un scan. And it assigned all sixteen values differently: it had `h` at zero and `th` at twelve, where the sheet has the glottal stop at zero and `h` at twelve.
+
+WHAT IT GOT RIGHT, and this is the only reason the swap is cheap: the arithmetic. Value equals four times the right hooks plus the left hooks, which is exactly what the sheet draws, confirmed by measuring the hook geometry of all sixteen signs out of the SVG rather than reading the caption.
+
+THE CORRECT TABLE, in reading order: iss, sath, ruur, thaal, lull, nekk, tekk, kar, vor, mekh, zhaal, khai, hoss, fin, shuur, nguth. Marks: ah, aah, eh, ih, oh, uh, eye.
+
+THE GLOTTAL STOP BEING ZERO IS THE SHARPEST THING IN THE SYSTEM. A clerical species wrote a sign for nothing owed and put it first in the count. It draws as a closed ring on the stem rather than hooks, because zero has no hooks to draw, and it still occupies a digit position, so a name carrying one has a zero in its figure and a ring on its line.
+
+VERIFIED AGAINST THE SHEET'S OWN WORKED EXAMPLE. Zharkofin reads zh, r, k, f, n, which is A 2 7 D 5 in base sixteen, which is 665557. The module computes 665557. That is one number that cannot be arrived at by accident, and the check asserts it.
+
+THE OVERFLOW QUESTION IS SETTLED, AND THE SHEET IS STRONGER THAN EITHER READING ON THE TABLE. It says a doubled sign must be PRECEDED BY A VOWEL, and that no word opens on one. The second sentence falls out of the first rather than being a separate rule: a word-initial doubled sign has nothing before it at all. So the code enforces the preceding unit and the test proves both halves, including the case neither earlier reading covered, which is a doubled sign sitting after a consonant in the middle of a word.
+
+Ossuveth and Ussaleth are legal, because the o and the u are what precede their doubled s. No world needs renaming.
+
+THE SHEET NOW SHIPS IN THE REPO at `docs/lore/khaisultull-alphabet.svg`. A canon document that only exists in a downloads folder loses to the copy in the code the first time anybody checks, and the copy in the code is derived. The suite parses the sheet, pulls its sixteen sign and value pairs, and compares them to the module sign for sign, so the two cannot drift without failing. Verified by transposing two values and confirming three assertions fail, then restoring.
+
+`tools/reach-check.mjs` is now 416 assertions. Suite: city 84/84, city-shortcut 20/20, fleet 62/62, lane 54/54, lore 38/38, mathtest 77/77, mobile 105/105, mobile-136 71/71, reach 416/416, tutorial 22/22.
+
+---
+
+## v1.4.5.3 (2026-08-23) - NPC freight comes back after a galaxy swap
+
+Hard refresh, no server restart for this patch alone. Files touched: `client/assets/galaxy.js`, `tools/fleet-check.mjs`, `tools/mobile-check.mjs`, `tools/city-shortcut-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+A GALAXY SWAP KILLED THE NPC FLEET FOR THE REST OF THE SESSION. Not for eight seconds, permanently, until the page was reloaded. Both sectors, because the cause has nothing to do with which sector you swapped to.
+
+THE CAUSE IS SCOPE. The ship module is an IIFE running from line 2144 to 2972 of `galaxy.js`, and `gShipList` and `gServerShips` are `var` declared inside it. `swapGalaxy` is defined at 3653, outside. The clear read `try { gShipList = []; gServerShips = {}; } catch(e) {}`, which from out there does not clear anything: it creates two new globals that nothing reads, and the IIFE keeps its own maps intact.
+
+`spawnServerShip` opens with `if (gServerShips[npc.id]) return;`. So once the map was stale, the eight second reconcile pulled the fleet, walked it, and refused every single ship as already rendered. The DOM layer had been emptied, so the map showed nothing, and nothing ever came back.
+
+THE `catch` IS THE TELL. There was no throw to catch. `var` assignment from an outer scope does not throw; it just silently targets the wrong binding. The `try` was written by somebody who suspected the line might not work and wrapped it rather than checking whether it did, which converted a question into a guarantee that no error would ever be visible.
+
+THE LINE BELOW IT HAD THE SAME PROBLEM AND WAS ALSO DEAD. `if(typeof clearAmbient==='function')` evaluates to false outside the IIFE, so ambient traffic was never cleared either, and every swap leaked a set of detached ship objects that `shipTick` kept animating.
+
+FIXED BY EXPORTING A REAL RESET from inside the IIFE, where the state actually lives, and calling that. It also resyncs immediately instead of leaving the map with no freight until the next reconcile tick.
+
+THE CHECK THAT CATCHES THIS ALREADY EXISTED AND WAS ALREADY FAILING. `tools/fleet-check.mjs` asserted that jade view shows traffic after a swap, and it has been red since the clear landed. It needs jsdom, which is deliberately not a project dependency, so on a bare clone it died with an `ERR_MODULE_NOT_FOUND` stack. That reads as a broken tool rather than a failing assertion, and it gets scrolled past. Three of thirteen checks were in that state.
+
+THAT IS THE ACTUAL ROOT CAUSE and it is worth more than the fix. The assertion existed, was correct, and could not run. All three jsdom checks now print a loud NOT RUN banner naming the one command that fixes it, instead of a stack trace. Running them for the first time: `fleet-check` 62, `mobile-check` 105, `city-shortcut-check` 20, all green once the swap bug was fixed.
+
+The swap assertion was also rewritten. It counted ships that were spawned BEFORE the swap, which the clear removes by design, so it was asserting a behaviour the code deliberately does not have. It now respawns per phase, which is what the reconcile does in production, and a new section tests the reset behaviourally: the same npc id must be able to respawn after a reset and after a full swap round trip. Verified by reintroducing the exact bug and confirming three assertions fail, then restoring.
+
+TWO ASSERTIONS IN `reach-check` WERE PINNING THE DEFECT IN PLACE. They asserted that `swapGalaxy` contained the literal text `shipLayer.innerHTML=''` and `gShipList = []; gServerShips = {}`. The second of those is the bug itself, written down as a requirement, so the correct fix FAILED the check. A check that names an implementation line cannot tell you the line is wrong. Both replaced with the guarantee: the swap clears the fleet through the module that owns the state, and does not reach into that module's internals from outside.
+
+Suite: city 84/84, city-shortcut 20/20, fleet 62/62, lane 54/54, lore 38/38, mathtest 77/77, mobile 105/105, mobile-136 71/71, reach 402/402, tutorial 22/22.
+
+---
+
+## v1.4.5.2 (2026-08-23) - Vesskanoth is red, and Ossuveth stopped being a station
+
+Hard refresh. `server/city.js` is untouched, so no restart is needed for this patch on its own; if v1.4.5.1 has not shipped yet, that one does need the restart. Files touched: `client/assets/reach-hive.js`, `client/assets/reach-battle.js`, `client/assets/galaxy.js`, `client/assets/god-panel.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+VESSKANOTH WAS PAINTED IN NEW ANCHOR'S COLOURS. The hive survey drew a teal plate with green spokes because `tether` is one terrain key shared between the Coalition and the Reach, and the palette came with it. A terrain key is a SHAPE vocabulary rather than a colour: an anchored world has anchor footings and radiating cable runs whichever galaxy it sits in, and that says nothing about what the ground is made of. Vesskanoth and New Anchor are both anchored ground and they are not the same biome.
+
+THE FIX SITS IN THE TWO REACH-ONLY RENDERERS. `reach-hive.js` and `reach-battle.js` draw Reach worlds and nothing else, so the divergence belongs there, and `client/assets/city.js` keeps its green for the Coalition and Circuit cities without being touched at all. Both Reach files changed together, because a world that is red while surveyed and green while fought over is worse than either.
+
+THE ASSERTION IS THAT THEY DIFFER, NOT WHAT THEY ARE. Pinning the exact rgba would be an assertion that describes today's decision, and the failure mode actually worth catching is somebody unifying the two palettes later as a tidy-up. So the check asserts the Reach value is in the red family, the city value is not, and the two are not equal. Retuning the red keeps passing. Merging the files does not.
+
+OSSUVETH WAS STILL A STATION IN TWO PLACES, found while checking which terrain Vesskanoth resolves to. That world's terrain is declared in FIVE separate sources: `REACH_TERRAIN` in galaxy.js, `COLONY_META.terrain` in galaxy.js, `REACH_TERRAIN` in god-panel.js, the `WORLDS` table in reach-battle.js, and `COLONY_VISUAL` in server/city.js. When it became an ocean world in v1.4.4.0 the rewrite reached three of them. The GM panel has been labelling an ocean world STATION ever since, and `COLONY_META.terrain` has disagreed with the server the whole time.
+
+THE OLD ASSERTION CHECKED THE WRONG NOUN. v1.4.4.0 added a check that the station TEXT appeared nowhere in the file, and it passed, because the station TERRAIN is a different thing from a lore string describing a station. That is the same failure the last three patches kept naming in a different costume: a check written the same day as the fix describes what was fixed rather than what must stay true.
+
+SO THE NEW CHECK COMPARES THE FIVE SOURCES TO EACH OTHER rather than to a list of expected values written in the test. There is nothing to update when a world is renamed or retextured, it fails on any divergence between any two sources, and the failure message names which source disagreed. Verified by reintroducing the exact bug and confirming it fails, then restoring.
+
+`tools/reach-check.mjs` is now 401 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 401/401, tutorial 22/22.
+
+---
+
+## v1.4.5.1 (2026-08-23) - the Hivelord outranks the dev colour
+
+Server restart and a hard refresh. Files touched: `server/server.js`, `client/assets/core.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+ZHARKOFIN WAS SEEDED CORRECTLY AND RENDERED WRONG. `seed_devaccounts.mjs` has carried `title: 'Hivelord'` and `title_color: '#c2551f'` since the account was made, written into `gifted_titles` so the account owns the title the same way any granted title is owned. The colour never appeared because the chat chain resolved `_isDev` to null before it ever reached the gifted branch, and a dev account is not an owner, so it fell straight through.
+
+AN EQUIPPED GIFTED TITLE NOW OUTRANKS THE DEV DEFAULT, and generally rather than as a carve-out for one name. Hardcoding `Hivelord` into a colour chain means the next GM character needs another patch and the rule rots the first time somebody forgets it exists. The principle that holds without maintenance is that the dev colour is a DEFAULT costume for an operator who has not chosen one, and a gifted title is a costume somebody deliberately put on. Owner and council seat still sit above it, because both are offices rather than costumes.
+
+THE USUAL OBJECTION INVERTS HERE. Dev colour is an identity signal, and removing it normally makes an operator harder to spot. Zharkofin exists to be the Khai'sultull speaking; a GM voice that renders as a dev account breaks the fiction the account was built for, so the marker is the thing that was wrong. Any operator who wants the gear badge simply does not equip a gifted title, which is a deliberate act rather than a default.
+
+IT NEEDED BOTH LAYERS AND THAT IS THE PART WORTH REMEMBERING. `core.js` runs its own dev override in the chat renderer and again in the whisper renderer, repainting `_DEV_COLOR` over whatever colour arrived whenever `is_dev` is set. A server-only fix to the colour chain would have been completely invisible and would have looked like the change not working. Both now stand down when a gifted title is equipped, and the whisper payload carries `giftTitle` so the client can see it at all.
+
+THE BADGE FOLLOWS THE COLOUR. Lifting only the colour leaves an orange name wearing a dev gear icon, which is a mixed identity rather than a fixed one. Zharkofin's seeded badge is the four-pointed lozenge.
+
+A DEAD ARM WENT WITH IT. The old gifted branch below `_isDev` in the colour chain is now unreachable and was removed rather than left sitting there for somebody to read as the live one.
+
+SIDE EFFECT, STATED RATHER THAN DISCOVERED LATER: this applies to any dev or admin account that equips a gifted title, not only to Zharkofin. Nothing in the seed grants one to any other operator account, so today it affects exactly one, but a title granted in game to a dev would change how they read in chat.
+
+WHAT WAS NOT TOUCHED: the leaderboard. `getLeaderboard` filters `is_dev=0 AND is_admin=0 AND is_prime=0` in SQL, so no operator account is ever in a row and the dev branch in that renderer cannot fire for one.
+
+`tools/reach-check.mjs` is now 382 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 382/382, tutorial 22/22.
+
+---
+
+## v1.4.5.0 (2026-08-23) - the push window, and their script
+
+Server restart and a hard refresh. Files touched: `server/reach.js`, `server/server.js`, `client/assets/galaxy.js`, `client/assets/god-panel.js`, `client/assets/core.js`, `client/assets/khai-script.js` (new), `client/index.html`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE REACH WAS A SCREENSAVER. A player could cross the passage, read a front, survey a hive and watch a battle, and could not affect one. Everything in the war layer was a thing the GM did and the room watched. The push window is the one mechanic that makes it a thing players do.
+
+THE FUNDER MINIMUM IS THE WHOLE DESIGN, and it is why this is not just a fund button. A pure capital target is a whale button: one large portfolio takes a world alone and everyone else watches a bar they did not move. Four separate people have to answer the same window in the same hour, and no amount of capital substitutes for the fourth. The scarce resource is attention, which is the resource a live room actually has.
+
+THE PER-FUNDER CAP IS WHAT MAKES THE MINIMUM BITE. Without it the minimum is theatre: one funder puts in 99% and three friends chip in the floor, and the rule has been satisfied without anything converging. At Ƒ2,500,000 a window mathematically cannot clear without real convergence, because at the cap the minimum funders barely cover a typical target.
+
+THREE OUTCOMES AND TWO OF THEM BURN. Carried moves the line 12 to 24 points depending on overrun. Repelled burns the pool and the brood takes ground back, scaled on garrison. Unanswered, which is a window that never reached the funder minimum, returns every credit in full. That last one is not generosity: it is not a failed attack, it is an attack that never happened, and charging for it teaches players that funding first is a mistake. This is a sink and it must stay one. The moment funding a window has positive expected value it stops being a war and becomes a payout schedule.
+
+ESCROW CANNOT BE ORPHANED. Any path that deletes the ground a window is being fought over holds real player credits hostage, so a flip, an accord and a reset all harvest open windows and hand the money back before rewriting state. The check asserts this per function and would catch a fourth such path being added later without one.
+
+reach.js STILL CANNOT TOUCH A WALLET. It records commitments the caller has already debited and returns refund lists the caller pays; server.js is the only file where credits move. That means there is exactly one place to read to answer whether the Reach can mint money, and the answer stays no. Asserted: reach.js has one import, it is the KV store, and it never names safeAddCash, savePlayer or getPlayer.
+
+GUESTS CANNOT FUND. Not because a trial account spending into a sink is harmful, but because a guest is the cheapest way to manufacture a distinct funder, and the funder minimum is the entire mechanic. The IP limiter on guest minting makes that expensive rather than impossible, and expensive is not a standard the load-bearing rule of a feature should be held to.
+
+FUNDER NAMES ARE NOT SHIPPED WHILE A WINDOW IS OPEN. Only the count and your own total. A live table of who has put in what turns a convergence mechanic into a public shaming board, and the number that matters to somebody deciding whether to answer is how many, not who. Names ride along once it has resolved, when the ledger is history rather than pressure.
+
+TWO GOD COMMANDS WERE WIRED TO NOTHING, found while adding a third. `reach_zone` and `reach_envoy` called `reachSetZone` and `reachSetEnvoy`, and server.js never imported either. Both threw ReferenceError on every use, since the zone sliders and the envoy toggle shipped. Every static check passed the entire time, because a check that greps for a handler finds the handler. The suite now asserts that every reach function called is a function imported.
+
+THE KHAI'SULTULL SCRIPT IS IN THE CLIENT. Sixteen signs, seven marks, base sixteen. Hooks off the right of the stem are worth four, hooks off the left are worth one, so a sign reads as a quantity before it reads as a sound and nothing has to be memorised. Vowels carry no value, which is the part of the language you can say without settling anything. A doubled sign doubles its value and is drawn as a struck stem, and may never open a line.
+
+WHY A NUMBER SYSTEM AND NOT ALIEN LETTERS. Every fact established about this species is clerical: a ministry under an ocean whose accounts have not been late once, a world named Ninth Concession before the ninth demand, a Guild valuation quoted back with the date. A species like that does not write sounds. It writes amounts, and the sounds fall out of reading an amount aloud. Every name they have given us is therefore also a figure, and the figure is in the title attribute.
+
+THE RULE ABOUT OVERFLOWS SURVIVED A REAL CONFLICT. Four canon names carry a doubled s as their first sign, which looked like the rule failing against its own corpus. It is not: the rule is about the written LINE and those four open on a bare mark, because they open on a vowel. The check now enforces the rule on the first cell and still rejects a word that genuinely opens on a doubled sign, so it is a guarantee rather than a decision quietly deleted to make a test pass.
+
+TWO OF SIXTEEN SIGNS ARE UNATTESTED. `sh` and `ng` appear nowhere in the corpus. An inventory of sixteen is required by the base and the attested names use fourteen, so two are extrapolated rather than derived. That is stated here rather than papered over.
+
+`tools/reach-check.mjs` is now 371 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 371/371, tutorial 22/22.
+
+---
+
+## v1.4.4.0 (2026-08-22) - the worlds have their own names
+
+Server restart and a hard refresh. Files touched: `client/assets/galaxy.js`, `client/assets/reach-battle.js`, `client/assets/god-panel.js`, `server/reach.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+KS-01 THROUGH KS-10 WERE A COALITION CATALOGUE. The surface zones were worse: "Clerical Decks" is a Coalition survey label written on a Khai'sultull world, which is exactly backwards. The phonology is derived from the two names already canon, Khai'sultull and Zharkofin: Kh, Zh, Th, Ss, V, N, M, T onsets, a glottal stop mid-word, doubled consonants, terminal forms in -ull, -eth, -ekk, -aal, -ur and -oth.
+
+Sahn'tekk, Ussaleth, Khai'ru, Tessul, Zhaal'un, Marokketh, Ossuveth, Nikkathaal, Thennsur, Vesskanoth. Surface zones and war zones renamed with them, and the battlefield viewer and the GM panel use them too.
+
+THE REVEAL MECHANIC MOVED RATHER THAN BROKE. The name is always shown now, because the Khai'sultull built the translation layer and told us what these worlds are called; that is who they are. What capture discloses is the MEANING. Ossuveth is The Ministry Beneath. Thennsur is Ninth Concession. Vesskanoth is Sixteen Names. That is a better thing to earn than a name, and it is consistent with an envoy whose whole character is deciding what we are permitted to understand.
+
+WAR ZONES DESCEND FROM THEIR WORLD. They were drawn from a shared pool, which put the same Vor'ekk on three unrelated worlds. Each world's zones now come from its own stem, so Ossuveth has Ossu'kar and Ossu'thal and nothing else does; all nineteen are globally unique. A stem that already carries a glottal stop takes the suffix bare, or Khai'ru produced Khai'ru'kar.
+
+TWO STALE STRINGS, BOTH FROM A REPLACE I NEVER ASSERTED. When KS-07 became an ocean world I rewrote its lore and its zone blurb with a plain `replace` that silently failed to match. So it was still described as a hive platform in a decaying orbit, with interior decks and no sky, on a world that is now an ocean. That is precisely what the screenshot showed. Both corrected, and the check asserts the station text appears nowhere in the file.
+
+A FOURTH ASSERTION PINNED TO A LABEL rather than a guarantee: it identified KS-07 by its display tag, which then became Ossuveth. It asserts against the world id now, which is the thing that actually identifies a world.
+
+`tools/reach-check.mjs` is now 294 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 294/294, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.3.1 (2026-08-22) - region blobs removed, Circuit gets the banner
+
+Server restart and a hard refresh. Files touched: `client/index.html`, `client/assets/galaxy.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE COLOURED REGION BLOBS ARE GONE. Six tinted ellipses and a white reference grid were hardcoded directly into the galaxy SVG markup, in Coalition coordinates, sitting outside every layer group. They drew on every galaxy as a result: the Circuit and the Reach both inherited the Coalition's faction blobs and its deep crimson Abaddon nebula, laid over worlds that have nothing to do with Abaddon. The nebula plate already carries whatever colour a galaxy needs, and the grid was sized to the old 1000x700 box, so it stopped lining up the moment the viewBox changed. Both removed. The layer stack is untouched, and the check asserts that.
+
+THE CIRCUIT PANEL GOT THE NEW BANNER. `renderJadeDetail` is a separate renderer and never received the titled banner, so Circuit worlds still showed a landscape strip with a bare globe floating underneath while every other colony had the composited version. It now matches the rest: strip on top, titled banner beneath with the landscape as its plate, the planet composited on the right, the name and region over it, and an `onerror` on both images. The bare globe block is gone from the file entirely.
+
+TWO TEST BUGS, BOTH MINE, AND BOTH THE SAME SHAPE. An assertion pinned the file to exactly one banner block. That was correct while only one renderer had a banner, and the actual guarantee is that each renderer has one, not that the file does. Rewriting it, I split the source on `renderJadeDetail` without checking where that function sits: it is defined before the main renderer, so both banners landed on the same side of the split and the corrected assertion failed as well. It now slices the Circuit function by its own bounds.
+
+That is three assertions across two patches that encoded a decision rather than a guarantee. The pattern is worth naming: a check written the same day as the code it checks tends to describe what the code currently does, and the useful ones describe what must remain true.
+
+`tools/reach-check.mjs` is now 278 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 278/278, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.3.0 (2026-08-22) - hive works are a city
+
+Server restart and a hard refresh. Files touched: `client/assets/reach-hive.js` (new), `client/assets/reach-battle.js`, `client/assets/galaxy.js`, `client/index.html`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+A HIVE IS A PLACE, NOT A BATTLEFIELD FEATURE. The survey view drew the settlement with the battlefield's wireframe and the units switched off, which made every brood world read as a firefight even when nothing was happening on it, and looked nothing like what a Coalition world shows when you open its city.
+
+`reach-hive.js` uses the city view's own idiom instead: the same isometric projection, the same terrain plate keyed off the world, the same massing language. What changes is the architecture. A Coalition city is blocks on a grid of districts. A hive is towers, built from stacked rings so they taper the way something grown tapers rather than the way something built does, leaning off vertical, ribbed at every growth seam, lit with apertures up the shaft and crowned with spines.
+
+They cluster around brood spires rather than sitting on a grid. Skyways are strung between neighbours, which is what makes it read as a settlement rather than a field of separate objects. Ambient flyers orbit the towers they belong to, split around depth so one on the far side of a spire is drawn behind it rather than over it. Density follows how much of the world the brood still holds, and the whole thing is deterministic per world.
+
+TERRAIN FOLLOWS THE WORLD, exactly as a Coalition city's does. All seven keys have a plate, so a hive on ice does not look like a hive on dust.
+
+THE BATTLEFIELD HAD NO OCEAN VOCABULARY. KS-07 became an ocean world last patch, and `TERRAIN_KIND` had no `ocean` entry, so it silently fell back to dust and fought over boulders and craters on a sea. Ocean now fights across flooded terraces and the shelf above them. The check asserts every world terrain has a vocabulary, so this class of silent fallback cannot recur the next time a world's terrain changes.
+
+BOTH BANNERS. The topline landscape strip is back above the titled banner, the way the Circuit panel does it. Merging them into one element lost the wide establishing shot; keeping only the strip lost the name.
+
+Verified headless against the live module: 15 assertions covering build, terrain per world, density following control, determinism across repeat opens, unknown-world fallback, opening with no war state at all, and that it actually issues draw calls.
+
+`tools/reach-check.mjs` is now 272 assertions. One assertion was retired rather than fixed: it asserted the standalone landscape strip had been removed, which was true when the banners were merged and is deliberately no longer true. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 272/272, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.2.2 (2026-08-22) - hive works are viewable on the planet
+
+Server restart and a hard refresh. Files touched: `client/assets/reach-battle.js`, `client/assets/galaxy.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE LAST OPEN ITEM ON THE LIST. Frontline information and watching a battle both shipped, but hive cities existed only inside a live engagement. A brood world you were not currently fighting over showed nothing at all: it has no city view because it has no city, and "no city" was rendering as an empty panel rather than as what is actually down there.
+
+VIEW HIVE WORKS opens a survey. Same terrain, same settlement, no war on it. Units are off entirely, the front is pushed off the map so nothing reads as contested, and the camera orbits slowly. It reuses the battlefield's own geometry rather than duplicating it, because the hive a player surveys and the hive they fight through have to be the same hive or the two views quietly disagree about a world.
+
+The number of works scales with how much of the world the brood still holds, so a nearly taken world shows a single holdout mound and an untouched one is dense with them. It is seeded deterministically per world: surveying the same world twice is identical, and two worlds differ. An unrevealed world is titled UNSURVEYED SETTLEMENT rather than named.
+
+Reachable from both the colony detail panel and the surface HUD, because a view nobody can open is the dead-switch problem over again. Mode is tracked and reset on close, and battle mode re-declares itself, so a survey cannot leak into the next engagement.
+
+Verified headless against the live module: opens with no war state at all, scales works with control, stays deterministic across repeat opens, does not throw on an unknown world or a double close, and a battle still opens correctly after a survey.
+
+STILL NOT IN THE BUILD: the push window. `reach.js` has no `commit`, no per-player cap and no funder minimum. A player can cross the passage, read a front, survey a hive and watch a battle, and still cannot affect one.
+
+`tools/reach-check.mjs` is now 260 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 260/260, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.2.1 (2026-08-22) - banner, star field, and things brood worlds should not offer
+
+Server restart and a hard refresh. Files touched: `client/assets/galaxy.js`, `client/index.html`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE BANNER WAS A THIRD HEADER, NOT A NEW ONE. The detail panel already had a landscape strip and a planet thumbnail as two separate elements. I added a titled box beneath both, so every colony rendered three stacked headers and the landscape read as a broken frame above the real banner. There is one banner now: the landscape is the plate, the world sits on it, the name goes over it. Both images carry an `onerror` so missing art degrades to the gradient rather than a broken-image glyph. All ten Reach worlds have landscape banners now, matched to the terrain each already declares; they had none at all.
+
+THE MAP HAD STARLESS BANDS. Extending the Coalition viewBox upward to fit the Abaddon gate was fine. `seedStars` was not: it spread 220 stars across a hardcoded 1000x700 written against the old box, so the top 210 units and the bottom 120 had no stars, two flat black bands across something meant to be space. Stars are now seeded across the union of every galaxy's viewBox, with density held constant against the original, so a taller box gets more stars rather than the same 220 spread thinner. The nebula rect was widened to cover that union as well.
+
+BROOD WORLDS OFFERED THREE THINGS THAT CANNOT HAPPEN. Smuggling, blockades and lane shares all rendered on Khai'sultull worlds. There are no lanes into a brood world, so there are no runs to make, no blockade to fund and no shares to hold. Each of those is a button that would take money for something impossible, which is worse than an empty panel. All three are gated on capture, not on merely being in the Reach.
+
+THE CITY CHARTER CARD RENDERED ON WORLDS THE BROOD HOLDS. The server refuses every city route on an unconverted world, and that gate is correct, but the card is drawn from a client-side summary cache that never asked. CITY CHARTER, OPEN CITY, a district count and an outpost class all appeared over a world at war. It is gated client-side too now, and a stale card left over from a previous selection is removed rather than allowed to persist.
+
+ENGAGEMENTS MOVED TO THE DETAIL PANEL. They were only on the surface HUD, which is one click deeper than where they were being looked for. Each Reach world now lists its zones in the detail panel with a WATCH control on every live one, opening the battlefield viewer directly.
+
+`tools/reach-check.mjs` is now 249 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 249/249, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.2.0 (2026-08-22) - the war is in the game
+
+Server restart and a hard refresh. Files touched: `client/assets/reach-battle.js` (new), `client/assets/galaxy.js`, `client/assets/god-panel.js`, `client/assets/city.js`, `client/index.html`, `server/reach.js`, `server/city.js`, `server/server.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE BATTLEFIELD IS A CLIENT MODULE. The standalone mockup's renderer is ported to `client/assets/reach-battle.js` and lazy loaded behind the galaxy bundle. It is decoration and decides nothing: zone control and world control arrive over the wire from `reach.js`, and attrition between anonymous wireframes resolves locally because it carries no economic consequence, the same rule the ambient Verbattan patrols have always run under. It seeds deterministically from colony id plus zone index, so two players watching one engagement see the same ground. It re-reads live zone state every two seconds rather than drifting on its own, and closes itself if the GM makes the zone quiet.
+
+BATTLE ZONES SCALE WITH POPULATION. Under 15 population is one engagement, under 25 is two, 25 and over is three. Capped at three because that is what the surface panel can show without becoming a list. World control is the MEAN of its zones, so the front is what the ground adds up to rather than a number set alongside it, and clearing every zone on a world is what converts it to a city. Saves written before zones existed get them built, and a world whose population changed gets its zone count corrected rather than kept.
+
+PRAWN WORLDS NO LONGER SHOW A MARKET. Clicking into a Reach surface gave LIVE MARKET, FACTION CONTROL at four zeroes, and FUND FACTION. That is not a neutral default: it tells a player there is a control track here to buy into, and there is not. Reach surfaces now show the front, the engagements running on the world with a watch control on each live one, and what the settlement is.
+
+KS-07 IS AN OCEAN WORLD. It was rendering as a space station because I gave it station terrain and `static/tech` art. Terrain is now `ocean`, which is a real terrain the city renderer draws with open water, a running swell and a shelf line, rather than ice tinted blue. Its lore is rewritten to match: the ministry is under the water, the clerks have not surfaced in eleven years, and the accounts have never been late.
+
+DETAIL BANNERS. The panel leads with a wide banner carrying the world name and its region rather than a 64px thumbnail floating above the lore. Reach banners take the brood's colour and show the true name only once the world has been surveyed.
+
+THREE BUGS CAUGHT BEFORE SHIPPING, all mine and all in this port.
+
+The Reach HUD writes over whole HUD sections, labels included, and the standard updaters write into inner divs by id. Opening a single Reach world would therefore have left every Coalition world visited afterwards rendering with no section headers and no price list. The sections are rebuilt before the standard updaters run.
+
+The module bound pointer handlers to its canvas at parse time. That was safe in the mockup, where the canvas was in the document before the script ran, and is not safe here: the module is lazy loaded and the overlay may not exist yet, so it threw on a null canvas and took the entire module down with it. Binding is deferred to open. A load-safety check now boots the module with no DOM at all.
+
+And `setCam` called `.classList` on the mockup harness's four camera buttons, none of which exist in the viewer. Every element lookup the module makes is now either present in `index.html` or guarded, asserted by sweeping the source.
+
+`tools/reach-check.mjs` is now 232 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 232/232, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.1.8 (2026-08-22) - hive cities: decoration until the world is taken
+
+Server restart and a hard refresh. Files touched: `server/city.js`, `server/reach.js`, `server/server.js`, `client/assets/galaxy.js`, `client/assets/core.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+TAKEN MEANS THE BROOD HOLDS NONE OF IT. Not most of it, not a majority: the threshold is zero. Ninety-nine percent Coalition control is still a war, and a world at war has no city. Until then the hive settlement is decoration, with no districts, no mayoral seat, no commerce, no charter and nothing to buy or govern.
+
+THE GATE IS ONE PREDICATE. Reach worlds now sit in `CITY_COLONIES` as data, so a captured world has something to become, but `isCityColony` answers false for them until `worldTaken()` says otherwise. Every city route in `server.js` already gates on `isCityColony`, so installing this closes all of them at once rather than needing a check bolted onto each one and one of them being forgotten. It fails closed: with no resolver installed, a Reach world is not a city. The resolver is injected the same way `setFactionResolver` already is, so `city.js` never imports `reach.js` and no cycle exists.
+
+CONVERSION FIRES ON EVERY PATH that can move control: `setControl`, `flipWorld` and `resetReach`. Each compares before against after, so it fires only on an actual change and never twice for the same transition. Taking a world seeds its city, its districts and its NPC shops immediately and posts a headline; the client rebuilds rather than repaints, because the detail panel, the lane set and the city tab all read the predicate indirectly.
+
+Losing a world closes the city the instant `worldTaken` goes false, but does NOT delete the rows. Retaking a world should not wipe what was built on it. A hook that throws cannot break the mutator that called it.
+
+AN ORDERING BUG, CAUGHT AND FIXED. I first installed the resolver after `seedAllCityStates`. That meant a world already taken in a previous session read as not-a-city at boot and never got its city seeded. Failing closed is the correct default and exactly the wrong answer for an already-converted world. The resolver now installs first, and the check asserts that ordering rather than trusting it.
+
+Verified against the live module: 23 assertions covering decoration, partial control at 40% and at 99%, conversion, idempotence, reversal, the flip path, reset, boot seeding and the wire payload. `tools/reach-check.mjs` is now 199 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 199/199, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.1.7 (2026-08-22) - Reach worlds render, the front reaches the map, dev console audited
+
+Server restart and a hard refresh. Files touched: `client/assets/galaxy.js`, `client/assets/god-panel.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE PLANETS WERE BARE CIRCLES. None of the ten had a `COLONY_PLANET` entry, a star in `SP_COLONY_SUN`, or `SP_SINGLE_BODY` treatment, so the map drew a ring and a dot and the system view had nothing to show. All three tables now cover them. Seven are desert; the exceptions follow the terrain each world already declares in `COLONY_VISUAL`, so the sprite on the map, the body in the system view and the ground the war will eventually render on are all describing the same world. Every folder and frame count is asserted against the files actually on disk, because a missing frame is a silent broken image rather than an error.
+
+Each world also gets one named surface zone. With `planets:[]` the single-body system view read "0 ZONES" and clicking the planet called `spOpenSurface(id, 0)` against an empty array.
+
+THE FRONT REPLACES FACTION CONTROL ON REACH WORLDS. Coalition, Syndicate, Void and Guild hold nothing past the passage, so four bars reading 0% and a Fund A Faction block are worse than absent: they invite a player to pour money into a control track that does not exist on that side of the gate. Reach worlds now render the war instead: status, live-front and surveyed flags, a Coalition versus Khai'sultull split bar reading live server state, and how many fronts are live across the Reach. Key Operators and Fund A Faction fall inside the same `else` branch and are suppressed with it, which the check verifies by brace depth rather than by reading it. With no state received yet it falls back to 100% hive and quiet.
+
+THE DEV CONSOLE AUDIT FOUND A DEAD SWITCH. `reach_garrison` had a server handler, a panel function, and no control anywhere that could reach either one. That is precisely the failure this panel was built to avoid and I wrote it in anyway. It now has a slider on every world row.
+
+The audit is permanent now rather than a one-off: every server handler must be triggerable from the panel, the panel must send nothing the server ignores, every `onclick` in the tab must resolve to a defined function, every element the panel reaches for must exist in the markup, and no control may be defined but unreachable. All fifteen handlers pass.
+
+TWO TEST BUGS, BOTH MINE. The world-list check scanned the whole file, so the new `COLONY_PLANET` art entries share the `ks_*` keys and doubled the count to 20; it is now scoped to the `COLONY_META` block. The handler-reachability check only read `god-panel.js`, so it reported `reach_disarm` as unreachable when it is an inline `onclick` in `index.html`. Neither was a code fault, and both would have been easy to "fix" in the wrong place.
+
+`tools/reach-check.mjs` is now 180 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 180/180, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.1.6 (2026-08-22) - the ocean, the gate, and the overlay
+
+Server restart and a hard refresh. Files touched: `client/assets/galaxy.js`, `client/index.html`, `client/assets/space/backgrounds/khai_green.png` (new), `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE BACKGROUND WAS A PHOTOGRAPH OF AN OCEAN. `glowing_sea.png` was picked by filename and never opened. In the same patch I noted that I could not verify anything requiring a browser, and then shipped an asset choice that required nothing but opening the file. The Reach now uses `khai_green.png`: the Coalition plate, gradient mapped on its own luminance, so it is the same nebula with the same structure and contrast rendered green rather than a different image. A hue rotation was tried first, came out olive and too bright, and was discarded.
+
+THE PASSAGE IS ON THE MAP NOW, ABOVE ABADDON. It was a small body orbiting inside Abaddon's system view, which was too small to read and dragged the whole system-view teardown path into the crossing. It now sits at (490, -72) at size 112 with its labels rendered ABOVE the sprite, because below they land directly on Abaddon's own name. Verified against the shipped numbers: the gate sprite clears Abaddon's top by 20 units, the labels clear it by 151, and the highest label sits 51 units inside the viewBox edge. The Coalition viewBox is extended from `-150 -80 1200 900` to `-150 -210 1200 1030` to make room. Every galaxy now declares its own viewBox in the registry and the swap applies it, so the Circuit and the Reach keep the original framing. The system-view gate renderer is deleted outright, about three thousand characters of it.
+
+THE OVERLAY. Swapping galaxies never cleared the ship layer. It only toggled `display` on ship groups, which works only if all four spawn paths remembered to tag their group, and one of them feeds a scheduler. A swap left the previous galaxy's traffic sitting on top of the new map. The swap now wipes `gShips` outright, together with `gShipList` (which `shipTick` iterates, so clearing the DOM alone would leave the animation frame advancing detached nodes), `gServerShips`, and ambient traffic. Ships are decoration and respawn within seconds; clearing cannot miss a spawn path the way tagging can, and `gShipTrafficStop` already tore down in exactly this order.
+
+CAUGHT WHILE WRITING THAT TEARDOWN. My first version called `Array.isArray(gShips)`. There is no `gShips` variable anywhere, only the DOM element id. It was inside a `try/catch`, so it would have sat there doing nothing, forever, with no error, which is the same shape as the `injectHeadline` call two patches ago.
+
+`tools/reach-check.mjs` is now 163 assertions, including the gate geometry against the shipped coordinates. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 163/163, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.1.5 (2026-08-22) - logging in out of a trial left the client in trial mode
+
+Server restart required, and a hard refresh: `fm-auth.js` changed. Files touched: `client/assets/fm-auth.js`, `server/server.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+BOOT PUTS EVERY VISITOR ON A TRIAL, AND NOTHING TOOK THEM OFF IT. `setGuestState` writes `window.FM_GUEST`, which the file's own comment describes as the single source of truth for every other module that wants to know. It renders the guest bar and unhides the Claim Account button. The interactive login and register handlers never called it. They saved the session, closed the modal and emitted, and that was the whole teardown: the trial bar stayed on screen, Claim Account stayed visible, and `FM_Auth.isGuest()` kept returning true for the rest of the session even on a dev account.
+
+The upgrade path had already solved this. It resets `FM_GUEST`, removes the bar, removes the lock screen, and reloads, with a comment explaining that every panel which cached a guest flag on boot is now wrong. Login and register had the identical problem and none of the handling.
+
+THE SECOND HALF OF THE SAME BUG. `/api/login` and `/api/register` did not return `is_guest` at all, so even code that wanted to check was reading `undefined`, and the `emit` on both paths omitted `is_guest` and `guest_locked` while the `whoami` path included them. Both responses now state `is_guest:false` explicitly. Login already refuses guest accounts with a 401, so a successful login is by definition a permanent account; saying so on the wire is better than leaving the field absent and trusting every reader to coerce `undefined` the way you intended.
+
+THE FIX. One shared `leaveTrial()` teardown, called by both handlers. It resets `FM_GUEST` from the response, removes the guest bar and the lock screen, and defaults to non-trial when the server omits the field rather than inheriting the previous state. Coming from a trial it reloads, for the same reason the upgrade path does. A direct login with no trial in play does not reload.
+
+REPRODUCED, THEN VERIFIED. Replaying the sequence against the real handler shape: the old flow reproduces the bug exactly, the new one clears the flag, the bar, the lock screen and `isGuest()`, including from a locked trial, and falls back safely against a server that omits the field. `tools/reach-check.mjs` is now 153 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 153/153, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.1.4 (2026-08-22) - the dev flag was being stripped at boot
+
+Deploy, then `node server/seed_devaccounts.mjs`, then restart. Files touched: `server/db.js`, `server/seed_devaccounts.mjs`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+TWO AUTHORITIES ON ONE COLUMN, AND THE WRONG ONE RAN LAST. `seed_devaccounts.mjs` writes `is_dev` and `is_admin`. So does `syncDevAccounts()`, which runs at server boot. What that function does is blanket-reset `is_dev=0, is_admin=0` on every account that is not the owner, and then re-flag only the names listed in the `DEV_ACCOUNTS` environment variable. Zharkofin is not in that variable, so every restart quietly took away the flag the seeder had just written. Nothing was logged, and the account looked correct in the database right up until the next restart.
+
+REPRODUCED, NOT GUESSED. Against a stub database: seeder writes `dev=1` for all three accounts, then replaying `syncDevAccounts(['MrFlesh','DEV-SMASHER'])` writes `dev=0` for Zharkofin and leaves the other two alone.
+
+This has always been the behaviour and would have hit any future seeded account the same way. It surfaced now because this deployment evidently does define `DEV_ACCOUNTS`, which contradicts the standing assumption that `seed_devaccounts.mjs` is the sole authority on privilege flags. That assumption should be treated as retired.
+
+THE FIX IS A UNION, NOT A PRECEDENCE RULE. Deciding that one file wins would just move the problem: whichever loses becomes a trap for whoever edits it next. The seeder now records its account names in `city_kv` under `seeded_dev_accounts`, and `syncDevAccounts` unions that list with the environment list before performing the reset. An account is stripped only if it appears in neither. Adding a seeded account no longer requires anyone to remember to also edit an environment variable on the VPS, and setting `DEV_ACCOUNTS` no longer silently deletes seeded privileges.
+
+If the seeder cannot write that KV row for any reason it prints the account names and tells you to add them to `DEV_ACCOUNTS` by hand, rather than failing quietly and reintroducing the bug. Boot logs the union so the two lists are visible in the startup output.
+
+Verified end to end against a stub database using a deliberately stale environment list: Zharkofin keeps dev through boot. The union rule itself is asserted for duplicates, case differences, and the empty-list case. `tools/reach-check.mjs` is now 144 assertions. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 144/144, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.1.3 (2026-08-22) - passage leak, dev panel connectivity, Zharkofin
+
+Server restart required, and a reseed: `node server/seed_devaccounts.mjs`. Files touched: `client/assets/galaxy.js`, `client/assets/god-panel.js`, `client/assets/core.js`, `client/assets/portrait-manifest.js`, `client/assets/portraits/prawn1.png` (new), `server/seed_devaccounts.mjs`, `tools/lane-check.mjs`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+SHIPS WERE GETTING THROUGH THE PASSAGE. A run crossing the gate was tagged `'both'`, and `tagShipGalaxy` rendered that as show-everywhere. With exactly two galaxies, "both" and "everywhere" were the same set, so the bug was invisible and correct by accident. Adding the Reach made them different sets and Circuit traffic started flying through Khai'sultull space. A run is now tagged with the two galaxies it actually touches, and a single `shipVisibleIn()` rule tests membership.
+
+THE SAME AREA HAD A SECOND BUG NOBODY HAD REPORTED. `applyShipGalaxyFilter`, which runs on every galaxy swap, never honoured `'both'` at all: it tested `gx === activeGalaxy` only. So crossing runs were shown everywhere by one filter and hidden everywhere by the other, depending on whether you arrived by spawn or by swap. Two filters, two different rules, opposite failures. There is now one rule and both call it.
+
+`isPassageRun` also compared `isJadeWorld(a) !== isJadeWorld(b)`, which cannot see a third galaxy: a Coalition-to-Reach run read as not-a-crossing. It compares `galaxyOf()` now. Manifest scan behaviour is verified unchanged: only a run wholly inside the Circuit is refused, crossings and Reach runs stay scannable.
+
+THE DEV PANEL SAID NOT CONNECTED WHILE CONNECTED. `godSend` read `window._ws`, a raw socket reference that `core.js` only refreshed inside `onmessage`. After any reconnect it pointed at the previous, closed socket with `readyState` 3, so every god command refused. This was pre-existing and affected every god command; the Prawn War tab only made it visible because it fires a command on tab open rather than on a click. `godSend` now sends through `window.ws`, the queueing shim the rest of the client already uses, which always resolves the live socket. `core.js` also assigns `window._ws` in `onopen` so nothing else reads a stale reference.
+
+THE REACH IS GREEN. `glowing_sea.png` replaces the `blue_purple.png` placeholder.
+
+ZHARKOFIN, HIVELORD. Dev and admin, `is_prime` false, seeded with portrait `prawn1` and the title Hivelord in chitin orange. Portrait and title are seeded rather than dressed by hand: an account whose entire purpose is to appear as a specific character will otherwise speak as a blank the first time someone reseeds and forgets. The title is written through `gifted_titles` so it is owned the same way any granted title is owned, rather than a bare string on the player row that the titles UI does not know about. Verified against a stub database: creates, updates, idempotent across re-runs, and the password verifies against the seeded hash.
+
+THE COMMANDER ART IS IN, WITH A CAVEAT. `prawn1.png` at the canonical 393x397, nearest-neighbour upscaled 2.34x from the 106x166 source and bottom-anchored like a bust. It is visibly chunkier than the painted portraits beside it, which is the trade that was flagged before it shipped. It is registered as its own manifest group and deliberately NOT added to the frame map: `FMPortraitFrame` measures the widest point in the top 45% of the silhouette and calls it a head, and antennae are as wide as the shoulders. That is the droid16 2.79x failure exactly. THE CREDIT IS RECORDED AS "unverified" AND MUST BE FILLED IN BEFORE THIS IS PLAYER-VISIBLE.
+
+`tools/lane-check.mjs` had three assertions pinned to the literal tag `'both'` and failed on a retag that lost nothing. They now test the guarantee, and the scan assertion exercises the live tagging rule rather than a string. Suite: city 84/84, lane 54/54, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 135/135, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.1.2 (2026-08-22) - the Khai'sultull envoy
+
+Server restart required. Files touched: `client/assets/codec-data.js`, `client/assets/codec.js`, `client/assets/core.js`, `client/assets/god-panel.js`, `client/index.html`, `server/reach.js`, `server/server.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+A FIFTH CODEC CONTACT. The Envoy of the Ninth Concession, 30 nodes, six topics: what we call them, how they learned our language, the intrusions into Coalition and Void systems, what they actually want, why they defend worthless ground, and whether any of this can end. The voice is bureaucratic rather than monstrous. They are running a business, they are as boxed in by their own hierarchy as a Guild factor is, and they say so.
+
+THE ENVOY HAS NO FACE. The portrait is an inline `data:` SVG reading NO IMAGE behind scan lines, not a file. That is a lore decision earning its keep twice over: the Khai'sultull speak through a translation layer they built themselves out of eleven years of our commercial broadcasts, and nobody has seen what is on the other end of it. It also means the Reach ships with no art dependency at all, and the pixel-art ant portraits stay in reserve for an eventual reveal rather than being spent now on a 393x397 slot they do not fit.
+
+GATED ON LIVE STATE, NOT ON SHIPPED DATA. `repEnabled` in `codec.js` now honours an optional `rep.gate()`; the envoy's reads `window._REACH_ENVOY`, which the Prawn War panel flips through `reach_envoy`. A gate that throws fails CLOSED. The master `CALLS_ENABLED` switch still overrides everything. Exactly one rep uses a gate and every other contact behaves exactly as before. Editing shipped data was never a runtime control.
+
+THE ENVOY QUOTES THE LIVE DEMAND. `resolveTokens` grew a `{demand}` token that reads the demand posted from the panel, so what the envoy says changes the moment you post one and never goes stale after it is answered. An unset or empty demand falls back to written copy rather than printing the raw token. The contacts list re-renders when the line opens, so opening it mid-session does not require telling anyone to reload.
+
+TWO FALSE ALARMS FROM MY OWN TEST, BOTH WORTH RECORDING.
+
+The first: I asserted that every dialogue node must offer a direct exit or a route back to root. Four envoy nodes failed it. Checking against shipped content showed that 14 of 24 nodes in every existing contact are branch-only openers. The assertion was wrong, not the data.
+
+The second is worse. The corrected traversal then reported `flesh1`, `flesh2` and `flesh_faction` in McHallan and Jaquet, `own1` through `own_faction` in Rahtan, and `goal1` through `goal_faction` in Xen as nodes that trap the caller with no reachable exit. They do not. Those are faction ROUTER nodes, `{branch:{faction, match, other}}`, which `codec.js` redirects through silently and which carry no `options` array by design. My walker only modelled option nodes. I came close to reporting a bug in four shipped contacts that does not exist.
+
+The check now models both node kinds and walks every contact rather than only the new one: zero trapped nodes and zero dangling links across all six. That is a stronger guarantee than the codebase had before this patch, and it exists because the test was wrong twice first.
+
+`tools/reach-check.mjs` is now 108 assertions. Suite: city 84/84, lane 52/52, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 108/108, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.1.1 (2026-08-22) - Prawn War dev controls
+
+Server restart required. Files touched: `server/reach.js` (new), `server/server.js`, `client/index.html`, `client/assets/god-panel.js`, `client/assets/core.js`, `tools/reach-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+WAR STATE AS ONE KV BLOB, NOT A TABLE. Ten worlds and a handful of scalars is not a schema, and a new table means a migration against a live database for data that is rewritten wholesale on every change. If the Reach ever grows per-world history or a value ledger, that is when it earns a table. The loader merges rather than trusts: a world added to `REACH_WORLDS` after a save was written comes back with defaults instead of `undefined`.
+
+TWO FRONTS MAXIMUM, ENFORCED SERVER-SIDE. A third request is refused with a message rather than clamped silently. This is a rule and not a preference: the push window works because a fixed number of separate funders have to converge on one contest, and ten live windows means either nobody converges anywhere or nine sit dead. The brood chooses where it presses; players choose whether to answer.
+
+ANNOUNCE THEN EXECUTE ON EVERYTHING IRREVERSIBLE. Flip, accord and reset arm on the first call and commit on a second within twenty seconds. Arming is action-specific and world-specific, so an armed Take on KS-03 cannot be discharged by clicking Lose on KS-07. A world changing hands on a live stream has no undo, and a misclick should cost a confirmation rather than a session.
+
+TAKING A WORLD REVEALS ITS NAME. The reveal is not a separate ceremony: capture is how you learn what the Khai'sultull call the place. The GM can still reveal or conceal by hand.
+
+AN ACCORD IS NOT A WIN BUTTON. Signing closes every front and freezes the map exactly as it stands. Worlds held stay held, worlds lost stay lost, nothing is handed back, and the terms are on record for the Council to be furious about. Breaking one costs forty points of the peace track.
+
+DEV AND PUBLIC PAYLOADS ARE SEPARATE. Garrison strength, the armed slot and the GM action log never leave the dev socket. Players see control, status, front state, reveals, the outstanding demand and the peace track.
+
+NO CASH PATH IN THE WAR STATE. `reach.js` contains no reference to player cash, `savePlayer`, or any payout. The Reach spends money and pays in territory; when capture rewards exist they will go through the city and charter systems that already carry provenance checks, not through a new payout path invented alongside a war. The check asserts this.
+
+CONTROLS WIRED: passage open and seal, per-world hive control, garrison, reveal and conceal, open and close front, take and lose, Khai'sultull voice (broadcasts live and posts to the news crawl), demands with a kind, a deadline and accepted/refused/ignored tracking, the peace track, accord sign and break, reset, disarm, and a rolling action log.
+
+DELIBERATELY ABSENT: wave composition, tempo, and blast tuning. The war layer is not in this build. A switch wired to nothing rots untested, which is precisely how the trial REST gate sat broken across 120 routes for four patches while every static check passed.
+
+FOUND WHILE BUILDING THIS. The Khai'sultull voice called `injectHeadline`. That function does not exist anywhere in the codebase; the real one is `pushHeadline(text, tone, symbol, category, meta)`. It sat inside a `try/catch`, so every transmission would have broadcast correctly and silently posted nothing to the news crawl, forever, with no error. `reach-check.mjs` now asserts the real function is used and the invented one appears nowhere.
+
+`tools/reach-check.mjs` is now 87 assertions across the registry, the Reach worlds, passage plumbing, the war state module, announce-then-execute, the dispatcher and the panel. Suite: city 84/84, lane 52/52, lore 38/38, mathtest 77/77, mobile-136 71/71, reach 87/87, tutorial 22/22, selector 28/28.
+
+---
+
+## v1.4.1.0 (2026-08-22) - Khai'sultull Reach, slice 1: the galaxy registry
+
+Server restart required. Files touched: `client/assets/galaxy.js`, `client/assets/core.js`, `server/server.js`, `server/city.js`, `tools/reach-check.mjs` (new), `tools/lane-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+THE GALAXY SYSTEM WAS A BOOLEAN WEARING A STRING. `activeGalaxy` had two values. `portalConfig()` was an if/else. The nebula was a ternary. `swapGalaxy()` was a toggle with no argument, because a toggle only ever has one destination. `renderPortal()` drew exactly one portal because there were exactly two galaxies. `WORMHOLE_OPEN` was a single global boolean for a single passage. A third galaxy breaks all six, so the shape moved first, before any war code could be written against the old assumption and then rewritten.
+
+THE REGISTRY. `GALAXIES` keys each galaxy to its label, nebula, accent, seal key, sealed wording, a `gate` describing how you reach it, and a `ret` portal home. `gate.kind` is `'map'` (a portal sprite at fixed coordinates on the galaxy map) or `'orbit'` (a body orbiting inside one colony's system view). `mapGates(galaxyId)` returns everything to draw on that galaxy's map; `orbitGateFor(colonyId)` returns the gate hiding in a given system. `renderPortal` iterates. `swapGalaxy(to)` takes a destination and still falls back to "the other one" when called bare, so nothing that called it before is broken.
+
+THE CIRCUIT DID NOT MOVE. Same coordinates (990,150 and 990,250), same sprite, same nebula, same seal semantics, and the same `wormhole_open` DB key. Renaming that key would have silently reopened a passage a GM had sealed as a story beat, which is the kind of thing that only surfaces on stream.
+
+THE REACH GATE IS NOT ON THE GALAXY MAP. It orbits Abaddon, inside Abaddon's system view, outside the planet's own orbital track, on the same `sp-orbit-arm` machinery the Gluttonis refineries already use. You get there by flying to Abaddon and finding the thing going round it. Sealed by default; clicking a sealed gate does nothing; the label reads UNIDENTIFIED CONTACT until the passage opens.
+
+TEN WORLDS, NO NAMES. KS-01 through KS-10, population REDACTED, `revealed:false`. Each carries a `khaiName` and `khaiLore` the GM reveals per world on first capture or first contact. Mostly desert, with one seam world, one rift, one ice, one orbital hive platform and one tether. Terrain is authored now, in `COLONY_VISUAL`, even though cities are not shipping: retrofitting a world's look after players have learned it means re-authoring something they already know. No lanes, no companies, no sector bonuses. This is a war map.
+
+SECOND PASSAGE, SEPARATE FLAG. `REACH_OPEN` under `passage_khaisultull`, defaulting SEALED because the Reach is a war zone and nothing should cross it because a process restarted. `POST /api/dev/reach` is its own endpoint rather than a branch inside `/api/dev/wormhole`, because opening the Circuit relists tickers and rebuilds market tabs and the Reach has no market. A generic `{type:'passage'}` broadcast carries per-galaxy state.
+
+A CHECK THAT WAS TESTING THE WRONG THING. `tools/lane-check.mjs` asserted the literal string `if(!WORMHOLE_OPEN) return;` inside `renderPassageLink`. That is an implementation detail, not the guarantee, so it failed on a refactor that lost nothing. It now asserts the function bails before drawing anything when the passage is sealed, by either mechanism. `tools/reach-check.mjs` is new: 50 assertions covering the registry shape, that the Circuit is unmoved, that the Reach gate is absent from the map, that the binary assumptions are gone, and the full passage plumbing.
+
+NOT IN THIS PATCH: the war layer, Prawn cities, the codec envoy, the God Panel Prawn War tab, and any Reach economy. Slice 1 is the foundation only.
+
+---
+
 ## v1.4.0.4 (2026-08-22) - pre-deploy sanity pass (SERVER ONLY)
 
 Server restart required. No client change. Files touched: `server/server.js`, `tools/guest-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.

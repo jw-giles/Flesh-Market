@@ -166,8 +166,16 @@ ok('legacy client-scored mathgame rounds are refused', /game === 'mathgame'/.tes
 // resolved a round by id without asking which game opened it, so any
 // server-authoritative round could be settled through the client-declared path
 // instead. Solitaire paid 1848 on a 250 buy-in with no cards played.
-ok('server-settled games are named', /const SERVER_SETTLED_GAMES = new Set\(\['solitaire'/.test(srv));
-ok('solitaire and every exam are in that set', /MathTest\.EXAMS\.map\(e => e\.game\)/.test(srv));
+// WHITESPACE INSENSITIVE, because the first version pinned the whole literal on
+// one line. The set grew a third source (the sudoku tiers) and had to be broken
+// across lines to stay readable, and this failed on the reformat while the
+// property it protects was untouched. The property is that solitaire is in the
+// set, not that the set fits on one line.
+const settled = srv.slice(srv.indexOf('const SERVER_SETTLED_GAMES'),
+                          srv.indexOf('// ─── Casino: server-authoritative one-shot'));
+ok('the server-settled set resolves as a span', settled.length > 40, settled.length + ' chars');
+ok('server-settled games are named', /new Set\(\s*\[\s*\n?\s*'solitaire'/.test(settled));
+ok('solitaire and every exam are in that set', /MathTest\.EXAMS\.map\(e => e\.game\)/.test(settled));
 const guarded = [...srv.matchAll(/SERVER_SETTLED_GAMES\.has\(round\.game\)/g)].length;
 ok('both client-priced paths check it', guarded === 2, `${guarded} of 2 (casino_result, casino_bet_addon)`);
 

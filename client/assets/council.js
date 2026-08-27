@@ -35,8 +35,11 @@
   // Derived rather than restated. Two tables holding the same four hex values is
   // two tables that will eventually disagree.
   var SEAT_COLOR = { coalition: FACTION_COLOR.coalition, syndicate: FACTION_COLOR.syndicate,
-                     void: FACTION_COLOR.void, guild: FACTION_COLOR.guild };
-  var SEAT_ORDER = ['coalition','syndicate','void','guild'];
+                     void: FACTION_COLOR.void, guild: FACTION_COLOR.guild,
+                     // Not the battlefield grey. Against four saturated faction
+                     // colours a grey chair reads as disabled rather than allied.
+                     jade: '#6fae9f' };
+  var SEAT_ORDER = ['coalition','syndicate','void','guild','jade'];
 
   var st = { seats: [], accords: [], colonies: [], log: [], mySeat: null, isGM: false,
              cfg: null, loaded: false,
@@ -204,19 +207,48 @@
   };
 
   function renderChamber(){
-    var W = 900, H = 260;
+    var W = 900, H = 320;
     // Chairs sit on a single arc facing the viewer, labels directly beneath each,
     // and the table is a FOREGROUND arc drawn below all of it. The first pass put
     // the two inner chairs over the table and their name plates landed on top of
     // the tabletop, which is why the geometry is separated by band here: chairs
     // 84 to 190, plates 190 to 226, table 214 down. Nothing overlaps by accident.
-    var seatX = { coalition:118, syndicate:372, void:528, guild:782 };
-    var seatY = { coalition:128, syndicate:128, void:128, guild:128 };
+    /* TWO ROWS AND A PROPRIETOR, and the rows are a RULE rather than an
+       arrangement: the front row is every chair a player can take, the back row
+       is every chair no player can take. That comes off the seat's own mode
+       shipped by the server, so adding a seat cannot land it in the wrong row
+       and cannot leave it unplaced. The previous version was a hand kept map of
+       four ids to pixels, and a fifth id rendered at seatX[undefined].
+
+       Front row is three and back row is two, so the back chairs sit in the
+       HORIZONTAL GAPS between the front ones. That is what lets each row keep
+       its own plate band without the bands ever crossing: a back plate is lower
+       than the top of a front chair, and it never shares an x range with one. */
+    var FRONT_X = [200, 450, 700], BACK_X = [300, 600];
+    var seatX = {}, seatY = {}, seatRow = {};
+    (function(){
+      var front = [], back = [];
+      SEAT_ORDER.forEach(function(id){
+        var v = null; st.seats.forEach(function(x){ if (x.seat === id) v = x; });
+        if (!v) return;
+        // presidency and purchasable are chairs a player can occupy. never and
+        // gm are not. An unknown mode is treated as takeable, because a new
+        // purchasable seat is the likely case and the front row has the room.
+        (v.mode === 'never' || v.mode === 'gm' ? back : front).push(id);
+      });
+      front.slice(0, FRONT_X.length).forEach(function(id, i){
+        seatX[id] = FRONT_X[i]; seatY[id] = 216; seatRow[id] = 'front';
+      });
+      back.slice(0, BACK_X.length).forEach(function(id, i){
+        seatX[id] = BACK_X[i]; seatY[id] = 126; seatRow[id] = 'back';
+      });
+    })();
     // Short names on the graphic. The full labels collided: "THE VOID COLLECTIVE"
     // is 19 characters and the two inner chairs are 156px apart, so at plate size
     // the middle two plates ran into each other. The roster below carries the
     // long names; the chamber only needs to be legible at a glance.
-    var SHORT = { coalition:'COALITION', syndicate:'SYNDICATE', void:'THE VOID', guild:'M. GUILD' };
+    var SHORT = { coalition:'COALITION', syndicate:'SYNDICATE', void:'THE VOID',
+                  guild:'M. GUILD', jade:'JADE CIRCUIT' };
 
     var defs = '';
     SEAT_ORDER.forEach(function(id){
@@ -229,7 +261,7 @@
     });
 
     var h = '<div style="border:1px solid '+CO.line+';background:'+CO.deep+';margin-bottom:14px;overflow:hidden">';
-    h += '<svg viewBox="0 0 '+W+' '+H+'" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="xMidYMid meet" style="width:100%;display:block;max-height:262px">';
+    h += '<svg viewBox="0 0 '+W+' '+H+'" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="xMidYMid meet" style="width:100%;display:block;max-height:322px">';
     h += '<defs>' + defs
       +  '<radialGradient id="cgFloor" cx="50%" cy="26%" r="78%">'
       +  '<stop offset="0%" stop-color="#123449" stop-opacity="0.8"/>'
@@ -253,24 +285,61 @@
       h += '<circle cx="'+gx.toFixed(1)+'" cy="'+gy.toFixed(1)+'" r="2.3" fill="#5b93b0" opacity="'+(0.14 + (g % 4) * 0.06).toFixed(2)+'"/>';
     }
 
+    /* THE PROPRIETOR, ABOVE THE ROOM AND NOT IN IT. Mr Flesh is deliberately
+       NOT a seat: he is not in COUNCIL_SEATS, has no mode, cannot be bought,
+       counted, voted for or signed with. He owns the house the chamber sits in,
+       and putting him in the seat list would make him a fifth vote in every
+       place that iterates chairs. He is drawn here as a fixture.
+
+       Centred at 450, directly above the middle front chair, which is the
+       Presidency. That is the composition doing the work: the house sits over
+       the elected. */
+    (function(){
+      var FX = 450, FY = 54, FR = 22, fc = '#f0b454';
+      h += '<g>';
+      h += '<rect x="'+(FX-56)+'" y="'+(FY-32)+'" width="112" height="72" rx="3" '
+        +  'fill="'+fc+'" fill-opacity="0.06" stroke="'+fc+'" stroke-opacity="0.5" stroke-width="1"/>';
+      var fsrc = portraitSrc('item:jarred_brain');
+      if (fsrc) {
+        h += '<clipPath id="cclip-flesh"><circle cx="'+FX+'" cy="'+FY+'" r="'+FR+'"/></clipPath>';
+        var FF = window.FMPortraitFrame ? window.FMPortraitFrame('item:jarred_brain')
+                                        : { scale: 1.55, ox: -0.275, oy: -0.0735 };
+        var FD = FR * 2, FW = FD * FF.scale;
+        h += '<image href="'+esc(fsrc)+'" xlink:href="'+esc(fsrc)+'" '
+          +  'x="'+(FX - FR + FF.ox * FD).toFixed(1)+'" y="'+(FY - FR + FF.oy * FD).toFixed(1)+'" '
+          +  'width="'+FW.toFixed(1)+'" height="'+FW.toFixed(1)+'" preserveAspectRatio="xMidYMid slice" '
+          +  'clip-path="url(#cclip-flesh)"/>';
+      }
+      h += '<circle cx="'+FX+'" cy="'+FY+'" r="'+FR+'" fill="none" stroke="'+fc+'" stroke-width="1.8"/>';
+      h += '<text x="'+FX+'" y="'+(FY+40)+'" text-anchor="middle" font-size="9.5" font-family="monospace" '
+        +  'letter-spacing="2.4" fill="'+fc+'" fill-opacity="0.85">THE HOUSE</text>';
+      h += '</g>';
+    })();
+
     // Chairs.
     SEAT_ORDER.forEach(function(id){
       var v = null; st.seats.forEach(function(x){ if (x.seat === id) v = x; });
       if (!v) return;
       var x = seatX[id], y = seatY[id], c = SEAT_COLOR[id];
+      if (x === undefined) return;          // seated in no row: drawn nowhere
+      var isBack = seatRow[id] === 'back';
+      // The back row sits smaller as well as higher. Same size at two depths
+      // reads as two rows of the same room rather than one room with depth.
+      var CW = isBack ? 27 : 33, CT = isBack ? 34 : 45, CB = isBack ? 22 : 30;
+      var PLATE = isBack ? 170 : 268;       // the two bands, never crossing
       var occupied = !v.regent, mine = st.mySeat === id;
 
       h += '<g style="cursor:pointer" onclick="window.__councilFocusSeat(\''+id+'\')">';
       // High backed chair behind the delegate marker.
-      h += '<path d="M '+(x-33)+' '+(y+30)+' L '+(x-33)+' '+(y-14)+' Q '+x+' '+(y-45)+' '+(x+33)+' '+(y-14)
-         + ' L '+(x+33)+' '+(y+30)+' Z" fill="'+c+'" fill-opacity="'+(occupied?0.13:0.05)+'" '
+      h += '<path d="M '+(x-CW)+' '+(y+CB)+' L '+(x-CW)+' '+(y-CT*0.31).toFixed(1)+' Q '+x+' '+(y-CT)+' '+(x+CW)+' '+(y-CT*0.31).toFixed(1)
+         + ' L '+(x+CW)+' '+(y+CB)+' Z" fill="'+c+'" fill-opacity="'+(occupied?0.13:0.05)+'" '
          + 'stroke="'+c+'" stroke-opacity="'+(occupied?0.45:0.2)+'" stroke-width="1"/>';
 
       // The delegate's face, clipped to the chair disc. A regent uses an assigned
       // portrait from the same set players pick from, so nothing in the room
       // reads as "this one is furniture".
       var src = portraitSrc(v.portrait);
-      var R = 25;
+      var R = isBack ? 21 : 25;
       // PORTRAIT FRAMING is no longer a constant. It used to be 1.55x anchored at
       // 37% down, which was tuned against art that sits inset in its frame. The
       // scan and droid sets run to the frame edges and that zoom ate their faces.
@@ -308,33 +377,34 @@
       // client (diamond, lozenge, hexagon) falls back to a tofu box in any font
       // that lacks it, and a chamber with four boxes in it is worse than none.
       // Sigil moved off the face and onto a corner badge once portraits landed.
-      var sx = x + 19, sy = y + 18;
+      var sx = x + (isBack ? 16 : 19), sy = y + (isBack ? 15 : 18);
       h += '<circle cx="'+sx+'" cy="'+sy+'" r="8" fill="#04070b" stroke="'+c+'" stroke-opacity="0.85" stroke-width="1"/>';
       var sig = '';
       if (id === 'coalition')      sig = '<rect x="'+(sx-3.2)+'" y="'+(sy-3.2)+'" width="6.4" height="6.4" transform="rotate(45 '+sx+' '+sy+')"';
       else if (id === 'syndicate') sig = '<rect x="'+(sx-4)+'" y="'+(sy-2.2)+'" width="8" height="4.4" transform="rotate(45 '+sx+' '+sy+')"';
       else if (id === 'void')      sig = '<circle cx="'+sx+'" cy="'+sy+'" r="3.4"';
+      else if (id === 'jade')      sig = '<polygon points="'+[[sx,sy-4],[sx+3.6,sy+2.4],[sx-3.6,sy+2.4]].map(function(q){return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ')+'"';
       else                         sig = '<polygon points="'+[[sx,sy-4],[sx+3.5,sy-2],[sx+3.5,sy+2],[sx,sy+4],[sx-3.5,sy+2],[sx-3.5,sy-2]].map(function(q){return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ')+'"';
       h += sig + ' fill="'+c+'" fill-opacity="'+(occupied ? 1 : 0.5)+'"/>';
 
       // Name plates. Same band for every chair regardless of chair height, so the
       // four read as a row instead of a staircase.
-      h += '<text x="'+x+'" y="184" text-anchor="middle" font-size="10.5" font-family="monospace" '
+      h += '<text x="'+x+'" y="'+PLATE+'" text-anchor="middle" font-size="10.5" font-family="monospace" '
         +  'letter-spacing="1.9" fill="'+c+'" fill-opacity="'+(occupied ? 0.95 : 0.48)+'">'
         +  esc(SHORT[id] || v.label.toUpperCase()) + '</text>';
-      h += '<text x="'+x+'" y="200" text-anchor="middle" font-size="10.5" font-family="monospace" '
+      h += '<text x="'+x+'" y="'+(PLATE+16)+'" text-anchor="middle" font-size="10.5" font-family="monospace" '
         +  'fill="'+(occupied ? CO.text : CO.dim)+'">' + esc(trunc(v.holderName, 20)) + '</text>';
-      h += '<line x1="'+x+'" y1="'+(y+32)+'" x2="'+x+'" y2="174" stroke="'+c+'" stroke-opacity="0.2" stroke-width="1"/>';
+      h += '<line x1="'+x+'" y1="'+(y+CB+2)+'" x2="'+x+'" y2="'+(PLATE-10)+'" stroke="'+c+'" stroke-opacity="0.2" stroke-width="1"/>';
       h += '</g>';
     });
 
     // Foreground table. Its arc peaks at y=214, which is BELOW the lowest name
     // plate at y=200. The first cut peaked at 196 and swallowed the middle two
     // plates, which is what made them look like they were lying on the tabletop.
-    h += '<path d="M 70 290 A 380 76 0 0 1 830 290 Z" fill="url(#cgTable)" stroke="none"/>';
-    h += '<path d="M 70 290 A 380 76 0 0 1 830 290" fill="none" stroke="#4a7ea3" stroke-opacity="0.6" stroke-width="1.5"/>';
-    h += '<path d="M 168 290 A 288 46 0 0 1 732 290" fill="none" stroke="#25415a" stroke-opacity="0.75" stroke-width="1"/>';
-    h += '<text x="450" y="252" text-anchor="middle" font-size="9" font-family="monospace" letter-spacing="3.6" '
+    h += '<path d="M 70 350 A 380 76 0 0 1 830 350 Z" fill="url(#cgTable)" stroke="none"/>';
+    h += '<path d="M 70 350 A 380 76 0 0 1 830 350" fill="none" stroke="#4a7ea3" stroke-opacity="0.6" stroke-width="1.5"/>';
+    h += '<path d="M 168 350 A 288 46 0 0 1 732 350" fill="none" stroke="#25415a" stroke-opacity="0.75" stroke-width="1"/>';
+    h += '<text x="450" y="312" text-anchor="middle" font-size="9" font-family="monospace" letter-spacing="3.6" '
       +  'fill="'+CO.gold+'" fill-opacity="0.5">EVERYTHING SAID HERE IS ON THE RECORD</text>';
 
     // Scanlines, so the graphic sits inside the CRT rather than on top of it.

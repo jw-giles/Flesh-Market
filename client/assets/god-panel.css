@@ -36,3 +36,74 @@
 .god-ticker-row:hover { background:#1a0a00; }
 .god-player-row { display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-radius:4px;cursor:pointer; }
 .god-player-row:hover { background:#1a0a00; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REACH AND WAR CONTROL LAYOUT
+
+   These panels grew a row at a time and every row carried its own inline
+   cssText, so the label column was whatever the last person typed - 52px here,
+   42px there, and one that was a bare span. Nothing lined up, which is why a
+   card with eight controls on it read as a wall rather than as eight controls.
+
+   A GRID, NOT A FLEX ROW. The label column is fixed so every label on every
+   card starts at the same x, and the value column is fixed and right aligned so
+   numbers can be compared down the card instead of read one at a time. The
+   middle is the only thing that stretches, which is where the sliders are, and
+   that is the one thing that SHOULD be different widths on different rows.
+
+   Sections exist because these cards mix four unrelated jobs: what the ground
+   is, who is fighting on it, what it costs, and what is standing on it. A GM
+   scanning for the fund should not have to read past the posture toggle.
+   ══════════════════════════════════════════════════════════════════════════ */
+.gw-card{border:1px solid #2a2a24;border-radius:2px;padding:7px 9px;margin-bottom:7px;background:#0b0b08}
+.gw-card.armed{border-color:#f0b454;background:rgba(240,180,84,.06)}
+
+/* The title line. Name, then the facts that are true of the world regardless of
+   what anyone does to it, then the one number a GM checks first. */
+.gw-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.gw-name{font-size:.74rem;color:#e2ddd0;letter-spacing:.09em;font-weight:400}
+.gw-tag{font-size:.54rem;letter-spacing:.13em;color:#57554c}
+.gw-hive{margin-left:auto;font-size:.66rem;color:#c2551f;letter-spacing:.06em}
+
+/* A section is a hairline and a word. Cheaper than a box and it does the same
+   job: it tells you where to stop reading. */
+.gw-sec{font-size:.5rem;letter-spacing:.18em;color:#43413a;margin:8px 0 3px;
+  border-top:1px solid #1b1b16;padding-top:5px}
+.gw-sec:first-of-type{border-top:0;padding-top:0;margin-top:2px}
+
+/* THE ROW. 74px label, elastic middle, 58px value. The label column is wide
+   enough for GARRISON and COMMITMENT without wrapping, which is what set it. */
+.gw-row{display:grid;grid-template-columns:74px 1fr 58px;gap:7px;align-items:center;margin:3px 0}
+.gw-row.wide{grid-template-columns:74px 1fr}
+.gw-lab{font-size:.55rem;letter-spacing:.13em;color:#57554c;white-space:nowrap}
+.gw-val{font-size:.62rem;color:#b9b5a8;text-align:right;font-variant-numeric:tabular-nums}
+.gw-val.hot{color:#c2551f}
+.gw-val.warm{color:#f0b454}
+.gw-val.cool{color:#4ecdc4}
+.gw-mid{display:flex;gap:5px;align-items:center;flex-wrap:wrap;min-width:0}
+.gw-row input[type=range]{width:100%;min-width:60px;accent-color:#c2551f}
+
+/* A note under a row, for the case where a control is refusing and the reason
+   is not visible from the control itself. A disabled button with no reason
+   attached is a control a GM goes looking for an explanation for. */
+.gw-note{grid-column:1 / -1;font-size:.54rem;color:#57554c;line-height:1.45;margin:1px 0 2px}
+.gw-note.warn{color:#c2551f}
+
+/* Engagement rows inside a card. Indented, because they belong to the world
+   above them and a flat list of ten zones under ten worlds is unreadable. */
+.gw-zone{display:grid;grid-template-columns:1fr 90px 54px 62px;gap:6px;align-items:center;
+  margin:2px 0 2px 8px;font-size:.6rem}
+.gw-zone .zn{color:#9a968b;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gw-zone .zs{font-size:.54rem;letter-spacing:.12em;text-align:center}
+.gw-zone .zs.live{color:#f0b454}
+.gw-zone .zs.quiet{color:#43413a}
+
+/* Buttons in these panels are small and there are a lot of them, so they get a
+   consistent size rather than each caller picking one. */
+.gw-b{background:#100f0b;border:1px solid #2f2d25;color:#8f8b80;
+  font-family:inherit;font-size:.56rem;letter-spacing:.08em;padding:2px 7px;cursor:pointer;border-radius:2px}
+.gw-b:hover{border-color:#6a6658;color:#d8d2c4}
+.gw-b:disabled{opacity:.32;cursor:not-allowed}
+.gw-b.on{border-color:#f0b454;color:#f0b454}
+.gw-b.go{border-color:#4ecdc4;color:#4ecdc4}
+.gw-b.bad{border-color:#c2551f;color:#c2551f}

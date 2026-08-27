@@ -25,7 +25,7 @@ hr()    { echo -e "${CYAN}──────────────────
 DOMAIN="${1:-}"
 EMAIL="${2:-}"
 REPO_URL="${3:-}"
-APP_DIR="/opt/fleshmarket"
+APP_DIR="${FM_APP_DIR:-/root/Flesh-Market}"
 FM_USER="fm"
 
 echo ""

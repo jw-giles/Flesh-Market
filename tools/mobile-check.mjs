@@ -16,7 +16,18 @@
 // Run from the repo root.
 
 import fs from 'fs';
-import { JSDOM } from 'jsdom';
+// jsdom is deliberately not a project dependency, so this check cannot run on a
+// bare clone. It used to die with an ERR_MODULE_NOT_FOUND stack, which reads as
+// "this tool is broken" and gets scrolled past, and that is exactly how a real
+// failure in here survived: the assertion that catches it could not run. A loud
+// SKIP says NOT RUN instead of pretending nothing was wrong.
+let JSDOM = null;
+try { ({ JSDOM } = await import('jsdom')); } catch (_) {}
+if (!JSDOM) {
+  console.log('\n  !!  NOT RUN  !!  jsdom is not installed, so none of these assertions executed.');
+  console.log('      npm i jsdom      (from the repo root), then run this again.\n');
+  process.exit(0);
+}
 
 const ROOT = process.cwd();
 let pass = 0, fail = 0; const failures = [];
@@ -396,7 +407,15 @@ const run = async () => {
   ok('shell reactivates on rotate back', back);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  if (fail) { failures.forEach(f => console.log('  - ' + f)); process.exit(1); }
+  if (fail) failures.forEach(f => console.log('  - ' + f));
+  // EXIT EXPLICITLY, BOTH WAYS. pretendToBeVisual keeps a requestAnimationFrame
+  // timer alive, so the process never ends on its own. This used to exit only on
+  // FAILURE, which is precisely backwards: a failing run terminated and a
+  // passing one hung forever. Every hand run of this check was piped through
+  // `tail`, which prints the result and hides the hang, so it looked fine for
+  // as long as nobody ran the suite from a script.
+  try { window.close(); } catch (_) {}
+  process.exit(fail ? 1 : 0);
 };
 
 run();

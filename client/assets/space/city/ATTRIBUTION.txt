@@ -1,0 +1,96 @@
+*** RETIRED. THESE TEXTURES ARE NO LONGER SHIPPED OR USED. ***
+The facade sheets were removed in v1.9.1.0 when the city moved to Voloshka's
+modular kit. The reason is not a complaint about the art, which was good: a
+canvas 2D renderer maps images through an AFFINE transform, a rectangle in
+perspective is a PROJECTIVE map, and no amount of subdivision closes that gap -
+so a photographic facade on a box always bowed and always gapped. Geometry
+whose faces carry one baked colour has no such problem.
+
+papptimus stays in docs/CREDITS.md and in the in-client Asset Credits panel.
+CC BY attribution is owed for USE, the sheets were used for several releases,
+and removing the credit because the files left the tree would be reading the
+licence backwards.
+
+The original record follows.
+
+=====================================================================
+
+FleshMarket - cyber city facade textures
+========================================
+
+WHAT THESE ARE
+Nine albedo textures and their nine matching emissive maps, plus two roof
+textures. 256x256 pixel-art facades: brick, shutters, glazing, doors, service
+risers. The emissive maps are black except where a window, a sign or a keypad
+is lit, which is exactly the split a night scene wants - the albedo is drawn
+at the ambient value and the emissive is added on top so lit windows are
+LIGHT SOURCES rather than bright paint.
+
+They are drawn by client/assets/city-battle.js onto building facades. See
+"HOW THEY ARE USED" below for why only part of the pack was taken.
+
+
+LICENCE: CC BY 4.0. RESOLVED.
+
+  Licence:     Creative Commons Attribution 4.0 International
+               https://creativecommons.org/licenses/by/4.0/
+  Author:      papptimus
+  Source:      https://papptimus.itch.io/cyber-city
+  Verified:    the itch.io listing states the asset licence as "Creative
+               Commons Attribution v4.0 International" in its own metadata,
+               and the author confirmed the same licence in the comments on
+               that page. Both were checked against the page rather than taken
+               from the archive, which contains no licence file.
+  Changes:     stated below, as section 3(a)(1)(B) requires.
+
+CC BY 4.0 IS THE MOST PERMISSIVE LICENCE IN THIS REPOSITORY AND THE ONLY ONE
+THAT DOES NOT HAVE A DISTRIBUTION PROBLEM. It explicitly permits commercial
+use, modification and redistribution, including in a public repository. The
+troop pack, the tile pack and the tank all fail that test; this one passes it.
+
+Its one condition is attribution, and that is now met in three places, which
+is deliberate: this directory, docs/CREDITS.md, and the in-client Asset Credits
+panel (client/assets/asset-credits.js), the last of which is the one a player
+actually sees. tools/city-battle-check.mjs asserts the author is named here and
+fails if the line is ever emptied.
+
+NOTE FOR NEXT TIME, BECAUSE THIS IS THE FOURTH PACK TO ARRIVE THIS WAY: the
+archive contained no licence file, no readme and no author name - only
+Textures/ and FBX/. The terms were on the STORE PAGE, not in the download. An
+archive is not a licence; the page it came from is. Record the URL at the
+moment of download and none of this costs anything later.
+
+
+CHANGES MADE (required to be stated under CC BY 4.0 section 3(a)(1)(B))
+- Only 20 of the pack's 29 texture files were taken: the nine albedo facades
+  that have a matching emissive map, those nine emissive maps, and the two
+  roof textures. Files taken verbatim, byte for byte, renamed not at all.
+- Nothing was resampled, recoloured or recompressed. The renderer tints at
+  draw time from the planet palette; the files on disk are the originals.
+- The FBX meshes were NOT taken. See below.
+
+
+WHAT WAS DELIBERATELY NOT TAKEN, AND WHY
+The pack ships twenty FBX meshes - four whole buildings and sixteen modular
+sections. They are not here.
+
+They are binary FBX (Kaydara FBX Binary, 2020), and this renderer has no
+mesh format that could receive them without a converter being written first:
+the nature pack went through tools/nature-meshes.py to become a flat vertex
+and face list, and an FBX importer is a substantially bigger job than that
+was. More to the point, the meshes are the part of the pack we need LEAST.
+The building shapes in this scene are generated - footprint, height, setback,
+cornice, roof plant - and they need to stay generated, because the block layout
+places them procedurally against streets and cover slots. What was missing was
+never the boxes. It was the SURFACES on the boxes, and that is what the
+textures are.
+
+If the meshes are wanted later, tools/nature-meshes.py is the pattern to copy
+and an FBX-to-JSON step is the work; the licence permits it and this note is
+the record that it was a decision rather than an oversight.
+
+The five unpaired emissive maps (building_emiss, building3_emiss,
+building10_emiss, building_10a_emiss, building_red_2_emiss) were left out
+because they have no albedo in the pack to sit on; the renderer draws emissive
+only over its own albedo, so an orphan map has nothing to be emissive OF. The
+rail textures were left out because there is no rail in this scene yet.

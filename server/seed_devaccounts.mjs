@@ -33,6 +33,20 @@ const DEV_ACCOUNTS = [
     password_hash: 'c39ae1079e8c18ccaca19fffc0f214c3f804e37ae84ed4926e604ed1b1dda4374e482e00de65ea5a6233421fa06e91e10d5a8354dbb6917920237663e2d20c4a',
     password_salt: 'c0ac22304438fb6dcd46eba79605ce81',
   },
+  {
+    // GM voice for the Khai'sultull. Dev/admin like the others, is_prime false.
+    // portrait and title are seeded here because this account's whole purpose is
+    // to appear as a specific character in chat and the council chamber; a GM
+    // who has to dress the account by hand after every reseed will eventually
+    // forget and speak as a blank.
+    name:          'Zharkofin',
+    password_hash: '758e623acbe7ebf92c15ba1b31f123dc41b88647c615eb5e155358bea44167ff5628f3afb3cefb3e834d84bb00e98b0237d82a74468c15f82b79e97cc4b40487',
+    password_salt: '857701f98a5bc83fbe8c4515014a1299',
+    portrait:      'prawn1',
+    title:         'Hivelord',
+    title_color:   '#c2551f',
+    title_badge:   '\u2756',
+  },
 ];
 
 // ─── Retired accounts ─────────────────────────────────────────────────────────
@@ -73,6 +87,37 @@ function getPlayerByName(name) {
   return db.prepare('SELECT * FROM players WHERE LOWER(name)=LOWER(?) LIMIT 1').get(name) || null;
 }
 
+// Portrait and title, for accounts that exist to be a character rather than an
+// operator. Idempotent like everything else here: re-running restores the look
+// if someone changed it in-game. Titles go through gifted_titles so the account
+// owns it the same way any granted title is owned, rather than being a string
+// on the row that the titles UI does not know about.
+function applyLook(playerId, acct) {
+  if (acct.portrait) {
+    try { stmt('UPDATE players SET portrait=?, updated_at=? WHERE id=?')
+            .run(acct.portrait, Date.now(), playerId); }
+    catch(e) { console.log(`[warn]   portrait for ${acct.name}: ${e.message}`); }
+  }
+  if (acct.title) {
+    try {
+      stmt(`INSERT OR IGNORE INTO gifted_titles (player_id,label,color,badge,granted_by,granted_at)
+            VALUES (?,?,?,?,?,?)`)
+        .run(playerId, acct.title, acct.title_color || '#c2551f',
+             acct.title_badge || null, 'seed_devaccounts', Date.now());
+    } catch(e) { console.log(`[warn]   gifted_titles for ${acct.name}: ${e.message}`); }
+    try {
+      const row = db.prepare('SELECT owned_titles FROM players WHERE id=?').get(playerId);
+      let owned = [];
+      try { owned = JSON.parse(row && row.owned_titles || '[]'); } catch(_) { owned = []; }
+      if (!owned.includes(acct.title)) owned.push(acct.title);
+      stmt('UPDATE players SET title=?, owned_titles=?, updated_at=? WHERE id=?')
+        .run(acct.title, JSON.stringify(owned), Date.now(), playerId);
+    } catch(e) { console.log(`[warn]   title for ${acct.name}: ${e.message}`); }
+  }
+  if (acct.portrait || acct.title)
+    console.log(`[look]   ${acct.name} — portrait ${acct.portrait || '(unchanged)'}, title ${acct.title || '(unchanged)'}`);
+}
+
 // ─── Seed ─────────────────────────────────────────────────────────────────────
 
 let ownerPlayerId = null;
@@ -88,6 +133,7 @@ for (const acct of DEV_ACCOUNTS) {
       password_hash=?, password_salt=?
       WHERE id=?`
     ).run(isPrime ? 1 : 0, acct.password_hash, acct.password_salt, existing.id);
+    applyLook(existing.id, acct);
     if (isPrime) ownerPlayerId = existing.id;
     console.log(`[update] ${acct.name} — hash + flags refreshed${isPrime ? ' (OWNER ★)' : ''}`);
     continue;
@@ -100,6 +146,7 @@ for (const acct of DEV_ACCOUNTS) {
   ).run(id, acct.name, acct.password_hash, acct.password_salt,
         1000, 0, 1, '[]', 3, 1, 1, isPrime ? 1 : 0, Date.now(), Date.now());
 
+  applyLook(id, acct);
   if (isPrime) ownerPlayerId = id;
   console.log(`[create] ${acct.name}${isPrime ? ' (OWNER ★)' : ''}`);
 }
@@ -130,6 +177,25 @@ for (const acct of RETIRED_ACCOUNTS) {
   try { stmt(`DELETE FROM fund_memberships WHERE player_id=? AND fund_id IN ('FLSH','MERCHANTS_GUILD')`).run(p.id); } catch(_) {}
 
   console.log(`[retire] ${acct.name} — login sealed, dev/admin/tier stripped, funds cleared`);
+}
+
+// ─── Record what this seeder owns ─────────────────────────────────────────────
+// syncDevAccounts() runs at boot, blanket-resets is_dev/is_admin on every
+// non-owner, and re-flags only the names in the DEV_ACCOUNTS env var. Without
+// this list it would silently strip any account seeded here that the env var
+// does not also name. Writing the names down means boot unions the two lists
+// instead of one authority quietly undoing the other.
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS city_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)`);
+  const names = JSON.stringify(DEV_ACCOUNTS.map(a => a.name));
+  db.prepare(`INSERT INTO city_kv (k,v) VALUES (?,?)
+              ON CONFLICT(k) DO UPDATE SET v=excluded.v`)
+    .run('seeded_dev_accounts', names);
+  console.log(`[kv]     seeded_dev_accounts = ${names}`);
+} catch (e) {
+  console.log(`[warn]   could not record seeded_dev_accounts: ${e.message}`);
+  console.log(`[warn]   if DEV_ACCOUNTS is set in .env, ADD THESE NAMES TO IT or boot will strip them:`);
+  console.log(`[warn]   ${DEV_ACCOUNTS.map(a => a.name).join(',')}`);
 }
 
 // ─── Guild ownership — set MrFlesh as MERCHANTS_GUILD owner ───────────────────

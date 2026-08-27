@@ -12,7 +12,18 @@
 //   npm i jsdom && node tools/city-shortcut-check.mjs
 // Run from the repo root.
 import fs from 'fs';
-import { JSDOM } from 'jsdom';
+// jsdom is deliberately not a project dependency, so this check cannot run on a
+// bare clone. It used to die with an ERR_MODULE_NOT_FOUND stack, which reads as
+// "this tool is broken" and gets scrolled past, and that is exactly how a real
+// failure in here survived: the assertion that catches it could not run. A loud
+// SKIP says NOT RUN instead of pretending nothing was wrong.
+let JSDOM = null;
+try { ({ JSDOM } = await import('jsdom')); } catch (_) {}
+if (!JSDOM) {
+  console.log('\n  !!  NOT RUN  !!  jsdom is not installed, so none of these assertions executed.');
+  console.log('      npm i jsdom      (from the repo root), then run this again.\n');
+  process.exit(0);
+}
 
 const ROOT = process.cwd();
 let pass = 0, fail = 0; const failures = [];

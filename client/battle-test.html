@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>FleshMarket - battle test bench</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  BATTLE TEST BENCH.  client/battle-test.html  ->  http://<host>/battle-test.html
+
+  A HARNESS, NOT A MOCKUP. It loads client/assets/factions.js,
+  client/assets/coalition-sprites.js and client/assets/reach-battle.js with
+  plain script tags, so what runs here is byte for byte what runs in the game.
+  Nothing is copied, inlined or reimplemented, which is the whole point: a test
+  bench that contains its own copy of the renderer drifts from the real one and
+  starts lying the first time either is touched.
+
+  WHY THIS WAS REBUILT, AND IT IS NOT COSMETIC. The bench did not load
+  factions.js, and both consumers of the registry hold a FALLBACK for the frame
+  before it arrives. So the bench was rendering the fallback: three factions
+  instead of six, the pre-registry skin path, and no optic or accent remap at
+  all. It looked fine and it was showing a build that no longer exists, which is
+  the exact failure the header above has warned about since the bench shipped.
+  A missing script tag is a quieter version of embedding your own renderer.
+
+  IT ALSO RESOLVES ART FROM THE REAL PATH. It sits beside index.html, so
+  assets/space/troops/*.png resolves exactly as it does in the client. If a
+  sheet is missing on a server, this page shows it missing too, which makes it
+  a deploy check as well as a design bench.
+
+  WHAT IT REPLACES: window._REACH, which is normally pushed down the socket by
+  the server, and the couple of DOM ids the overlay would have provided. That
+  is the entire seam. No game state is touched, no socket is opened, nothing is
+  written anywhere.
+
+  THE ROSTER IS SET THE WAY THE SERVER SETS IT. Composing a line here writes
+  world.roster in the wire shape rosterWire produces and lets the renderer's own
+  two second tick pick it up, because applyWorks re-reads it on every refresh.
+  There is no bench-only path into the faction model, so a line composed here
+  turns over exactly as slowly as one composed in the God panel: as men die and
+  are replaced, not by teleporting the field.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  html,body{margin:0;height:100%;background:#04050a;overflow:hidden;
+    font-family:'Courier New',monospace;color:#d8d2c4}
+  #reachBattle{position:fixed;inset:0;background:#04050a}
+  #rbCanvas{display:block;width:100%;height:100%;cursor:grab}
+  #rbCanvas.drag{cursor:grabbing}
+  #hud{position:absolute;left:0;top:0;right:0;padding:9px 14px;
+    background:linear-gradient(#04050aee,#04050a00);pointer-events:none;z-index:2}
+  #rbTitle{font-size:.86rem;letter-spacing:.12em;color:#d8d2c4}
+  #rbSub{font-size:.62rem;letter-spacing:.14em;color:#4a4842}
+  #rbStat{position:absolute;left:14px;bottom:12px;font-size:.6rem;color:#3a4250;
+    letter-spacing:.1em;z-index:2}
+  #note{position:absolute;right:14px;bottom:12px;font-size:.58rem;color:#2a303c;
+    letter-spacing:.1em;z-index:2}
+  #panel{position:absolute;right:12px;top:56px;width:286px;background:#070910f2;
+    border:1px solid #1d2029;padding:11px 13px;font-size:.62rem;letter-spacing:.08em;
+    z-index:3;max-height:calc(100vh - 90px);overflow:auto}
+  #panel h4{margin:12px 0 7px;font-size:.58rem;letter-spacing:.18em;color:#6b7280;
+    font-weight:400;border-top:1px solid #1a1a22;padding-top:9px}
+  #panel h4:first-child{margin-top:0;border-top:0;padding-top:0}
+  .row{display:flex;justify-content:space-between;margin:4px 0;color:#6b7280}
+  .row b{font-weight:400;color:#d8d2c4}
+  input[type=range]{width:100%;margin:5px 0 2px;accent-color:#4ecdc4}
+  .bar{height:5px;background:#0d1017;border:1px solid #1d2029;margin:3px 0 7px;overflow:hidden}
+  .bar i{display:block;height:100%;background:#4ecdc4;transition:width .3s}
+  .bar i.amb{background:#f0b454}
+  button{background:#0a0d14;border:1px solid #2a2a3e;color:#8a8a9a;padding:4px 7px;
+    font-family:inherit;font-size:.58rem;letter-spacing:.09em;cursor:pointer;margin:0 3px 3px 0}
+  button:hover{border-color:#4ecdc4;color:#4ecdc4}
+  .hint{margin-top:8px;color:#4a4842;line-height:1.55;font-size:.58rem}
+  .rb-cam.on{border-color:#f0b454;color:#f0b454}
+  #mix{font-size:.58rem;color:#6b7280;line-height:1.6}
+  #mix b{color:#d8d2c4;font-weight:400}
+  /* Roster editor. Weights, not percentages, because the server normalises on
+     read and never on write: a GM typing 3 and 1 should not have to think about
+     whether they add to a hundred, and the bench must not teach a habit the
+     real panel does not want. */
+  .fw{display:inline-flex;align-items:center;gap:2px;margin:0 4px 3px 0;font-size:.54rem}
+  .fw input{width:32px;background:#0d1017;border:1px solid #1d2029;color:#c9c6bb;
+    font-family:inherit;font-size:.54rem;padding:1px 2px}
+  .sideLab{font-size:.54rem;letter-spacing:.12em;color:#4a4842;margin:5px 0 2px}
+  #parade{display:block;width:100%;height:96px;background:#0a0c12;
+    border:1px solid #1d2029;margin:4px 0 2px;image-rendering:pixelated}
+  .warn{color:#c2551f}
+  .good{color:#4ecdc4}
+  #taint{display:none;position:fixed;left:0;right:0;top:0;z-index:9;
+    background:#2a0d06;border-bottom:2px solid #c2551f;color:#f0b454;
+    padding:8px 14px;font-size:.66rem;letter-spacing:.08em;line-height:1.6}
+  #taint b{color:#ff7043;font-weight:400;letter-spacing:.12em}
+  #taint code{color:#4ecdc4}
+  body.tainted #hud{top:52px}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     THE RECOLOUR CANNOT RUN FROM A file:// URL, AND IT FAILS SILENTLY.
+
+     tinted() in coalition-sprites.js reads the sheet back with getImageData to
+     remap skin, optics and accents by exact palette value. A canvas that has
+     drawn an image loaded from file:// is TAINTED by the browser's origin rules,
+     getImageData throws SecurityError, and the catch there returns the raw image
+     - which is correct behaviour for the game (a tint that throws must not lose
+     the figure) and is indistinguishable, on screen, from a build that has no
+     factions in it.
+
+     So opening this page off the disk shows: turquoise Hounds instead of olive
+     ones, every faction in the pack's own olive, no visors, no skin tones, and
+     the ground patches graded blind because tintedPattern's probe throws too.
+     It looks exactly like the build from before the faction pass landed.
+
+     The banner below is not a nicety. Silence is the failure - the same failure
+     as the missing script tag two patches ago - so this shouts.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div id="taint">
+  <b>NO RECOLOUR: THIS PAGE IS RUNNING FROM A LOCAL FILE.</b>
+  <span id="taintWhy"></span>
+</div>
+
+<div id="reachBattle">
+  <canvas id="rbCanvas"></canvas>
+  <div id="hud">
+    <div id="rbTitle">ENGAGEMENT</div>
+    <div id="rbSub"></div>
+  </div>
+  <div id="rbStat"></div>
+  <div id="note">test bench &middot; drag to look &middot; scroll to zoom &middot; wasd in free</div>
+</div>
+
+<div id="panel">
+  <h4>CAMERA</h4>
+  <div>
+    <button id="camCine" class="rb-cam on" onclick="cam('cine')">CINE</button
+    ><button id="camOrbit" class="rb-cam" onclick="cam('orbit')">ORBIT</button
+    ><button id="camFollow" class="rb-cam" onclick="cam('follow')">FOLLOW</button
+    ><button id="camFree" class="rb-cam" onclick="cam('free')">FREE</button>
+  </div>
+
+  <h4>THE LINE</h4>
+  <!-- The parade draws one figure per faction through FMTroops.drawFrame at a
+       readable size, which is the only way to judge a recolour: at field size a
+       soldier is twenty pixels and every uniform looks like a dark smudge.
+       Same tinted() call the battlefield makes, so a faction that looks wrong
+       here looks wrong in the game. -->
+  <canvas id="parade" width="286" height="96"></canvas>
+  <div id="paradeLab" style="font-size:.5rem;color:#4a4842;letter-spacing:.06em"></div>
+  <div class="sideLab">HOME</div>
+  <div id="rHome"></div>
+  <div class="sideLab">AWAY</div>
+  <div id="rAway"></div>
+  <div><button onclick="applyRoster()">SET LINE</button
+    ><button onclick="preset('reach')">REACH</button
+    ><button onclick="preset('mixed')">COAL+JADE</button
+    ><button onclick="preset('vg')">VOID v GUILD</button
+    ><button onclick="preset('three')">3-WAY HOME</button
+    ><button onclick="preset('synd')">SYND v VOID</button></div>
+  <div class="row"><span>FORWARD</span><b id="pFwd">-</b></div>
+  <div id="fwdBtns"></div>
+
+  <h4>PUSH WINDOW</h4>
+  <div class="row"><span>CAPITAL</span><b id="pPool">&#402;0</b></div>
+  <div class="bar"><i id="pBar" style="width:0%"></i></div>
+  <div class="row"><span>FUNDERS</span><b id="pFund">0 / 4</b></div>
+  <div class="bar"><i id="pFbar" class="amb" style="width:0%"></i></div>
+  <input id="fund" type="range" min="0" max="130" value="0" oninput="setFund(this.value)">
+  <div><button onclick="setFund(0)">NONE</button><button onclick="setFund(40)">40%</button
+    ><button onclick="setFund(70)">70%</button><button onclick="setFund(100)">FULL</button></div>
+
+  <h4>GROUND</h4>
+  <div class="row"><span>HIVE HOLDS</span><b id="pHive">60%</b></div>
+  <input id="hive" type="range" min="5" max="95" value="60" oninput="setHive(this.value)">
+  <div class="row"><span>GARRISON</span><b id="pGar">50</b></div>
+  <input id="gar" type="range" min="0" max="100" value="50" oninput="setGar(this.value)">
+  <div class="row"><span>INTENSITY</span><b id="pInt">62</b></div>
+  <input id="intn" type="range" min="5" max="100" value="62" oninput="setInt(this.value)">
+  <div><button onclick="world('ks_gate_reach')">SAHN'TEKK</button
+    ><button onclick="world('ks_07')">OSSUVETH</button
+    ><button onclick="world('ks_10')">VESSKANOTH</button></div>
+
+  <h4>GEOMETRY</h4>
+  <!-- The two things v1.6.3.1 fixed, both of which are invisible by nature: a
+       tank that has reversed off the map is off the map, and a body half inside
+       a rock looks like a body beside a rock. Drag HIVE HOLDS to 95 and then to
+       5; OFF FIELD must stay 0 at both ends. -->
+  <div class="row"><span>FRONT</span><b id="gFront">-</b></div>
+  <div class="row"><span>HOME DEPTH</span><b id="gHome">-</b></div>
+  <div class="row"><span>AWAY DEPTH</span><b id="gAway">-</b></div>
+  <div class="row"><span>OFF FIELD</span><b id="gOff">-</b></div>
+  <div class="row"><span>INSIDE TERRAIN</span><b id="gStuck">-</b></div>
+  <!-- WHO IS STANDING ON WHICH HALF. facMix counts factions and says nothing
+       about sides, so a faction on the wrong half of the field looked exactly
+       like one on the right half. CROSSED counts men whose faction is not on
+       the roster for the side they are standing on; it should fall to zero as
+       the pre-change seed dies off. -->
+  <div class="row"><span>HOME LINE</span><b id="sHome">-</b></div>
+  <div class="row"><span>AWAY LINE</span><b id="sAway">-</b></div>
+  <div class="row"><span>CROSSED</span><b id="sCross">-</b></div>
+
+  <h4>SIMULATION</h4>
+  <!-- THE LEVER THE BENCH HAS NEVER HAD. Bounding overwatch, cover claiming,
+       suppression and target acquisition all resolve faster than a person can
+       follow at full tempo, so what gets reported is an IMPRESSION of the
+       aggregate. Those impressions have been wrong here in both directions
+       already. At a fifth speed a bound is a man walking to a rock, and either
+       he arrives on his own side of it or he does not. -->
+  <div class="row"><span>TEMPO</span><b id="pTempo">0.24</b></div>
+  <input id="tempo" type="range" min="1" max="100" value="24" oninput="setTempo(this.value)">
+  <div><button onclick="setTempo(3)">1/8</button><button onclick="setTempo(8)">1/3</button
+    ><button onclick="setTempo(24)">NORMAL</button><button onclick="setTempo(60)">FAST</button></div>
+  <div><button id="bHold" onclick="togglePause()">PAUSE</button
+    ><button onclick="stepN(1)">STEP 1</button><button onclick="stepN(10)">STEP 10</button></div>
+  <div class="hint" style="margin-top:4px">the camera keeps running while held,
+    so you can orbit a frozen exchange.</div>
+
+  <h4>AI</h4>
+  <!-- Every number here is written by stepField on every frame and, until now,
+       exactly one of them reached a human: coverCount, through the fps line,
+       behind a debug flag. The other six describe the AI. -->
+  <div class="row"><span>BOUNDING</span><b id="aBound">-</b></div>
+  <div class="bar"><i id="aBoundBar" style="width:0%"></i></div>
+  <div class="row"><span>IN COVER</span><b id="aCover">-</b></div>
+  <div class="bar"><i id="aCoverBar" class="amb" style="width:0%"></i></div>
+  <div class="row"><span>SUPPRESSED</span><b id="aSupp">-</b></div>
+  <div class="row"><span>IN MELEE</span><b id="aMelee">-</b></div>
+  <div class="row"><span>AIM ON NEAREST</span><b id="aAim">-</b></div>
+  <div class="row"><span>MEAN RANGE RATIO</span><b id="aRatio">-</b></div>
+  <div class="row"><span>3x TOO FAR</span><b id="aFar">-</b></div>
+  <div class="row"><span>KILLS / MIN</span><b id="aKpm">-</b></div>
+  <div class="row"><span>GRENADES UP</span><b id="aNade">-</b></div>
+  <div class="row"><span>GUNS BUILT</span><b id="aBuilt">-</b></div>
+
+  <h4>COVER SUPPLY</h4>
+  <!-- The pressure the whole bounding model sits under. Sixty positions
+       contested by two hundred and thirty units is what collapsed the line onto
+       a few rocks and is why terCount went up. -->
+  <div class="row"><span>SLOTS TAKEN</span><b id="sSlots">-</b></div>
+  <div class="bar"><i id="sBar" style="width:0%"></i></div>
+  <div class="row"><span>HEAVY TAKEN</span><b id="sHeavy">-</b></div>
+  <div class="row"><span>FEATURES</span><b id="sFeat">-</b></div>
+  <div class="row"><span>OBJECTIVES</span><b id="sObj">-</b></div>
+  <div id="sKinds" style="font-size:.54rem;color:#4a4842;line-height:1.6"></div>
+
+  <h4>PER CLASS</h4>
+  <!-- states() has existed since the bounding work and has never been shown.
+       An aggregate hides the case that matters: a class that never bounds and a
+       class that never holds average out to a line that looks fine. -->
+  <div id="stateTable" style="font-size:.52rem;color:#6b7280;line-height:1.55"></div>
+
+  <h4>ISOLATE</h4>
+  <!-- Judging one behaviour means having a field of one thing doing it. The
+       away half is new: it only ever had the home one, which was fine while the
+       away side was always creatures and is not now. -->
+  <div style="font-size:.52rem;color:#4a4842">HOME</div>
+  <div><button onclick="fh('inf')">RIFLE</button><button onclick="fh('enf')">SHIELD</button
+    ><button onclick="fh('eng')">ENG</button><button onclick="fh('tank')">TANK</button
+    ><button onclick="fh('turret')">TURRET</button></div>
+  <div style="font-size:.52rem;color:#4a4842">AWAY</div>
+  <div><button onclick="fa('inf')">RIFLE</button><button onclick="fa('enf')">SHIELD</button
+    ><button onclick="fa('spit')">SPIT</button><button onclick="fa('rush')">RUSH</button
+    ><button onclick="fa('brute')">BRUTE</button><button onclick="fa('leap')">LEAP</button
+    ><button onclick="fa('flyer')">FLYER</button></div>
+
+  <h4>WORKS</h4>
+  <div><button onclick="work('bastion')">BASTION</button><button onclick="work('pad')">PAD</button
+    ><button onclick="work('cut')">CUT</button><button onclick="work('spire')">SPIRE</button></div>
+  <div><button onclick="mound(1)">+ MOUND</button><button onclick="mound(-1)">- MOUND</button
+    ><button onclick="clearWorks()">CLEAR</button></div>
+  <div id="workList" style="font-size:.56rem;color:#6b7280;line-height:1.7">nothing standing</div>
+
+  <h4>CAMPS</h4>
+  <div class="row"><span>HELD</span><b id="pCamps">-</b></div>
+  <div id="campList" style="font-size:.56rem;color:#6b7280;line-height:1.7"></div>
+
+  <h4>ON THE FIELD</h4>
+  <div id="mix">reading...</div>
+  <div id="facMix" style="font-size:.58rem;line-height:1.6;margin-top:5px"></div>
+
+  <h4>ASSETS</h4>
+  <div class="row"><span>REGISTRY</span><b id="pReg">checking</b></div>
+  <div class="row"><span>RECOLOUR</span><b id="pTint">checking</b></div>
+  <div class="row"><span>PLANET PALETTE</span><b id="pPal">checking</b></div>
+  <div class="row"><span>ROCK MESHES</span><b id="pMesh">checking</b></div>
+  <div class="row"><span>BROOD SHEETS</span><b id="pBrood">checking</b></div>
+  <div class="row"><span>SPRITE SHEETS</span><b id="pSpr">checking</b></div>
+  <div id="sprFail" style="color:#c2551f;font-size:.56rem;line-height:1.5"></div>
+
+  <h4>ACTIONS</h4>
+  <div><button onclick="reopen()">RESEED</button><button onclick="survey()">SURVEY</button
+    ><button onclick="allBlades()">ALL SHIELD</button><button onclick="allRifles()">ALL RIFLE</button></div>
+  <div class="hint">
+    this page loads the real planet-palette.js, factions.js, coalition-sprites.js
+    and reach-battle.js, plus a generated shim carrying the two planet tables and
+    the two manifests that would otherwise be fetched. nothing here is a copy, so
+    what you see is what the game does. a composed line turns over as men die,
+    not instantly.
+  </div>
+</div>
+
+<script>
+// The only thing this bench fakes: the payload the server normally pushes down
+// the socket. Same shape reachWatch reads in the client, field for field.
+var TEST_WORLD = 'ks_gate_reach';
+// The shape the server actually ships. Fields added after this bench was
+// written have to land here too, or the bench renders a game that no longer
+// exists: forcesFor reads cover off the zone, so an absent field is a bench
+// showing a skeleton where the game shows a standing line.
+function mkZone(name, hive, intensity){
+  return { name:name, hive:hive, intensity:intensity, live:1,
+    cleared:0, waveAt:Date.now(), done:0, cover:0,
+    win:{ open:1, closesAt:Date.now()+20*60000, target:6000000, pool:0,
+          funders:0, mine:0, resolved:null, outcome:null, gain:0, roll:null } };
+}
+/* THE ROSTER SHIPS ON EVERY WORLD NOW, composed or not, and the bench has to
+   ship it too. It was added to the wire in v1.6.5.0 and a payload without it
+   falls through to the legacy derived path, which would have made this bench a
+   two-faction bench forever while the game grew four more.
+   The default is the war as it actually stands: an all-Jade line against the
+   brood, which is what rosterFromReach derives for an undeclared Coalition. */
+function mkWorld(zones){
+  return { hive:60, front:1, status:'contested', revealed:1, taken:0,
+    garrison:50, waves:3, fund:0, burn:0, cover:0,
+    bonus:{arm:0,air:0,strike:1,repel:1,price:1},
+    mass:0, fobs:[], nodes:[], eligible:0, vote:null,
+    jade:1, jadeFwd:1, composed:0,
+    roster:{ home:[{fac:'jade',share:1}], away:[{fac:'khai',share:1}], fwd:'jade' },
+    zones:zones };
+}
+window._REACH = {
+  fronts:1, maxFronts:2, envoy:1, peace:0, accord:null, demand:null, coalIn:0,
+  push:{ minFunders:4, cap:2500000, minCommit:100000 },
+  worlds:{
+    ks_gate_reach: mkWorld([ mkZone("Sahn'kar", 60, 62) ]),
+    ks_07:         mkWorld([ mkZone("Ossu'kar", 60, 62), mkZone("Ossu'thal", 60, 55) ]),
+    ks_10:         mkWorld([ mkZone("Vessa'kar", 60, 62), mkZone("Vessa'thal", 60, 48) ])
+  }
+};
+</script>
+
+<!-- THE TERRAIN TABLES, AND WHY THE GROUND WAS WRONG. paletteFor() reads
+     window.PLANET_PALETTE and window.COLONY_PLANET; terrainKey() reads
+     window.REACH_TERRAIN. All three come out of planet-palette.js and galaxy.js,
+     and this page loaded NEITHER - so every lookup missed and the battlefield
+     fell through to TERRAIN_COL, the legacy hand-written table whose own comment
+     records that four of ten Reach worlds fought on a colour their planet is
+     not. Correct as a fallback; exactly wrong for a bench whose whole claim is
+     that what you see is what the game does. That was wrong over http too, not
+     only off the disk.
+
+     bench-manifests.js is generated by tools/bench-manifests.mjs and carries
+     four things: the two planet tables lifted from galaxy.js (seven thousand
+     lines and a map renderer, none of which belongs on this page), and the two
+     manifests that loadMeshes and loadBrood would otherwise FETCH - which is
+     blocked on file:// and is why the rocks were untextured prisms and the
+     enemies were wireframe. -->
+<script src="assets/planet-palette.js"></script>
+<script src="assets/space/bench-manifests.js"></script>
+
+<!-- The real modules. Order matters three ways now. The tables above go first
+     because FM_NATURE_SRC and FM_BROOD_GEOM are read at the moment the module
+     decides whether to fetch. The FACTION REGISTRY next, because both modules
+     below hold a fallback for the frame before it arrives, and a bench that
+     renders the fallback is a bench showing a build that does not exist. Then
+     the sprite module, because the troop sheets must be resolvable before the
+     renderer asks whether one is ready. -->
+<script src="assets/factions.js"></script>
+<script src="assets/coalition-sprites.js"></script>
+<script src="assets/reach-battle.js"></script>
+
+<script>
+var $ = function(id){ return document.getElementById(id); };
+var W = function(){ return window._REACH.worlds[TEST_WORLD]; };
+var Z = function(){ return W().zones[0]; };
+var TARGET_BASE = 6000000;
+
+// Mirrors server/reach.js so the bench prices ground the way the game does.
+// THIS DRIFTED ONCE AND THE CHECK DID NOT CATCH IT: the server gained wave
+// garrison escalation and then a Spire discount, and this stayed on the raw
+// garrison with no multiplier, so the bench quietly priced a different war for
+// two releases while the assertion, which only looked for the base formula
+// terms in both files, went on passing. The pieces are named separately now and
+// each one is asserted on its own.
+var WAVE_GARRISON_STEP = 12;
+var SPIRE_PRICE = 0.88;
+
+function effGarrison(garrison, cleared){
+  return Math.max(0, Math.min(100, garrison + Math.max(0, cleared|0) * WAVE_GARRISON_STEP));
+}
+function fobPrice(fobs){
+  var p = 1;
+  var seen = {};
+  (fobs || []).forEach(function(f){
+    if (f.type === 'spire' && !seen.spire) { seen.spire = 1; p *= SPIRE_PRICE; }
+  });
+  return p;
+}
+function pushTarget(garrison, hive){
+  var g = Math.max(0, Math.min(100, garrison));
+  var h = Math.max(0, Math.min(100, hive));
+  return Math.round(TARGET_BASE * (0.6 + g/125) * (0.7 + h/200) / 100000) * 100000;
+}
+function retarget(){
+  var w = W();
+  for (var i=0;i<w.zones.length;i++){
+    var z = w.zones[i];
+    var raw = pushTarget(effGarrison(w.garrison, z.cleared), z.hive);
+    z.win.target = Math.round(raw * fobPrice(w.fobs) / 100000) * 100000;
+  }
+}
+
+function setFund(v){
+  $('fund').value = v;
+  var r = v/100, w = W();
+  for (var i=0;i<w.zones.length;i++){
+    var z = w.zones[i];
+    z.win.pool = Math.round(z.win.target * r);
+    z.win.funders = r <= 0 ? 0 : Math.max(1, Math.min(9, Math.round(r*6)));
+    z.win.mine = r <= 0 ? 0 : Math.min(2500000, Math.round(z.win.pool/Math.max(1,z.win.funders)));
+  }
+  paint();
+}
+function setHive(v){
+  $('hive').value = v; var w = W();
+  w.hive = +v;
+  for (var i=0;i<w.zones.length;i++) w.zones[i].hive = +v;
+  retarget(); setFund($('fund').value);
+}
+function setGar(v){ $('gar').value = v; W().garrison = +v; retarget(); setFund($('fund').value); }
+function setInt(v){ $('intn').value = v; var w=W();
+  for (var i=0;i<w.zones.length;i++) w.zones[i].intensity = +v; paint(); }
+function cam(m){ if (window.rbSetCam) window.rbSetCam(m);
+  ['cine','orbit','follow','free'].forEach(function(k){
+    var b = $('cam'+k.charAt(0).toUpperCase()+k.slice(1));
+    if (b) b.className = 'rb-cam' + (k===m?' on':'');
+  });
+}
+function world(id){ TEST_WORLD = id; retarget(); setFund($('fund').value); reopen(); buildRoster(); }
+
+/* ── The roster ──────────────────────────────────────────────────────────
+   WRITTEN IN THE SERVER'S WIRE SHAPE AND NOTHING ELSE. rosterWire normalises
+   the weights and orders each side heaviest first, so the bench does both here
+   rather than inventing a second convention the God panel does not use. There
+   is deliberately no bench-only entry point into the faction model: composing a
+   line here goes through exactly the payload path a real one does.
+
+   NOTHING IS CALLED TO REDRAW. applyWorks re-reads world.roster on the
+   renderer's two second tick, so a new line lands on its own and the field
+   turns over as men die. Calling reopen() would reseed and teleport the whole
+   army, which is precisely the thing reinforcement exists to avoid and would
+   make the bench show a transition the game never performs. */
+function facIds(){
+  return window.FM_FACTIONS ? Object.keys(window.FM_FACTIONS)
+       : ['jade','coal','void','synd','guild','khai'];
+}
+function facShort(f){
+  return window.FM_FAC_API ? window.FM_FAC_API.short(f) : f.toUpperCase();
+}
+function facCol(f){
+  var r = window.FM_FACTIONS && window.FM_FACTIONS[f];
+  return r && r.line ? 'rgb(' + r.line.join(',') + ')' : '#8a8a9a';
+}
+function buildRoster(){
+  var R = W().roster || { home:[], away:[] };
+  ['home','away'].forEach(function(side){
+    var host = $(side === 'home' ? 'rHome' : 'rAway');
+    var cur = {};
+    (R[side] || []).forEach(function(e){ cur[e.fac] = e.share; });
+    host.innerHTML = '';
+    facIds().forEach(function(f){
+      var l = document.createElement('label');
+      l.className = 'fw';
+      var t = document.createElement('span');
+      t.textContent = facShort(f);
+      t.style.color = facCol(f);
+      var i = document.createElement('input');
+      i.type = 'number'; i.min = '0'; i.max = '100'; i.step = '1';
+      i.setAttribute('data-fac', f);
+      i.setAttribute('data-side', side);
+      i.value = cur[f] !== undefined ? Math.round(cur[f]*100) : 0;
+      l.appendChild(t); l.appendChild(i);
+      host.appendChild(l);
+    });
+  });
+  paintFwd();
+}
+function readSide(side){
+  var out = [], total = 0;
+  var ins = document.querySelectorAll('input[data-side="' + side + '"]');
+  for (var i=0;i<ins.length;i++){
+    var v = Number(ins[i].value);
+    if (v > 0){ out.push({ fac: ins[i].getAttribute('data-fac'), w: v }); total += v; }
+  }
+  if (!total) return null;
+  return out.map(function(e){ return { fac:e.fac, share:e.w/total }; })
+            .sort(function(a,b){ return b.share - a.share; });
+}
+function applyRoster(){
+  var home = readSide('home'), away = readSide('away');
+  /* AN EMPTY SIDE IS REFUSED HERE TOO, and for the server's reason rather than
+     out of tidiness: a battlefield with nobody on one half gives the band clamp
+     a front with no army behind it and gives reinforcement a mix with no
+     members to draw from. */
+  if (!home || !away){ alert('Both sides need at least one faction above zero.'); return; }
+  var w = W();
+  var fwd = w.roster && w.roster.fwd;
+  if (!home.some(function(e){ return e.fac === fwd; })) fwd = home.length > 1 ? home[0].fac : null;
+  w.roster = { home:home, away:away, fwd:fwd };
+  w.composed = 1;
+  buildRoster();
+}
+function preset(k){
+  var w = W();
+  var P = {
+    /* The war as it actually stands. An undeclared Coalition is ABSENT from the
+       line rather than present at zero, which is what rosterFromReach produces
+       and the distinction the server is careful about. */
+    reach: { home:[{fac:'jade',share:1}], away:[{fac:'khai',share:1}], fwd:'jade' },
+    mixed: { home:[{fac:'coal',share:0.6},{fac:'jade',share:0.4}],
+             away:[{fac:'khai',share:1}], fwd:'jade' },
+    /* Two polities, no brood anywhere. This is the case the whole faction pass
+       was for and the one that used to be impossible: before awayClass routed
+       on faction, every Guild soldier here would have been a crawling horror. */
+    vg:    { home:[{fac:'void',share:1}], away:[{fac:'guild',share:1}], fwd:null },
+    three: { home:[{fac:'void',share:0.5},{fac:'synd',share:0.3},{fac:'guild',share:0.2}],
+             away:[{fac:'khai',share:1}], fwd:'void' },
+    synd:  { home:[{fac:'synd',share:1}], away:[{fac:'void',share:1}], fwd:null },
+  }[k];
+  if (!P) return;
+  w.roster = { home:P.home.slice(), away:P.away.slice(), fwd:P.fwd };
+  w.composed = k === 'reach' ? 0 : 1;
+  buildRoster();
+}
+function setFwd(f){ var w = W(); if (w.roster) w.roster.fwd = f; paintFwd(); }
+function paintFwd(){
+  var R = W().roster || { home:[] };
+  $('pFwd').textContent = R.fwd ? facShort(R.fwd) : 'n/a';
+  var host = $('fwdBtns');
+  host.innerHTML = '';
+  /* Only meaningful with two or more on a side: a posture is a relationship
+     between two parts of a line, and a line with one part has none. */
+  if ((R.home || []).length < 2){
+    host.innerHTML = '<span style="font-size:.54rem;color:#2a303c">'
+      + 'one faction on the home line: no posture to set</span>';
+    return;
+  }
+  R.home.forEach(function(e){
+    var b = document.createElement('button');
+    b.className = 'rb-cam' + (R.fwd === e.fac ? ' on' : '');
+    b.textContent = facShort(e.fac);
+    b.onclick = function(){ setFwd(e.fac); };
+    host.appendChild(b);
+  });
+}
+
+/* ── The parade ──────────────────────────────────────────────────────────
+   ONE FIGURE PER FACTION, LARGE. A recolour cannot be judged at field size,
+   where a soldier is twenty pixels and every uniform is a dark smudge: the
+   black armour and the brown armour separate at 4x and not at 1x, and the
+   optic is two pixels. Drawn through FMTroops.drawFrame, which is the same call
+   the muster strip and the battlefield make, so a faction that looks wrong here
+   looks wrong in the game.
+
+   The enforcer is the figure on purpose. He is the only class carrying BOTH
+   accent channels - the faceplate that the optic remap burns and the shield
+   panel the accent remap marks - so one silhouette shows whether either landed.
+   The engineer, whose wrist device is the other accent source, alternates in. */
+var _parT = 0;
+function drawParade(){
+  var c = $('parade'); if (!c || !window.FMTroops) return;
+  var g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.clearRect(0,0,c.width,c.height);
+  var ids = facIds().filter(function(f){
+    var r = window.FM_FACTIONS && window.FM_FACTIONS[f];
+    return r && r.skin !== undefined && f !== 'khai';   // the brood wears no kit
+  });
+  if (!ids.length) return;
+  var anim = (Math.floor(_parT/120) % 2) ? 'engineer_idle' : 'enforcer_shielded_idle';
+  if (!window.FMTroops.ready(anim)) anim = 'assault_idle';
+  if (!window.FMTroops.ready(anim)) return;
+  var step = c.width / ids.length, scale = 2.6;
+  var lab = [];
+  ids.forEach(function(f, i){
+    var x = step*(i+0.5), y = c.height - 8;
+    /* Index 0 for the skin so the parade is a UNIFORM comparison and not a skin
+       comparison: two factions with the same kit and different tones would read
+       as a colour difference that is not the one being judged. */
+    /* Kit 0 alongside skin 0, so the parade stays a UNIFORM comparison: the
+       Syndicate has five kits and cycling them here would read as a colour
+       difference that is not the one being judged. The contact sheet is where
+       its spread belongs. */
+    try { window.FMTroops.drawFrame(g, anim, Math.floor(_parT/12) % 4, x, y, scale, f, 0, 0); }
+    catch(e){}
+    lab.push('<span style="color:' + facCol(f) + '">' + facShort(f) + '</span>');
+  });
+  $('paradeLab').innerHTML = lab.join(' &middot; ') + '  &middot; ' + anim.replace(/_/g,' ');
+  _parT++;
+}
+
+/* WORKS ON THE BENCH. Four structures and a mound that the server has been
+   tracking since the FOB vote shipped and that nothing drew until now, so this
+   is the only place to look at them without winning a wave first. Toggling one
+   writes the same payload shape the server ships and calls the same refresh
+   path, which is the point of the bench: no second implementation. */
+function work(type){
+  var w = W();
+  var i = w.fobs.findIndex(function(f){ return f.type === type; });
+  if (i >= 0) w.fobs.splice(i, 1);
+  else w.fobs.push({ type:type, zone:0, at:Date.now() });
+  afterWorks();
+}
+function mound(d){
+  var w = W();
+  if (d > 0) w.nodes.push({ zone:0, at:Date.now() + w.nodes.length });
+  else w.nodes.pop();
+  afterWorks();
+}
+function clearWorks(){ var w = W(); w.fobs.length = 0; w.nodes.length = 0; afterWorks(); }
+function afterWorks(){
+  var w = W();
+  // Same two things the server derives, so the bench prices and colours the
+  // field the way the game does rather than only redrawing the structures.
+  var seen = {}, b = { arm:0, air:0, strike:1, repel:1, price:1 };
+  (w.fobs||[]).forEach(function(f){
+    if (seen[f.type]) return; seen[f.type] = 1;
+    if (f.type === 'bastion') b.arm += 0.015;
+    if (f.type === 'pad') { b.air += 0.020; b.strike *= 0.65; }
+    if (f.type === 'cut') b.repel *= 0.55;
+    if (f.type === 'spire') b.price *= 0.88;
+  });
+  w.bonus = b;
+  w.mass = Math.min(0.24, w.nodes.length * 0.06);
+  retarget();
+  /* NOTHING IS CALLED TO REDRAW. reachWatch runs a two second tick that
+     re-reads the world off _REACH and calls applyWorks, which is where works
+     are built from the payload, so a toggle lands on its own. Calling reopen()
+     here would reseed the entire field to move one structure. */
+  var el = $('workList');
+  if (el) el.innerHTML = (w.fobs.length || w.nodes.length)
+    ? w.fobs.map(function(f){ return f.type.toUpperCase(); })
+        .concat(w.nodes.length ? [w.nodes.length + ' MOUND' + (w.nodes.length===1?'':'S')] : [])
+        .join(' &middot; ')
+    : 'nothing standing';
+}
+
+/* ── Simulation controls ────────────────────────────────────────────────
+   All four go through _fmReachDebug rather than reaching into the module, for
+   the reason the bench exists at all: there is one implementation and the bench
+   drives it. TEMPO is a module var with no other setter, so a client that never
+   opens this page runs the shipped 0.24 and always has. */
+function D(){ return window._fmReachDebug; }
+function setTempo(v){
+  $('tempo').value = v;
+  var t = v/100;
+  if (D() && D().tempo) D().tempo(t);
+  $('pTempo').textContent = t.toFixed(2);
+}
+function togglePause(){
+  if (!D() || !D().pause) return;
+  var held = D().pause();
+  var b = $('bHold');
+  b.textContent = held ? 'RESUME' : 'PAUSE';
+  b.className = held ? 'rb-cam on' : '';
+}
+function stepN(n){
+  if (!D() || !D().step) return;
+  D().step(n);
+  var b = $('bHold');
+  b.textContent = 'RESUME'; b.className = 'rb-cam on';
+}
+function fh(c){ if (D()) D().forceCoalClass(c); }
+function fa(c){ if (D() && D().forceAwayClass) D().forceAwayClass(c); }
+
+function reopen(){ if (window.reachWatch) window.reachWatch(TEST_WORLD, 0); }
+function survey(){ if (window.reachSurvey) window.reachSurvey(TEST_WORLD); }
+function allBlades(){ if (window._fmReachDebug) window._fmReachDebug.forceCoalClass('enf'); }
+function allRifles(){ if (window._fmReachDebug) window._fmReachDebug.forceCoalClass('inf'); }
+
+function paint(){
+  var z = Z(), r = z.win.target ? Math.min(1, z.win.pool/z.win.target) : 0;
+  $('pPool').textContent = '\u0192' + z.win.pool.toLocaleString();
+  $('pBar').style.width = (r*100) + '%';
+  $('pFund').textContent = z.win.funders + ' / 4';
+  $('pFbar').style.width = Math.min(100, z.win.funders/4*100) + '%';
+  $('pHive').textContent = z.hive + '%';
+  $('pGar').textContent = W().garrison;
+  $('pInt').textContent = z.intensity;
+}
+
+/* ── Can this page recolour at all ──────────────────────────────────────
+   PROBED FUNCTIONALLY, NOT BY SNIFFING THE PROTOCOL. Checking
+   location.protocol === 'file:' would be a proxy for the thing that matters and
+   would be wrong in both directions: a browser with local file access enabled
+   recolours fine from file://, and a misconfigured host can taint over http.
+
+   So it asks the question directly. tinted() returns a NEW CANVAS per faction
+   when the remap ran, and returns the SAME underlying <img> for every faction
+   when getImageData threw. Two factions whose kit could not look more different
+   handing back one identical object is the failure, stated exactly. */
+/* Mirrors `const PORT = process.env.PORT || 7777` in server/server.js, which
+   serves client/ at the root. Asserted against it rather than trusted. */
+var BENCH_PORT = 7777;
+var _taintChecked = 0;
+setInterval(function(){
+  if (_taintChecked || !window.FMTroops || !window.FMTroops.tinted) return;
+  var probe = 'enforcer_shielded_idle';
+  if (!window.FMTroops.ready(probe)) probe = 'assault_idle';
+  if (!window.FMTroops.ready(probe)) return;          // nothing decoded yet
+  _taintChecked = 1;
+  var a = window.FMTroops.tinted(probe, 'void', 0);
+  var b = window.FMTroops.tinted(probe, 'guild', 0);
+  if (a && b && a !== b){
+    var ok2 = $('pTint'); ok2.textContent = 'running'; ok2.className = 'good';
+    return;
+  }
+  document.body.className = 'tainted';
+  $('taint').style.display = 'block';
+  var pt = $('pTint'); pt.textContent = 'BLOCKED (file://)'; pt.className = 'warn';
+  $('taintWhy').innerHTML =
+    'getImageData is blocked on a canvas holding a local image, so every faction '
+    + 'falls back to the pack\u2019s own art: turquoise Hounds, one uniform for all '
+    + 'five polities, no visors, no skin tones.<br>'
+    /* THE REAL URL, NOT A PLACEHOLDER. `<port>` is a thing to go and look up,
+       which is one step more than most people take when a banner is already
+       telling them something is broken. server.js defaults to 7777 and serves
+       client/ at the root, so the address is knowable and is written out.
+       tools/faction-check.mjs asserts this number against server.js, the same
+       way the pricing block is asserted against reach.js: two files that have to
+       agree with nothing but attention holding them together otherwise. */
+    + 'Run <code>server/start_server.bat</code> (or <code>start_server.sh</code>) '
+    + 'and open <code>http://localhost:' + BENCH_PORT + '/battle-test.html</code>.<br>'
+    /* THIS LINE USED TO SAY TERRAIN WAS UNAFFECTED AND THAT WAS FLATLY WRONG.
+       The taint blocks getImageData, which is the recolour; the same origin
+       rules block fetch, which is the mesh and brood manifests. Terrain and the
+       brood are hit HARDER by file:// than the uniforms are, and the banner was
+       telling a reader the opposite while they were looking at untextured rocks
+       and wireframe creatures. bench-manifests.js removes that half of the
+       problem, so the list is now true - but the lesson is the list, not the
+       fix: a banner that names what is fine has to be right about it, or it is
+       worse than no banner. */
+    + 'Terrain meshes and brood sheets are unaffected: their manifests are '
+    + 'inlined by tools/bench-manifests.mjs precisely because fetch is blocked '
+    + 'here too. Geometry, AI counters, roster and pricing are accurate.';
+}, 500);
+
+/* GROUND AND ENEMIES, EACH WITH ITS OWN ROW. Reported five times as "the
+   terrain is wrong" and it was three separate silent fallbacks stacked on one
+   another - no planet palette, no rock meshes, no brood geometry - each of which
+   degrades to something that draws rather than to an error. One row each, so
+   the next one names itself. */
+setInterval(function(){
+  var pal = $('pPal');
+  var haveTbl = !!(window.PLANET_PALETTE && window.COLONY_PLANET && window.REACH_TERRAIN);
+  pal.textContent = haveTbl ? 'loaded' : 'LEGACY FALLBACK';
+  pal.className = haveTbl ? 'good' : 'warn';
+
+  var me = $('pMesh');
+  var nm = window.FM_NATURE_SRC ? Object.keys(window.FM_NATURE_SRC).length : 0;
+  me.textContent = nm ? (nm + ' meshes') : 'WIREFRAME (no manifest)';
+  me.className = nm ? 'good' : 'warn';
+
+  var br = $('pBrood');
+  var nb = window.FM_BROOD_GEOM ? Object.keys(window.FM_BROOD_GEOM).length : 0;
+  br.textContent = nb ? (nb + ' sheets') : 'WIREFRAME (no manifest)';
+  br.className = nb ? 'good' : 'warn';
+}, 900);
+
+// REGISTRY STATUS. The failure this exists for is the one that made a rebuild
+// necessary: factions.js not loading is silent, because both consumers hold a
+// fallback and the page renders a smaller game rather than an error.
+setInterval(function(){
+  var el = $('pReg');
+  var n = window.FM_FACTIONS ? Object.keys(window.FM_FACTIONS).length : 0;
+  el.textContent = n ? (n + ' factions') : 'FALLBACK ONLY';
+  el.className = n >= 6 ? 'good' : 'warn';
+}, 900);
+
+// SPRITE SHEET STATUS. The failure mode this exists for is silence: a sheet
+// 404s, the unit quietly falls back to wireframe, and the page looks fine.
+setInterval(function(){
+  if (!window.FMTroops) return;
+  var want = ['assault_idle','assault_walk','assault_auto_shooting','assault_hitted',
+              'enforcer_shielded_idle','enforcer_shielded_walk','enforcer_shielded_shot',
+              'engineer_idle','engineer_walk','engineer_placing_turret',
+              'turret_idle','turret_deploy'];
+  var n = 0;
+  for (var i=0;i<want.length;i++) if (window.FMTroops.ready(want[i])) n++;
+  var el = $('pSpr');
+  el.textContent = n + ' / ' + want.length + (n ? '' : '  WIREFRAME');
+  el.style.color = n === want.length ? '#4ecdc4' : n ? '#f0b454' : '#c2551f';
+  var f = window.FMTroops.failed();
+  $('sprFail').textContent = f.length ? ('missing: ' + f.join(', ')) : '';
+}, 600);
+
+// What is actually on the field, read from the renderer rather than recomputed.
+setInterval(function(){
+  if (!window._fmReachDebug) return;
+  var D = window._fmReachDebug;
+  var c = D.counts(), out = [];
+  /* EVERY CLASS THE LADDERS CAN PRODUCE. This listed nine and broodClass alone
+     returns eight, four of which were missing - so a field full of brutes and
+     leapers read as "no contact" in the one readout that exists to tell you what
+     is on it. A label table that is a subset of the class table is a readout
+     that lies by omission. */
+  var LABEL = { inf:'riflemen', enf:'shield', eng:'engineers', turret:'emplacements',
+                tank:'tanks', heli:'gunships', spit:'spitters', rush:'rushers',
+                brute:'brutes', leap:'leapers', grub:'grubs', maw:'maws',
+                flyer:'flyers', wing:'wings' };
+  for (var k in LABEL) if (c[k]) out.push(LABEL[k] + ' <b>' + c[k] + '</b>');
+  $('mix').innerHTML = out.join('<br>') || 'no contact';
+
+  /* WHO IS ACTUALLY WEARING WHAT, which is the readout the roster editor is
+     useless without: setting a line is a request, and the field only honours it
+     as men die and are replaced. Watching these numbers cross is watching
+     reinforcement work. */
+  if (D.facMix){
+    var fm = D.facMix(), rows = [];
+    for (var f in fm) if (fm[f]) rows.push('<span style="color:' + facCol(f) + '">'
+      + facShort(f) + ' <b style="color:#d8d2c4">' + fm[f] + '</b></span>');
+    $('facMix').innerHTML = rows.join(' &middot; ');
+  }
+
+  /* GEOMETRY. Both of these should be boring, and boring is the point: they
+     exist because the bugs they cover for are invisible by nature. */
+  if (D.depth){
+    var d = D.depth();
+    $('gFront').textContent = d.front;
+    $('gHome').textContent = d.home[0] + ' .. ' + d.home[1];
+    $('gAway').textContent = d.away[0] + ' .. ' + d.away[1];
+    var off = $('gOff');
+    off.textContent = d.off;
+    off.className = d.off ? 'warn' : 'good';
+  }
+  /* WHO IS STANDING ON WHICH HALF. facMix counts factions and says nothing
+     about sides, so a faction on the wrong half of the field looked exactly
+     like one on the right half - which is why "the shield enemies joined the
+     attacking line" had no readout that could confirm it or rule it out. */
+  if (D.sides){
+    var sd = D.sides();
+    var fmt = function(o){ var r=[]; for(var f in o) r.push(facShort(f)+' '+o[f]); return r.join('  ') || '-'; };
+    $('sHome').textContent = fmt(sd.home);
+    $('sAway').textContent = fmt(sd.away);
+    /* Men whose faction is not on the roster for the side they stand on. Should
+       fall to zero as the pre-change seed dies off; anything that PERSISTS is a
+       unit the reinforcement path put on the wrong side. */
+    var cx = $('sCross'); cx.textContent = sd.crossed; cx.className = sd.crossed ? 'warn' : 'good';
+  }
+  if (D.stuck){
+    var st = D.stuck(), el = $('gStuck');
+    el.textContent = st;
+    el.className = st ? 'warn' : 'good';
+  }
+
+  // Camps are derived from the server's front, so this readout is a check on
+  // that derivation as much as a display: slide HIVE HOLDS and they must flip.
+  if (D.camps){
+    var cs = D.camps();
+    $('pCamps').textContent = D.campsHeld() + ' / ' + cs.length;
+    $('campList').innerHTML = cs.map(function(c){
+      var col = c.owner==='hive' ? '#c2551f' : facCol(c.owner);
+      return '<span style="color:'+col+'">depth ' + c.y.toFixed(2) + '  '
+        + c.owner.toUpperCase() + (c.flash?'  \u25c0 FLIPPED':'') + '</span>';
+    }).join('<br>');
+  }
+}, 700);
+
+/* ── The AI readouts ───────────────────────────────────────────────────
+   Sampled on their own interval, slower than the field mix, because aimQuality
+   is O(n squared) over live units: it asks, for every unit with a target, who
+   the nearest enemy ACTUALLY is. That is the point of it - a random sample of
+   twenty-six out of seven hundred usually is not the nearest, and every wrong
+   answer is a man turning round - and it is not something to run at 60Hz. */
+var _kPrev = null, _kAt = 0;
+setInterval(function(){
+  var d = D(); if (!d) return;
+
+  if (d.field){
+    /* Named `fld` and not `f`, which is the fob local three functions up. A
+       one-letter name reused across an unrelated scope is also what made a
+       check that scans for `f.` unable to tell a field key from a fob key. */
+    var fld = d.field();
+    $('aBound').textContent = fld.bound + '  (' + fld.boundPct + '%)';
+    $('aBoundBar').style.width = Math.min(100, fld.boundPct) + '%';
+    $('aCover').textContent = fld.cover + '  (' + fld.coverPct + '%)';
+    $('aCoverBar').style.width = Math.min(100, fld.coverPct) + '%';
+    $('aSupp').textContent = fld.supp;
+    $('aMelee').textContent = fld.melee;
+    /* KILLS IS CUMULATIVE, NOT PER FRAME, so a rate has to be differenced.
+       Taking it as a rate directly would have shown a number that only ever
+       climbs and called it attrition. */
+    var now = Date.now();
+    if (_kPrev !== null && now > _kAt){
+      var kpm = (fld.kills - _kPrev) / ((now - _kAt)/60000);
+      $('aKpm').textContent = Math.max(0, Math.round(kpm));
+    }
+    _kPrev = fld.kills; _kAt = now;
+  }
+  if (d.nades) $('aNade').textContent = d.nades();
+  if (d.built) $('aBuilt').textContent = d.built();
+
+  if (d.aimQuality){
+    var q = d.aimQuality();
+    var el = $('aAim');
+    /* THE COMPLAINT THIS MEASURES IS "MEN TURN AROUND AT RANDOM". Heading churn
+       was tried first and did not separate two implementations, because most
+       units are bounding and their facing follows their movement either way.
+       What separates them is whether the man is shooting at the enemy who is
+       actually nearest. */
+    /* THE KEY IS exactNearest. The first cut of this guessed at two other
+       spellings with a fallback chain, which would have shown a dash forever
+       and looked like "no data" rather than like a typo - the same silent-miss
+       failure this whole bench exists to catch. tools/faction-check.mjs now
+       asserts every key read here against the hook's own return literal. */
+    var pct = q.exactNearest !== undefined ? q.exactNearest : null;
+    el.textContent = pct === null ? '-' : (Math.round(pct*100) + '%');
+    el.className = pct === null ? '' : (pct > 0.8 ? 'good' : pct > 0.5 ? '' : 'warn');
+    $('aRatio').textContent = q.meanDistanceRatio !== undefined ? q.meanDistanceRatio : '-';
+    var far = $('aFar');
+    far.textContent = q.overThreeTimesTooFar !== undefined
+      ? (q.overThreeTimesTooFar*100).toFixed(1) + '%' : '-';
+    far.className = q.overThreeTimesTooFar > 0.05 ? 'warn' : 'good';
+  }
+
+  if (d.slots){
+    var sl = d.slots();
+    $('sSlots').textContent = sl.taken + ' / ' + sl.total + '  (' + sl.pct + '%)';
+    $('sBar').style.width = Math.min(100, sl.pct) + '%';
+    $('sHeavy').textContent = sl.heavyTaken + ' / ' + sl.heavy;
+  }
+  if (d.terrain){
+    var t = d.terrain();
+    $('sFeat').textContent = t.blocking + ' solid / ' + t.features;
+    $('sObj').textContent = t.objectives;
+    var ks = [];
+    for (var k in t.kinds) ks.push(k + ' ' + t.kinds[k]);
+    $('sKinds').textContent = ks.join('  ');
+  }
+
+  if (d.states){
+    /* PER CLASS, because an aggregate hides the case that matters: a class that
+       never bounds and a class that never holds average out to a line that
+       looks fine. This is home-side only, which is what states() reports. */
+    var st = d.states(), rows = [];
+    for (var c in st){
+      var v = st[c];
+      rows.push('<span style="color:#8a8a9a">' + c.padEnd(7, '\u00a0') + '</span>'
+        + '<b style="color:#d8d2c4">' + String(v.n).padStart(3, '\u00a0') + '</b>'
+        + ' bnd ' + v.bound + ' hld ' + v.hold + ' sup ' + v.supp
+        + ' cov ' + v.slot + ' aim ' + v.aim);
+    }
+    $('stateTable').innerHTML = rows.join('<br>') || 'no contact';
+  }
+}, 1100);
+
+setInterval(drawParade, 90);
+
+retarget();
+paint();
+buildRoster();
+reopen();
+</script>
+</body>
+</html>

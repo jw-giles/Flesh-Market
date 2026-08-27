@@ -38,14 +38,38 @@ let _db;
 const _S = {};
 function stmt(sql) { if (!_S[sql]) _S[sql] = _db.prepare(sql); return _S[sql]; }
 
-export const COUNCIL_SEATS = ['coalition', 'syndicate', 'void', 'guild'];
+export const COUNCIL_SEATS = ['coalition', 'syndicate', 'void', 'guild', 'jade'];
 
-// Seats that can be bought outright. Coalition is deliberately absent: that chair
-// is the existing Presidency and is resolved live from the president variable in
-// server.js, so there is exactly one source of truth for who holds it. Guild is
-// deliberately absent too: the Guild is the notary and the house, and a house
-// that can be bought is not a house.
-export const PURCHASABLE_SEATS = ['syndicate', 'void'];
+// HOW A CHAIR IS HELD, stated per seat rather than implied by absence from a
+// list. Every rule below was already true and two of them were only expressible
+// as "not in PURCHASABLE_SEATS", which is a fact about a different array.
+//
+//   presidency  resolved live from the president variable in server.js, so
+//               there is exactly one source of truth for who holds it
+//   purchasable bought outright from the chamber
+//   never       the Guild is the notary and the house, and a house that can be
+//               bought is not a house
+//   gm          granted, held by an NPC voice, vacated when the GM says so
+//
+// The 'gm' mode has no seat yet. It exists because the Jade Circuit is meant to
+// take a chair as an ally and to become purchasable later, and adding a mode is
+// a word where unpicking a hardcoded exception is a refactor.
+//
+// ADDING A SEAT HERE IS NOT ENOUGH TO ADD A CHAIR. client/assets/council.js
+// positions the chamber from four-entry maps keyed by seat id: seatX, seatY,
+// SHORT, SEAT_COLOR. A fifth id would render at seatX[undefined] and the graphic
+// would break silently. The suite asserts the two agree.
+export const SEAT_MODE = {
+  coalition: 'presidency',
+  syndicate: 'purchasable',
+  void:      'purchasable',
+  guild:     'never',
+  jade:      'gm',
+};
+
+// Derived rather than maintained by hand, so a seat cannot be listed as
+// purchasable in one place and something else in another.
+export const PURCHASABLE_SEATS = COUNCIL_SEATS.filter(s => SEAT_MODE[s] === 'purchasable');
 
 export function initCouncilDb(db) {
   _db = db;

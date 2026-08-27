@@ -1,0 +1,87 @@
+FleshMarket - modular low poly city kit
+=======================================
+
+WHAT THIS IS
+client/assets/space/city/kit.json - 526 modular meshes baked from Voloshka's
+"Industrial Low Poly City", with each face's palette colour and emissive colour
+resolved at build time. Walls, 10 window types (lit / unlit / partly lit), 3
+door designs, roof sections, stairs, road and pavement pieces, kerbs, crossings,
+lamps, fences, signs, bins and bare trees, in 10 coordinated colour variants.
+
+Regenerate with:
+    python3 tools/city-meshes.py <path-to-IndustrialCityAsset>
+    python3 tools/city-meshes.py <path-to-IndustrialCityAsset> --check
+
+The source FBX and its two 1024px palette textures are NOT in this repository.
+Only the derived kit.json is.
+
+
+LICENCE AND CREDIT
+  Author:   Voloshka
+  Source:   https://viravoloshyn.itch.io/low-poly-city-asset-pack
+  Terms:    the store page states, of the FREE edition: "All 526 prefabs, FBX
+            sources, textures, and materials are 100% free to download and use
+            in your personal or commercial projects." Tagged Royalty Free.
+  Changes:  meshes baked to a flat vertex/face/normal list; each face's UV
+            resolved against palette.png and paletteEmission.png to a single
+            colour and a single emissive colour; texture coordinates discarded.
+
+COMMERCIAL USE IS EXPLICITLY GRANTED. REDISTRIBUTION IS NOT ADDRESSED, and that
+distinction is the one this repo keeps tripping over. "Free to use in your
+projects" is a licence to USE; it does not say the source art may be published
+in a public repository for anyone to take. That is why the FBX and the palette
+PNGs are not here and only the derived kit.json is - the same position the
+nature pack settled into, and the same one ATTRIBUTION.txt in the terrain
+directory argues for at length.
+
+If the repository is public and you want to be certain, ask Voloshka directly.
+It is one message and the answer is probably yes.
+
+*** THE PAID SCENE IS DELIBERATELY NOT USED. *** IndustrialCityScene.zip is the
+$5 support edition - a pre-assembled demo city - and its own Credits.txt says
+"thank you for buying". Nothing from it is baked or shipped. The free modular
+kit is what this game builds from, which is also the better engineering answer:
+a kit is assembled procedurally per colony, and a fixed demo scene would be one
+city on sixty-six worlds.
+
+
+SECOND PACK: 3D LOW POLY MODERN CITY ASSETS
+  Author:   38491748
+  Source:   https://38491748.itch.io/3d-low-poly-modern-city-assets
+  Terms:    PURCHASED. The store page states no licence text of any kind and
+            the archive contains no readme, so what is established is the
+            PURCHASE, not a set of terms.
+  Used:     thirteen building meshes and four cars, baked to
+            client/assets/space/city/modern.json. The buildings are the distant
+            skyline; nothing from this pack is used at street level.
+  Changes:  baked from FBX to a flat vertex/face/normal list; each polygon's
+            material index resolved to its DiffuseColor at build time, since
+            the pack ships NO TEXTURES AT ALL; Lcl Scaling and Translation
+            applied; Z-up converted to Y-up. Source FBX not redistributed.
+
+THE POSITION IS THE SAME AS THE KIT ABOVE, and for the same reason. A purchase
+buys use. It does not, by itself, say anything about publishing the source art
+in a repository anyone can clone, and this page says nothing at all - so only
+the DERIVED mesh data is here and the FBX is not. If this repository is public,
+one message to the author settles it.
+
+WHAT WAS NOT TAKEN: the trains, helicopters, tanks, forklifts and racking. They
+are good models and this is a city battlefield, not a rail yard, and every one
+of them is 1,500 to 4,000 faces. If a tank is ever wanted, it is already baked
+by tools/city-meshes.py --materials and only the shipping subset excludes it.
+
+SUPERSEDED NOTE - THIS PACK WAS BLOCKED UNTIL PURCHASED
+  Author:   38491748
+  Source:   https://38491748.itch.io/3d-low-poly-modern-city-assets
+  Terms:    *** NONE STATED ANYWHERE ON THE PAGE. ***
+
+A $2 purchase with no licence text, no terms link and no readme in the archive.
+That is not "probably fine" - it is the tile pack situation again, and that one
+has blocked ship.sh for months. Nothing from this pack is baked, shipped or
+referenced. It also has no textures at all - 70 FBX files and not one image -
+so every model would need colours invented for it, which is a second reason to
+leave it until the first is resolved.
+
+TO USE IT: obtain terms in writing from the author, record them here, and then
+tools/city-meshes.py needs a companion path for untextured meshes, because the
+palette lookup this baker is built around does not exist in that pack.

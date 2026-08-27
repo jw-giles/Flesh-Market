@@ -34,6 +34,13 @@
     <div id="eod-timer">--:--</div>
     <div id="passiveIncomeEOD" style="font-size:.6rem;color:#447744;letter-spacing:.08em;opacity:0;transition:opacity .3s"></div>
   </div>
+  <!-- ASSET CREDITS. In the header rather than the tab row on purpose: the tab
+       row is where you go to DO something, and this is a standing statement
+       about the game, not a place to spend time. It is also the one surface here
+       that a licence obliges to exist, so it sits somewhere it cannot be
+       crowded out by the next tab. -->
+  <button id="assetCreditsBtn" onclick="window.openAssetCredits&amp;&amp;window.openAssetCredits()"
+          title="Everyone whose art, music or code is in this game">Asset Credits</button>
 </div>
 </div>
 <div class="row">
@@ -796,7 +803,7 @@ window.storeSubTab=storeSubTab;
   <!-- Map pane -->
   <div id="gMapPane" style="display:flex;flex:1;min-height:0;background:#02020a">
     <div style="flex:1;position:relative;overflow:hidden;background:#050508">
-      <svg id="galaxySVG" viewBox="-150 -80 1200 900" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block">
+      <svg id="galaxySVG" viewBox="-150 -210 1200 1030" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block">
         <defs>
           <filter id="gf-coalition" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#4ecdc4" flood-opacity="0.7" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           <filter id="gf-syndicate" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#e74c3c" flood-opacity="0.7" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
@@ -806,25 +813,19 @@ window.storeSubTab=storeSubTab;
           <filter id="gf-guild"  x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#2ecc71" flood-opacity="0.7" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           <filter id="gf-jade"   x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feFlood flood-color="#e8e4d8" flood-opacity="0.75" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
         </defs>
-        <image id="gNebula" href="assets/space/backgrounds/blue_purple.png" x="-300" y="-300" width="1700" height="1400" preserveAspectRatio="xMidYMid slice" opacity="0" style="transition:opacity 1.2s ease"/>
+        <image id="gNebula" href="assets/space/backgrounds/blue_purple.png" x="-400" y="-420" width="1900" height="1700" preserveAspectRatio="xMidYMid slice" opacity="0" style="transition:opacity 1.2s ease"/>
         <g id="gStars"></g>
         <!-- Space loading spinner -->
         <g id="gLoadSpinner" opacity="0" style="transition:opacity .3s">
           <image id="gSpinImg" href="assets/space/ui/loading_wheel/loading_whee1.png" x="488" y="338" width="24" height="24" style="image-rendering:pixelated"/>
         </g>
-        <ellipse cx="200" cy="490" rx="180" ry="120" fill="#9b59b6" opacity="0.03"/>
-        <ellipse cx="700" cy="210" rx="220" ry="140" fill="#4ecdc4" opacity="0.04"/>
-        <ellipse cx="600" cy="525" rx="160" ry="100" fill="#e74c3c" opacity="0.035"/>
-        <!-- Abaddon cluster — deep crimson northern nebula -->
-        <ellipse cx="490" cy="55"  rx="240" ry="75"  fill="#8b0000" opacity="0.07"/>
-        <ellipse cx="490" cy="70"  rx="140" ry="45"  fill="#c0392b" opacity="0.05"/>
-        <ellipse cx="490" cy="100" rx="60"  ry="35"  fill="#ff2200" opacity="0.04"/>
-        <g opacity="0.04" stroke="#ffffff" stroke-width="0.5">
-          <line x1="200" y1="0" x2="200" y2="700"/><line x1="400" y1="0" x2="400" y2="700"/>
-          <line x1="600" y1="0" x2="600" y2="700"/><line x1="800" y1="0" x2="800" y2="700"/>
-          <line x1="0" y1="175" x2="1000" y2="175"/><line x1="0" y1="350" x2="1000" y2="350"/>
-          <line x1="0" y1="525" x2="1000" y2="525"/>
-        </g>
+        <!-- Six tinted region ellipses and a reference grid used to live here,
+             hardcoded in Coalition coordinates. They drew on EVERY galaxy,
+             so the Circuit and the Reach both inherited the Coalition's
+             faction blobs and its Abaddon nebula sitting over unrelated
+             worlds. The nebula plate already carries the colour each galaxy
+             needs, and the grid was sized to the old 1000x700 box, so it
+             stopped lining up the moment the viewBox changed. Both removed. -->
         <g id="gLanes"></g>
         <g id="gShips"></g>
         <g id="gColonies"></g>
@@ -1269,6 +1270,9 @@ window.storeSubTab=storeSubTab;
     <div id="bottomTicker" style="display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;font-family:monospace"></div>
   </div>
 </div>
+<!-- Eager, not lazy. One licence obliges this panel to exist, and a credit that
+     depends on a lazy loader firing is a credit that can silently not be there. -->
+<script src="assets/asset-credits.js"></script>
 <script src="assets/core.js"></script>
 <script>
 /* Dev Logs sub-tabs (Videos / Live on Kick). Owns both iframes so only the
@@ -1923,8 +1927,44 @@ ws.addEventListener('message', function(ev){
     if(!t) return;
     var tab = t.getAttribute('data-tab');
     if(tab === 'galactic'){
+      // The Khai'sultull script goes first: galaxy.js renders their names and
+      // every call site guards on it, so loading it ahead means the guard
+      // almost never fires rather than firing on the first panel open.
+      lazyLoad('assets/khai-script.js');
+      // THE FACTION REGISTRY GOES BEFORE THE SPRITE LAYER THAT READS IT. Both
+      // consumers hold a fallback and neither will draw black without it, so
+      // this is an ordering that improves the first paint rather than one that
+      // load-bears - but a soldier who wears the fallback uniform for the first
+      // second of an engagement and then changes colour is worse than one who
+      // never does, so it goes first.
+      lazyLoad('assets/factions.js');
+      // Coalition troop sprites for the push window muster strip. Behind the
+      // galaxy bundle like everything else in the Reach: the strip only exists
+      // inside a window panel, which lives in there.
+      lazyLoad('assets/coalition-sprites.js');
+      // Generated planet palettes. Ahead of galaxy.js because the battlefield
+      // and the hive survey both take their ground colour from it, and it is a
+      // static table with no dependencies of its own. If it is slow both views
+      // fall back to the legacy terrain colour rather than to black.
+      lazyLoad('assets/planet-palette.js');
       lazyLoad('assets/galaxy.js', function(){
         if(window.__galaxyOpen) window.__galaxyOpen();
+        // The battlefield viewer rides in behind the galaxy bundle: it is only
+        // reachable from a Reach world's surface panel, which lives inside it.
+        // Loaded after, because it binds a canvas the galaxy view never touches
+        // but is opened by a handler galaxy.js writes.
+        lazyLoad('assets/reach-battle.js');
+        lazyLoad('assets/reach-hive.js');
+        // The CITY battlefield, and it rides here for the same reason: it is
+        // only reachable from a colony's city view, which lives in the galaxy
+        // bundle, and it reads gState for who is fighting - which galaxy.js
+        // owns. Loaded after, because it binds a canvas galaxy.js never
+        // touches but is opened by a handler city.js writes.
+        // The published colony table the battlefield derives from. Ahead of
+        // the renderer because that is the only consumer, and COLONY_VISUAL
+        // lives on the server and is never sent down the socket.
+        lazyLoad('assets/space/city-fronts.js');
+        lazyLoad('assets/city-battle.js');
       });
       // Council Chamber rides in with the galaxy bundle. It is a view over
       // colony_state, so it is never needed before the galactic tab is opened.
@@ -1939,6 +1979,99 @@ ws.addEventListener('message', function(ev){
 <!-- ═══════════════════════════════════════════════════════════
      GOD MODE PANEL, DEV accounts only
      ═══════════════════════════════════════════════════════════ -->
+<!-- Hive city view. A brood settlement drawn as a city, not a battlefield. -->
+<div id="reachHive" style="display:none;position:fixed;inset:0;z-index:9994;background:#050303">
+  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+    <canvas id="rhCanvas" width="1180" height="720"
+      style="max-width:100%;max-height:100%;image-rendering:pixelated"></canvas>
+  </div>
+  <div style="position:absolute;left:0;top:0;right:0;display:flex;align-items:center;gap:12px;
+              padding:9px 14px;background:linear-gradient(#050303ee,#05030300);pointer-events:none">
+    <div>
+      <div id="rhTitle" style="font-size:.86rem;color:#e08a52;letter-spacing:.12em;font-family:'Courier New',monospace">HIVE WORKS</div>
+      <div id="rhSub" style="font-size:.62rem;color:#4a3a2a;letter-spacing:.14em;font-family:'Courier New',monospace"></div>
+    </div>
+    <div style="margin-left:auto;pointer-events:all">
+      <button onclick="window.reachHiveClose&&window.reachHiveClose()"
+        style="background:#0a0605;border:1px solid #3a1d0c;color:#a07050;padding:5px 12px;cursor:pointer;
+               font-size:.68rem;font-family:'Courier New',monospace;letter-spacing:.1em">CLOSE</button>
+    </div>
+  </div>
+  <div id="rhCount" style="position:absolute;left:14px;bottom:12px;font-size:.6rem;color:#4a3a2a;
+       letter-spacing:.1em;font-family:'Courier New',monospace;pointer-events:none"></div>
+</div>
+
+<!-- Live battlefield viewer. Opened from a Reach world's surface panel. -->
+<div id="reachBattle" style="display:none;position:fixed;inset:0;z-index:9994;background:#04050a">
+  <canvas id="rbCanvas" style="display:block;width:100%;height:100%"></canvas>
+  <div style="position:absolute;left:0;top:0;right:0;display:flex;align-items:center;gap:12px;
+              padding:9px 14px;background:linear-gradient(#04050aee,#04050a00);pointer-events:none">
+    <div>
+      <div id="rbTitle" style="font-size:.86rem;color:#d8d2c4;letter-spacing:.12em;font-family:'Courier New',monospace">ENGAGEMENT</div>
+      <div id="rbSub" style="font-size:.62rem;color:#4a4842;letter-spacing:.14em;font-family:'Courier New',monospace"></div>
+    </div>
+    <div style="margin-left:auto;pointer-events:all;display:flex;gap:6px;align-items:center">
+      <div id="rbCamBar" style="display:flex;gap:4px">
+        <button id="camCine"   onclick="window.rbSetCam&&window.rbSetCam('cine')"   class="rb-cam on">CINE</button>
+        <button id="camOrbit"  onclick="window.rbSetCam&&window.rbSetCam('orbit')"  class="rb-cam">ORBIT</button>
+        <button id="camFollow" onclick="window.rbSetCam&&window.rbSetCam('follow')" class="rb-cam">FOLLOW</button>
+        <button id="camFree"   onclick="window.rbSetCam&&window.rbSetCam('free')"   class="rb-cam">FREE</button>
+      </div>
+      <button onclick="window.reachWatchClose&&window.reachWatchClose()"
+        style="background:#0a0d14;border:1px solid #2a2a3e;color:#888;padding:5px 12px;cursor:pointer;
+               font-size:.68rem;font-family:'Courier New',monospace;letter-spacing:.1em">CLOSE</button>
+    </div>
+  </div>
+  <style>
+    #reachBattle .rb-cam{background:#0a0d14;border:1px solid #2a2a3e;color:#5f6672;
+      padding:5px 9px;cursor:pointer;font-size:.6rem;font-family:'Courier New',monospace;
+      letter-spacing:.1em}
+    #reachBattle .rb-cam:hover{border-color:#4ecdc4;color:#4ecdc4}
+    #reachBattle .rb-cam.on{border-color:#f0b454;color:#f0b454}
+  </style>
+  <div id="rbStat" style="position:absolute;left:14px;bottom:12px;font-size:.6rem;color:#3a4250;
+       letter-spacing:.1em;font-family:'Courier New',monospace;pointer-events:none"></div>
+  <div style="position:absolute;right:14px;bottom:12px;font-size:.58rem;color:#2a303c;
+       letter-spacing:.1em;font-family:'Courier New',monospace;pointer-events:none">
+    drag to look \u00b7 scroll to zoom \u00b7 esc to close</div>
+</div>
+
+<!-- City battlefield viewer. Opened from a colony's city view. Same shape as
+     #reachBattle above, deliberately: two viewers that behave differently for
+     no reason is two things to learn instead of one. -->
+<div id="cityBattle" style="display:none;position:fixed;inset:0;z-index:9994;background:#04070a">
+  <canvas id="cbCanvas" style="display:block;width:100%;height:100%"></canvas>
+  <div style="position:absolute;left:0;top:0;right:0;display:flex;align-items:center;gap:12px;
+              padding:9px 14px;background:linear-gradient(#04070aee,#04070a00);pointer-events:none">
+    <div>
+      <div id="cbTitle" style="font-size:.86rem;color:#d8d2c4;letter-spacing:.12em;font-family:'Courier New',monospace">CITY ENGAGEMENT</div>
+      <div id="cbSub" style="font-size:.62rem;color:#4a4842;letter-spacing:.14em;font-family:'Courier New',monospace"></div>
+    </div>
+    <div style="margin-left:auto;pointer-events:all;display:flex;gap:6px;align-items:center">
+      <div style="display:flex;gap:4px">
+        <button id="cbCam_flank" onclick="window.cbSetCam&&window.cbSetCam('flank')" class="cb-cam on">FLANK</button>
+        <button id="cbCam_orbit" onclick="window.cbSetCam&&window.cbSetCam('orbit')" class="cb-cam">ORBIT</button>
+        <button id="cbCam_free"  onclick="window.cbSetCam&&window.cbSetCam('free')"  class="cb-cam">FREE</button>
+      </div>
+      <button onclick="window.cityWatchClose&&window.cityWatchClose()"
+        style="background:#0a0d14;border:1px solid #2a2a3e;color:#888;padding:5px 12px;cursor:pointer;
+               font-size:.68rem;font-family:'Courier New',monospace;letter-spacing:.1em">CLOSE</button>
+    </div>
+  </div>
+  <style>
+    #cityBattle .cb-cam{background:#0a0d14;border:1px solid #2a2a3e;color:#5f6672;
+      padding:5px 9px;cursor:pointer;font-size:.6rem;font-family:'Courier New',monospace;
+      letter-spacing:.1em}
+    #cityBattle .cb-cam:hover{border-color:#4ecdc4;color:#4ecdc4}
+    #cityBattle .cb-cam.on{border-color:#f0b454;color:#f0b454}
+  </style>
+  <div id="cbStat" style="position:absolute;left:14px;bottom:12px;font-size:.6rem;color:#3a4250;
+       letter-spacing:.1em;font-family:'Courier New',monospace;pointer-events:none"></div>
+  <div style="position:absolute;right:14px;bottom:12px;font-size:.58rem;color:#2a303c;
+       letter-spacing:.1em;font-family:'Courier New',monospace;pointer-events:none">
+    FLANK holds the arc the sprite pack is drawn for \u00b7 esc to close</div>
+</div>
+
 <div id="godPanel" style="
   display:none;position:fixed;z-index:10000;top:60px;right:18px;
   background:#080506;border:1px solid #ff990055;
@@ -1971,6 +2104,8 @@ ws.addEventListener('message', function(ev){
     <button class="god-tab"        data-tab="control"  onclick="godTab('control')">⚡ Control</button>
     <button class="god-tab"        data-tab="comms"    onclick="godTab('comms')">📡 Comms</button>
     <button class="god-tab"        data-tab="frs"      onclick="godTab('frs');window.godCmd&&window.godCmd({cmd:'get_frs'})">🏛 FRS</button>
+    <button class="god-tab"        data-tab="reach"    onclick="godTab('reach')">🦐 Prawn War</button>
+    <button class="god-tab"        data-tab="war"      onclick="godTab('war')">⚔️ War Controls</button>
   </div>
 
   <!-- Scrollable Content -->
@@ -2355,6 +2490,184 @@ ws.addEventListener('message', function(ev){
     </div>
 
     <!-- ══ FRS: Gifted Titles + Tax Engine + Surveillance ══ -->
+    <div id="godTab-reach" class="god-tab-content" style="display:none">
+
+      <div class="god-section-title">Passage · Abaddon Gate</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <button class="god-btn" style="border-color:#c2551f;color:#e08a52" onclick="reachPassage(true)">Open Passage</button>
+        <button class="god-btn" style="border-color:#553" onclick="reachPassage(false)">Seal Passage</button>
+        <span id="reach-passage-state" style="font-size:.66rem;color:#666;letter-spacing:.1em">SEALED</span>
+      </div>
+      <div style="font-size:.6rem;color:#4a4842;margin-bottom:14px;line-height:1.5">
+        The gate orbits Abaddon inside its system view. It is not on the galaxy map.
+        Sealed by default, and it stays sealed across restarts.
+      </div>
+
+      <div class="god-section-title">Worlds
+        <span id="reach-front-count" style="float:right;font-size:.6rem;color:#666">0/2 fronts</span>
+      </div>
+      <div style="font-size:.6rem;color:#4a4842;margin-bottom:6px;line-height:1.5">
+        Two fronts maximum. The push window needs separate funders converging on one
+        contest; ten live windows means nobody converges anywhere.
+      </div>
+      <!-- What changed since the GM last looked, and what is waiting on him.
+           Above the controls on purpose: it is read far more often than any
+           of them is touched. Filled by reachRender from the dev payload. -->
+      <div id="reach-digest" style="margin:0 0 10px;padding:8px 10px;border:1px solid #2a2a33;
+           background:#0b0b10;font-family:'Courier New',monospace"></div>
+      <div id="reach-worlds" style="margin-bottom:14px"></div>
+
+      <div class="god-section-title">Envoy Line</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <button class="god-btn" style="border-color:#c2551f;color:#e08a52" onclick="reachEnvoy(true)">Open Line</button>
+        <button class="god-btn" style="border-color:#553" onclick="reachEnvoy(false)">Close Line</button>
+        <span id="reach-envoy-state" style="font-size:.66rem;color:#666;letter-spacing:.1em">CLOSED</span>
+      </div>
+      <div style="font-size:.6rem;color:#4a4842;margin-bottom:14px;line-height:1.5">
+        Puts the Envoy of the Ninth Concession in the codec contacts list. The
+        envoy quotes whatever demand is posted below, live, so it never goes stale.
+      </div>
+
+      <div class="god-section-title">Khai'sultull Voice</div>
+      <textarea id="reach-say" class="god-input" rows="2" placeholder="Transmission, rendered through the translation layer…" style="width:100%;margin-bottom:6px;resize:vertical"></textarea>
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <button class="god-btn" style="border-color:#c2551f;color:#e08a52" onclick="reachSay()">Transmit</button>
+        <span style="font-size:.6rem;color:#4a4842;align-self:center">Broadcasts live and posts to the news crawl.</span>
+      </div>
+
+      <div class="god-section-title">Demand</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <select id="reach-demand-kind" class="god-input" style="flex:1">
+          <option value="tribute">Tribute</option>
+          <option value="cease">Cease funding a contest</option>
+          <option value="cede">Cede a world</option>
+          <option value="limbosis">Surrender Limbosis</option>
+          <option value="other">Other</option>
+        </select>
+        <input id="reach-demand-hours" class="god-input" type="number" min="0" max="720" value="48" style="width:74px" title="Deadline in hours, 0 for none">
+      </div>
+      <textarea id="reach-demand-text" class="god-input" rows="2" placeholder="What they are demanding, in their words…" style="width:100%;margin-bottom:6px;resize:vertical"></textarea>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <button class="god-btn" onclick="reachDemand()">Post Demand</button>
+        <button class="god-btn" style="border-color:#3a6" onclick="reachAnswer('accepted')">Mark Accepted</button>
+        <button class="god-btn" style="border-color:#a33" onclick="reachAnswer('refused')">Mark Refused</button>
+        <button class="god-btn" style="border-color:#553" onclick="reachAnswer('ignored')">Mark Ignored</button>
+      </div>
+      <div id="reach-demand-state" style="font-size:.62rem;color:#666;margin-bottom:14px;line-height:1.5">No demand outstanding.</div>
+
+      <div class="god-section-title">Peace</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <input id="reach-peace" type="range" min="0" max="100" value="0" style="flex:1" oninput="document.getElementById('reach-peace-val').textContent=this.value">
+        <span id="reach-peace-val" style="font-size:.7rem;color:#f0b454;width:28px">0</span>
+        <button class="god-btn" onclick="reachPeace()">Set</button>
+      </div>
+      <textarea id="reach-accord-terms" class="god-input" rows="2" placeholder="Accord terms. What the Khai'sultull get…" style="width:100%;margin-bottom:6px;resize:vertical"></textarea>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <button class="god-btn" style="border-color:#3a6;color:#6c9" onclick="reachAccord('sign')">Sign Accord</button>
+        <button class="god-btn" style="border-color:#a33;color:#c66" onclick="reachAccord('break')">Break Accord</button>
+      </div>
+      <div style="font-size:.6rem;color:#4a4842;margin-bottom:14px;line-height:1.5">
+        An accord freezes the map as it stands. Worlds held stay held, worlds lost stay
+        lost, and the terms are on record for the Council to be furious about. It is not
+        a reset and it does not hand anything back.
+      </div>
+      <div id="reach-accord-state" style="font-size:.62rem;color:#666;margin-bottom:14px"></div>
+
+      <div class="god-section-title">Log</div>
+      <div id="reach-log" style="font-size:.6rem;color:#555;line-height:1.7;max-height:150px;overflow:auto;margin-bottom:10px"></div>
+      <div style="display:flex;gap:6px">
+        <button class="god-btn" onclick="window.godCmd({cmd:'reach_get'})">Refresh</button>
+        <button class="god-btn" style="border-color:#553" onclick="window.godCmd({cmd:'reach_disarm'})">Disarm</button>
+        <button class="god-btn" style="border-color:#a33;color:#c66" onclick="reachReset()">Reset Reach</button>
+      </div>
+    </div>
+
+    <!-- WAR CONTROLS. Any faction, any battlefield, either side.
+         Deliberately a SEPARATE TAB from Prawn War rather than a section inside
+         it. The Reach is one war with a named enemy and a story; this is the
+         general machinery, and the moment players are fighting each other the
+         Reach becomes one thing this tab can express rather than the frame the
+         whole layer sits in. Filing it under the shrimp would have made the
+         faction war a feature of the bug war forever.
+         Rendered entirely from god-panel.js off the same reach payload. -->
+    <div id="godTab-war" class="god-tab-content" style="display:none">
+      <!-- WAR-WIDE, ABOVE THE PER-WORLD CARDS, because it governs all of them.
+           Declaring a faction here puts it on every line that has not been
+           hand-composed below; a composed line is a statement about one
+           battlefield and always wins over a statement about the war. -->
+      <!-- THE HIVE LORD'S FACE. The Khai'sultull portraits are not in the public
+           picker and /api/portrait refuses them, so this is the only way onto an
+           account. It was an HTTP route with no button for a release, which is a
+           feature that exists and cannot be used. -->
+      <!-- ══ CORPORATE WARS ══════════════════════════════════════════════
+           The Reach war below is one war against one enemy. THIS is the other
+           kind: colony against colony in settled space, priced by the city
+           book and fought over faction control percentages that already exist
+           and have never had a control surface.
+
+           IT SENDS NOTHING NEW. Every button here is set_colony_control, which
+           the server has accepted since long before this panel - so this adds
+           a way to DRIVE the war model, not a second war model. The board is a
+           live view of gState, which is what the client already holds.
+
+           IGNITE is a test lever and is labelled as one: it moves control to a
+           contested split so a front exists to look at. It is not a
+           declaration of war and it is not what players will use. -->
+      <div style="font-size:.56rem;letter-spacing:.14em;color:#4a4842;margin-bottom:4px">
+        CORPORATE WARS &middot; SETTLED SPACE
+      </div>
+      <div style="display:flex;gap:4px;margin-bottom:5px;align-items:center">
+        <select id="gw-filter" class="god-input" style="flex:1;font-size:.6rem"
+                onchange="godWarsRefresh()">
+          <option value="contested">Contested only</option>
+          <option value="all">Every colony</option>
+          <option value="jade">Jade Circuit</option>
+          <option value="coal">Coalition space</option>
+        </select>
+        <button class="gw-b" onclick="godWarsRefresh()">REFRESH</button>
+      </div>
+      <div id="gw-board" style="max-height:260px;overflow:auto;margin-bottom:6px"></div>
+      <div style="font-size:.52rem;color:#55534c;margin-bottom:9px;line-height:1.5">
+        WATCH opens the city battlefield for that colony's first zone. A colony
+        needs two factions holding ground before there is anything to watch, so
+        IGNITE exists to create that state for testing and CALM removes it.
+        Both are set_colony_control, the same command the war fund drives.
+      </div>
+      <div style="font-size:.56rem;letter-spacing:.14em;color:#4a4842;margin-bottom:4px">
+        HIVE LORD PORTRAIT
+      </div>
+      <div style="display:flex;gap:4px;margin-bottom:4px">
+        <input id="god-portrait-name" class="god-input" placeholder="Player name"
+               style="flex:1;font-size:.6rem" value="Zharkofin">
+        <input id="god-portrait-id" class="god-input" placeholder="hive"
+               title="Leave as 'hive' to use whichever Khai'sultull portrait is installed."
+               style="width:96px;font-size:.6rem" value="hive">
+        <button class="gw-b go" onclick="devPortrait()">ASSIGN</button>
+      </div>
+      <div style="font-size:.52rem;color:#55534c;margin-bottom:9px;line-height:1.5">
+        Assigns a portrait nobody can select. Blank the second field to strip one.
+        The player sees it immediately; existing chat scrollback keeps the old face.
+      </div>
+      <div style="font-size:.56rem;letter-spacing:.14em;color:#4a4842;margin-bottom:4px">
+        WHO IS IN THIS WAR
+      </div>
+      <div id="war-belligerents" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px"></div>
+      <div style="font-size:.52rem;color:#55534c;margin-bottom:9px;line-height:1.5">
+        A declared faction appears on every line that has not been composed below,
+        sharing the ground the Circuit is not holding. Composed lines are untouched.
+      </div>
+      <div style="font-size:.56rem;letter-spacing:.14em;color:#4a4842;margin-bottom:6px">
+        COMPOSE A LINE. WEIGHTS, NOT PERCENTAGES: THE SERVER NORMALISES.
+      </div>
+      <div id="war-worlds"></div>
+      <div style="font-size:.52rem;color:#55534c;margin-top:8px;line-height:1.5">
+        A world runs the Reach two-faction model until you set a line on it.
+        Setting one takes over; REVERT deletes it and the Reach answer comes back
+        exactly, because nothing was overwritten to produce it. Open battlefields
+        restock from the new mix as men die rather than snapping, so a change
+        takes a few seconds to read on screen.
+      </div>
+    </div>
     <div id="godTab-frs" class="god-tab-content" style="display:none">
       <div class="god-section-title">Gifted Titles</div>
       <input id="god-frs-target" class="god-input" placeholder="Player name" style="width:100%;margin-bottom:6px">

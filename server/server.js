@@ -149,6 +149,7 @@ import {
 } from './db.js';
 import { replay as solitaireReplay } from './solitaire.js';
 import * as MathTest from './mathtest.js';
+import * as Sudoku from './sudoku.js';
 import { newBuckets, checkRate } from './ratelimit.js';
 import {
   GUEST_WINDOW_MS, GUEST_CHAT_UNLOCK_MS, GUEST_IP_LIMIT, GUEST_IP_WINDOW_MS,
@@ -172,7 +173,35 @@ import {
   lastPetition, recordPetition, setCharterOwner,
 } from './db_city.js';
 import {
+  REACH_WORLDS, MAX_FRONTS, loadReach, reachState, reachPayload,
+  setControl as reachSetControl, setGarrison as reachSetGarrison, setWaves as reachSetWaves,
+  tickFunds as reachTickFunds, setFund as reachSetFund,
+  donate as reachDonate, donateRoom as reachDonateRoom,
+  raidFob as reachRaidFob, addFob as reachAddFob, FOB_TYPES,
+  fobVoteParams as reachFobVoteParams,
+  markSeen as reachMarkSeen, setJade as reachSetJade,
+  setCoalitionEntry as reachSetCoalition, coalitionInWar as reachCoalitionInWar,
+  DONATE_DAILY_CAP, DONATE_MIN, DONATE_TERMS,
+  openVote as reachOpenVote, castVote as reachCastVote, cancelVote as reachCancelVote,
+  dueVotes as reachDueVotes, resolveVote as reachResolveVote, VOTE_MIN_BALLOTS,
+  setRevealed as reachSetRevealed, setFront as reachSetFront,
+  armAction as reachArm, disarm as reachDisarm, isArmedFor as reachIsArmed,
+  flipWorld as reachFlip, setPeace as reachSetPeace,
+  postDemand as reachPostDemand, answerDemand as reachAnswerDemand,
+  signAccord as reachSignAccord, breakAccord as reachBreakAccord,
+  resetReach, worldTaken, setConversionHooks,
+  setZone as reachSetZone, setEnvoy as reachSetEnvoy,
+  harvestWindows as reachHarvest,
+  openWindow as reachOpenWindow, cancelWindow as reachCancelWindow,
+  commit as reachCommit, pushRoom as reachPushRoom,
+  dueWindows as reachDueWindows, resolveWindow as reachResolveWindow,
+  PUSH_MIN_FUNDERS, PUSH_PLAYER_CAP, PUSH_MIN_COMMIT,
+  setRoster as reachSetRoster, clearRoster as reachClearRoster,
+  setForward as reachSetForward, setBelligerent as reachSetBelligerent,
+} from './reach.js';
+import {
   CITY_TUNE, CITY_COLONIES, COLONY_VISUAL, isCityColony, seedAllCityStates,
+  setReachResolver, isReachWorld, isReachTaken,
   seedDistrictsFor, cityGeometry, geometryPayload, validDistrict,
   districtCount, baselineDev, districtDev, devCost, devFromInvested, nextLevelCost,
   popPerDistrict, seatBasePrice, seatPrice, seatCompensation, seatTakeable,
@@ -198,7 +227,7 @@ import {
 } from './tcg/tcg-db.js';
 import { PACKS, rollPack, packPrice, packInfo } from './tcg/packs.js';
 import {
-  COUNCIL_SEATS, PURCHASABLE_SEATS,
+  COUNCIL_SEATS, PURCHASABLE_SEATS, SEAT_MODE,
   getSeatRow, getAllSeatRows, setSeatHolder, clearSeatHolder, seatHeldBy,
   createAccord, addClause, getAccord, getAccordClauses,
   getOpenAccords, getRecentAccords, getExpiredOpenAccords, getOpenAccordsByProposer,
@@ -234,10 +263,47 @@ try {
     console.log('[Warehouse] Meter anchored; grandfather window open');
   }
 } catch(e) { console.error('[Warehouse] meter anchor', e); }
+// Installed BEFORE seedAllCityStates: a Reach world taken in a previous
+// session has to read as a city at boot or it never gets seeded. isCityColony
+// fails closed without a resolver, which is the right default and precisely
+// the wrong answer for a world already converted.
+setReachResolver(worldTaken);
 seedAllCityStates(seedColonyMeta);
 // The city commerce model needs to know who is in the Circuit to apply the
 // Jade export bonus. Installed once rather than threaded through every caller.
 setFactionResolver(getPlayerFaction);
+
+// ── Reach city conversion ────────────────────────────────────────────────────
+// A hive settlement is DECORATION while the brood holds any of the world. The
+// moment the Coalition holds all of it, that world becomes a real colony: it
+// seeds a city, districts, a mayoral seat and commerce. Losing it again takes
+// all of that back out of play. isCityColony is the single predicate every city
+// route already gates on, so installing this resolver closes and opens all of
+// them at once instead of needing a check bolted onto each one.
+setConversionHooks(
+  (colonyId) => {
+    try {
+      const meta = CITY_COLONIES[colonyId];
+      if (!meta) return;
+      seedColonyMeta(colonyId, meta.pop, meta.capital);
+      seedDistrictsFor(colonyId);
+      try { ensureNpcShopsFor(colonyId); } catch (_) {}
+      broadcast({ type:'reach_converted', data:{ id:colonyId, taken:true } });
+      pushHeadline('COALITION ADMINISTRATION OPENS ON ' + colonyId.toUpperCase().replace(/_/g,' ')
+                   + '. The hive works are surveyed and a charter is drawn.', 'good', '', 'reach', null);
+      console.log('[Reach] ' + colonyId + ' TAKEN: city seeded');
+    } catch (e) { console.error('[Reach] conversion seed', e); }
+  },
+  (colonyId) => {
+    // Lost again. The city stops existing as far as every gated route is
+    // concerned the instant worldTaken goes false; the rows are left alone
+    // rather than deleted, because retaking it should not wipe what was built.
+    try {
+      broadcast({ type:'reach_converted', data:{ id:colonyId, taken:false } });
+      console.log('[Reach] ' + colonyId + ' LOST: city closed');
+    } catch (e) { console.error('[Reach] conversion close', e); }
+  }
+);
 
 // City layout v2 migration (1.2.6.0): the district model moved from a 14x10
 // grid to Voronoi sectors, so lots claimed under grid addressing have no
@@ -907,11 +973,29 @@ const CASINO_CFG = {
 for (const ex of MathTest.EXAMS) {
   CASINO_CFG[ex.game] = { mult: 0, flat: MathTest.maxGross(ex), minDurMs: 0, timeoutMs: ex.timeoutMs };
 }
+// SUDOKU: ONE CASINO_CFG KEY PER DIFFICULTY, same reason as the exams. The old
+// single `sudoku` key meant one cooldown and one payout cap across all five
+// tiers, so the backstop on an EASY round was the INSANE reward: a forged Easy
+// settlement paid Ƒ4,200 for a Ƒ50 puzzle. Per tier, the cap is that tier's own
+// prize, and getLastCasinoRoundTs gives a per tier cooldown for free.
+// minDurMs is 0 because a real solve is bounded by the puzzle rather than by a
+// clock, and a floor would void a fast player on an Easy board. Nothing here is
+// client settled any more, so the duration floor is not load bearing.
+for (const d of Sudoku.DIFFICULTIES) {
+  CASINO_CFG[d.game] = { mult: 0, flat: Sudoku.maxGross(d), minDurMs: 0, timeoutMs: 45 * 60_000 };
+}
 // The pre-1.3.5 'mathgame' round type is retired. Its entry stays so an old row
 // in casino_rounds still resolves through the sweep, but casino_bet refuses to
 // open a new one (see the stale guard below) because the client that opened them
 // declared its own payout.
 CASINO_CFG.mathgame = { mult: 0, flat: 900, minDurMs: 5000, timeoutMs: 15 * 60_000 };
+// The pre-1.5.1.3 client-settled 'sudoku' round type is retired for the same
+// reason the math quiz was. The client generated the puzzle, held the solution,
+// decided whether it had been solved, and told the server what to pay; the only
+// things bounding it were this cap, a 20s duration floor and a cooldown that
+// lived in localStorage. Its entry stays so an old open row still resolves
+// through the sweep, and the stale guard below refuses to open a new one.
+CASINO_CFG.sudoku = { mult: 0, flat: 4200, minDurMs: 20000, timeoutMs: 45 * 60_000 };
 
 // Rounds that only their OWN handler may resolve.
 //
@@ -927,7 +1011,11 @@ CASINO_CFG.mathgame = { mult: 0, flat: 900, minDurMs: 5000, timeoutMs: 15 * 60_0
 // Found by playing it against a running server, not by reading it. The static
 // checks all passed: every individual handler is correct, and the hole is only
 // visible when you ask what ELSE can reach a round after one of them opens it.
-const SERVER_SETTLED_GAMES = new Set(['solitaire', ...MathTest.EXAMS.map(e => e.game)]);
+const SERVER_SETTLED_GAMES = new Set([
+  'solitaire',
+  ...MathTest.EXAMS.map(e => e.game),
+  ...Sudoku.DIFFICULTIES.map(d => d.game),
+]);
 // ─── Casino: server-authoritative one-shot games (roulette, horse races) ──────
 // These pure-RNG games no longer trust a client-declared payout. The client sends
 // only its bet selection; the server rolls with crypto.randomInt (unbiased, not
@@ -2585,6 +2673,16 @@ companies.push(BRNC_COMPANY);
 let WORMHOLE_OPEN = true;
 const WORMHOLE_KEY = 'wormhole_open';
 
+// ── Khai'sultull Reach passage ───────────────────────────────────────────────
+// Second passage, reached through a gate orbiting Abaddon rather than from the
+// galaxy map. Kept as its own flag and its own KV key rather than folding the
+// Circuit into a generic map: WORMHOLE_KEY is already persisted in live saves
+// and renaming it would silently reopen a passage some GM sealed on purpose.
+// Defaults SEALED. The Reach is a war zone, not a trade route: nothing should
+// be able to cross it because a process restarted.
+let REACH_OPEN = false;
+const REACH_KEY = 'passage_khaisultull';
+
 // Global gate on commodity buying and selling. GM switch, same shape as the
 // passage. In-memory only and therefore resets to open on restart: a halt is a
 // deliberate live intervention, not a state the world should silently boot into
@@ -2606,8 +2704,37 @@ let COMMODITIES_OPEN = true;
 //
 // One predicate, used by every path that can reach a Circuit market, so the
 // gate can never again be enforced in some of them and not others.
-function jadeSealed(colonyId) {
-  try { return !WORMHOLE_OPEN && isJadeColony(colonyId); } catch(_) { return false; }
+/* ── The seal, and who it is for ──────────────────────────────────────────
+   A SEAL IS A RULE FOR PLAYERS AND AN OBSTACLE FOR THE PERSON RUNNING THE GAME.
+   A GM has to be able to stand in a galaxy before he opens it to anyone: check
+   the ground, set the line, watch the first engagement, and unseal it only then.
+   With the seal enforced against everybody that could not be done without
+   unsealing first, which is precisely the thing he is not ready to do.
+
+   ONE PREDICATE PER SEAL, taking the actor. The exception is not sprinkled at
+   the call sites: six routes ask about these two seals and an exception added
+   at four of them is a hole at the other two, in whichever direction is worse.
+
+   `actor` is OPTIONAL and absent means "no exception". Every existing caller
+   that does not pass one keeps exactly the behaviour it had, so this cannot
+   quietly widen a gate somebody forgot to update. */
+function devPassesSeal(actor) {
+  const id = actor && (actor.id || actor.playerId);
+  if (!id) return false;
+  try { return !!(isDevAccount(id) || isAdminAccount(id) || isOwnerAccount(id)); }
+  catch(_) { return false; }
+}
+function jadeSealed(colonyId, actor) {
+  try {
+    if (WORMHOLE_OPEN) return false;
+    if (!isJadeColony(colonyId)) return false;
+    return !devPassesSeal(actor);
+  } catch(_) { return false; }
+}
+// The Reach's half of the same question, so the three routes below read the same
+// way the six Jade ones do rather than each spelling out the flag and the actor.
+function reachSealed(actor) {
+  return !REACH_OPEN && !devPassesSeal(actor);
 }
 const JADE_SEED = [
   {sym:'JCH', name:'Jade Circuit Holdings', price:500, sector:0},
@@ -2655,6 +2782,22 @@ try {
   if (saved === '0' || saved === '1') WORMHOLE_OPEN = (saved === '1');
 } catch(e) { console.error('[Jade] restore passage state', e); }
 console.log('[Jade] '+JADE_COMPANIES.length+' Jade Exchange tickers registered, passage '+(WORMHOLE_OPEN?'OPEN':'SEALED'));
+
+// The Reach restores the same way but defaults SEALED when the key is absent.
+try {
+  const savedR = getCityKV(REACH_KEY);
+  if (savedR === '0' || savedR === '1') REACH_OPEN = (savedR === '1');
+} catch(e) { console.error('[Reach] restore passage state', e); }
+console.log('[Reach] Khai\'sultull passage '+(REACH_OPEN?'OPEN':'SEALED'));
+try {
+  loadReach();
+  const _rs = reachState();
+  const _held  = REACH_WORLDS.filter(id => _rs.worlds[id].hive <= 0).length;
+  const _fronts = REACH_WORLDS.filter(id => _rs.worlds[id].front).length;
+  console.log('[Reach] war state: '+REACH_WORLDS.length+' worlds, '+_held+' held, '
+    +_fronts+'/'+MAX_FRONTS+' fronts live, peace '+_rs.peace+'/100'
+    +(_rs.accord ? ', ACCORD IN FORCE' : ''));
+} catch(e) { console.error('[Reach] war state load', e); }
 
 
 // SWT anchored mean-reversion init — BRNC uses default beta model from main loop
@@ -3489,6 +3632,238 @@ app.post('/api/dev/wormhole', (req, res) => {
     res.json({ ok:true, open:WORMHOLE_OPEN, tickers:jadeCos.length });
   } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
 });
+// ═══════════════════════════════════════════════════════════════════════════
+// KHAI'SULTULL REACH - PUSH WINDOWS
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// reach.js is the state machine and this is the only place credits move, which
+// is the same split the treasury uses and for the same reason: one file to read
+// to answer "can the Reach mint money". It cannot. A commitment is debited here
+// and either burns or comes back to the SAME player; there is no path from a
+// window to anybody else's wallet, so this is a sink with a refund case rather
+// than a transfer.
+//
+// NOT GATED BY GUILD CLEARANCE, on the identical argument to the treasury: a
+// commitment reaches no other player, ever, so there is nothing for clearance to
+// protect against and gating it would only stop players funding their own war.
+//
+// GUESTS CANNOT FUND. Not because a guest spending on a sink is harmful, but
+// because the funder MINIMUM is the entire mechanic and a guest account is the
+// cheapest way to manufacture a distinct funder. The IP limiter on guest minting
+// makes this expensive rather than impossible, and "expensive" is not a standard
+// the load-bearing rule of a feature should be held to.
+function payReachRefunds(refunds, why) {
+  if (!refunds || !refunds.length) return 0;
+  let total = 0;
+  for (const r of refunds) {
+    try {
+      const p = r.playerId ? getPlayer(r.playerId) : null;
+      const amt = Math.floor(Number(r.amount) || 0);
+      if (!p || amt <= 0) continue;
+      safeAddCash(p, amt);
+      savePlayer(p);
+      total += amt;
+      broadcastToPlayer(p.id, { type:'portfolio', data: snapshotPortfolio(p) });
+      broadcastToPlayer(p.id, { type:'error', data:{ msg:`\u25c8 Ƒ${amt.toLocaleString()} returned. ${why || ''}`.trim() } });
+    } catch (e) { console.error('[Reach] refund', e); }
+  }
+  return total;
+}
+
+// Resolve every window whose clock has run out. A sweep, not a per window timer:
+// PM2 forgets setTimeout on restart and an unresolved window is both a front
+// that never moves and player credits nobody gets back.
+function sweepReachWindows() {
+  try {
+    // The fund rides the window sweep rather than its own timer, for the same
+    // reason the sweep exists: PM2 forgets a setTimeout on restart, and a fund
+    // that stops ticking is a war that quietly freezes with nobody noticing.
+    if (reachTickFunds(Date.now())) broadcast({ type:'reach_state', data: reachPayload(false) });
+  } catch (e) { console.error('[Reach] fund tick', e); }
+  try {
+    // A VOTE MUST NEVER WAIT FOR THE GM. If the clock runs out with nobody
+    // answering, the default lands and the war continues without him.
+    // A cleared wave leaves a work standing and the room chooses which. Opened
+    // from the sweep rather than by hand, so a wave cleared at 4am still gets
+    // its vote and its FOB.
+    for (const world of REACH_WORLDS) {
+      const st = reachState().worlds[world];
+      if (!st || !st.pendingFob || (st.vote && !st.vote.resolved)) continue;
+      // The options are whatever is not already standing, decided in reach.js
+      // beside the effect table rather than written out again here. Null means
+      // every work stands and there is nothing to ask.
+      const P = reachFobVoteParams(world);
+      if (!P) continue;
+      const r = reachOpenVote(world, P.kind, P.question, P.options, P.hours, P.defaultId, 'wave');
+      if (r.ok) broadcast({ type:'reach_state', data: reachPayload(false) });
+    }
+    for (const world of reachDueVotes(Date.now())) {
+      const out = reachResolveVote(world, 'clock');
+      if (!out.ok) continue;
+      try { pushHeadline(`COALITION DECISION AT ${world.toUpperCase()}: ${out.label.toUpperCase()}. ${out.outcome}`,
+        out.resolved === 'carried' ? 'neutral' : 'bad', '', 'reach', null); } catch(_) {}
+      broadcast({ type:'reach_vote_result', data: out });
+      broadcast({ type:'reach_state', data: reachPayload(false) });
+    }
+  } catch (e) { console.error('[Reach] vote sweep', e); }
+  try {
+    for (const { world, zone } of reachDueWindows(Date.now())) {
+      const out = reachResolveWindow(world, zone);
+      if (!out.ok) continue;
+      payReachRefunds(out.refunds, 'The push never formed.');
+      const tone = out.result === 'carried' ? 'good' : out.result === 'repelled' ? 'bad' : null;
+      const line = out.result === 'carried'
+        ? `THE LINE MOVED AT ${out.zoneName.toUpperCase()}. ${out.funders} funders raised Ƒ${out.pool.toLocaleString()} and the brood gave up ${out.gain} points of ground.`
+        : out.result === 'repelled'
+          ? `THE PUSH AT ${out.zoneName.toUpperCase()} WAS REPELLED. Ƒ${out.pool.toLocaleString()} of Ƒ${out.target.toLocaleString()} raised. The brood took back ${Math.abs(out.gain)} points.`
+          : `THE WINDOW AT ${out.zoneName.toUpperCase()} CLOSED UNANSWERED. ${out.funders} of ${PUSH_MIN_FUNDERS} funders. Every credit returned.`;
+      try { pushHeadline(line, tone || 'neutral', '', 'reach', null); } catch(_) {}
+      broadcast({ type:'reach_push_result', data:{
+        world, zone, result: out.result, zoneName: out.zoneName,
+        pool: out.pool, target: out.target, funders: out.funders,
+        gain: out.gain, outcome: out.outcome, worldTaken: out.worldTaken ? 1 : 0 } });
+      broadcast({ type:'reach_state', data: reachPayload(false) });
+    }
+  } catch (e) { console.error('[Reach] window sweep', e); }
+}
+setInterval(sweepReachWindows, 30 * 1000);
+
+// Commit credits to an open window.
+// Cast a ballot. No money moves, so there is no debit path and no refund path:
+// what is being spent is attention, which is the resource the whole design says
+// is scarce.
+app.post('/api/reach/vote', (req, res) => {
+  try {
+    const { token, world, option } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'not_logged_in' });
+    if (p.isGuest) return res.status(403).json({ ok:false, error:'guest_blocked',
+      msg:'Trial accounts cannot vote. Claim the account first.' });
+    if (reachSealed(p)) return res.status(400).json({ ok:false, error:'passage_sealed',
+      msg:'The passage is sealed.' });
+    const r = reachCastVote(String(world || ''), p.id, p.name, option);
+    if (!r.ok) return res.status(400).json({ ok:false, error:'rejected', msg:r.msg });
+    broadcast({ type:'reach_state', data: reachPayload(false) });
+    res.json({ ok:true, msg:r.msg, ballots:r.ballots, mine:r.mine,
+               minBallots: VOTE_MIN_BALLOTS, state: reachPayload(false, p.id) });
+  } catch (e) {
+    console.error('[Reach] vote:', e);
+    res.status(500).json({ ok:false, error:String(e && e.message || e) });
+  }
+});
+
+// Give to a world's war fund. THIS IS NOT A COMMITMENT AND IT NEVER COMES BACK:
+// a window refunds when it goes unanswered because nothing was attempted, and a
+// donation is consumed by time passing. The terms ship in the payload so the
+// client cannot quietly fail to say so.
+app.post('/api/reach/fund', (req, res) => {
+  try {
+    const { token, world, amount, max } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'not_logged_in' });
+    if (p.isGuest) return res.status(403).json({ ok:false, error:'guest_blocked',
+      msg:'Trial accounts cannot fund the war. Claim the account first.' });
+    if (reachSealed(p)) return res.status(400).json({ ok:false, error:'passage_sealed',
+      msg:'The passage is sealed.' });
+
+    const wid = String(world || '');
+    // "Give max" resolves against the daily cap AND the wallet, server side, for
+    // the same reason the push route does it here: computing it on the client
+    // makes the button a lie the moment cash moves.
+    const room = reachDonateRoom(p.id);
+    const amt = max ? Math.min(room, Math.floor(p.cash)) : Math.floor(Number(amount) || 0);
+    if (max && amt < DONATE_MIN)
+      return res.status(400).json({ ok:false, error:'nothing_to_give',
+        msg: room <= 0 ? 'You are at your daily limit.' : 'Not enough cash to meet the floor.' });
+    if (amt <= 0) return res.status(400).json({ ok:false, error:'bad_amount' });
+    if (p.cash < amt) return res.status(400).json({ ok:false, error:'insufficient_funds',
+      msg:'Not enough cash.' });
+
+    const r = reachDonate(wid, p.id, p.name, amt);
+    if (!r.ok) return res.status(400).json({ ok:false, error:'rejected', msg:r.msg });
+
+    safeAddCash(p, -amt);
+    savePlayer(p);
+    broadcastToPlayer(p.id, { type:'portfolio', data: snapshotPortfolio(p) });
+    broadcast({ type:'reach_state', data: reachPayload(false) });
+    res.json({ ok:true, msg:r.msg, cash:p.cash, given:r.given, fund:r.fund,
+               roomLeft:r.roomLeft, cap:DONATE_DAILY_CAP, terms:DONATE_TERMS,
+               state: reachPayload(false, p.id) });
+  } catch (e) {
+    console.error('[Reach] fund:', e);
+    res.status(500).json({ ok:false, error:String(e && e.message || e) });
+  }
+});
+
+app.post('/api/reach/push', (req, res) => {
+  try {
+    const { token, world, zone, amount, max } = req.body || {};
+    const p = token ? getPlayer(token) : null;
+    if (!p) return res.status(401).json({ ok:false, error:'not_logged_in' });
+    if (p.isGuest) return res.status(403).json({ ok:false, error:'guest_blocked',
+      msg:'Trial accounts cannot fund a push. Claim the account first.' });
+    if (reachSealed(p)) return res.status(400).json({ ok:false, error:'passage_sealed',
+      msg:'The passage is sealed.' });
+
+    const wid = String(world || ''), zi = Number(zone) | 0;
+    // "Commit max" resolves against the cap AND the wallet, server side. Doing
+    // it on the client means the button is a lie the moment cash moves.
+    const room = reachPushRoom(wid, zi, p.id);
+    let amt = max ? Math.min(room, Math.floor(p.cash)) : Math.floor(Number(amount) || 0);
+    if (max && amt < PUSH_MIN_COMMIT)
+      return res.status(400).json({ ok:false, error:'nothing_to_give',
+        msg: room <= 0 ? 'You are already at the cap for this window.' : 'Not enough cash to meet the floor.' });
+    if (amt <= 0) return res.status(400).json({ ok:false, error:'bad_amount' });
+    if (p.cash < amt) return res.status(400).json({ ok:false, error:'insufficient_funds',
+      msg:'Not enough cash.' });
+
+    // Every rejection path in commit() runs before it touches state, so debiting
+    // after a successful call cannot leave a charge against a window that did
+    // not accept it.
+    const r = reachCommit(wid, zi, p.id, p.name, amt);
+    if (!r.ok) return res.status(400).json({ ok:false, error:'rejected', msg:r.msg });
+
+    safeAddCash(p, -amt);
+    savePlayer(p);
+    broadcastToPlayer(p.id, { type:'portfolio', data: snapshotPortfolio(p) });
+    broadcast({ type:'reach_state', data: reachPayload(false) });
+    res.json({ ok:true, cash:p.cash, committed:amt, pool:r.pool, target:r.target,
+               funders:r.funders, mine:r.mine, minFunders:PUSH_MIN_FUNDERS, cap:PUSH_PLAYER_CAP,
+               state: reachPayload(false, p.id) });
+  } catch (e) {
+    console.error('[Reach] push:', e);
+    res.status(500).json({ ok:false, error:String(e && e.message || e) });
+  }
+});
+
+// Read the Reach with the caller's own commitments filled in. The broadcast
+// payload is viewer agnostic by design, so `mine` has to come from somewhere.
+app.post('/api/reach/state', (req, res) => {
+  try {
+    const p = req.body && req.body.token ? getPlayer(req.body.token) : null;
+    res.json({ ok:true, state: reachPayload(false, p ? p.id : null) });
+  } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
+});
+
+// Reach passage switch. Separate endpoint from /api/dev/wormhole on purpose:
+// the Circuit gate delists tickers and rebuilds market tabs, the Reach gate
+// does none of that because the Reach has no market. Folding them into one
+// handler would mean one of the two carries dead branches.
+app.post('/api/dev/reach', (req, res) => {
+  try {
+    const tok = (req.body && req.body.token) || null;
+    const actor = tok ? getPlayer(tok) : null;
+    if (!actor) return res.status(401).json({ ok:false, error:'unauthorized' });
+    if (!isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
+    const open = !!(req.body && req.body.open);
+    REACH_OPEN = open;
+    try { setCityKV(REACH_KEY, open ? '1' : '0'); } catch(e) { console.error('[Reach] persist', e); }
+    broadcast({ type:'passage', data:{ galaxy:'khaisultull', open:REACH_OPEN } });
+    console.log('[Reach] passage '+(open?'OPENED':'SEALED')+' by '+actor.name);
+    res.json({ ok:true, galaxy:'khaisultull', open:REACH_OPEN });
+  } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
+});
+
 // Dev-only halt/resume for commodity trading. Buy and sell reject with 423 while
 // halted; in-flight cargo is untouched by design (see COMMODITIES_OPEN above).
 app.post('/api/dev/commodities', (req, res) => {
@@ -3606,7 +3981,7 @@ app.get('/api/dev/gates', (req, res) => {
     const tok = tokenFrom(req);
     const actor = tok ? getPlayer(tok) : null;
     if (!actor || !isDevAccount(actor.id)) return res.status(403).json({ ok:false, error:'dev_only' });
-    res.json({ ok:true, wormhole:WORMHOLE_OPEN, commodities:COMMODITIES_OPEN });
+    res.json({ ok:true, wormhole:WORMHOLE_OPEN, reach:REACH_OPEN, commodities:COMMODITIES_OPEN });
   } catch (e) { res.status(500).json({ ok:false, error:String(e && e.message || e) }); }
 });
 
@@ -3639,6 +4014,37 @@ try {
 const GATED_PORTRAITS = {
   jarred_brain: { requiresItem: 'jarred_brain', img: 'cyberpunk_jarred_brain.png', name: 'Preserved Brain' },
 };
+
+/* ── Portraits nobody may choose ──────────────────────────────────────────
+   THE HIVE IS NOT A COSTUME. The Khai'sultull portraits sat in the ordinary
+   selectable set, so any account could put on the face of the thing the entire
+   war layer is about. That is not a cosmetic problem: the Reach reads as a
+   standing threat because exactly one voice speaks with that face, and a
+   station full of them is a joke about the enemy rather than the enemy.
+
+   DEV-ASSIGNED, WHICH IS A DIFFERENT MECHANISM FROM GATED. A gated portrait is
+   earned and checked live against an equipped item - the item stays valuable
+   because the check is continuous. These are not earned by anything. They are
+   set on an account by somebody with the dev flag and they stay set, so the
+   test is on the SETTER rather than on the wearer's inventory.
+
+   They stay in PORTRAIT_SET because the file is in the portraits dir and the
+   boot sweep must not decide they are withdrawn and wipe them off the accounts
+   already wearing them. What changes is that the PICKER never lists them and the
+   ordinary set route refuses them. */
+const DEV_PORTRAITS = new Set(['prawn1', 'prawn_commander']);
+
+/* THE COMMANDER, WITH A FALLBACK, BECAUSE THE ART IS NOT IN THE REPO YET.
+   Zharkofin renders as the base drone because prawn1 is the only Khai'sultull
+   portrait on disk. Dropping prawn_commander.png into client/assets/portraits/
+   is the whole installation: PORTRAIT_SET is built from the directory at boot,
+   so it starts validating the moment it exists, and this resolves to it in
+   preference to the drone from that boot onward.
+   Written as a resolver rather than a constant so the fallback is a fact about
+   what is present rather than something a reader has to know. */
+function hiveLordPortrait() {
+  return PORTRAIT_SET.has('prawn_commander') ? 'prawn_commander' : 'prawn1';
+}
 
 // Is this stored portrait id still something we can actually render? Stems live
 // in PORTRAIT_SET, gated ids live in GATED_PORTRAITS, and item: / data: forms are
@@ -3860,7 +4266,7 @@ app.post('/api/register',(req,res)=>{
     if(!isNameAvailable(trimmed)) return res.status(409).json({ok:false,error:'name_taken'});
     const id=uuidv4();
     const player=createPlayerSync(id,trimmed,password);
-    res.json({ok:true,token:player.id,name:player.name,cash:player.cash,patreon_tier:0});
+    res.json({ok:true,token:player.id,name:player.name,cash:player.cash,patreon_tier:0,is_guest:false,guest_locked:false,guest_expires_at:null,guest_days_left:null});
   }catch(e){console.error('/api/register:',e);res.status(500).json({ok:false,error:'server_error'});}
 });
 
@@ -3878,7 +4284,7 @@ app.post('/api/login',(req,res)=>{
     if(!verifyPassword(password,player.password_hash,player.password_salt))
       return res.status(401).json({ok:false,error:'invalid_credentials'});
     touchPlayer(player.id);
-    res.json({ok:true,token:player.id,name:player.name,cash:player.cash,xp:player.xp,level:player.level,title:player.title,faction:player.faction||null,portrait:player.portrait||null,patreon_tier:player.patreon_tier||0,is_dev:!!(isDevAccount(player.id)),is_admin:!!(isAdminAccount(player.id)),is_prime:!!(isOwnerAccount(player.id)),void_locked:!!(isVoidLocked(player.id))});
+    res.json({ok:true,token:player.id,name:player.name,cash:player.cash,xp:player.xp,level:player.level,title:player.title,faction:player.faction||null,portrait:player.portrait||null,patreon_tier:player.patreon_tier||0,is_dev:!!(isDevAccount(player.id)),is_admin:!!(isAdminAccount(player.id)),is_prime:!!(isOwnerAccount(player.id)),void_locked:!!(isVoidLocked(player.id)),is_guest:false,guest_locked:false,guest_expires_at:null,guest_days_left:null});
   }catch(e){console.error('/api/login:',e);res.status(500).json({ok:false,error:'server_error'});}
 });
 
@@ -5412,6 +5818,10 @@ app.get('/api/commodities-grid', (req, res) => {
     // Sealed means gone from the board, not greyed out. A price a player cannot
     // act on is worse than no price: it reads as an arbitrage they are being
     // denied rather than a market that is closed.
+    /* NO ACTOR ON PURPOSE. This is the shared board and the dev exception is a
+       permission to ACT, not a licence to publish sealed prices to everybody
+       who happens to be listening on the same route. A GM who needs to see them
+       looks at the colony directly. */
     const colonies = getAllColonyStates().filter(isMarketColony).filter(c => !jadeSealed(c.id));
     const all = getAllCommodityPrices();
     const byColony = {};
@@ -5455,7 +5865,7 @@ app.get('/api/commodities/:colonyId', (req, res) => {
     const colony = getColonyState(colonyId);
     if (!colony) return res.status(404).json({ ok:false, error:'colony_not_found' });
     if (!isMarketColony(colony)) return res.status(403).json({ ok:false, error:'no_market_here' });
-    if (jadeSealed(colonyId)) return res.status(403).json({ ok:false, error:'passage_sealed' });
+    if (jadeSealed(colonyId, p)) return res.status(403).json({ ok:false, error:'passage_sealed' });
     const leading = colonyLeadingFaction(colony);
     const tithe = leading === 'guild' ? GUILD_TITHE : 0;
     let rows = getColonyCommodityPrices(colonyId);
@@ -5785,12 +6195,18 @@ function sweepCasinoRounds() {
       const cashAfter = p ? p.cash : r.cash_before - r.wager;
       resolveCasinoRound(r.id, 'expired', 0, cashAfter, now);
       MATH_PAPERS.delete(r.id);
+      SUDOKU_BOARDS.delete(r.id);
     }
     // Belt and braces: a key whose round resolved by any other path is dead
     // weight. Anything older than the longest exam timeout cannot be live.
     if (MATH_PAPERS.size) {
       for (const [id, paper] of MATH_PAPERS) {
         if (now - paper.openedTs > 60 * 60_000) MATH_PAPERS.delete(id);
+      }
+    }
+    if (SUDOKU_BOARDS.size) {
+      for (const [id, b] of SUDOKU_BOARDS) {
+        if (now - b.openedTs > 60 * 60_000) SUDOKU_BOARDS.delete(id);
       }
     }
   } catch(e) { console.error('[CasinoSweep]', e); }
@@ -5805,6 +6221,13 @@ function sweepCasinoRounds() {
 // been handed back. Pruned by the casino sweep so an abandoned sitting cannot
 // pin its key here for the life of the process.
 const MATH_PAPERS = new Map();
+
+// ─── Sudoku: live boards ─────────────────────────────────────────────────────
+// roundId -> { playerId, diffId, game, puzzle, solution, grid, hints, openedTs }
+// In memory for the same reasons as the exam keys: the solution must never
+// touch the wire, and it never needs to outlive the process, because a sudoku
+// round carries no stake to strand. Pruned by the casino sweep.
+const SUDOKU_BOARDS = new Map();
 
 // On boot, void every round left 'open' by a crash/restart and REFUND the stake.
 // Players can't trigger server restarts, so this can't be farmed the way the
@@ -5840,7 +6263,7 @@ app.post('/api/commodities/buy', (req, res) => {
     if (!isMarketColony(colony)) return res.status(403).json({ ok:false, error:'no_market_here' });
     // Cargo already parked on the far side is NOT destroyed, only frozen: it
     // stays where it is and becomes sellable again when the passage reopens.
-    if (jadeSealed(colonyId)) return res.status(403).json({ ok:false, error:'passage_sealed' });
+    if (jadeSealed(colonyId, p)) return res.status(403).json({ ok:false, error:'passage_sealed' });
 
     const leading = colonyLeadingFaction(colony);
     const tithe = leading === 'guild' ? GUILD_TITHE : 0;
@@ -5894,7 +6317,7 @@ app.post('/api/commodities/sell', (req, res) => {
     if (!isMarketColony(colony)) return res.status(403).json({ ok:false, error:'no_market_here' });
     // Cargo already parked on the far side is NOT destroyed, only frozen: it
     // stays where it is and becomes sellable again when the passage reopens.
-    if (jadeSealed(colonyId)) return res.status(403).json({ ok:false, error:'passage_sealed' });
+    if (jadeSealed(colonyId, p)) return res.status(403).json({ ok:false, error:'passage_sealed' });
 
     const held = getCargoQty(p.id, commodityId, colonyId);
     if (held <= 0) return res.status(400).json({ ok:false, error:'no_cargo_here' });
@@ -6614,6 +7037,12 @@ const SEAT_META = {
   syndicate: { label: 'The Syndicate',      color: '#ff2e63', regent: 'Syndicate Proxy Vasari',    portrait: 'scan31'  },
   void:      { label: 'The Void Collective',color: '#c77dff', regent: 'Void Proxy Node 7',         portrait: 'cyborg8' },
   guild:     { label: 'Merchant Guild',     color: '#42ff7e', regent: 'Guild Notary Ostrow',       portrait: 'scan10'  },
+  jade:      { label: 'The Jade Circuit',   regent: 'Circuit Envoy Sarn',      portrait: 'corpo3',
+    // Not the battlefield grey. Against four saturated faction colours a grey
+    // chair reads as disabled rather than allied, which is the opposite of what
+    // an ally at the table should look like. Muted jade: present, and not one
+    // of the four.
+    color: '#6fae9f' },
 };
 
 // The colour a seated delegate's chat renders in, or null. Read by the chat,
@@ -6662,11 +7091,21 @@ function seatView(seatId) {
              portrait: _pPortrait,
              regent: !president, regentName: meta.regent,
              purchasable: false, cost: PRESIDENT_COST,
+             mode: SEAT_MODE['coalition'],
              title: 'President of The Coalition',
              acquiredAt: _pAcq,
              termEndsAt: _pAcq ? (_pAcq + PRESIDENT_TERM_MS) : 0,
              termMs: PRESIDENT_TERM_MS,
              note: 'Seven day protected term, the longest in the chamber.' };
+  }
+  if (seatId === 'jade') {
+    return { seat: seatId, label: meta.label, color: meta.color,
+             holderId: null, holderName: meta.regent,
+             portrait: meta.portrait,
+             regent: true, regentName: meta.regent,
+             purchasable: false, cost: 0, acquiredAt: 0, termEndsAt: 0, termMs: 0, title: null,
+             mode: SEAT_MODE.jade,
+             note: 'Seated as an ally, not as a member. The chair is not for sale yet.' };
   }
   if (seatId === 'guild') {
     return { seat: seatId, label: meta.label, color: meta.color,
@@ -6674,6 +7113,7 @@ function seatView(seatId) {
              portrait: meta.portrait,
              regent: true, regentName: meta.regent,
              purchasable: false, cost: 0, acquiredAt: 0, termEndsAt: 0, termMs: 0, title: null,
+             mode: SEAT_MODE.guild,
              note: 'The Guild notarises. The Guild does not sell its chair.' };
   }
   const row = getSeatRow(seatId);
@@ -6691,6 +7131,7 @@ function seatView(seatId) {
            portrait,
            regent: !held, regentName: meta.regent,
            purchasable: true, cost: SEAT_COST,
+           mode: SEAT_MODE[seatId] || 'purchasable',
            acquiredAt: held ? row.acquired_at : 0,
            termEndsAt: held ? (row.acquired_at + SEAT_TERM_MS) : 0,
            termMs: SEAT_TERM_MS,
@@ -8262,6 +8703,12 @@ app.post('/api/portrait', requirePlayer, (req, res) => {
       if (GATED_PORTRAITS[pid]) {
         if (!isItemEquipped(req.player.id, GATED_PORTRAITS[pid].requiresItem))
           return res.status(400).json({ ok: false, error: 'portrait_locked' });
+      } else if (DEV_PORTRAITS.has(pid)) {
+        /* Refused on the ordinary route whoever is asking, including a dev.
+           A dev wanting one uses the dev route below, which logs it; the two
+           paths existing for one action is how a costume ends up on an account
+           with no record of who put it there. */
+        return res.status(400).json({ ok: false, error: 'portrait_not_selectable' });
       } else if (!PORTRAIT_SET.has(pid)) {
         return res.status(400).json({ ok: false, error: 'invalid_portrait' });
       }
@@ -8606,7 +9053,7 @@ function broadcastToAdmins(msg) {
     for (const ws of sockets) { try { if (ws.readyState === 1) ws.send(data); } catch(_) {} }
   }
 }
-app.get('/state',(req,res)=>{res.json({companies:companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector})),headlines:headlines.slice(-30),time:Date.now()});});
+app.get('/state',(req,res)=>{res.json({companies:companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector})),headlines:wireHeadlines(30),time:Date.now()});});
 app.post('/snapshot', requireAdmin, (req,res)=>{saveMarketState(companies,headlines);res.json({saved:true});});
 app.get('/api/v1/eoh/:ticker',(req,res)=>{const sym=String(req.params.ticker||'').toUpperCase();res.json(EOH.get(sym)||[]);});
 app.get('/api/v1/fmi',(_req,res)=>{res.json({ticker:FMI.ticker,treasury:FMI.treasury});});
@@ -8773,10 +9220,88 @@ function broadcastFundDetail(fundId) {
   } catch(_) {}
 }
 
+/* ── The Reach does not go in the wire ────────────────────────────────────
+   THE PRAWN WAR IS NOT MARKET NEWS AND IT WAS COMPETING AS IF IT WERE. The feed
+   is a market wire: rotations, fills, cargo, blockades, dozens of lines an hour,
+   and a headline's whole life is the few seconds before the next one pushes it
+   up. A Khai'sultull transmission or a front being overrun scrolled past at the
+   same weight as a fund buying two hundred shares, and then it was gone.
+
+   So the eight `cat:'reach'` sites route to the BREAKING BANNER instead. Not one
+   of them had to change: the category was already there and already correct,
+   which is the only reason this is a seam and not a rewrite.
+
+   TWO LAYERS, NOT ONE, and this is the part worth being careful about. The GM's
+   own breaking banner is a deliberate act with no timer on it, and a war that
+   silently ate it would make the panel unreliable in exactly the moment a GM is
+   relying on it. So a Reach line sits ON TOP for REACH_BREAK_MS and then stands
+   down to whatever the GM had set, which is untouched underneath. A GM who sets
+   a banner during a firefight gets it back when the shooting stops.
+
+   LAST ONE WINS rather than a queue. A queue would hold a line about a push
+   window open for as long as it takes to clear the four ahead of it, and a
+   banner is a statement about NOW. The feed is not the archive either - see
+   below, the line is still filed, it just does not scroll. */
+const REACH_BREAK_MS = 45000;
+let reachBreaking = null;    // { text, tone, until }
+
+function reachBreakActive(){
+  if (reachBreaking && Date.now() < reachBreaking.until) return reachBreaking;
+  if (reachBreaking) reachBreaking = null;
+  return null;
+}
+/* The wire, as a joining client should see it. THE ARRAY IS THE ARCHIVE AND THE
+   FEED IS NOT: a Reach line is still filed, so /state and the snapshot keep it
+   and a front that fell is still findable, but it must not arrive in the scroll
+   on join either - a player logging in an hour later would get a war headline
+   pushed into a market wire, which is the exact thing this change is undoing,
+   just deferred to reconnect. Filtered at the two places a feed is handed out.
+
+   Sliced AFTER the filter, not before, or a burst of Reach traffic empties the
+   thirty a new client gets. */
+function wireHeadlines(n){
+  const out = [];
+  for (let i = headlines.length - 1; i >= 0 && out.length < n; i--)
+    if (headlines[i].cat !== 'reach') out.push(headlines[i]);
+  return out.reverse();
+}
+
+/* What the banner should say right now, Reach over GM over nothing. One function
+   so the init payload, the broadcast and the stand-down cannot disagree about
+   precedence, which is the sort of thing that only shows up when both are set. */
+function breakingPayload(){
+  const r = reachBreakActive();
+  if (r) return { active:true, text:r.text, tone:r.tone, src:'reach' };
+  if (breakingNews) return { active:true, text:breakingNews.text, tone:breakingNews.tone, src:'gm' };
+  return { active:false };
+}
+/* Stand-down. Runs on a timer rather than being computed at read time because
+   the banner is PUSHED to clients: nobody asks for it, so nothing would notice
+   the expiry until the next unrelated broadcast. */
+let _reachBreakT = null;
+function scheduleReachStandDown(){
+  if (_reachBreakT) clearTimeout(_reachBreakT);
+  _reachBreakT = setTimeout(function(){
+    _reachBreakT = null;
+    if (reachBreakActive()) return;          // superseded by a newer line
+    broadcast({ type:'breaking_news', data: breakingPayload() });
+  }, REACH_BREAK_MS + 250);
+}
+
 function pushHeadline(text,tone,symbol,category,meta){
   const item={id:uuidv4(),t:Date.now(),text,tone,symbol:symbol||null,cat:category||'system'};
   if(meta) item.meta=meta;
+  /* FILED EITHER WAY. The banner is transient and the archive is not: a player
+     who joins after a front falls should still be able to find that it fell, and
+     `headlines` is what the init payload and the OBS anchor read. What changes
+     is only that it does not BROADCAST as news, so it never enters the scroll. */
   headlines.push(item); if(headlines.length>200)headlines.shift();
+  if(item.cat==='reach'){
+    reachBreaking = { text, tone: tone || 'bad', until: Date.now()+REACH_BREAK_MS };
+    broadcast({ type:'breaking_news', data: breakingPayload() });
+    scheduleReachStandDown();
+    return;
+  }
   broadcast({type:'news',data:item});
 }
 
@@ -9912,7 +10437,7 @@ wss.on('connection',(ws,req)=>{
     ws.send(JSON.stringify({type:'welcome',data:{id:null,name:'Guest',cash:START_CASH}}));
   }
 
-  ws.send(JSON.stringify({type:'init',data:{companies:companies.filter(c=>c._jade?WORMHOLE_OPEN:true).map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector,hq:c.hq||null,jade:c._jade?true:undefined,fundTicker:c._fundTicker?true:undefined,desc:c._fundTicker?(c._fundDesc||''):undefined})).sort((a,b)=>a.name.localeCompare(b.name)),headlines:headlines.slice(-30),leaderboard:_leaderboardSnapshot||getLeaderboard(companies),breaking:(breakingNews?{active:true,text:breakingNews.text,tone:breakingNews.tone}:{active:false}),wormholeOpen:WORMHOLE_OPEN}}));
+  ws.send(JSON.stringify({type:'init',data:{companies:companies.filter(c=>c._jade?WORMHOLE_OPEN:true).map(c=>({id:c.id,name:c.name,symbol:c.symbol,price:c.price,sector:c.sector,hq:c.hq||null,jade:c._jade?true:undefined,fundTicker:c._fundTicker?true:undefined,desc:c._fundTicker?(c._fundDesc||''):undefined})).sort((a,b)=>a.name.localeCompare(b.name)),headlines:wireHeadlines(30),leaderboard:_leaderboardSnapshot||getLeaderboard(companies),breaking:breakingPayload(),wormholeOpen:WORMHOLE_OPEN,reachOpen:REACH_OPEN}}));
 
   ws.on('message',(buf)=>{
     let msg; try{msg=JSON.parse(buf.toString());}catch{return;}
@@ -10814,7 +11339,7 @@ wss.on('connection',(ws,req)=>{
       // 'mathgame' joins them from 1.3.5: the Math Quiz is now the Guild Numeracy
       // Exams, which run on math_start / math_answer and are settled by the server.
       // A cached old client would otherwise open a round it cannot settle.
-      if(ONESHOT_GAMES.has(game) || game === 'mathgame'){
+      if(ONESHOT_GAMES.has(game) || game === 'mathgame' || game === 'sudoku'){
         ws.send(JSON.stringify({ type:'casino_stale', data:{
           msg:'Casino updated — hard-refresh (Ctrl+Shift+R) to load the new version.' } }));
         return;
@@ -11074,6 +11599,104 @@ wss.on('connection',(ws,req)=>{
     }
 
     // ── Exams: sit a paper ───────────────────────────────────────────────────
+    // ── Sudoku: server-authoritative ─────────────────────────────────────────
+    // The server builds the board, holds the solution, counts the hints, owns
+    // the cooldown and computes the payout. The client renders and collects
+    // input. Same shape as the exams, and for the same reason: the previous
+    // version did all of it in the browser and then named its own prize.
+    if(msg.type==='sudoku_lobby'){
+      const now = Date.now();
+      ws.send(JSON.stringify({type:'sudoku_lobby_ack',data:{ ok:true,
+        hintMax: Sudoku.HINT_MAX, hintPenalty: Sudoku.HINT_PENALTY,
+        tiers: Sudoku.DIFFICULTIES.map(d => ({
+          id:d.id, name:d.name, reward:d.reward, cooldownMs:d.cooldownMs,
+          cooldownLeftMs: Math.max(0, d.cooldownMs - (now - getLastCasinoRoundTs(actor.id, d.game))),
+        })) }}));
+      return;
+    }
+
+    if(msg.type==='sudoku_start'){
+      const diff = Sudoku.DIFF_BY_ID.get(Number(msg.diffId));
+      if(!diff){ ws.send(JSON.stringify({type:'sudoku_start_ack',data:{ok:false,error:'Unknown difficulty.'}})); return; }
+      const now = Date.now();
+      // THE COOLDOWN IS CHECKED BEFORE ANYTHING IS GENERATED. Carving a unique
+      // board costs real CPU on this thread, so a client must not be able to
+      // spend it asking for puzzles it is not entitled to.
+      const cdLeft = Math.max(0, diff.cooldownMs - (now - getLastCasinoRoundTs(actor.id, diff.game)));
+      if(cdLeft > 0){
+        ws.send(JSON.stringify({type:'sudoku_start_ack',data:{ok:false,error:'cooldown',cooldownLeftMs:cdLeft}})); return;
+      }
+      // Abandoning resolves the old round rather than locking the tier. There
+      // is no stake to forfeit, and the cooldown already ran from the moment
+      // that round opened, so this cannot be used to reroll for a softer board.
+      const stale = getOpenRoundForGame(actor.id, diff.game);
+      if(stale){ resolveCasinoRound(stale.id, 'abandoned', 0, actor.cash, now); SUDOKU_BOARDS.delete(stale.id); }
+
+      const built = Sudoku.generate(diff.clues);
+      const roundId = uuidv4();
+      openCasinoRound({ id:roundId, playerId:actor.id, game:diff.game, wager:0, cashBefore:actor.cash, openedTs:now });
+      SUDOKU_BOARDS.set(roundId, { playerId:actor.id, diffId:diff.id, game:diff.game,
+        puzzle:built.puzzle, solution:built.solution, grid:built.puzzle.slice(),
+        hints:0, openedTs:now });
+      ws.send(JSON.stringify({type:'sudoku_start_ack',data:{ ok:true, roundId,
+        diffId:diff.id, name:diff.name, puzzle:built.puzzle, clues:built.clues,
+        reward:diff.reward, hintMax:Sudoku.HINT_MAX, cooldownMs:diff.cooldownMs }}));
+      return;
+    }
+
+    if(msg.type==='sudoku_hint'){
+      const roundId = String(msg.roundId||'');
+      const board = SUDOKU_BOARDS.get(roundId);
+      if(!board || board.playerId !== actor.id){
+        ws.send(JSON.stringify({type:'sudoku_hint_ack',data:{ok:false,error:'No open puzzle.'}})); return; }
+      if(board.hints >= Sudoku.HINT_MAX){
+        ws.send(JSON.stringify({type:'sudoku_hint_ack',data:{ok:false,roundId,error:'hint_cap',
+          hints:board.hints, hintMax:Sudoku.HINT_MAX}})); return; }
+      // The player's working grid is whatever they last sent; hints fill from
+      // the server's own copy so a revealed cell cannot be un-revealed by
+      // sending a different grid afterwards.
+      const cell = Sudoku.hintCell(board.puzzle, board.solution, board.grid);
+      if(!cell){ ws.send(JSON.stringify({type:'sudoku_hint_ack',data:{ok:false,roundId,error:'nothing_to_reveal'}})); return; }
+      board.grid[cell.index] = cell.value;
+      board.hints++;
+      const diff = Sudoku.DIFF_BY_ID.get(board.diffId);
+      ws.send(JSON.stringify({type:'sudoku_hint_ack',data:{ ok:true, roundId,
+        index:cell.index, value:cell.value, hints:board.hints, hintMax:Sudoku.HINT_MAX,
+        reward:Sudoku.rewardFor(diff, board.hints) }}));
+      return;
+    }
+
+    if(msg.type==='sudoku_finish'){
+      const roundId = String(msg.roundId||'');
+      const board = SUDOKU_BOARDS.get(roundId);
+      const round = getOpenCasinoRound(roundId, actor.id);
+      if(!board || !round || board.playerId !== actor.id){
+        ws.send(JSON.stringify({type:'sudoku_finish_ack',data:{ok:false,error:'No open puzzle.'}})); return; }
+      const grid = Array.isArray(msg.grid) ? msg.grid.map(v => Number(v)|0) : null;
+      // Cells the server revealed stand regardless of what comes back, so a
+      // hint cannot be taken and then written out of the submission.
+      if(grid) for(let i=0;i<81;i++) if(board.grid[i] !== board.puzzle[i]) grid[i] = board.grid[i];
+
+      if(!grid || !Sudoku.isSolved(board.puzzle, grid)){
+        // A wrong submission does not end the round and reveals nothing about
+        // WHICH cells are wrong, so the server is not usable as an oracle: one
+        // bit per attempt against a board with one completion is worth nothing.
+        ws.send(JSON.stringify({type:'sudoku_finish_ack',data:{ok:true,roundId,correct:false}}));
+        return;
+      }
+      const diff   = Sudoku.DIFF_BY_ID.get(board.diffId);
+      const reward = Sudoku.rewardFor(diff, board.hints);
+      safeAddCash(actor, reward);
+      actor.cash = Math.round(actor.cash*100)/100;
+      savePlayer(actor);
+      resolveCasinoRound(roundId, 'resolved', reward, actor.cash, Date.now());
+      SUDOKU_BOARDS.delete(roundId);
+      ws.send(JSON.stringify({type:'sudoku_finish_ack',data:{ ok:true, roundId, correct:true,
+        reward, hints:board.hints, cash:actor.cash }}));
+      ws.send(JSON.stringify({type:'me',data:{id:actor.id,name:actor.name,cash:actor.cash}}));
+      return;
+    }
+
     if(msg.type==='math_start'){
       const exam = MathTest.EXAM_BY_ID.get(String(msg.examId||''));
       if(!exam){ ws.send(JSON.stringify({type:'math_start_ack',data:{ok:false,error:'Unknown exam.'}})); return; }
@@ -11443,18 +12066,44 @@ wss.on('connection',(ws,req)=>{
       }
 
       // Run end or mid-run ferry (positive): bound the credit to a plausible
-      // yield for the elapsed run time, minus what this run has already banked.
+      // yield for the elapsed run time, minus what has already been banked.
       //
-      // THE BUDGET IS PER RUN, NOT PER MESSAGE. Cargo drones bank mid-run and
-      // there can be many per run. Deleting the run window on the first positive
-      // delta closed the run, so every later message fell through to the
-      // MINING_RUN_FALLBACK_SEC branch and was handed a FRESH FULL CAP. The
-      // ceiling was therefore not the cap, it was the cap times however many
-      // bank messages a client chose to send. Only the end of run settlement
-      // closes the window now.
-      const run      = _miningRuns.get(actor.id);
-      const elapsed  = run ? Math.max(1, (now - run.startTs) / 1000) : MINING_RUN_FALLBACK_SEC;
-      const already  = run ? Number(run.banked || 0) : 0;
+      // THE WINDOW IS NEVER CLOSED, AND THAT IS THE FIX. The previous version
+      // deleted the run on any settlement that was not a cargo drone, and a
+      // message arriving with no open run fell through to a FRESH FULL
+      // MINING_RUN_FALLBACK_SEC BUDGET. So the ceiling was never the cap: it
+      // was the cap times however many settlement messages a client chose to
+      // send, and a client that never sent a loadout at all got the fallback
+      // budget on every single message.
+      //
+      // Traced against the shipped arithmetic: Ƒ36,000 per message, unbounded
+      // in count, throttled only by the 30 message per second connection limit.
+      // That is Ƒ1.08m a second and Ƒ3.9 BILLION an hour, against a war layer
+      // whose entire daily burn is Ƒ240m.
+      //
+      // A PREVIOUS PATCH FIXED HALF OF THIS AND ITS COMMENT CLAIMED THE WHOLE
+      // THING, which is why it survived a later audit: keeping the window open
+      // for cargo drones closed the loadout-bank-bank shape and left both the
+      // second settlement and the no-loadout shape wide open. The comment
+      // described the bug accurately and the code only covered one path to it.
+      //
+      // The window is a TOKEN BUCKET now rather than a session. Budget accrues
+      // at MINING_MAX_YIELD_PER_SEC from the moment the run opened, every
+      // credit is deducted from it, and it is never reset except by a loadout,
+      // which starts a new run from zero elapsed and therefore zero budget.
+      // Message count stops mattering entirely: the ceiling is a RATE.
+      let run = _miningRuns.get(actor.id);
+      if (!run) {
+        // No open run. This is a real case (a restart clears the map mid run)
+        // and it is also exactly the forgery shape, so it is granted ONCE:
+        // seeding the window a fallback-length in the past hands over that one
+        // budget and leaves it spent, rather than handing it over again on
+        // every message that follows.
+        run = { startTs: now - MINING_RUN_FALLBACK_SEC * 1000, banked: 0 };
+        _miningRuns.set(actor.id, run);
+      }
+      const elapsed  = Math.max(1, (now - run.startTs) / 1000);
+      const already  = Number(run.banked || 0);
       const runCap   = Math.min(MINING_MAX_YIELD_PER_SEC * elapsed, MINING_MAX_RUN_BANK);
       const cap      = Math.max(0, runCap - already);
       const credited = Math.round(Math.min(delta, cap) * 100) / 100;
@@ -11462,8 +12111,9 @@ wss.on('connection',(ws,req)=>{
       // A claim sitting just under the ceiling is the shape a tuned forgery
       // makes, and the old log only fired ABOVE the cap, so it was silent.
       const nearCap  = !clamped && cap > 0 && delta > cap * 0.75;
-      if (reason === 'cargo_drone' && run) run.banked = already + credited;
-      else _miningRuns.delete(actor.id);
+      // ALWAYS, for every reason. Deducting only for cargo drones is what left
+      // the settlement path free.
+      run.banked = already + credited;
 
       safeAddCash(actor, credited);
       actor.cash = Math.round(actor.cash * 100) / 100;
@@ -11841,12 +12491,15 @@ wss.on('connection',(ws,req)=>{
           if (!text) return err('Breaking news text is empty.');
           const tone = ['good','bad','neutral'].includes(msg.tone) ? msg.tone : 'bad';
           breakingNews = { text, tone, t: Date.now(), by: actor.name };
-          broadcast({ type: 'breaking_news', data: { active: true, text, tone } });
+          /* Through breakingPayload, so a GM setting a banner mid-firefight does
+             not blank a live Reach line that is still holding the panel. The GM's
+             text is stored and appears the moment the Reach stands down. */
+          broadcast({ type: 'breaking_news', data: breakingPayload() });
           broadcastToAdmins({ type: 'admin_log', data: { action: 'breaking_news_set', by: actor.name, text } });
           ack('✓ Breaking news broadcast to all clients.');
         } else {
           breakingNews = null;
-          broadcast({ type: 'breaking_news', data: { active: false } });
+          broadcast({ type: 'breaking_news', data: breakingPayload() });
           broadcastToAdmins({ type: 'admin_log', data: { action: 'breaking_news_default', by: actor.name } });
           ack('✓ News header reset to default.');
         }
@@ -12050,6 +12703,38 @@ wss.on('connection',(ws,req)=>{
       }
 
       // ── dunce: throw a player into the dunce corner ───────────────────────
+      /* ── Dev assignment for the portraits nobody may choose ─────────────
+         A SOCKET COMMAND, NOT AN HTTP ROUTE, AND THAT WAS THE BUG. The first
+         cut shipped `/api/dev/portrait` with no control anywhere in the panel
+         and a note saying to POST to it - which is a feature that exists and
+         cannot be used, the exact thing controls-check was written to catch and
+         did not, because it only walks socket commands. A route nobody can
+         reach is worse than no route: it reads as done.
+
+         It also has to PUSH. Writing the portrait to the row changes what the
+         next login sends and nothing else, so the target sat there with the old
+         face until they happened to reload - which is what "did not load to the
+         account" looked like from the outside even when the write succeeded.
+         broadcastToPlayer tells them, and the broadcast tells everyone else so
+         the next chat line carries the new face.
+
+         Scrollback keeps the old portrait, because each message froze one at
+         post time. That is deliberate elsewhere in this file and it stays. */
+      else if (cmd === 'dev_portrait') {
+        const target = getPlayerByName(String(msg.targetName || '').trim());
+        if (!target) return err('Player not found.');
+        let pid = String(msg.portrait || '').trim();
+        // 'hive' resolves to whichever Khai'sultull portrait is installed, so
+        // the caller need not know whether the commander art has landed.
+        if (pid === 'hive') pid = hiveLordPortrait();
+        if (pid && !PORTRAIT_SET.has(pid) && !GATED_PORTRAITS[pid])
+          return err('No such portrait: ' + pid);
+        setPlayerPortrait(target.id, pid || null);
+        broadcastToPlayer(target.id, { type: 'portrait_set', data: { portrait: pid || null, by: actor.name } });
+        broadcast({ type: 'player_portrait', data: { id: target.id, name: target.name, portrait: pid || null } });
+        broadcastToAdmins({ type: 'admin_log', data: { action: 'dev_portrait', by: actor.name, target: target.name, portrait: pid || null } });
+        ack('\u2713 ' + target.name + ' now wears ' + (pid || 'no portrait') + '.');
+      }
       else if (cmd === 'dunce') {
         const target = getPlayerByName(String(msg.targetName || '').trim());
         if (!target) return err('Player not found.');
@@ -12465,6 +13150,306 @@ wss.on('connection',(ws,req)=>{
         } catch(e) { err('Feed failed: ' + e.message); }
       }
 
+      // ══ Khai'sultull Reach ════════════════════════════════════════════
+      // Every control here drives state that exists. Wave composition, tempo
+      // and blast tuning are deliberately absent until the war layer ships:
+      // a switch wired to nothing rots untested, which is how the trial gate
+      // sat broken across 120 routes for four patches.
+      else if (cmd === 'reach_get') {
+        // The digest is computed against this actor's last-seen mark and the
+        // mark is moved AFTER, so opening the panel hands back everything since
+        // the previous visit rather than blanking it on arrival.
+        ws.send(JSON.stringify({ type:'reach_state', data: reachPayload(true, null, actor.name) }));
+        if (!msg.peek) reachMarkSeen(actor.name);
+      }
+      else if (cmd === 'reach_passage') {
+        const open = !!msg.open;
+        REACH_OPEN = open;
+        try { setCityKV('passage_khaisultull', open ? '1' : '0'); }
+        catch(e) { console.error('[Reach] persist', e); }
+        broadcast({ type:'passage', data:{ galaxy:'khaisultull', open:REACH_OPEN } });
+        broadcastToAdmins({ type:'admin_log', data:{ action:'reach_passage', by:actor.name, open } });
+        ack(`✓ Reach passage ${open ? 'OPEN' : 'SEALED'}`);
+      }
+      else if (cmd === 'reach_control') {
+        const r = reachSetControl(String(msg.world||''), msg.hive, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('✓ ' + r.msg);
+      }
+      else if (cmd === 'reach_garrison') {
+        const r = reachSetGarrison(String(msg.world||''), msg.value, actor.name);
+        if (!r.ok) return err(r.msg);
+        /* IT BROADCASTS NOW. This replied only to the socket that sent it, which
+           is right for a read and wrong for a write: garrison is what forcesFor
+           reads to decide how hard the brood pushes back, so a GM raising it
+           mid-session changed the fight for himself and for nobody else. Every
+           other reach_* write in this block broadcasts; this one was the single
+           exception and nothing had noticed because the panel it was pressed
+           from is the one place that DID update.
+           The dev echo stays as well: the GM's own payload carries dev-only
+           fields the broadcast deliberately withholds. */
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ws.send(JSON.stringify({ type:'reach_state', data: reachPayload(true) }));
+        ack('✓ ' + r.msg);
+      }
+      // jade_* rather than reach_*: same war, different faction, and the
+      // namespace has to survive Jade eventually pointing at a different enemy.
+      // The envoy's voice in the Reach feed. The chamber floor already carries
+      // Jade, because gmRegents is derived from which chairs sit in regency and
+      // the Jade chair always does. This is the other surface: the war itself,
+      // where the hive lord already speaks through reach_say and Jade had no
+      // way to say anything at all.
+      else if (cmd === 'jade_say') {
+        const text = String(msg.text || '').slice(0, 400).trim();
+        if (!text) return err('Nothing to transmit.');
+        broadcast({ type:'reach_voice', data:{ text, at: Date.now(), voice:'jade' } });
+        try { pushHeadline('JADE CIRCUIT ENVOY: ' + text, 'neutral', '', 'reach', null); }
+        catch(e) { console.error('[Jade] headline', e); }
+        broadcastToAdmins({ type:'admin_log', data:{ action:'jade_say', by:actor.name } });
+        ack('\u2713 Transmitted.');
+      }
+      else if (cmd === 'jade_commit') {
+        const r = reachSetJade(String(msg.world||''), msg.frac, msg.forward, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('\u2713 ' + r.msg);
+      }
+      /* WAR CONTROLS: any faction, any battlefield, either side. Broadcasts for
+         the same reason coalition_enter does - every open battlefield restocks
+         its line from the faction mix, and a client whose mix changed without a
+         payload would keep reinforcing in the old uniform until somebody
+         reopened the panel.
+
+         The entry list is sanitised HERE as well as in setRoster, because this
+         is the socket boundary and setRoster is also reachable from code that
+         has already been trusted. Cheap, and it means a malformed weight cannot
+         reach the model at all. */
+      else if (cmd === 'war_roster') {
+        const raw = Array.isArray(msg.entries) ? msg.entries.slice(0, 6) : [];
+        const entries = raw.map(e => ({
+          fac: String((e && e.fac) || ''),
+          weight: Math.max(0, Math.min(1000, Number((e && e.weight) || 0))),
+        }));
+        const r = reachSetRoster(String(msg.world||''), String(msg.side||''), entries, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        broadcastToAdmins({ type:'admin_log', data:{ action:'war_roster', by:actor.name } });
+        ack('\u2713 ' + r.msg);
+      }
+      else if (cmd === 'war_roster_clear') {
+        const r = reachClearRoster(String(msg.world||''), actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('\u2713 ' + r.msg);
+      }
+      /* Force any faction into the war, or withdraw it. Broadcasts because a
+         declaration changes every uncomposed line in the Reach at once: worlds
+         with no hand-composed roster derive theirs, and the derivation now
+         includes whoever has been declared. */
+      else if (cmd === 'war_belligerent') {
+        const r = reachSetBelligerent(String(msg.fac||''), !!msg.on, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        broadcastToAdmins({ type:'admin_log', data:{ action:'war_belligerent', by:actor.name, fac:String(msg.fac||''), on:!!msg.on } });
+        ack('\u2713 ' + r.msg);
+      }
+      else if (cmd === 'war_forward') {
+        const f = msg.fac === null || msg.fac === undefined ? null : String(msg.fac);
+        const r = reachSetForward(String(msg.world||''), f, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('\u2713 ' + r.msg);
+      }
+      /* THE COALITION ENTERING THE WAR IS ONE SWITCH FOR THE WHOLE REACH, and
+         it is the largest narrative beat the layer has. It carries a headline
+         because a player who is not in the GM panel has no other way to learn
+         that the uniform on their screen changed, and a broadcast because every
+         open battlefield has to restock its line from the new faction mix. */
+      else if (cmd === 'coalition_enter') {
+        const r = reachSetCoalition(!!msg.value, actor.name);
+        if (!r.ok) return err(r.msg);
+        try {
+          pushHeadline(r.joined
+            ? 'THE COALITION HAS ENTERED THE KHAI\u2019SULTULL WAR. Nine seats voted; the line that Jade Circuit opened alone is no longer theirs alone.'
+            : 'THE COALITION HAS WITHDRAWN FROM THE REACH. Jade Circuit holds the line it opened.',
+            r.joined ? 'good' : 'bad', '', 'reach', null);
+        } catch(e) { console.error('[Reach] coalition headline', e); }
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        broadcastToAdmins({ type:'admin_log', data:{ action:'coalition_enter', by:actor.name } });
+        ack('\u2713 ' + r.msg);
+      }
+      else if (cmd === 'reach_raid') {
+        const r = reachRaidFob(String(msg.world||''), msg.fobType, actor.name);
+        if (!r.ok) return err(r.msg);
+        /* WHOSE WORK IT WAS depends on who is in the war. Before the Coalition
+           declares, every work in the Reach was raised by Jade Circuit, and
+           calling it Coalition in a headline is the same error the battlefield
+           was making in paint. */
+        try { pushHeadline(`A ${reachCoalitionInWar() ? 'COALITION' : 'JADE CIRCUIT'} ${String(r.type).toUpperCase()} ON ${String(msg.world||'').toUpperCase()} HAS BEEN OVERRUN. The ground it stood on is still ours.`,
+          'bad', '', 'reach', null); } catch(_) {}
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('\u2713 ' + r.msg);
+      }
+      else if (cmd === 'reach_fob') {
+        const r = reachAddFob(String(msg.world||''), msg.fobType, msg.zone, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('\u2713 ' + r.msg);
+      }
+      else if (cmd === 'reach_vote') {
+        const r = reachOpenVote(String(msg.world||''), msg.kind, msg.question,
+                               msg.options, msg.hours, msg.defaultId, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('\u2713 ' + r.msg);
+      }
+      else if (cmd === 'reach_vote_close') {
+        const r = msg.cancel ? reachCancelVote(String(msg.world||''), actor.name)
+                             : reachResolveVote(String(msg.world||''), actor.name);
+        if (!r.ok) return err(r.msg);
+        if (!msg.cancel) broadcast({ type:'reach_vote_result', data: r });
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('\u2713 ' + (r.outcome || r.msg));
+      }
+      else if (cmd === 'reach_fund') {
+        const r = reachSetFund(String(msg.world||''), msg.value, msg.mode, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('\u2713 ' + r.msg);
+      }
+      else if (cmd === 'reach_waves') {
+        const r = reachSetWaves(String(msg.world||''), msg.value, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('\u2713 ' + r.msg);
+      }
+      else if (cmd === 'reach_reveal') {
+        const r = reachSetRevealed(String(msg.world||''), !!msg.on, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('✓ ' + r.msg);
+      }
+      else if (cmd === 'reach_front') {
+        // force lets the GM open a front out of order. It logs when used, so
+        // an out-of-sequence front shows in the digest rather than looking like
+        // the advance rule failed.
+        const r = reachSetFront(String(msg.world||''), !!msg.on, actor.name, !!msg.force);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('✓ ' + r.msg);
+      }
+      // Announce then execute. First call arms, second within 20s commits.
+      else if (cmd === 'reach_flip') {
+        const world = String(msg.world||''), side = msg.side === 'coalition' ? 'coalition' : 'hive';
+        const tag = 'flip:' + side;
+        if (!reachIsArmed(tag, world)) {
+          const r = reachArm(tag, world, actor.name);
+          ws.send(JSON.stringify({ type:'reach_state', data: reachPayload(true) }));
+          return ack('⚠ ' + r.msg, '#f0b454');
+        }
+        const r = reachFlip(world, side, actor.name);
+        if (!r.ok) return err(r.msg);
+        payReachRefunds(r.refunds, 'The world changed hands before the window closed.');
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        broadcastToAdmins({ type:'admin_log', data:{ action:'reach_flip', by:actor.name, world, side } });
+        ack('✓ ' + r.msg);
+      }
+      else if (cmd === 'reach_disarm') {
+        reachDisarm();
+        ws.send(JSON.stringify({ type:'reach_state', data: reachPayload(true) }));
+        ack('✓ Disarmed.');
+      }
+      // Khai'sultull voice. Rides the existing news pipe rather than inventing
+      // a channel: it is already broadcast, already persisted and already on
+      // the OBS crawl.
+      else if (cmd === 'reach_say') {
+        const text = String(msg.text || '').slice(0, 400).trim();
+        if (!text) return err('Nothing to transmit.');
+        broadcast({ type:'reach_voice', data:{ text, at: Date.now() } });
+        try { pushHeadline("KHAI'SULTULL TRANSLATION LAYER: " + text, 'bad', '', 'reach', null); }
+        catch(e) { console.error('[Reach] headline', e); }
+        broadcastToAdmins({ type:'admin_log', data:{ action:'reach_say', by:actor.name } });
+        ack('✓ Transmitted.');
+      }
+      else if (cmd === 'reach_demand') {
+        const r = reachPostDemand(msg.kind, msg.text, msg.hours, actor.name);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('✓ ' + r.msg);
+      }
+      else if (cmd === 'reach_demand_answer') {
+        const r = reachAnswerDemand(msg.answer, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('✓ ' + r.msg);
+      }
+      else if (cmd === 'reach_zone') {
+        const r = reachSetZone(String(msg.world||''), Number(msg.zone)|0, {
+          hive: msg.hive, intensity: msg.intensity, live: msg.live,
+        }, actor.name);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('✓ ' + r.msg);
+      }
+      // Push windows. The GM opens them, deliberately: a window that opens on a
+      // schedule fires when nobody is watching, and the whole mechanic depends
+      // on people converging on the same contest at the same time.
+      else if (cmd === 'reach_window') {
+        // force runs past the wave-forming gate. It is a separate flag rather
+        // than the absence of one so that going past the pace shows up in the
+        // log as a decision instead of looking like the normal path.
+        const r = reachOpenWindow(String(msg.world||''), Number(msg.zone)|0, msg.minutes, actor.name, !!msg.force);
+        if (!r.ok) return err(r.msg);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        try { pushHeadline(`A PUSH WINDOW IS OPEN IN THE REACH. ${PUSH_MIN_FUNDERS} separate funders minimum, Ƒ${PUSH_PLAYER_CAP.toLocaleString()} cap each.`, 'neutral', '', 'reach', null); } catch(_) {}
+        ack('✓ ' + r.msg);
+      }
+      else if (cmd === 'reach_window_close') {
+        const r = reachCancelWindow(String(msg.world||''), Number(msg.zone)|0, actor.name);
+        if (!r.ok) return err(r.msg);
+        payReachRefunds(r.refunds, 'The window was pulled before it closed.');
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('✓ ' + r.msg);
+      }
+      else if (cmd === 'reach_envoy') {
+        const r = reachSetEnvoy(!!msg.on, actor.name);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('✓ ' + r.msg);
+      }
+      else if (cmd === 'reach_peace') {
+        const r = reachSetPeace(msg.value, actor.name);
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('✓ ' + r.msg);
+      }
+      else if (cmd === 'reach_accord') {
+        if (msg.action === 'break') {
+          const r = reachBreakAccord(actor.name);
+          if (!r.ok) return err(r.msg);
+          broadcast({ type:'reach_state', data: reachPayload(false) });
+          return ack('✓ ' + r.msg);
+        }
+        if (!reachIsArmed('accord', '*')) {
+          const r = reachArm('accord', '*', actor.name);
+          ws.send(JSON.stringify({ type:'reach_state', data: reachPayload(true) }));
+          return ack('⚠ ' + r.msg, '#f0b454');
+        }
+        const r = reachSignAccord(msg.terms, actor.name);
+        payReachRefunds(r.refunds, 'An accord was signed before the window closed.');
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        broadcastToAdmins({ type:'admin_log', data:{ action:'reach_accord', by:actor.name } });
+        ack('✓ ' + r.msg);
+      }
+      else if (cmd === 'reach_reset') {
+        if (!reachIsArmed('reset', '*')) {
+          const r = reachArm('reset', '*', actor.name);
+          return ack('⚠ ' + r.msg, '#f0b454');
+        }
+        const r = resetReach(actor.name);
+        payReachRefunds(r.refunds, 'The Reach was reset before the window closed.');
+        broadcast({ type:'reach_state', data: reachPayload(false) });
+        ack('✓ ' + r.msg);
+      }
+
             else {
         err(`Unknown god_cmd: ${cmd}`);
       }
@@ -12530,16 +13515,32 @@ wss.on('connection',(ws,req)=>{
       // the equipped title is one the player holds. Equipped label resolves it directly.
       const _giftEquipped = equippedGiftOf(actor.id, actor.title);
       const _giftActive = !!_giftEquipped;
-      // Badge: Owner→★, Dev→null, Cyborg+CEO→♛, Cyborg→🤖, gifted(equipped)→gift badge, else→tier badge
-      const chatBadge = _isOwner ? '★' : (_isDev ? null : (_isCyborg ? (actor.patreon_tier === 3 ? '♛' : '🤖') : ((_giftActive && _giftEquipped.badge) || tier?.badge || null)));
-      // Color: President→blue, Owner→orange, Dev→null,
-      //   Escaped+Syndicate→red, Escaped+other→null (purple gone),
-      //   Cyborg+Guild→green, Cyborg(normal)→purple, gifted title (equipped)→gift color, else→tier color
+      // AN EQUIPPED GIFTED TITLE OUTRANKS THE DEV DEFAULT, and that ordering is
+      // the whole point rather than an exception carved for one account. The dev
+      // colour is a DEFAULT costume for an operator who has not chosen one; a
+      // gifted title is a costume somebody deliberately put on. Zharkofin exists
+      // to be the Khai'sultull speaking, and a GM voice that renders as a dev
+      // account breaks the fiction the account was made for.
+      //
+      // The usual objection is that dev colour is an identity signal players
+      // rely on. It inverts here: the marker is what is wrong, because the
+      // account is a character, and equipping a gifted title is a deliberate act
+      // an operator who wants the gear badge simply does not perform.
+      //
+      // Badge: Owner→★, gifted(equipped)→gift badge, Dev→null, Cyborg+CEO→♛,
+      //   Cyborg→🤖, else→tier badge
+      const chatBadge = _isOwner ? '★'
+        : ((_giftActive && _giftEquipped.badge) ? _giftEquipped.badge
+          : (_isDev ? null : (_isCyborg ? (actor.patreon_tier === 3 ? '♛' : '🤖') : (tier?.badge || null))));
+      // Color: President→blue, seat→seat, Owner→orange, gifted title (equipped)→gift
+      //   color, Dev→null, Escaped+Syndicate→red, Escaped+other→null,
+      //   Cyborg+Guild→green, Cyborg(normal)→purple, else→tier color
       let chatColor;
       const _seatColor = councilSeatChatColor(actor.id);
       if (_isPresident) chatColor = '#00bfff';
       else if (_seatColor) chatColor = _seatColor;
       else if (_isOwner) chatColor = '#ff6a00';
+      else if (_giftActive && _giftEquipped.color) chatColor = _giftEquipped.color;
       else if (_isDev) chatColor = null;
       else if (actor.title === DEBTOR_TITLE) chatColor = '#6b4423'; // poop brown when the Debtor brand is worn
       else if (_isEscaped) {
@@ -12547,7 +13548,6 @@ wss.on('connection',(ws,req)=>{
         chatColor = pFaction === 'syndicate' ? '#e74c3c' : null;
       }
       else if (_isCyborg) chatColor = actor.patreon_tier === 2 ? '#2ecc71' : '#9b59b6';
-      else if (_giftActive) chatColor = _giftEquipped.color;
       else chatColor = tier?.chatColor || null;
       const chatText = channel==='unmod' ? rawText : text;
       // For all channels (except dunce), include room number (1-15) for multi-room support
@@ -12589,18 +13589,25 @@ wss.on('connection',(ws,req)=>{
       const _wEscaped=_wCyborg&&isVoidPresidentEscaped(actor.id);
       const _wGiftEquipped=equippedGiftOf(actor.id, actor.title);
       const _wGiftActive=!!_wGiftEquipped;
-      const wBadge=_isOwner?'★':(_isDev?null:(_wCyborg?(actor.patreon_tier===3?'♛':'🤖'):((_wGiftActive&&_wGiftEquipped.badge)||TIERS[actor.patreon_tier||0]?.badge||null)));
+      // Same ordering as the chat chain above. A character who is that character
+      // in the room and a dev account in a whisper is two identities for one
+      // person, which is exactly the seam a GM gets caught in.
+      const wBadge=_isOwner?'★':((_wGiftActive&&_wGiftEquipped.badge)?_wGiftEquipped.badge:(_isDev?null:(_wCyborg?(actor.patreon_tier===3?'♛':'🤖'):(TIERS[actor.patreon_tier||0]?.badge||null))));
       let wColor;
       const _wSeatColor = councilSeatChatColor(actor.id);
       if(_isPres) wColor='#00bfff';
       else if(_wSeatColor) wColor=_wSeatColor;
       else if(_isOwner) wColor='#ff6a00';
+      else if(_wGiftActive && _wGiftEquipped.color) wColor=_wGiftEquipped.color;
       else if(_isDev) wColor=null;
       else if(_wEscaped){ const wf=getPlayerFaction(actor.id); wColor=wf==='syndicate'?'#e74c3c':null; }
       else if(_wCyborg) wColor=actor.patreon_tier===2?'#2ecc71':'#9b59b6';
-      else if(_wGiftActive) wColor=_wGiftEquipped.color;
       else wColor=TIERS[actor.patreon_tier||0]?.chatColor||null;
-      const base={id:uuidv4(),t:Date.now(),from:actor.name,to:target.name,text:wText,badge:wBadge,color:wColor,is_prime:_isOwner,is_dev:_isDev};
+      // giftTitle rides along so the CLIENT can stand down its own dev override.
+      // Fixing only the server changes nothing visible: core.js repaints
+      // _DEV_COLOR over whatever colour arrives whenever is_dev is set, so both
+      // layers have to agree or the fix is invisible.
+      const base={id:uuidv4(),t:Date.now(),from:actor.name,to:target.name,text:wText,badge:wBadge,color:wColor,is_prime:_isOwner,is_dev:_isDev,giftTitle:(_wGiftActive&&_wGiftEquipped.label)||null};
       broadcastToPlayer(target.id,{type:'whisper',data:{...base,sent:false}});
       ws.send(JSON.stringify({type:'whisper',data:{...base,sent:true}}));
     }
@@ -12639,7 +13646,10 @@ wss.on('connection',(ws,req)=>{
       // CAN run entirely inside a sealed Circuit, which is the same access the
       // passage is supposed to deny. Runs already in flight are left alone,
       // matching how the commodity halt treats in-transit cargo.
-      if (jadeSealed(from) || jadeSealed(to)) {
+      /* THE ACTOR IS PASSED HERE. A smuggling run is exactly the kind of thing a
+         GM needs to set going inside a sealed Circuit to test a lane before
+         anyone else can reach it. */
+      if (jadeSealed(from, actor) || jadeSealed(to, actor)) {
         ws.send(JSON.stringify({ type:'smuggling_error', error:'The Jade passage is sealed. No run may set out inside the Circuit.' })); return;
       }
       const cargo = CARGO_TYPES.find(c => c.id === cargoId);
@@ -12691,7 +13701,9 @@ wss.on('connection',(ws,req)=>{
       }
       const lane = findLane(from, to);
       if (!lane) { ws.send(JSON.stringify({ type:'shipping_error', error:'No lane exists' })); return; }
-      if (jadeSealed(from) || jadeSealed(to)) {
+      // Same exception as smuggling above, and for the same reason: a lane has
+      // to be runnable before the passage opens or it ships untested.
+      if (jadeSealed(from, actor) || jadeSealed(to, actor)) {
         ws.send(JSON.stringify({ type:'shipping_error', error:'The Jade passage is sealed. No freight moves inside the Circuit.' })); return;
       }
 

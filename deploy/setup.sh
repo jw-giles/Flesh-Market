@@ -11,7 +11,7 @@
 #    1. Updates system packages
 #    2. Installs Node.js 22, PM2, nginx, certbot
 #    3. Configures firewall (ufw)
-#    4. Copies FleshMarket files to /opt/fleshmarket
+#    4. Copies FleshMarket files to $FM_APP_DIR (default /root/Flesh-Market)
 #    5. Creates a dedicated 'fm' system user
 #    6. Sets up .env, seeds dev accounts
 #    7. Creates nginx reverse proxy config
@@ -32,7 +32,9 @@ hr()    { echo -e "${CYAN}──────────────────
 # ── Args ──────────────────────────────────────────────────────────────────────
 DOMAIN="${1:-}"
 EMAIL="${2:-}"
-APP_DIR="/opt/fleshmarket"
+# Default matches where the live server actually runs. It was /opt/fleshmarket,
+# which nothing has ever served from.
+APP_DIR="${FM_APP_DIR:-/root/Flesh-Market}"
 FM_USER="fm"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

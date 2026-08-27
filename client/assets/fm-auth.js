@@ -216,10 +216,16 @@
       try {
         const data = await apiPost('/api/login', {name, password:pass});
         if (data.ok) {
+          const wasTrial = !!(window.FM_GUEST && window.FM_GUEST.active);
           saveSession(data.token, data.name);
           window.FM_TOKEN = data.token;
+          leaveTrial(data);
           closeModal();
-          emit({name:data.name, token:data.token, cash:data.cash, faction:data.faction||null, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_prime:!!(data.is_prime)});
+          // Coming from a trial, every panel that cached a guest flag on boot
+          // is now wrong, exactly as it is after an upgrade. Same fix: reload
+          // against a session that is already saved.
+          if (wasTrial) { location.reload(); return; }
+          emit({name:data.name, token:data.token, cash:data.cash, faction:data.faction||null, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_prime:!!(data.is_prime), is_guest:false, guest_locked:false});
         } else {
           const msgs = {invalid_credentials:(window.t?window.t('auth.wrongCredentials','Wrong name or password.'):'Wrong name or password.'),missing_fields:(window.t?window.t('auth.fillAllFields','Fill in all fields.'):'Fill in all fields.')};
           setHint(ui.hint, msgs[data.error]||data.error||(window.t?window.t('auth.loginFailed','Login failed.'):'Login failed.'),'err');
@@ -266,10 +272,13 @@
       try {
         const data = await apiPost('/api/register', {name, password:pass});
         if (data.ok) {
+          const wasTrial = !!(window.FM_GUEST && window.FM_GUEST.active);
           saveSession(data.token, data.name);
           window.FM_TOKEN = data.token;
+          leaveTrial(data);
           closeModal();
-          emit({name:data.name, token:data.token, cash:data.cash, faction:data.faction||null, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_prime:!!(data.is_prime)});
+          if (wasTrial) { location.reload(); return; }
+          emit({name:data.name, token:data.token, cash:data.cash, faction:data.faction||null, patreon_tier:data.patreon_tier||0, is_dev:!!(data.is_dev), is_admin:!!(data.is_admin), is_prime:!!(data.is_prime), is_guest:false, guest_locked:false});
         } else {
           const msgs = {name_taken:(window.t?window.t('auth.nameTaken','That name is taken.'):'That name is taken.'),password_too_short:(window.t?window.t('auth.passwordTooShort','Password too short (min 4).'):'Password too short (min 4).'),name_required:(window.t?window.t('auth.nameRequired','Name required.'):'Name required.')};
           setHint(ui.hint, msgs[data.error]||data.error||(window.t?window.t('auth.registrationFailed','Registration failed.'):'Registration failed.'),'err');
@@ -303,6 +312,21 @@
     syncClaimButton();
     if (window.FM_GUEST.active) renderGuestBar();
     if (window.FM_GUEST.locked) showLockScreen();
+  }
+
+  // Leaving a trial session behind. Boot puts a visitor on a trial and sets
+  // FM_GUEST.active, and NOTHING in the interactive login or register handlers
+  // ever cleared it: signing into a permanent account from a trial session left
+  // the guest bar, the Claim Account button and FM_Auth.isGuest() all still
+  // reporting a trial. The upgrade path already did this teardown and said in
+  // its own comment why the reload is necessary; login and register had the
+  // identical problem and none of the handling.
+  function leaveTrial(data) {
+    setGuestState(data && data.is_guest !== undefined
+      ? data
+      : { is_guest:false, guest_locked:false, guest_expires_at:null, guest_days_left:null });
+    const gb = document.getElementById('fm-guest-bar'); if (gb) gb.remove();
+    const lk = document.getElementById('fm-guest-lock'); if (lk) lk.remove();
   }
 
   // The header Claim Account button. Lives in index.html hidden, because the

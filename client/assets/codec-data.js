@@ -11,6 +11,7 @@ window.FM_CODEC = {
     void:     { color:'#9b59b6', sys:'VOID COLLECTIVE NODE' },
     guild:    { color:'#2ecc71', sys:'GUILD LEDGERNET' },
     flesh:    { color:'#f0b454', sys:'FLESH STATION CORE' },
+    khaisultull:{ color:'#c2551f', sys:'TRANSLATION LAYER' },
   },
   // Order here is the order they appear in the contacts list.
   reps: [
@@ -565,6 +566,160 @@ window.FM_CODEC = {
           ca1:{ text:"Why not, 99% of gamblers quit just before hitting big. You should try the wheel sometime, you look lucky.", options:[
             { text:"I have more questions.", next:'root' },
             { text:"That's all for now.", end:true },
+          ]},
+        }
+      }
+    },
+    {
+      id:'khaisultull', name:"Envoy of the Ninth Concession", faction:'khaisultull',
+      portrait:"data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 120'%3E%3Crect width='100' height='120' fill='%230b0705'/%3E%3Cg stroke='%23c2551f' fill='none' stroke-width='1.6' opacity='0.85'%3E%3Cpath d='M22 40 H78 M22 40 V88 M78 40 V88 M22 88 H78'/%3E%3Cpath d='M22 40 L78 88 M78 40 L22 88' opacity='0.35'/%3E%3C/g%3E%3Cg fill='%23c2551f' opacity='0.55'%3E%3Crect x='0' y='16' width='100' height='2'/%3E%3Crect x='0' y='58' width='100' height='2'/%3E%3Crect x='0' y='101' width='100' height='2'/%3E%3C/g%3E%3Ctext x='50' y='68' text-anchor='middle' font-family='monospace' font-size='9' fill='%23f0b454' letter-spacing='2'%3ENO IMAGE%3C/text%3E%3C/svg%3E",
+      role:"Khai'sultull Translation Layer", enabled:false,
+      // Gated on live state, not on this file. The GM opens the line from the
+      // Prawn War panel; shipped data is not a runtime control.
+      gate:function(){ return !!(window._REACH_ENVOY); },
+      blurb:"Audio only, and the audio is not theirs. The Khai'sultull built the translation themselves, from our broadcasts, without asking and without telling us they had. Every word you hear is a word they decided we would understand. Nobody has seen what is on the other end of the line. Coalition signals has audited the layer four times and found no errors, which they have written up as a finding rather than a reassurance.",
+      ver:'v1.00',
+      quests:[],
+      tree:{
+        start:'open',
+        nodes:{
+          open:{ text:"You are on the line. Speak plainly. The layer renders idiom badly and I would rather not guess at you, {name}.", options:[
+            { text:"I have questions.", next:'root' },
+            { text:"What do you want from us?", next:'want1' },
+          ]},
+          root:{ text:"Ask. I have been assigned to answer, which is not the same as being permitted to.", options:[
+            { text:"What do we call you?", next:'name1' },
+            { text:"How are you speaking our language?", next:'trans1' },
+            { text:"You have been in our systems.", next:'hack1' },
+            { text:"What is it you actually want?", next:'want1' },
+            { text:"Why these worlds and not others?", next:'worlds1' },
+            { text:"Is there a version of this that ends?", next:'peace1' },
+            { text:"That is all.", end:true },
+          ]},
+
+          // ── A1: the name ──
+          name1:{ text:"Your people have settled on Prawns. I am told it refers to an animal you eat. The layer renders it accurately, which I insisted on.", options:[
+            { text:"That was not meant kindly.", next:'name2' },
+            { text:"What do you call yourselves?", next:'name3' },
+          ]},
+          name2:{ text:"No. It was meant to make us smaller before anyone had to decide what to do about us. I do not object. A thing you have named is a thing you have already agreed exists, and six months ago your Coalition was still calling us an instrument error.", options:[
+            { text:"What do you call yourselves?", next:'name3' },
+            { text:"Something else.", next:'root' },
+          ]},
+          name3:{ text:"Khai'sultull. The layer will not render what it means. Not because it is forbidden. Because the nearest structure in your language is a debt schedule, and I am told that lands wrong.", options:[
+            { text:"It lands about right, actually.", next:'name4' },
+            { text:"Something else.", next:'root' },
+          ]},
+          name4:{ text:"Then we understand each other better than either government would prefer.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+
+          // ── A2: the translation layer ──
+          trans1:{ text:"We built it. From your commercial broadcasts, mostly. Eleven years of market open bells, dividend announcements and casino advertising. That is the corpus. That is what we learned you from.", options:[
+            { text:"Eleven years. The passage opened this year.", next:'trans2' },
+            { text:"So you learned us from our worst material.", next:'trans3' },
+          ]},
+          trans2:{ text:"Yes.", options:[
+            { text:"Explain that.", next:'trans2b' },
+            { text:"Something else.", next:'root' },
+          ]},
+          trans2b:{ text:"The passage opened for you this year. I will not tell you when it opened. I will tell you that your Limbosis grid has been aimed at our approach for longer than your current administration has existed, and that nobody who authorised it has ever said out loud what it was aimed at.", options:[
+            { text:"You are saying the Coalition knew.", next:'trans2c' },
+            { text:"Something else.", next:'root' },
+          ]},
+          trans2c:{ text:"I am saying the grid points somewhere. I am not in a position to know who decided that, and you are not in a position to ask them. We are both working from the same document, {name}, and neither of us wrote it.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          trans3:{ text:"Your worst material is your most honest material. An advertisement tells you what a people will admit to wanting. Your fiction would have taken longer and taught us less.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+
+          // ── A3: the intrusions ──
+          hack1:{ text:"We read your Coalition and we read the Void Collective. I am not going to perform surprise at being asked.", options:[
+            { text:"Why the Void Collective? They are not fighting you.", next:'hack2' },
+            { text:"Do you understand what you have taken?", next:'hack3' },
+          ]},
+          hack2:{ text:"Because the Void Collective reads everyone and writes nothing down, and a people who keep no records keep them somewhere. Their surveillance is the most complete account of your species in existence. We did not have to compile it. We only had to find where they put it.", options:[
+            { text:"Do they know?", next:'hack2b' },
+            { text:"Something else.", next:'root' },
+          ]},
+          hack2b:{ text:"Their representative on your station has been telling anyone who will sit still that the intrusions stopped when he arrived. He believes it. That belief is the most useful thing he has ever done for us.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          hack3:{ text:"Ledgers. Shipping manifests. The Guild's tariff schedule, which was the least protected and the most informative. We are not interested in your weapons. We are interested in what your weapons cost and who is late paying for them.", options:[
+            { text:"That is worse.", next:'hack4' },
+            { text:"Something else.", next:'root' },
+          ]},
+          hack4:{ text:"It is more useful. Whether it is worse is a question for whoever is holding the invoice.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+
+          // ── A4: demands, wired to whatever the GM has posted ──
+          want1:{ text:"The standing position is this. {demand}", options:[
+            { text:"And if we refuse?", next:'want2' },
+            { text:"Who decided that?", next:'want3' },
+            { text:"Something else.", next:'root' },
+          ]},
+          want2:{ text:"Then the front stays where it is and both of us keep paying for it. I want to be precise, because your negotiators keep hearing a threat and I am describing an invoice. Nothing new happens if you refuse. That is the problem with it.", options:[
+            { text:"Who is billing whom here?", next:'want3' },
+            { text:"Something else.", next:'root' },
+          ]},
+          want3:{ text:"Not me. I am the Ninth Concession, {name}. There are at least eight ahead of me, and I was not told what they were. My brood was assigned this front and given a number, and the number is what I am permitted to say to you.", options:[
+            { text:"That sounds familiar.", next:'want4' },
+            { text:"Something else.", next:'root' },
+          ]},
+          want4:{ text:"I would expect so. Your Merchant Guild sends people who cannot approve anything either. We recognised the shape of your delegation immediately. It was the first thing about you we understood.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+
+          // ── A5: the worlds ──
+          worlds1:{ text:"You have noticed we defend worthless ground and give up good ground. You have written it up as poor doctrine, I assume.", options:[
+            { text:"It has been noticed.", next:'worlds2' },
+            { text:"Something else.", next:'root' },
+          ]},
+          worlds2:{ text:"The dust worlds are not for holding. They are for the front to exist on. A front that exists can be supplied, and a supply run can be priced, and a price is the only thing either of our governments has ever agreed to look at directly.", options:[
+            { text:"You are farming this war.", next:'worlds3' },
+            { text:"Something else.", next:'root' },
+          ]},
+          worlds3:{ text:"So is your Guild. Ask them what wartime freight clears at. Then ask them which of the sixteen prior wars they lost money on.", options:[
+            { text:"Fifteen. There have been fifteen.", next:'worlds4' },
+            { text:"Something else.", next:'root' },
+          ]},
+          worlds4:{ text:"Yes. Fifteen.", options:[
+            { text:"You said sixteen.", next:'worlds5' },
+            { text:"Something else.", next:'root' },
+          ]},
+          worlds5:{ text:"The layer renders numbers exactly. I will not be correcting it.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+
+          // ── A6: peace ──
+          peace1:{ text:"There is. It is available now and it has been available since the first day. Nobody on either side has wanted it badly enough to say so where a second person could hear.", options:[
+            { text:"What would it cost?", next:'peace2' },
+            { text:"Why has nobody said it?", next:'peace3' },
+          ]},
+          peace2:{ text:"You would keep what you hold. We would keep what we hold. Everything currently under contest stays where it stops. And something moves toward us that is not territory: a lane, a rate, a seat. I am not authorised to name which. I am authorised to say that it is small, and that the smallness is the problem.", options:[
+            { text:"Why is small a problem?", next:'peace2b' },
+            { text:"Something else.", next:'root' },
+          ]},
+          peace2b:{ text:"Because a large concession can be defended to your Council as a defeat forced on you. A small one has to be defended as a choice. Your people would rather lose a world than explain a tariff.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
+          ]},
+          peace3:{ text:"Because the war is currently profitable to four parties and expensive to two, and the four are the ones with representatives on your station. I am not being cynical, {name}. I am reading you the attendance list.", options:[
+            { text:"Who are the two?", next:'peace4' },
+            { text:"Something else.", next:'root' },
+          ]},
+          peace4:{ text:"The people on the ground. Ours and yours. The layer renders both as the same word and I have stopped asking it to distinguish them.", options:[
+            { text:"I have more questions.", next:'root' },
+            { text:"That is all.", end:true },
           ]},
         }
       }

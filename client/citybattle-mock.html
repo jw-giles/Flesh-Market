@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>FleshMarket - city battlefield bench</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  CITY BATTLEFIELD BENCH.  client/citybattle-mock.html
+                        -> http://<host>/citybattle-mock.html
+
+  IT DRIVES assets/city-battle.js, THE SHIPPED MODULE, not a copy of it. The
+  same file the client lazy-loads behind the galaxy bundle and opens from a
+  district's WATCH ENGAGEMENT button. This page exists to work on the camera,
+  the tables and the ground without opening the game and finding a contested
+  colony first; it is not a second renderer.
+
+  A BENCH ON THE SAME TERMS AS battle-test.html, and for the reason its own
+  header already gives: a bench that contains its own copy of the renderer
+  drifts from the real one and starts lying the first time either is touched.
+
+  So this page loads assets/planet-palette.js, assets/factions.js and
+  assets/coalition-sprites.js with plain script tags, and citybattle-mock.js
+  reads them. The uniforms, the optic and accent remaps, the skin policies, the
+  per-sheet geometry, the frame counts and the tint loop itself are the shipped
+  ones. Change a faction row and this page changes with it.
+
+  WHAT IS NEW HERE, and therefore what a port to reach-battle.js costs:
+
+    1. genTowers    a wireframe skyline in the slot genSpires occupies. The far
+                    scenery on a Coalition world is a city, not a hive.
+    2. MAT          a material PER FACE. paintFace has one ramp, far -> rock,
+                    which is right where every surface is the same dead mineral
+                    and wrong the moment a kerb stands next to a hedge.
+    3. the street   bandPass with a clip, plus kerb and lane quads. New geometry
+                    class, and the one with a real per-frame cost.
+    4. urban cover  barriers, planters, lamps and blocks alongside the meshes. A
+                    feature still has a footprint, a height and cover slots and
+                    the AI still reads all three; only what is DRAWN moved.
+    5. FLORA urban  a climate row that finally spends the pack's trees. They
+                    have been baked since the nature pass and no world has ever
+                    named them, because the only battlefield is a brood world.
+
+  IT SITS BESIDE index.html, so assets/space/** resolves exactly as it does in
+  the client. A sheet missing on a server is missing here too, which makes this
+  a deploy check as well as a design bench.
+
+  NOTHING IS TOUCHED. No socket, no game state, no writes. The simulation is
+  local and decides nothing, same rule as the renderer it previews.
+
+  HEADLESS: tools/citybattle-harness.mjs drives this same renderer under
+  node-canvas against the same three modules and writes frames, so the bench
+  can be regression checked without a browser.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  html,body{margin:0;height:100%;background:#05070c;overflow:hidden;
+    font-family:ui-monospace,Menlo,Consolas,monospace;color:#9fb4c8}
+  #wrap{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%}
+  #hud{position:fixed;top:10px;left:10px;width:252px;background:rgba(6,10,16,.82);
+    border:1px solid #16324a;padding:10px 11px;font-size:11px;line-height:1.55;
+    letter-spacing:.02em;user-select:none}
+  #hud h1{margin:0 0 8px;font-size:11px;letter-spacing:.14em;color:#5fa8e8;font-weight:600}
+  .row{display:flex;justify-content:space-between;gap:8px;margin:3px 0}
+  .row label{color:#6b8299}
+  select,button,input[type=range]{background:#0a1420;color:#9fb4c8;border:1px solid #1d3d59;
+    font:inherit;font-size:11px;padding:2px 4px}
+  button{cursor:pointer}
+  button:hover{border-color:#3d7fb5;color:#cfe3f5}
+  button.on{border-color:#3d7fb5;color:#8fd0ff}
+  hr{border:0;border-top:1px solid #14283c;margin:8px 0}
+  #warn{color:#e0803c;min-height:15px}
+  #axis{color:#6b8299}
+  #axis.bad{color:#e2564a}
+  .btns{display:flex;gap:4px;flex-wrap:wrap}
+  #help{position:fixed;bottom:10px;left:10px;font-size:10px;color:#4a6076;
+    background:rgba(6,10,16,.7);padding:6px 9px;border:1px solid #12283c}
+  #fatal{position:fixed;inset:0;display:none;place-items:center;text-align:center;
+    background:#05070c;color:#e2564a;font-size:13px;line-height:2;padding:40px;
+    white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cbCanvas"></canvas></div>
+<div id="fatal"></div>
+
+<div id="hud">
+  <h1>CITY BATTLEFIELD // BENCH</h1>
+  <div class="row"><label>front</label><select id="fZone" style="max-width:150px"></select></div>
+  <div class="row"><label></label><span class="btns">
+    <button id="bPrev">&lt;</button><button id="bNext">&gt;</button>
+    <button id="bSweep">sweep all</button></span></div>
+  <div class="row"><label>world</label><span id="sWorld" style="color:#6fa8d0">-</span></div>
+  <div class="row"><label>arena</label><span id="sArena" style="color:#6fa8d0">-</span></div>
+  <hr>
+  <div class="row"><label>home</label><select id="fHome"></select></div>
+  <div class="row"><label>away</label><select id="fAway"></select></div>
+  <div id="warn"></div>
+  <hr>
+  <div class="row"><label>camera</label>
+    <span class="btns">
+      <button data-cam="flank" class="on">locked</button>
+      <button data-cam="cine">cine</button>
+      <button data-cam="orbit">orbit</button>
+      <button data-cam="free">free</button>
+    </span>
+  </div>
+  <div class="row"><label>off-axis</label><span id="axis">0&deg;</span></div>
+  <hr>
+  <div class="row"><label>per side</label><input id="rN" type="range" min="8" max="70" value="26" style="width:110px"></div>
+  <div class="row"><label>flora</label><input id="rF" type="range" min="0" max="600" value="260" style="width:110px"></div>
+  <div class="row"><label>view / fog</label><input id="rR" type="range" min="60" max="320" value="150" style="width:110px"></div>
+  <div class="row"><label>radius</label><span id="sR">150 m</span></div>
+  <div class="row"><label>road wear</label><input id="rW" type="range" min="0" max="100" value="0" style="width:110px"></div>
+  <div class="row"><label>ground tex</label><input id="rG" type="range" min="0" max="100" value="0" style="width:110px"></div>
+  <div class="row"><label>tile size</label><input id="rT" type="range" min="5" max="120" value="30" style="width:110px"></div>
+  <div class="row"><label>patch</label><span id="sT" style="color:#6fa8d0">off</span></div>
+  <div class="row"><label></label>
+    <span class="btns">
+      <button id="bSky">skyline</button>
+      <button id="bStyle" class="on">model</button>
+      <button id="bRe">reinforce</button>
+      <button id="bPause">pause</button>
+    </span>
+  </div>
+  <div class="row"><label></label><span class="btns"><button id="bSeed">reseed</button><button id="bShot">png</button></span></div>
+  <hr>
+  <div class="row"><label>alive</label><span id="sAlive">-</span></div>
+  <div class="row"><label>killed</label><span id="sKill">-</span></div>
+  <div class="row"><label>quad/frame</label><span id="sQ">-</span></div>
+  <div class="row"><label>fps</label><span id="sFps">-</span></div>
+  <div class="row"><label>build</label><span id="sBuild">-</span></div>
+  <div class="row"><label>cam</label><span id="sCam" style="color:#6fa8d0;font-size:10px">-</span></div>
+</div>
+
+<div id="help">free cam: drag to look &middot; W/A/S/D move &middot; Q/E up-down &middot; wheel speed</div>
+
+<!-- The shipped modules, in the order the client loads them. Not copies.
+
+     THE ?v= IS NOT DECORATION. index.html loads these through lazyLoad(), which
+     busts with Date.now() and therefore never serves a stale script. A plain
+     script tag on this page does not, so the bench was the ONE surface that
+     could show yesterday's renderer while the file on disk was current - and
+     it did. A literal here would normally rot, so tools/city-battle-check.mjs
+     asserts it equals client/version.json, exactly as reach-check does for
+     coalition-sprites.js's BUILD. -->
+<script src="assets/space/city-fronts.js?v=1.10.1.0"></script>
+<script src="assets/planet-palette.js?v=1.10.1.0"></script>
+<script src="assets/factions.js?v=1.10.1.0"></script>
+<script src="assets/coalition-sprites.js?v=1.10.1.0"></script>
+<script src="assets/city-battle.js?v=1.10.1.0"></script>
+
+<script>
+(function () {
+  'use strict';
+  var fatalEl = document.getElementById('fatal');
+  function die(msg) {
+    fatalEl.style.display = 'grid';
+    fatalEl.textContent = msg;
+    document.getElementById('hud').style.display = 'none';
+  }
+  /* A BARE ReferenceError SAYS NOTHING ABOUT WHICH FAILURE YOU HAVE. Missing
+     renderer and missing asset tree look identical in a console and are
+     completely different problems, so both get named. */
+  if (typeof CB === 'undefined')
+    return die('assets/city-battle.js did not load.\n\nIt must sit beside '
+             + 'index.html, and this page must be served over http rather than '
+             + 'opened from file:// or pasted into a preview pane.');
+
+  var cv = document.getElementById('cbCanvas');
+  var fatal = CB.attach(cv, window.devicePixelRatio || 1);
+  if (fatal)
+    return die(fatal + '\n\nThis page reads the shipped modules rather than '
+             + 'carrying copies of them, so it cannot run without them.');
+
+  /* ── The build check, and it exists because I missed this by eye ────────
+     The HUD has shown the build number for several patches and it is only
+     useful if somebody reads it. A bench serving an OLD TREE looks exactly
+     like a bench serving a current one - same layout, same controls - and the
+     only tell is a five character string in the corner that nobody checks.
+
+     So it checks itself. version.json is fetched with a no-store request and
+     compared against the BUILD the loaded scripts actually carry. Equal and
+     the number sits quietly; different and the whole page gets a red bar
+     naming both, because "you are looking at last week's renderer" is not a
+     thing to whisper. It also catches the OTHER cause, which is a browser that
+     has cached a script the server has since replaced. */
+  var buildEl = document.getElementById('sBuild');
+  var loaded = (window.FMTroops && window.FMTroops.BUILD) || '?';
+  buildEl.textContent = loaded;
+  fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (v) {
+      if (!v || !v.version || v.version === loaded) return;
+      buildEl.textContent = loaded + ' \u2260 ' + v.version;
+      buildEl.style.color = '#e2564a';
+      var bar = document.createElement('div');
+      bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;' +
+        'background:#5c1410;color:#ffd9d4;padding:7px 12px;font-size:12px;' +
+        'letter-spacing:.04em;border-bottom:1px solid #e2564a';
+      bar.textContent = 'STALE BUILD: the scripts on this page are ' + loaded +
+        ' but client/version.json says ' + v.version +
+        '. You are serving an old copy of the tree, or a cached script. ' +
+        'Check which folder the server is running from, then hard refresh.';
+      document.body.appendChild(bar);
+    })
+    .catch(function () { /* served from somewhere without version.json: quiet */ });
+
+  function fit() { var r = cv.getBoundingClientRect(); CB.resize(r.width, r.height); }
+  window.addEventListener('resize', fit);
+  fit();
+
+  /* The picker is filled FROM THE REGISTRY, so a faction added to factions.js
+     appears here without this file being touched. That is the whole reason the
+     bench reads the registry instead of holding a list of its own. */
+  var hs = document.getElementById('fHome'), as = document.getElementById('fAway');
+  var reg = CB.reg();
+  CB.polities().forEach(function (k) {
+    [hs, as].forEach(function (sel) {
+      var o = document.createElement('option');
+      o.value = k; o.textContent = reg[k].short || k.toUpperCase();
+      sel.appendChild(o);
+    });
+  });
+  hs.value = CB.sides.home; as.value = CB.sides.away;
+
+  /* ── Every front, in one list ─────────────────────────────────────────
+     The bench opened on one generated city and there are sixty-six. Walking
+     them is how a fault that only exists on one layout or one terrain gets
+     found - the ones you would never think to open are exactly the ones
+     nothing has ever rendered.
+
+     SWEEP walks the lot on a timer, which is the same job tools/citybattle-
+     harness.mjs --all does headlessly but with your eyes on it. The headless
+     one is the check; this is the look. */
+  var zoneSel = document.getElementById('fZone');
+  var worldEl = document.getElementById('sWorld');
+  var arenaEl = document.getElementById('sArena');
+  var FRONTS = [];
+  (function () {
+    var META = (window.FM_CITY_FRONTS && window.FM_CITY_FRONTS.meta)
+               || window._FM_COLONY_META || {};
+    Object.keys(META).forEach(function (cid) {
+      if (/^ks_/.test(cid)) return;               // the brood has its own bench
+      var zones = META[cid].planets || [];
+      zones.forEach(function (z, zi) {
+        if (!CB.mapFor(cid, zi)) return;          // orbital: no surface
+        FRONTS.push([cid, zi, (META[cid].name || cid) + ' \u00b7 ' + (z.name || zi)]);
+      });
+    });
+    FRONTS.forEach(function (f, i) {
+      var o = document.createElement('option');
+      o.value = String(i); o.textContent = f[2];
+      zoneSel.appendChild(o);
+    });
+  })();
+  var frontIdx = 0;
+  function goFront(i) {
+    if (!FRONTS.length) { worldEl.textContent = 'no colony data on this page'; return; }
+    frontIdx = ((i % FRONTS.length) + FRONTS.length) % FRONTS.length;
+    zoneSel.value = String(frontIdx);
+    var f = FRONTS[frontIdx];
+    var m = CB.setZone(f[0], f[1]);
+    if (!m) return;
+    var d = CB.diag();
+    worldEl.textContent = m.layout + ' / ' + m.terrain + ' / ' + m.sector +
+                          '   (' + d.props + ' props, ' + d.cover + ' cover)';
+    /* THE ARENA IS ON THE HUD BECAUSE IT IS DERIVED. It comes off the layout's
+       avenue spacing, so it is different on every one of the sixty-six fronts
+       and there is no literal anywhere to check it against by eye. */
+    var a = CB.arena();
+    arenaEl.textContent = Math.round(a.w) + ' x ' + Math.round(a.d) + ' m'
+                        + '   front ' + Math.round(a.frontLo) + '..'
+                        + Math.round(a.frontHi);
+  }
+  zoneSel.onchange = function () { goFront(+this.value); };
+  document.getElementById('bPrev').onclick = function () { goFront(frontIdx - 1); };
+  document.getElementById('bNext').onclick = function () { goFront(frontIdx + 1); };
+  var sweepTimer = null, bSweep = document.getElementById('bSweep');
+  bSweep.onclick = function () {
+    if (sweepTimer) { clearInterval(sweepTimer); sweepTimer = null;
+                      bSweep.classList.remove('on'); return; }
+    bSweep.classList.add('on');
+    sweepTimer = setInterval(function () { goFront(frontIdx + 1); }, 4000);
+  };
+  if (FRONTS.length) goFront(0);
+
+  var warn = document.getElementById('warn');
+  function applyFac() {
+    var err = CB.setFactions(hs.value, as.value);
+    if (err) { hs.value = CB.sides.home; as.value = CB.sides.away; }
+    warn.textContent = err || CB.warn || '';
+  }
+  hs.onchange = as.onchange = applyFac;
+
+  document.querySelectorAll('[data-cam]').forEach(function (b) {
+    b.onclick = function () {
+      document.querySelectorAll('[data-cam]').forEach(function (o) { o.classList.remove('on'); });
+      b.classList.add('on');
+      CB.setCam(b.dataset.cam);
+    };
+  });
+
+  /* ── THESE TWO BUTTONS WERE LYING AND THE HUD IS WHERE THAT IS WORST ────
+     Both carried a HARDCODED state: bSky was born class="on" and bStyle said
+     "glyph", while the renderer's defaults had already moved to skyline off
+     and style 'model'. So the bench opened claiming a skyline was on in a
+     style that had not been the default for a patch, and the first click on
+     either one moved it the wrong way. A bench that misreports the thing it
+     exists to look at is worse than no bench.
+
+     Both read CB.opt now, and the style button cycles all THREE - 'model' was
+     never in the rotation, which meant the shipped default was the one style
+     this page could not switch back to once you left it. */
+  var bSky = document.getElementById('bSky');
+  bSky.classList.toggle('on', CB.opt.skyline);
+  bSky.onclick = function () { CB.opt.skyline = !CB.opt.skyline; bSky.classList.toggle('on', CB.opt.skyline); };
+  /* All three skyline styles are kept and switchable. Model is real geometry,
+     prism speaks the city view's language, glyph reads as a readout of a city
+     rather than a picture of one. None is obviously right, so none is deleted
+     - and the default being OFF is a look call, not a verdict on the code. */
+  var SKY_STYLES = ['model', 'prism', 'glyph'];
+  var bStyle = document.getElementById('bStyle');
+  bStyle.textContent = CB.opt.skylineStyle;
+  bStyle.onclick = function () {
+    var i = SKY_STYLES.indexOf(CB.opt.skylineStyle);
+    CB.opt.skylineStyle = SKY_STYLES[(i + 1) % SKY_STYLES.length];
+    bStyle.textContent = CB.opt.skylineStyle;
+  };
+  var bRe = document.getElementById('bRe');
+  bRe.classList.toggle('on', CB.opt.reinforce);
+  bRe.onclick = function () { CB.opt.reinforce = !CB.opt.reinforce; bRe.classList.toggle('on', CB.opt.reinforce); };
+  var bP = document.getElementById('bPause');
+  bP.onclick = function () { CB.opt.paused = !CB.opt.paused; bP.classList.toggle('on', CB.opt.paused); };
+  document.getElementById('bSeed').onclick = function () { CB.reseed(); };
+  /* ── A SHOT THAT SAYS WHERE IT WAS TAKEN FROM ──────────────────────────
+     *** THIS EXISTS BECAUSE FIVE PATCHES WERE SPENT GUESSING AT A CAMERA. ***
+     A screenshot of this bench is the whole bug report, and until now it
+     carried the build number and nothing else - not the front, not the seed,
+     not where the camera was standing. So a fault visible on one avenue of one
+     layout at one angle got chased from renders that were never pointed at it,
+     and twice I reported "cannot reproduce" about something that was in every
+     frame he was looking at.
+
+     The line is burned INTO the png rather than only shown in the HUD, because
+     the HUD can be cropped out and routinely is. Everything needed to stand in
+     the same spot: build, front, seed, and the five camera numbers. */
+  function camLine() {
+    var c = CB.cam, f = FRONTS[frontIdx];
+    return 'build ' + loaded + '  front ' + (f ? f[0] + '#' + f[1] : '?') +
+           '  seed ' + CB.seed +
+           '  cam ' + c.x.toFixed(1) + ',' + c.y.toFixed(1) + ',' + c.z.toFixed(1) +
+           '  yaw ' + c.yaw.toFixed(3) + '  pitch ' + c.pitch.toFixed(3) +
+           '  r' + CB.opt.viewRadius + ' w' + CB.opt.roadWear.toFixed(2) +
+           ' g' + CB.opt.groundTex.toFixed(2) + '/' + CB.opt.texScale.toFixed(2);
+  }
+  document.getElementById('bShot').onclick = function () {
+    var line = camLine();
+    var out = document.createElement('canvas');
+    out.width = cv.width; out.height = cv.height + 20;
+    var o = out.getContext('2d');
+    o.fillStyle = '#05070c'; o.fillRect(0, 0, out.width, out.height);
+    o.drawImage(cv, 0, 0);
+    o.fillStyle = '#6fa8d0';
+    o.font = '12px ui-monospace, Menlo, Consolas, monospace';
+    o.fillText(line, 8, cv.height + 14);
+    var a = document.createElement('a');
+    a.download = 'citybattle_' + CB.seed + '.png';
+    a.href = out.toDataURL('image/png'); a.click();
+  };
+  document.getElementById('rN').oninput = function () { CB.opt.perSide = +this.value; };
+  /* ONE SLIDER FOR BOTH, because they are one setting. Pulling the view in
+     is what makes the scene cheap and the fog is what makes that legal - tuned
+     apart they would fight, so the fog onset is derived from the radius in the
+     renderer and this only moves the radius. */
+  var rR = document.getElementById('rR'), sR = document.getElementById('sR');
+  rR.oninput = function () {
+    CB.opt.viewRadius = +this.value;
+    sR.textContent = this.value + ' m';
+  };
+  /* Road wear has moved three times by opinion. It is a slider now so it can
+     be settled by looking rather than by another patch. */
+  document.getElementById('rW').oninput = function () {
+    CB.opt.roadWear = (+this.value) / 100;
+  };
+  /* ── TWO SLIDERS, BECAUSE THIS IS A LOOK CALL AND I CANNOT MAKE IT ──────
+     The band-pass ground versus flat kit tiles has been settled by opinion,
+     reversed and settled again, and the pats() notes already record one loop
+     of enlarging the tile to kill speckle and getting smears instead. That is
+     not a thing to decide by reasoning at a keyboard. groundTex blends the two
+     and texScale is the smear dial; the readout gives the patch size in metres
+     so the number means something while you look at it. */
+  var rG = document.getElementById('rG'), rT = document.getElementById('rT'),
+      sT = document.getElementById('sT');
+  function texRead() {
+    sT.textContent = CB.opt.groundTex <= 0 ? 'off'
+      : (48 * CB.opt.texScale).toFixed(1) + ' m  @ ' +
+        Math.round(CB.opt.groundTex * 100) + '%';
+  }
+  rG.oninput = function () { CB.opt.groundTex = (+this.value) / 100; texRead(); };
+  rT.oninput = function () { CB.opt.texScale = (+this.value) / 100; texRead(); };
+  texRead();
+  document.getElementById('rF').oninput = function () {
+    CB.opt.floraN = +this.value; CB.reseed(CB.seed);
+  };
+
+  var keys = {}, drag = false, lx = 0, ly = 0, spd = 34;
+  window.addEventListener('keydown', function (e) { keys[e.key.toLowerCase()] = 1; });
+  window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = 0; });
+  cv.addEventListener('mousedown', function (e) { drag = true; lx = e.clientX; ly = e.clientY; });
+  window.addEventListener('mouseup', function () { drag = false; });
+  window.addEventListener('mousemove', function (e) {
+    if (!drag || CB.camMode() !== 'free') return;
+    CB.cam.yaw += (e.clientX - lx) * 0.004;
+    CB.cam.pitch = Math.max(-0.9, Math.min(0.5, CB.cam.pitch - (e.clientY - ly) * 0.003));
+    lx = e.clientX; ly = e.clientY;
+  });
+  cv.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    spd = Math.max(4, Math.min(220, spd * (e.deltaY > 0 ? 0.86 : 1.16)));
+  }, { passive: false });
+  function freeMove(dt) {
+    if (CB.camMode() !== 'free') return;
+    var c = CB.cam, s = spd * dt / 1000;
+    var fx = Math.sin(c.yaw), fz = Math.cos(c.yaw);
+    if (keys.w) { c.x += fx*s; c.z += fz*s; }
+    if (keys.s) { c.x -= fx*s; c.z -= fz*s; }
+    if (keys.a) { c.x -= fz*s; c.z += fx*s; }
+    if (keys.d) { c.x += fz*s; c.z -= fx*s; }
+    if (keys.q) c.y += s*0.6;
+    if (keys.e) c.y = Math.max(1.4, c.y - s*0.6);
+  }
+
+  var last = performance.now(), acc = 0, fr = 0;
+  var sAlive = document.getElementById('sAlive'), sKill = document.getElementById('sKill'),
+      sQ = document.getElementById('sQ'), sFps = document.getElementById('sFps'),
+      camEl = document.getElementById('sCam'),
+      axis = document.getElementById('axis');
+  /* ── A THROW IN HERE USED TO BE A BLACK SCREEN AND NOTHING ELSE ─────────
+     requestAnimationFrame swallows the exception, the loop is never
+     re-queued, and what you get is a canvas that never draws and a HUD frozen
+     on dashes - which looks exactly like "nothing loaded" and is actually one
+     line throwing on frame one. The stack was in the console and nowhere a
+     person testing a renderer would look.
+
+     So the loop reports. First error only, on screen, with the message - and
+     it keeps trying, because a fault in one frame is not always a fault in
+     every frame and a viewer that gives up is less useful than one that
+     stutters. */
+  var loopErr = 0;
+  function fail(e) {
+    if (loopErr++) return;
+    var bar = document.createElement('div');
+    bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99;' +
+      'background:#5c1410;color:#ffd9d4;padding:8px 12px;font-size:12px;' +
+      'border-top:1px solid #e2564a;white-space:pre-wrap';
+    bar.textContent = 'RENDER ERROR: ' + (e && e.message ? e.message : e) +
+      '\nThe loop kept running. Full stack is in the console.';
+    document.body.appendChild(bar);
+    console.error(e);
+  }
+  function loop(now) {
+    var dt = Math.min(64, now - last); last = now;
+    try {
+      freeMove(dt);
+      CB.step(dt);
+      CB.frame();
+    } catch (e) { fail(e); }
+    acc += dt; fr++;
+    if (acc > 500) {
+      var st = CB.stats();
+      sAlive.textContent = st.home + ' / ' + st.away;
+      sKill.textContent = st.hk + ' / ' + st.ak;
+      sQ.textContent = st.faces + (st.ready ? '' : '  (meshes loading)');
+      sFps.textContent = Math.round(fr*1000/acc);
+      acc = 0; fr = 0;
+      camEl.textContent = CB.cam.x.toFixed(1) + ',' + CB.cam.y.toFixed(1) + ',' +
+        CB.cam.z.toFixed(1) + '  y' + CB.cam.yaw.toFixed(2) +
+        ' p' + CB.cam.pitch.toFixed(2);
+      var off = CB.offAxis()*180/Math.PI;
+      axis.textContent = off.toFixed(0) + '\u00b0';
+      /* THE ARC WHERE THE ART IS RIGHT, AS A NUMBER RATHER THAN AN ARGUMENT.
+         The pack is single facing; the flip buys two of eight rotations and the
+         other six do not exist. Past this the men are drawn in profile while
+         walking away from you. */
+      axis.className = off > CB.safeYaw*180/Math.PI ? 'bad' : '';
+      if (CB.warn) warn.textContent = CB.warn;
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

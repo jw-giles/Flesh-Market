@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 900" width="760" height="900">
+<style>
+  :root{}
+  svg{--gl:#ff9d5c;--vw:#f0b454;--fg:#d8d2c4;--dim:#6b6055;--faint:#3a3129;--bg:#0a0705}
+  rect.bg{fill:#0a0705}
+  text{font-family:'Courier New',monospace}
+  .h1{fill:#e08a52;font-size:19px;letter-spacing:5px}
+  .h2{fill:#6b6055;font-size:10px;letter-spacing:3px}
+  .sec{fill:#6b6055;font-size:10px;letter-spacing:4px}
+  .rom{fill:#f0e4d4;font-size:17px;letter-spacing:1px}
+  .nm{fill:#8a7a6a;font-size:9.5px;letter-spacing:1px}
+  .val{fill:#f0b454;font-size:10px;letter-spacing:1px}
+  .rec{fill:#5a4636;font-size:7.5px;letter-spacing:.5px}
+  .vrom{fill:#d8d2c4;font-size:12px;text-anchor:middle}
+  .vnm{fill:#6b6055;font-size:8px;text-anchor:middle}
+  .note{fill:#6b6055;font-size:9.5px}
+  .key{fill:#8a7a6a;font-size:9px}
+</style>
+<rect class="bg" x="0" y="0" width="760" height="900"/>
+<text class="h1" x="40" y="46">KHAI'SULTULL</text>
+<text class="h2" x="40" y="64">SIXTEEN SIGNS · SEVEN MARKS · BASE SIXTEEN</text>
+<line x1="40" y1="76" x2="720" y2="76" stroke="#3a1d0c"/>
+<text class="sec" x="40" y="100">THE SIGNS</text>
+<text class="key" x="150" y="100">hooks right = 4  ·  hooks left = 1  ·  the value is the letter</text>
+<g><line x1="104" y1="132" x2="104" y2="166" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><circle cx="104" cy="149" r="4.6" fill="none" stroke="var(--gl)" stroke-width="2.2"/>
+    <text x="128" y="150" class="rom">’</text>
+    <text x="128" y="165" class="nm">iss</text>
+    <text x="128" y="180" class="val">0</text>
+    
+  </g><g><line x1="272" y1="132" x2="272" y2="166" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M272 158 L265 163 L268.5 154" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="296" y="150" class="rom">s</text>
+    <text x="296" y="165" class="nm">sath</text>
+    <text x="296" y="180" class="val">1</text>
+    
+  </g><g><line x1="440" y1="132" x2="440" y2="166" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M440 158 L433 163 L436.5 154" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M440 145 L433 150 L436.5 141" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="464" y="150" class="rom">r</text>
+    <text x="464" y="165" class="nm">ruur</text>
+    <text x="464" y="180" class="val">2</text>
+    
+  </g><g><line x1="608" y1="132" x2="608" y2="166" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M608 158 L601 163 L604.5 154" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 145 L601 150 L604.5 141" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 132 L601 137 L604.5 128" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="632" y="150" class="rom">th</text>
+    <text x="632" y="165" class="nm">thaal</text>
+    <text x="632" y="180" class="val">3</text>
+    
+  </g><g><line x1="104" y1="256" x2="104" y2="290" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M104 264 L111 259 L107.5 268" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="128" y="274" class="rom">l</text>
+    <text x="128" y="289" class="nm">lull</text>
+    <text x="128" y="304" class="val">4</text>
+    
+  </g><g><line x1="272" y1="256" x2="272" y2="290" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M272 264 L279 259 L275.5 268" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M272 282 L265 287 L268.5 278" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="296" y="274" class="rom">n</text>
+    <text x="296" y="289" class="nm">nekk</text>
+    <text x="296" y="304" class="val">5</text>
+    
+  </g><g><line x1="440" y1="256" x2="440" y2="290" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M440 264 L447 259 L443.5 268" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M440 282 L433 287 L436.5 278" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M440 269 L433 274 L436.5 265" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="464" y="274" class="rom">t</text>
+    <text x="464" y="289" class="nm">tekk</text>
+    <text x="464" y="304" class="val">6</text>
+    
+  </g><g><line x1="608" y1="256" x2="608" y2="290" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M608 264 L615 259 L611.5 268" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 282 L601 287 L604.5 278" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 269 L601 274 L604.5 265" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 256 L601 261 L604.5 252" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="632" y="274" class="rom">k</text>
+    <text x="632" y="289" class="nm">kar</text>
+    <text x="632" y="304" class="val">7</text>
+    
+  </g><g><line x1="104" y1="380" x2="104" y2="414" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M104 388 L111 383 L107.5 392" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M104 401 L111 396 L107.5 405" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="128" y="398" class="rom">v</text>
+    <text x="128" y="413" class="nm">vor</text>
+    <text x="128" y="428" class="val">8</text>
+    
+  </g><g><line x1="272" y1="380" x2="272" y2="414" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M272 388 L279 383 L275.5 392" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M272 401 L279 396 L275.5 405" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M272 406 L265 411 L268.5 402" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="296" y="398" class="rom">m</text>
+    <text x="296" y="413" class="nm">mekh</text>
+    <text x="296" y="428" class="val">9</text>
+    
+  </g><g><line x1="440" y1="380" x2="440" y2="414" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M440 388 L447 383 L443.5 392" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M440 401 L447 396 L443.5 405" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M440 406 L433 411 L436.5 402" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M440 393 L433 398 L436.5 389" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="464" y="398" class="rom">zh</text>
+    <text x="464" y="413" class="nm">zhaal</text>
+    <text x="464" y="428" class="val">10</text>
+    
+  </g><g><line x1="608" y1="380" x2="608" y2="414" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M608 388 L615 383 L611.5 392" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 401 L615 396 L611.5 405" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 406 L601 411 L604.5 402" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 393 L601 398 L604.5 389" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 380 L601 385 L604.5 376" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="632" y="398" class="rom">kh</text>
+    <text x="632" y="413" class="nm">khai</text>
+    <text x="632" y="428" class="val">11</text>
+    
+  </g><g><line x1="104" y1="504" x2="104" y2="538" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M104 512 L111 507 L107.5 516" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M104 525 L111 520 L107.5 529" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M104 538 L111 533 L107.5 542" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="128" y="522" class="rom">h</text>
+    <text x="128" y="537" class="nm">hoss</text>
+    <text x="128" y="552" class="val">12</text>
+    
+  </g><g><line x1="272" y1="504" x2="272" y2="538" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M272 512 L279 507 L275.5 516" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M272 525 L279 520 L275.5 529" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M272 538 L279 533 L275.5 542" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M272 530 L265 535 L268.5 526" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="296" y="522" class="rom">f</text>
+    <text x="296" y="537" class="nm">fin</text>
+    <text x="296" y="552" class="val">13</text>
+    
+  </g><g><line x1="440" y1="504" x2="440" y2="538" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M440 512 L447 507 L443.5 516" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M440 525 L447 520 L443.5 529" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M440 538 L447 533 L443.5 542" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M440 530 L433 535 L436.5 526" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M440 517 L433 522 L436.5 513" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="464" y="522" class="rom">sh</text>
+    <text x="464" y="537" class="nm">shuur</text>
+    <text x="464" y="552" class="val">14</text>
+    <text x="464" y="565" class="rec">reconstructed</text>
+  </g><g><line x1="608" y1="504" x2="608" y2="538" stroke="var(--gl)" stroke-width="2.6" stroke-linecap="round"/><path d="M608 512 L615 507 L611.5 516" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 525 L615 520 L611.5 529" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 538 L615 533 L611.5 542" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 530 L601 535 L604.5 526" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 517 L601 522 L604.5 513" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/><path d="M608 504 L601 509 L604.5 500" fill="none" stroke="var(--gl)" stroke-width="2.3" stroke-linejoin="round"/>
+    <text x="632" y="522" class="rom">ng</text>
+    <text x="632" y="537" class="nm">nguth</text>
+    <text x="632" y="552" class="val">15</text>
+    <text x="632" y="565" class="rec">reconstructed</text>
+  </g>
+<line x1="40" y1="620" x2="720" y2="620" stroke="#3a1d0c"/>
+<text class="sec" x="40" y="642">THE MARKS</text>
+<text class="key" x="150" y="642">vowels carry no value. they are the part you may say without settling anything</text>
+<g><line x1="96" y1="664" x2="96" y2="690" stroke="var(--gl)" stroke-width="1.5" opacity="0.35"/>
+    <circle cx="96" cy="655" r="2.2" fill="var(--vw)"/>
+    <text x="96" y="706" class="vrom">a</text>
+    <text x="96" y="718" class="vnm">ah</text></g><g><line x1="190" y1="664" x2="190" y2="690" stroke="var(--gl)" stroke-width="1.5" opacity="0.35"/>
+    <circle cx="186" cy="655" r="2.2" fill="var(--vw)"/><circle cx="194" cy="655" r="2.2" fill="var(--vw)"/>
+    <text x="190" y="706" class="vrom">aa</text>
+    <text x="190" y="718" class="vnm">aah</text></g><g><line x1="284" y1="664" x2="284" y2="690" stroke="var(--gl)" stroke-width="1.5" opacity="0.35"/>
+    <path d="M279 657 Q284 650 289 657" fill="none" stroke="var(--vw)" stroke-width="1.6"/>
+    <text x="284" y="706" class="vrom">e</text>
+    <text x="284" y="718" class="vnm">eh</text></g><g><line x1="378" y1="664" x2="378" y2="690" stroke="var(--gl)" stroke-width="1.5" opacity="0.35"/>
+    <path d="M373 653 Q378 660 383 653" fill="none" stroke="var(--vw)" stroke-width="1.6"/>
+    <text x="378" y="706" class="vrom">i</text>
+    <text x="378" y="718" class="vnm">ih</text></g><g><line x1="472" y1="664" x2="472" y2="690" stroke="var(--gl)" stroke-width="1.5" opacity="0.35"/>
+    <path d="M467 652 L477 658" stroke="var(--vw)" stroke-width="1.6"/>
+    <text x="472" y="706" class="vrom">o</text>
+    <text x="472" y="718" class="vnm">oh</text></g><g><line x1="566" y1="664" x2="566" y2="690" stroke="var(--gl)" stroke-width="1.5" opacity="0.35"/>
+    <path d="M561 658 L571 652" stroke="var(--vw)" stroke-width="1.6"/>
+    <text x="566" y="706" class="vrom">u</text>
+    <text x="566" y="718" class="vnm">uh</text></g><g><line x1="660" y1="664" x2="660" y2="690" stroke="var(--gl)" stroke-width="1.5" opacity="0.35"/>
+    <path d="M655 658 L660 651 L665 658" fill="none" stroke="var(--vw)" stroke-width="1.6"/>
+    <text x="660" y="706" class="vrom">ai</text>
+    <text x="660" y="718" class="vnm">eye</text></g>
+<line x1="40" y1="740" x2="720" y2="740" stroke="#3a1d0c"/>
+<text class="sec" x="40" y="832">WORKED</text><line x1="150" y1="806" x2="150" y2="827.08" stroke="var(--gl)" stroke-width="1.612" stroke-linecap="round"/><path d="M150 810.96 L154.34 807.86 L152.17 813.44" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><path d="M150 819.02 L154.34 815.92 L152.17 821.5" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><path d="M150 822.12 L145.66 825.22 L147.83 819.64" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><path d="M150 814.0600000000001 L145.66 817.1600000000001 L147.83 811.58" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><text x="166" y="824" class="rom" style="font-size:12px">zh</text><text x="166" y="838" class="val" style="font-size:9px">10</text><line x1="224" y1="806" x2="224" y2="827.08" stroke="var(--gl)" stroke-width="1.612" stroke-linecap="round"/><path d="M224 822.12 L219.66 825.22 L221.83 819.64" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><path d="M224 814.0600000000001 L219.66 817.1600000000001 L221.83 811.58" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><text x="240" y="824" class="rom" style="font-size:12px">r</text><text x="240" y="838" class="val" style="font-size:9px">2</text><line x1="298" y1="806" x2="298" y2="827.08" stroke="var(--gl)" stroke-width="1.612" stroke-linecap="round"/><path d="M298 810.96 L302.34 807.86 L300.17 813.44" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><path d="M298 822.12 L293.66 825.22 L295.83 819.64" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><path d="M298 814.0600000000001 L293.66 817.1600000000001 L295.83 811.58" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><path d="M298 806 L293.66 809.1 L295.83 803.52" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><text x="314" y="824" class="rom" style="font-size:12px">k</text><text x="314" y="838" class="val" style="font-size:9px">7</text><line x1="372" y1="806" x2="372" y2="827.08" stroke="var(--gl)" stroke-width="1.612" stroke-linecap="round"/><path d="M372 810.96 L376.34 807.86 L374.17 813.44" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><path d="M372 819.02 L376.34 815.92 L374.17 821.5" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><path d="M372 827.08 L376.34 823.98 L374.17 829.5600000000001" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><path d="M372 822.12 L367.66 825.22 L369.83 819.64" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><text x="388" y="824" class="rom" style="font-size:12px">f</text><text x="388" y="838" class="val" style="font-size:9px">13</text><line x1="446" y1="806" x2="446" y2="827.08" stroke="var(--gl)" stroke-width="1.612" stroke-linecap="round"/><path d="M446 810.96 L450.34 807.86 L448.17 813.44" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><path d="M446 822.12 L441.66 825.22 L443.83 819.64" fill="none" stroke="var(--gl)" stroke-width="1.426" stroke-linejoin="round"/><text x="462" y="824" class="rom" style="font-size:12px">n</text><text x="462" y="838" class="val" style="font-size:9px">5</text><text class="note" x="40" y="876">Zharkofin, the Hivelord, reads 10 · 2 · 7 · 13 · 5 in base sixteen. He is the number 665557. So is every other name.</text>
+<text class="note" x="40" y="756">No b, d, g or p. The brood has no voiced stop: k without g, t without d.</text>
+<text class="note" x="40" y="772">A doubled sign doubles its value and must be preceded by a vowel. No word opens on one.</text>
+<text class="note" x="40" y="788">A word is read left to right as base-sixteen digits. Every name is therefore an amount.</text>
+</svg>

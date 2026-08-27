@@ -8,7 +8,18 @@
 // Requires jsdom:  npm i jsdom && node tools/fleet-check.mjs   (from repo root)
 import fs from 'fs';
 import path from 'path';
-import { JSDOM } from 'jsdom';
+// jsdom is deliberately not a project dependency, so this check cannot run on a
+// bare clone. It used to die with an ERR_MODULE_NOT_FOUND stack, which reads as
+// "this tool is broken" and gets scrolled past, and that is exactly how a real
+// failure in here survived: the assertion that catches it could not run. A loud
+// SKIP says NOT RUN instead of pretending nothing was wrong.
+let JSDOM = null;
+try { ({ JSDOM } = await import('jsdom')); } catch (_) {}
+if (!JSDOM) {
+  console.log('\n  !!  NOT RUN  !!  jsdom is not installed, so none of these assertions executed.');
+  console.log('      npm i jsdom      (from the repo root), then run this again.\n');
+  process.exit(0);
+}
 
 const ROOT = process.cwd();
 let pass = 0, fail = 0; const failures = [];
@@ -288,21 +299,104 @@ if (A) {
   const V = window._fmGalaxyView;
   ok('the view hook is exposed', !!V && typeof V.swap === 'function');
   if (V) {
+    // A swap CLEARS the layer and lets the reconcile repopulate it, so the
+    // ships spawned above do not survive it. The old version of this block
+    // counted them after swapping and had been failing ever since the clear
+    // landed; it needed jsdom to run, so nobody saw it. Respawn per phase,
+    // which is what the reconcile does in production.
+    /* *** THE JADE HALF OF THIS BLOCK HAS NEVER RUN, AND THAT IS THE WHOLE
+       FAILURE. *** V.swap('jade') is REFUSED when the passage is sealed, and
+       PASSAGE_OPEN starts { jade:false }, so the swap did nothing, the view
+       stayed on coalition, and the block then asserted "the jade view shows
+       nothing tagged coalition" against a coalition view. It reported two
+       coalition hulls as a leak into Circuit space. They were not a leak. They
+       were coalition hulls in the coalition view, drawn correctly, and the
+       refusal that kept them there was the seal doing its job.
+
+       A CHECK THAT SILENTLY TESTS THE WRONG STATE IS WORSE THAN ONE THAT
+       FAILS, because the failure it produces names a bug that does not exist -
+       and this one named a player-visible fault on the galaxy map for as long
+       as it has been red. So the swap is asserted before anything is asserted
+       about its consequences.
+
+       Opened for the duration and restored afterwards, which is what a check
+       exercising a gated view has to do: the alternative is asserting only the
+       half of the behaviour the default state happens to reach. */
+    const _wasOpen = !!(window._PASSAGE_OPEN && window._PASSAGE_OPEN.jade);
+    if (typeof window._setPassage === 'function') window._setPassage('jade', true);
     for (const phase of ['coalition','jade']) {
-      if (V.get() !== phase) V.swap();
+      if (V.get() !== phase) V.swap(phase);
+      /* THE SWAP IS ASSERTED, NOT ASSUMED. Everything below reads the view it
+         thinks it is in; if the swap was refused, every one of them is testing
+         a different galaxy than its own message claims. */
+      ok('the view actually swapped to ' + phase, V.get() === phase, V.get());
+      if (V.get() !== phase) continue;
+      mk('sc1','new_anchor','cascade_station','v2');
+      mk('sc2','flesh_station','aurora_prime','v1');
+      mk('sj1','yujing','tiangong','v3');
+      mk('sj2','houtu_foundry','changzheng_yards','v1');
+      const L = window.document.getElementById('gShips');
       // The layer itself must never be hidden wholesale. Doing that is what
       // made Circuit space look like it had no freight at all while Circuit
       // hulls kept drawing over Coalition space, whose coordinates overlap.
       ok('the ship layer is not hidden wholesale in ' + phase + ' view',
-         layer.style.display !== 'none', layer.style.display || '(default)');
-      const shown = kids().filter(k => k.style.display !== 'none');
-      ok(phase + ' view shows some traffic', shown.length > 0, String(shown.length));
+         L.style.display !== 'none', L.style.display || '(default)');
+      const shown = [...L.children].filter(k => k.style.display !== 'none');
+      ok(phase + ' view shows some traffic after a swap', shown.length > 0, String(shown.length));
       const wrong = shown.filter(k => (k.getAttribute('data-gx') === 'jade') !== (phase === 'jade'));
       ok('and shows nothing from the other sector', wrong.length === 0,
          wrong.map(k => k.getAttribute('data-gx')).join(','));
     }
-    if (V.get() !== 'coalition') V.swap();
+    if (V.get() !== 'coalition') V.swap('coalition');
+    if (typeof window._setPassage === 'function') window._setPassage('jade', _wasOpen);
+    /* AND THE SEAL ITSELF, which is what the old block was accidentally
+       testing and never said so. Sealed, a swap to Circuit space is refused
+       and the view does not move; the Coalition is always reachable because it
+       is home. */
+    /* Asserted on the VIEW rather than on a return value: the hook is
+       swap:function(to){ swapGalaxy(to); } and returns undefined either way, so
+       `V.swap(...) !== undefined || true` would be a tautology that passes on a
+       broken seal. What the seal is for is that the view does not move. */
+    V.swap('jade');
+    ok('a sealed passage refuses the swap and the view does not move',
+       V.get() === 'coalition', V.get());
+    ok('home is always reachable', (V.swap('coalition'), V.get() === 'coalition'));
   }
+}
+
+console.log('\n== A swap does not permanently kill the fleet ==');
+// THE BUG THIS EXISTS FOR: gShipList and gServerShips are var-scoped inside the
+// ship IIFE. swapGalaxy sits outside it and used to assign them directly, which
+// made two globals nobody reads and left the real gServerShips holding every id
+// it had seen. spawnServerShip opens with `if (gServerShips[npc.id]) return;`,
+// so after ONE swap the reconcile refused to respawn anything for the rest of
+// the session. This is behavioural on purpose: a grep for the old assignment
+// would pass the moment somebody reintroduced it under another name.
+if (A) {
+  const L = () => window.document.getElementById('gShips');
+  const mk2 = (id,a,b) => window._spawnServerShipForce({ id, from:a, to:b, variant:'v1',
+    progress:0.3, startTs:Date.now()-1000, arriveTs:Date.now()+60000, cargo:[{commodityName:'X',qty:1}] });
+  const V = window._fmGalaxyView;
+  ok('a fleet reset is exported from the ship module',
+     typeof window._fmFleetReset === 'function');
+  L().innerHTML = ''; window._fmFleetReset();
+  mk2('reuse1','new_anchor','cascade_station');
+  ok('a ship spawns before the reset', L().children.length === 1, String(L().children.length));
+  window._fmFleetReset();
+  ok('the reset empties the layer', L().children.length === 0, String(L().children.length));
+  mk2('reuse1','new_anchor','cascade_station');
+  ok('THE SAME npc id can respawn after a reset', L().children.length === 1,
+     'a stale gServerShips is what blocks this');
+  if (V) {
+    L().innerHTML = ''; window._fmFleetReset();
+    mk2('swaptest','new_anchor','cascade_station');
+    V.swap('jade'); V.swap('coalition');
+    mk2('swaptest','new_anchor','cascade_station');
+    ok('and after a full swap round trip', L().children.length === 1,
+       String(L().children.length) + ' (0 means swap left gServerShips stale)');
+  }
+  ok('swapGalaxy does not write to the IIFE vars from outside',
+     !/try \{ gShipList = \[\]; gServerShips = \{\}; \} catch/.test(src));
 }
 
 console.log(`${pass} passed, ${fail} failed`);

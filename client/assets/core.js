@@ -26,6 +26,9 @@ function wsConnect(token) {
   ws.readyState = 0;
   _wsReal.onopen = () => {
     ws.readyState = 1;
+    // Was only assigned in onmessage, so any consumer reading window._ws
+    // between a reconnect and the next inbound message saw a closed socket.
+    window._ws = _wsReal;
     _wsReconnectDelay = 1000; // reset backoff on successful connect
     _wsQueue.splice(0).forEach(d => _wsReal.send(d));
     document.dispatchEvent(new CustomEvent('_fmws:open', {detail:{}}));
@@ -1700,6 +1703,7 @@ window.I18N = {
   'lane.dark':{en:'Dark Net',zh:'暗网'},
   'lane.contested':{en:'Contested',zh:'争夺'},
   'news.breaking':{en:'⚠ BREAKING',zh:'⚠ 突发'},
+  'news.reach':{en:'◆ THE REACH',zh:'◆ 深空前线'},
   'news.live':{en:'◢ LIVE NEWSFEED',zh:'◢ 实时新闻'},
   'news.wire':{en:'REALTIME MARKET WIRE',zh:'实时市场电讯'},
   'ph.symOrder':{en:'Symbol (e.g. ORGX)',zh:'代码（例：ORGX）'},
@@ -2977,7 +2981,22 @@ function renderNewsHeader(b) {
     const col = b.tone === 'good' ? '#86ff6a' : (b.tone === 'bad' ? '#ff5544' : '#f0b454');
     elh.style.borderColor = col;
     elh.style.background = b.tone === 'bad' ? '#180605' : (b.tone === 'good' ? '#06140a' : '#16100a');
-    elh.innerHTML = `<span data-i18n="news.breaking" style="color:${col};font-weight:bold;white-space:nowrap">\u26A0 BREAKING</span><span style="color:#d8c89a;letter-spacing:.02em">${esc(b.text)}</span>`;
+    /* THE REACH GETS ITS OWN LABEL IN THE SAME PANEL. It hijacks the banner
+       rather than sharing it: a Khai'sultull transmission carrying the words
+       BREAKING reads as a market event, which is the confusion that put these
+       lines in the wire in the first place. The element, the geometry and the
+       tone colours are unchanged - only what it calls itself - so nothing about
+       the layout moves when the war stands down.
+
+       `src` is set by the server and is 'reach' or 'gm'. Absent on an older
+       server, which falls through to the label this has always used. */
+    if (b.src === 'reach') {
+      elh.style.borderColor = '#c2551f';
+      elh.style.background = '#160a05';
+      elh.innerHTML = `<span data-i18n="news.reach" style="color:#f0913f;font-weight:bold;white-space:nowrap;letter-spacing:.14em">\u25C6 THE REACH</span><span style="color:#e2cdb4;letter-spacing:.02em">${esc(b.text)}</span>`;
+    } else {
+      elh.innerHTML = `<span data-i18n="news.breaking" style="color:${col};font-weight:bold;white-space:nowrap">\u26A0 BREAKING</span><span style="color:#d8c89a;letter-spacing:.02em">${esc(b.text)}</span>`;
+    }
   } else {
     elh.style.borderColor = '#1f3a1f';
     elh.style.background = '#070a07';
@@ -4178,7 +4197,11 @@ function addChat(item){
   div.className = 'cm';
 
   const isOwner  = !!(item.is_prime);
-  const isDev    = !isOwner && !!(item.is_dev);
+  // AN EQUIPPED GIFTED TITLE STANDS THE DEV OVERRIDE DOWN. This override is the
+  // half that actually paints: the server can send any colour it likes and this
+  // line repaints _DEV_COLOR over it whenever is_dev is set, so a server-only
+  // fix to the colour chain is invisible. Both layers have to agree.
+  const isDev    = !isOwner && !!(item.is_dev) && !item.giftTitle;
   const rawBadge = isOwner ? _OWNER_BADGE : (isDev ? _DEV_BADGE : (item.badge || ''));
   const color    = isOwner ? _OWNER_COLOR : (isDev ? _DEV_COLOR : (item.color || '#f0b454'));
   const badge    = rawBadge ? `<span style="margin-right:3px;opacity:.9;color:${color}">${rawBadge}</span>` : '';
@@ -4668,6 +4691,7 @@ ws.addEventListener('message', (ev)=>{
     // Seed heatmap data immediately
     window.TICKERS = TICKERS;
     if (msg.data.wormholeOpen != null) { window._WORMHOLE_OPEN = !!msg.data.wormholeOpen; if (window._setWormhole) window._setWormhole(window._WORMHOLE_OPEN); }
+    if (msg.data.reachOpen != null && window._setPassage) window._setPassage('khaisultull', !!msg.data.reachOpen);
   }
   if (msg.type === 'company_added' && msg.data && msg.data.symbol) {
     // A new ticker (e.g. a freshly Index-listed Capital House) — add it live so
@@ -4703,6 +4727,70 @@ ws.addEventListener('message', (ev)=>{
   if (msg.type === 'wormhole' && msg.data) {
     window._WORMHOLE_OPEN = !!msg.data.open;
     if (window._setWormhole) window._setWormhole(window._WORMHOLE_OPEN);
+  }
+  // Generic per-galaxy passage broadcast. The Circuit keeps its own message
+  // type because opening it also relists tickers; this one only moves a gate.
+  if (msg.type === 'reach_state' && msg.data) {
+    window._REACH = msg.data;
+    // The envoy is gated on live state, so the contacts list has to be told
+    // when that state moves. Otherwise the line opens and nobody sees it until
+    // they reload.
+    const wasEnvoy = window._REACH_ENVOY;
+    window._REACH_ENVOY = !!msg.data.envoy;
+    if (wasEnvoy !== window._REACH_ENVOY) {
+      try {
+        const cw = document.getElementById('fmContacts');
+        if (cw && cw.offsetParent !== null && window.FMContacts) window.FMContacts.open();
+      } catch (e) {}
+    }
+    if (window.reachRender) window.reachRender(msg.data);
+  }
+  // A Reach world changing hands opens or closes a whole city. The galaxy view
+  // has to rebuild rather than repaint: the detail panel, the lane set and the
+  // city tab all read isCityColony indirectly.
+  if (msg.type === 'reach_converted' && msg.data && msg.data.id) {
+    try {
+      if (window._jadeRerender) window._jadeRerender();
+      if (window.gToast) window.gToast(
+        msg.data.taken
+          ? msg.data.id.toUpperCase().replace(/_/g,' ') + ' TAKEN. Charter open.'
+          : msg.data.id.toUpperCase().replace(/_/g,' ') + ' LOST. Holdings void.',
+        msg.data.taken ? 'good' : 'bad');
+    } catch (e) {}
+  }
+  // A window resolving is the one moment in the war layer where something the
+  // players did lands. It gets a toast rather than only a headline crawl,
+  // because a result buried in the news ticker is a result nobody connects to
+  // the thing they just paid for.
+  if (msg.type === 'reach_push_result' && msg.data) {
+    try {
+      const d = msg.data;
+      const tone = d.result === 'carried' ? 'good' : d.result === 'repelled' ? 'bad' : '#8a7a6a';
+      if (window.gToast) window.gToast('\u25c8 ' + String(d.zoneName || '').toUpperCase() + ': ' + (d.outcome || ''), tone);
+      if (d.worldTaken && window._jadeRerender) window._jadeRerender();
+    } catch (e) {}
+  }
+  if (msg.type === 'reach_voice' && msg.data && msg.data.text) {
+    // The Khai'sultull speak in the open. No private channel: a demand nobody
+    // else heard cannot be refused in public, which is where the politics is.
+    //
+    // TWO VOICES SHARE THIS CHANNEL NOW. The envoy shipped tagged and this
+    // handler read nothing, so a Jade transmission arrived labelled as the hive
+    // lord, in the brood's colour, saying the opposite of what it meant. An
+    // untagged payload is still the hive lord, which is every message sent
+    // before the tag existed.
+    var _rv = msg.data.voice === 'jade'
+      ? { who: 'JADE CIRCUIT ENVOY: ', tone: '#6fae9f' }
+      : { who: "KHAI'SULTULL: ",      tone: 'bad' };
+    try { if (window.gToast) window.gToast(_rv.who + msg.data.text, _rv.tone); } catch(e) {}
+  }
+  if (msg.type === 'passage' && msg.data && msg.data.galaxy) {
+    if (window._setPassage) window._setPassage(msg.data.galaxy, !!msg.data.open);
+    if (msg.data.galaxy === 'khaisultull') {
+      const el = document.getElementById('reach-passage-state');
+      if (el) { el.textContent = msg.data.open ? 'OPEN' : 'SEALED';
+                el.style.color = msg.data.open ? '#e08a52' : '#666'; }
+    }
   }
   if (msg.type === 'tick') {
     // Merge new prices into TICKERS (don't replace — tick data has no .name)
@@ -4749,6 +4837,26 @@ ws.addEventListener('message', (ev)=>{
   }
   if (msg.type === 'news') {
     renderNews(msg.data);
+  }
+  /* A DEV CHANGED YOUR FACE. Writing the portrait to the row changes what the
+     next login sends and nothing else, so without this the target sits with the
+     old face until they happen to reload - which is what "it did not load to the
+     account" looks like from the outside even when the write succeeded. */
+  if (msg.type === 'portrait_set') {
+    try {
+      const pid = msg.data && msg.data.portrait;
+      if (window.ME) window.ME.portrait = pid || null;
+      if (window.FMHeaderPortrait) window.FMHeaderPortrait(pid || null);
+      const portEl = document.getElementById('ppPortrait');
+      if (portEl) {
+        if (pid && window.FMPortraitSrc) {
+          portEl.src = window.FMPortraitSrc(pid);
+          portEl.style.imageRendering = (window.FMPortraitPixelated && window.FMPortraitPixelated(pid)) ? 'pixelated' : '';
+          portEl.style.display = 'block';
+        } else portEl.style.display = 'none';
+      }
+      if (window.showToast) window.showToast(pid ? 'Your portrait was set by ' + (msg.data.by||'a dev') : 'Your portrait was removed', '#42ff7e', 3000);
+    } catch(e) { console.error('[portrait_set]', e); }
   }
   if (msg.type === 'breaking_news') {
     renderNewsHeader(msg.data || { active: false });
@@ -4940,8 +5048,11 @@ ws.addEventListener('message', (ev)=>{
         row.innerHTML='<span style="opacity:.45;font-size:.72rem">→ '+d.to+':</span> <span style="color:#9b8fbf;font-style:italic">'+st+'</span>';
       }else{
         window._whisperTarget=d.from;
-        const sC=d.is_prime?_OWNER_COLOR:(d.is_dev?_DEV_COLOR:(d.color||'#d4b87a'));
-        const sB=d.is_prime?_OWNER_BADGE:(d.is_dev?_DEV_BADGE:(d.badge||''));
+        // Same stand-down as the chat renderer. A whisper is where a GM in
+        // costume would otherwise revert to a dev account mid conversation.
+        const _wDev=!d.is_prime&&!!d.is_dev&&!d.giftTitle;
+        const sC=d.is_prime?_OWNER_COLOR:(_wDev?_DEV_COLOR:(d.color||'#d4b87a'));
+        const sB=d.is_prime?_OWNER_BADGE:(_wDev?_DEV_BADGE:(d.badge||''));
         const bS=sB?'<span style="color:'+sC+';margin-right:2px">'+sB+'</span>':'';
         row.innerHTML=bS+'<b style="color:'+sC+'">'+d.from+'</b> <span style="opacity:.45;font-size:.72rem">→ you:</span> <span style="color:#c8e6c9">'+st+'</span>';
         try{playSound&&playSound('mention');}catch(e){}

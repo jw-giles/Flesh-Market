@@ -31,10 +31,20 @@ chmod +x deploy/setup.sh deploy/update.sh deploy/backup.sh
 ./deploy/setup.sh yourdomain.com your@email.com
 ```
 
+> **The install path is `/root/Flesh-Market`.** These documents said
+> `/opt/fleshmarket` for a long time and nothing has ever served from there.
+> Every script takes `FM_APP_DIR` if yours lives somewhere else, and
+> `deploy/update.sh` now refuses to run against a directory with no install
+> in it rather than creating one with rsync and then reloading the live
+> process anyway.
+>
+> **For a routine release use `./ship.sh` from the repo root**, not these
+> scripts. This document covers standing a server up from nothing.
+
 That's it. The script will:
 - Install Node.js 22, nginx, PM2, certbot
 - Configure the firewall (SSH + HTTP/HTTPS only)
-- Deploy files to `/opt/fleshmarket`
+- Deploy files to `/root/Flesh-Market`
 - Set up nginx as a reverse proxy
 - Get a free SSL certificate from Let's Encrypt
 - Start the server and set it to auto-start on reboot
@@ -46,7 +56,7 @@ That's it. The script will:
 ### Edit your .env file
 
 ```bash
-nano /opt/fleshmarket/server/.env
+nano /root/Flesh-Market/server/.env
 ```
 
 The file will look like this — fill in the blanks:
@@ -78,7 +88,7 @@ Creates or refreshes the active dev accounts and applies any retirements.
 Idempotent, so it is safe to re-run after a credential rotation:
 
 ```bash
-cd /opt/fleshmarket/server
+cd /root/Flesh-Market/server
 node seed_devaccounts.mjs
 ```
 
@@ -130,10 +140,10 @@ This syncs files, runs npm install, and does a **zero-downtime reload** — play
 
 ### Manual backup
 ```bash
-/opt/fleshmarket/deploy/backup.sh
+/root/Flesh-Market/deploy/backup.sh
 ```
 
-Backups are saved to `/opt/fleshmarket/backups/`. The script keeps the last 7.
+Backups are saved to `/root/Flesh-Market/backups/`. The script keeps the last 7.
 
 ### Set up automatic daily backups
 ```bash
@@ -141,7 +151,7 @@ crontab -e
 ```
 Add this line (runs at 3am every day):
 ```
-0 3 * * * /opt/fleshmarket/deploy/backup.sh >> /var/log/fleshmarket/backup.log 2>&1
+0 3 * * * /root/Flesh-Market/deploy/backup.sh >> /var/log/fleshmarket/backup.log 2>&1
 ```
 
 ---
@@ -149,7 +159,7 @@ Add this line (runs at 3am every day):
 ## File layout on the server
 
 ```
-/opt/fleshmarket/
+/root/Flesh-Market/
 ├── client/               ← static files (HTML, CSS, JS)
 ├── server/
 │   ├── server.js
@@ -187,7 +197,7 @@ certbot --nginx -d yourdomain.com
 ```bash
 pm2 logs fleshmarket --lines 100
 # or run directly to see full error:
-cd /opt/fleshmarket/server && node --experimental-sqlite server.js
+cd /root/Flesh-Market/server && node --experimental-sqlite server.js
 ```
 
 ### Port 3000 already in use
@@ -208,9 +218,9 @@ proxy_read_timeout 86400s;
 ### Reset the database (nuclear option)
 ```bash
 pm2 stop fleshmarket
-rm /opt/fleshmarket/server/fleshmarket.db
+rm /root/Flesh-Market/server/fleshmarket.db
 pm2 start fleshmarket
-cd /opt/fleshmarket/server && node seed_devaccounts.mjs
+cd /root/Flesh-Market/server && node seed_devaccounts.mjs
 ```
 
 ---
@@ -244,11 +254,11 @@ pm2 restart fleshmarket
 ./deploy/backup.sh
 
 # Edit config
-nano /opt/fleshmarket/server/.env
+nano /root/Flesh-Market/server/.env
 pm2 restart fleshmarket
 
 # Seed/refresh dev accounts
-cd /opt/fleshmarket/server && node seed_devaccounts.mjs
+cd /root/Flesh-Market/server && node seed_devaccounts.mjs
 
 # SSL renewal (automatic, but manual if needed)
 certbot renew

@@ -60,38 +60,116 @@ const PATTERNS = SLUR_LIST.map(term => ({
 /**
  * Returns a censored version of `text`, replacing slurs with ****.
  * Also returns `flagged: true` if any substitution was made.
+ *
+ * THIS FLAGGED AND DID NOT CENSOR FOR THE WHOLE LIFE OF THE FILTER.
+ * The old shape was: normalise the text, TEST the pattern against the
+ * normalised copy, then REPLACE against the original. A pattern that only
+ * matched because of normalisation cannot match the original by definition, so
+ * the replace was always a no op, and the else branch re run the same failed
+ * replace and set flagged anyway. The result was a filter that detected every
+ * leet spelling, reported success, logged the incident to admins, and published
+ * the slur unchanged. Measured before the repair: 51 of 51 terms with a leet
+ * variant, and 49 of 51 with a SINGLE substituted character. Four callers take
+ * .clean with no rejection layer behind it, so that text reached live chat,
+ * whispers, the council floor and player bios verbatim.
+ *
+ * THE REPAIR RESTS ON ONE PROPERTY: the normalised copy is the same LENGTH as
+ * the original, character for character, so an index into one is an index into
+ * the other and a match found in the normalised copy can be cut out of the
+ * original. normalizeIndexed below guarantees that rather than assuming it, and
+ * the invariant is checked at the call site: if it is ever violated the
+ * function falls back to the canonical only behaviour instead of splicing at
+ * indices it cannot trust.
  */
+const LEET_KEYS = new Set(Object.keys(LEET_MAP));
+
+/* Lowercase and de leet WITHOUT changing the length in UTF-16 units, which is
+   what makes index mapping safe. A plain toLowerCase() is not safe here: a
+   handful of characters lowercase into two units, and one of those in a message
+   would slide every index after it and cut the wrong span out of the original.
+   A substitution is only taken when the source is one unit and the replacement
+   is one unit; anything else is passed through untouched. */
+function normalizeIndexed(str) {
+  let out = '';
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (LEET_KEYS.has(ch)) { out += LEET_MAP[ch]; continue; }
+    const lower = ch.toLowerCase();
+    out += lower.length === 1 ? lower : ch;
+  }
+  return out;
+}
+
 export function filterChat(text) {
   if (!text || typeof text !== 'string') return { clean: text, flagged: false };
 
-  let working = text;
-  // Run on both original and leet-normalized in parallel
-  const normalized = normalizeLeet(text.toLowerCase());
-  let flagged = false;
+  const normalized = normalizeIndexed(text);
 
+  // The invariant the whole approach depends on. If it ever fails, splicing the
+  // original at normalised indices would cut the wrong characters out, so fall
+  // back to matching the original directly: that still censors every canonical
+  // spelling, which is what the filter managed before this change anyway.
+  if (normalized.length !== text.length) return legacyFilter(text);
+
+  // Collect every match as a range in the normalised copy. Ranges rather than
+  // replacements, because the patterns allow separators between characters and
+  // two terms can overlap on the same span.
+  const hits = [];
   for (const { re, replacement } of PATTERNS) {
-    // Test against normalized version; replace in original
-    const normTest = new RegExp(re.source, 'gi');
-    if (normTest.test(normalized)) {
-      // Replace corresponding region in original text
-      // Simple approach: replace in original using same pattern
-      const replaced = working.replace(re, m => {
-        flagged = true;
-        return replacement;
-      });
-      if (replaced !== working) {
-        working = replaced;
-        flagged = true;
-      } else {
-        // Leet version triggered — replace the original chars too
-        // For safety, replace the original match in the normalized map
-        flagged = true;
-        // Re-run replace on working just in case
-        working = working.replace(re, () => { flagged = true; return replacement; });
-      }
+    /* PATTERNS is module level and these carry /g, so lastIndex is shared
+       state across calls. The loop below runs until exec returns null, and a
+       null return resets lastIndex to 0 by contract, so nothing is left dirty
+       for the next message on the current shape.
+
+       The reset stays anyway, because that guarantee lives in the loop rather
+       than in this line: the day someone adds an early exit here, a cap on hit
+       count or a break on a long message, lastIndex is left mid string and the
+       NEXT message with the same slur comes back clean. A filter that works
+       once is worse than one that does not work at all.
+
+       NO ASSERTION COVERS THIS LINE, and removing it passes the whole suite.
+       That is accurate rather than a gap: on the code as written the property
+       is unobservable, and an assertion that cannot fail is not coverage. */
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(normalized)) !== null) {
+      if (m[0].length === 0) { re.lastIndex++; continue; }
+      hits.push([m.index, m.index + m[0].length, replacement]);
     }
   }
+  if (!hits.length) return { clean: text, flagged: false };
 
+  // Merge overlaps so an overlapping pair is censored once rather than having
+  // the second replacement land inside the first one's asterisks.
+  hits.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  const merged = [];
+  for (const h of hits) {
+    const last = merged[merged.length - 1];
+    if (last && h[0] <= last[1]) last[1] = Math.max(last[1], h[1]);
+    else merged.push([h[0], h[1], h[2]]);
+  }
+
+  // Cut the ORIGINAL at those ranges, so casing and punctuation outside a match
+  // survive untouched and the message still reads as the person wrote it.
+  let out = '', at = 0;
+  for (const [start, end, replacement] of merged) {
+    out += text.slice(at, start) + replacement;
+    at = end;
+  }
+  return { clean: out + text.slice(at), flagged: true };
+}
+
+/* The pre repair behaviour, kept only for the length desync fallback above.
+   It censors canonical spellings and misses leet ones, which is exactly what
+   the filter did everywhere before this change, so falling back to it cannot
+   be worse than what shipped. */
+function legacyFilter(text) {
+  let working = text, flagged = false;
+  for (const { re, replacement } of PATTERNS) {
+    re.lastIndex = 0;
+    const replaced = working.replace(re, () => replacement);
+    if (replaced !== working) { working = replaced; flagged = true; }
+  }
   return { clean: working, flagged };
 }
 
