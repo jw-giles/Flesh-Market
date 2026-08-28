@@ -4180,7 +4180,33 @@ function _ensureChatItemCatalog() {
   window.lazyLoad('assets/inventory.js', function () { _chatCatLoading = false; _refillChatAvatars(); });
 }
 
-function addChat(item){
+/* WHO A MESSAGE IS ADDRESSED TO, asked in ONE place. The badge, the highlight
+   and the sound are three answers to the same question and they were three
+   separate expressions, so they could disagree - and the badge's version was
+   "any message on a channel you are not looking at", which is not addressing at
+   all.
+   The lookahead rather than \b: usernames may contain a hyphen, and \b sits
+   happily between 'b' and '-', so @Jacob would match a mention of @Jacob-son. */
+function chatMentionsMe(item){
+  const myName = (window.ME && ME.name) ? String(ME.name) : '';
+  if (!myName) return false;
+  // Your own message is not a mention of you, even when you quote your own name.
+  if (item && item.user === myName) return false;
+  try {
+    // The @ has to START a token as well as end one, or an address like
+    // a@Jacob.io reads as a mention of Jacob.
+    const re = new RegExp('(^|[^A-Za-z0-9_\\-])@' + myName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z0-9_\\-])', 'i');
+    return re.test(String((item && item.text) || ''));
+  } catch(_) { return false; }
+}
+window.chatMentionsMe = chatMentionsMe;
+
+/* isHistory: this message is being REPLAYED, not received. The chat_history
+   handler has passed it since the replay was written; addChat took one
+   parameter and dropped it on the floor, so every refresh walked the last
+   thirty minutes of traffic through the live path and lit a badge for each
+   message on a channel you were not looking at. Nothing new had happened. */
+function addChat(item, isHistory){
   const channel = item.channel || 'global';
   const ROOMED = ['global','patreon','guild','unmod'];
   // For roomed channels, route to the correct room pane
@@ -4208,10 +4234,15 @@ function addChat(item){
 
   let text = String(item.text || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const myName = (ME && ME.name) ? ME.name : '';
+  const mentionsMe = chatMentionsMe(item);
   if (myName) {
-    const re = new RegExp(`(@${myName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
-    text = text.replace(re, `<span class="chat-mention">$1</span>`);
-    if (re.test(item.text || '')) try { playSound && playSound('mention'); } catch(e) {}
+    // Same shape as chatMentionsMe, so what is highlighted and what badges are
+    // never two different answers. $1 is the boundary character, put back.
+    const re = new RegExp(`(^|[^A-Za-z0-9_\\-])(@${myName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?![A-Za-z0-9_\\-]))`, 'gi');
+    text = text.replace(re, `$1<span class="chat-mention">$2</span>`);
+    // NOT ON REPLAY. A refresh replays half an hour of chat, and every mention
+    // in it used to sound again as though it had just arrived.
+    if (!isHistory && mentionsMe) try { playSound && playSound('mention'); } catch(e) {}
   }
   text = text.replace(/@([A-Za-z0-9_\-]+)/g, '<span style="color:#9dffb0;opacity:.8">@$1</span>');
 
@@ -4304,8 +4335,25 @@ function addChat(item){
   while (box.children.length > MAX_CHAT_MSGS) { box.removeChild(box.firstChild); }
   box.scrollTop = box.scrollHeight;
 
+  /* THE BADGE IS FOR SOMETHING ADDRESSED TO YOU. Two separate reasons it used
+     to fire when nothing had happened:
+
+     REPLAY. chat_history walks the last thirty minutes through this function on
+     every refresh, and each replayed line on a channel you were not looking at
+     incremented the count. A reload alone produced a badge.
+
+     TRAFFIC. Even live, it counted ANY message on a non-active channel, so a
+     busy Global lit the badge continuously whether or not a word of it was
+     meant for you.
+
+     Both are refused here, at the one place that paints the badge, rather than
+     at the callers - addChat has nine of them and they keep being added. */
+  if (isHistory) return;
+  if (!mentionsMe) return;
+
   const activeChannel = document.querySelector('.chat-tab.active')?.dataset?.channel || 'global';
-  // For global rooms: only show unread badge if not on global tab OR viewing a different room
+  // Still not badged when you are already looking at it: a mention you can see
+  // land in front of you does not need a counter next to the tab name.
   if (channel === 'global') {
     const msgRoom = Math.min(5, Math.max(1, parseInt(item.room) || 1));
     const isOnGlobal = activeChannel === 'global';
@@ -4364,6 +4412,34 @@ function removeAnnouncement(id) {
 }
 window.setAnnouncement = setAnnouncement;
 window.removeAnnouncement = removeAnnouncement;
+
+/* ── Mention badges, painted from the server rather than counted locally ─────
+   The badge used to be a number the client incremented and nothing else. It
+   started at zero on every load, so a mention that arrived while the player was
+   logged out was never delivered: the message was there in the replay and
+   nothing pointed at it.
+
+   The server owns the count now. This paints what it is told and asks it to
+   clear a channel when the player looks at one. The live increment in addChat
+   stays as it is, because a mention arriving while you are watching should move
+   the badge without a round trip. */
+function paintMentionBadges(counts){
+  const c = counts || {};
+  ['global','patreon','guild','unmod','dunce'].forEach(function(ch){
+    const b = document.getElementById('unread-' + ch);
+    if (!b) return;
+    const n = c[ch] | 0;
+    if (n > 0) { b.style.display = 'inline-block'; b.textContent = String(n); }
+    else { b.style.display = 'none'; b.textContent = '0'; }
+  });
+}
+window.markChannelRead = function(channel){
+  if (!channel) return;
+  // The whisper badge is not backed by this store; it is a live counter and
+  // clearing it locally is the whole of clearing it.
+  if (channel === 'whisper') return;
+  try { sendWS({ type:'chat_mentions_seen', channel: String(channel) }); } catch(_) {}
+};
 
 // Fleshbook unread dot — works before the lazy module loads, so updates the DOM directly.
 function setFbBadge(n) {
@@ -4968,6 +5044,26 @@ ws.addEventListener('message', (ev)=>{
   if (msg.type === 'announcement_set') setAnnouncement(msg.data);
   if (msg.type === 'announcement_clear') removeAnnouncement(msg.data && msg.data.id);
   if (msg.type === 'fleshbook_unread') setFbBadge(msg.data && msg.data.count || 0);
+  if (msg.type === 'chat_mentions') paintMentionBadges(msg.data || {});
+  /* The weekly wipe. A client already connected has its own copy of the week in
+     the DOM, and without this it keeps reading and quoting a scrollback the
+     server has forgotten - the wipe would only become visible on a refresh,
+     which is the one moment it should not be a surprise. */
+  if (msg.type === 'chat_cleared') {
+    try {
+      document.querySelectorAll('.chat-channel').forEach(function(pane){
+        pane.innerHTML = '';
+        const note = document.createElement('div');
+        note.style.cssText = 'text-align:center;color:#3a3a30;font-size:.7rem;padding:8px 0;letter-spacing:.08em;font-family:\'Courier New\',monospace';
+        note.textContent = '\u2500\u2500\u2500 the week closed. chat starts again here \u2500\u2500\u2500';
+        pane.appendChild(note);
+      });
+      // The badges went with them. Painted empty rather than waiting for the
+      // server's follow-up, so there is never a frame showing a count against
+      // an empty channel.
+      paintMentionBadges({});
+    } catch(e) { console.error('[chat cleared]', e); }
+  }
   if (msg.type === 'chat_history') {
     // Replay last 30min of messages on login/reconnect
     const msgs = (msg.data && msg.data.messages) || [];

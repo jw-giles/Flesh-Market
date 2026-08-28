@@ -4,6 +4,172 @@ All versions in chronological order. Each entry corresponds to a former `PATCH_N
 
 ---
 
+## v1.10.1.5 (2026-08-27) - the week closes with the tax (SERVER + CLIENT)
+
+**Server restart required.** Files touched: `server/db.js`, `server/server.js`, `client/assets/core.js`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html` (build stamp), `tools/chat-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### Same instant as tax day
+
+Chat clears on the FRS boundary: Sunday 12:00 America/Los_Angeles, read from `_frsMostRecentSundayNoonLA`, the same function `runWeeklyTaxAssessment` is scheduled from. Not a second cron expression that happens to line up, the same helper, so the two cannot drift apart on a DST week or on a timezone change.
+
+### It shares the boundary and not the scheduler
+
+`frsScheduleTick` returns early when FRS is disabled, and **FRS ships dormant** — `getFRSSettings().enabled` defaults to 0. Four lines inside that tick would have produced a weekly clear that silently never fires, hanging off a switch nobody would think to connect it to.
+
+"The same time as tax day" is a statement about the clock, not about whether the tax is turned on. Own tick, own marker in `city_kv`.
+
+The marker is there for the same reason `last_run_ts` is on the FRS side: a server that is down across Sunday noon runs the wipe when it comes back rather than skipping the week. A missed wipe leaves a week of scrollback outliving its cycle, which is the thing being prevented.
+
+**An unset marker is not a missed wipe.** A fresh database, or the first boot after this ships, would otherwise clear a chat nobody has had a cycle to fill, as a surprise, with no announcement. It records the boundary and waits for the next one.
+
+### What goes
+
+The in-memory rings, the `chat_log` table, and unread mentions older than the boundary. That last one matters: a badge surviving the wipe points at a message that no longer exists, so the player opens the channel, finds nothing, and the count is still sitting there with no way to clear it by reading. Mentions are cut by timestamp rather than truncated, so one landing in the same second as the wipe — about a message that survives — is not swallowed by it.
+
+### The client is told
+
+Without a broadcast the wipe is invisible to anyone already connected. The server forgets and their pane does not, so they go on reading and quoting a week that is gone, and it only surfaces on a refresh, which is the one moment it should not be a surprise. `chat_cleared` empties the panes and leaves a closing line.
+
+### What this does to the payload problem
+
+v1.10.1.4 recorded an open item: the connect payload grows about eightfold once messages can be thirteen times longer. A weekly wipe **bounds** it — the history can hold at most one week rather than accumulating — but it does not size it. A busy week still fills 200 messages per room, and the frame is still every room flattened into one send on every connect. The decision noted there is narrower now, not closed.
+
+### Checks
+
+`chat-check` 68 to 88. The boundary is **driven across both DST transitions**: 13:30 UTC-7 on the spring-forward Sunday resolves to that same Sunday, 11:30 UTC-8 on the fall-back Sunday resolves to the week before, and asking from the boundary itself returns the boundary rather than walking back a week. Those are the cases where an hour of drift would put the wipe on the wrong side of noon, and no reading of the arithmetic settles them.
+
+The wipe runs against a real in-memory database: fifty rows across two rooms removed and counted, a second wipe reported as harmless, and the mention cut proved to keep the row that lands after the boundary.
+
+Suite 15 of 23 green, 4906 assertions. The four failures are the gitignored vehicle, brood and terrain art, identical on an untouched checkout.
+
+---
+
+## v1.10.1.4 (2026-08-27) - 534 words, a counter that says so, and three walls in a row (SERVER + CLIENT)
+
+**Server restart required.** Files touched: `server/server.js`, `client/assets/chat-ui.js`, `client/index.html`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html` (build stamp), `tools/chat-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The cap
+
+240 characters to 534 words. That is roughly 3,200 characters of ordinary English, about thirteen times what chat held before.
+
+Enforced on the server, on chat and whisper both, and **refused rather than truncated**. Silently cutting at the cap publishes half a sentence under the player's name and gives them no way to know it happened.
+
+A character ceiling of 6,000 sits underneath it. That is not a second rule for players to think about, it is a defence: 534 words says nothing about how long a word may be, and without it one "word" of two hundred thousand characters is a legal message.
+
+### The counter
+
+A live count in the input row. Hidden below three quarters of the cap, because a number ticking beside every three-word line is noise and what a player actually needs is warning that a cut off is coming. Ambers at ninety percent, reds over, and the send button disables.
+
+Client and server count words with the same expression, and the check asserts that both copies match. Two definitions of "word" means a counter reading 533 next to a server refusing the message, which is worse than no counter: the player is told the rule and then the rule lies to them.
+
+An over-length message is refused **without clearing the input**. It is text somebody spent time on; throwing it away to punish them for going over is not a length rule, it is a shredder.
+
+### Three walls in a row
+
+Three messages at or above 481 words within sixty seconds auto-dunces. Two things were added to "back to back" and both are deliberate.
+
+**A window.** Consecutive with no clock catches three long posts written across an evening, which is a lore writer rather than a spammer. Spam is rapid, so the run has to be rapid.
+
+**A floor below the cap, not the cap exactly.** Somebody pasting the same wall three times lands wherever their paste lands, rarely on 534 exactly, and a rule that only catches an exact hit catches almost nobody. Ninety percent of the cap.
+
+Any ordinary message resets the run. Devs, admins and the owner are exempt: a GM posting three long lore drops is precisely the false positive this produces, and an operator locked out of his own chat by his own spam rule is worse than the spam.
+
+The check runs after the message has been delivered, so the third wall is on screen for whoever reviews the dunce rather than being swallowed by the punishment it caused. It logs to admins as `dunce_auto` and the existing undunce reverses it.
+
+### The thing this patch does not fix, and it is the one to decide before shipping
+
+`getChatHistory` flattens every ring into a single JSON frame sent on every connect. At 200 messages per room across roughly twenty rooms that is about 1.6MB today. Once a message can be thirteen times longer it is about 12MB, on every refresh, for every player.
+
+Nothing here changes `CHAT_RING_MAX` or the payload, so that growth is real and unmitigated. It is a product decision rather than a bug: lower the ring, cap the history by bytes, or send only the room being looked at and fetch the rest on demand. Recorded rather than quietly absorbed, because the ring's own comment still says the old estimate and will be wrong the moment this ships.
+
+### Checks
+
+`chat-check` 45 to 68. The counter and the streak are **driven**, the streak twice: once on the real clock for its shape, and once on a faked clock for the window, which is the assertion that separates a lore writer from a spammer and the one most likely to be got wrong by reading.
+
+Suite 15 of 23 green, 4886 assertions. The four failures are the gitignored vehicle, brood and terrain art, identical on an untouched checkout.
+
+---
+
+## v1.10.1.3 (2026-08-27) - a mention that arrives while you are logged out is now waiting for you (SERVER + CLIENT)
+
+**Server restart required.** Files touched: `server/db.js`, `server/server.js`, `client/assets/core.js`, `client/assets/chat-ui.js`, `client/index.html`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html` (build stamp), `tools/chat-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The gap v1.10.1.2 opened, closed
+
+Making badges mention-only was right and it exposed something the old noise had been hiding. Chat badges were client-side counters. They started at zero on every load, so a mention arriving while a player was logged out was never delivered: the message sat in the scrollback and nothing pointed at it. Under the old behaviour that barely showed, because the history replay immediately refilled the badges with traffic. Take the noise away and the gap is the whole feature.
+
+### An inbox, not a read cursor
+
+The obvious design is a per-player per-channel "last read" timestamp and a count of mentions since. It does not survive contact with the storage: the chat rings are count-bounded at 200 messages per room, not time-bounded, so on a busy Global the messages a cursor is counting against are gone and the count is wrong in whichever direction the traffic went.
+
+`chat_mentions` is a row per mention instead. The event, recorded when it happens, outliving the ring, a restart and any length of absence. It is shaped after `fb_notifications` down to the column names, because Fleshbook had already solved this exact problem and a second shape for the same thing is how two systems drift.
+
+### Recorded on the send path, and gated on the recipient
+
+The write happens where the message is sent, not where it is received, because the case that needs help is the player who is not connected.
+
+It parses `chatText` — the text that actually shipped — so a name the slur filter rewrote cannot notify anyone. Self-mentions are skipped. Duplicates within one message collapse. **And the channel gate is applied to the person being mentioned, not the person listening:** naming somebody in Guild chat who cannot read Guild chat would light a badge on a tab they cannot open, which is worse than no notification because it is an unclearable one.
+
+Two ceilings, and they are separate on purpose. Five recorded mentions per message caps the rows. Twelve scanned tokens caps the *lookups*, because `hits` only counts tokens that resolved to a real player, so forty `@nobody` tokens would record nothing and still cost forty name lookups. The cheap half of the work is the half an attacker controls.
+
+### Clearing
+
+Opening a channel marks that channel read and nothing else. The client sends a channel name; the server takes whose rows those are from the socket's own player id, never from the message. The room switcher clears the same badge by a different route and had to be wired too, or switching Global rooms cleared the picture and left the state.
+
+Read rows are pruned after thirty days, at boot and daily, so marking read stays a single cheap `UPDATE` rather than a delete.
+
+### What is still not covered
+
+The whisper badge is untouched and is still a live counter with no persistence. A whisper received while offline is in the pane on reconnect and does not raise a badge. That is the same gap, in the same shape, in a different store, and it is not fixed here.
+
+### Checks
+
+`chat-check` 22 to 45. The inbox is **driven against a real database**: an in-memory SQLite instance built from the `CREATE TABLE` lifted out of `db.js` rather than retyped, with the four helpers lifted and called. A schema copied into a check is a check that passes against a table the server does not create.
+
+The parser is driven too, and that is what caught the lookup ceiling: forty distinct junk tokens cost forty name lookups before the second cap existed, and no reading of the loop showed it, because the loop was correctly capped on the thing it was counting.
+
+That section needs Node 22.5 or later for `node:sqlite`. Where it is missing it prints the NOT RUN banner `run-all` recognises rather than a pass, because a check that cannot run must never print green.
+
+Suite 15 of 23 green, 4863 assertions. The four failures are the gitignored vehicle, brood and terrain art, identical on an untouched checkout.
+
+---
+
+## v1.10.1.2 (2026-08-27) - a refresh raised badges for messages nobody had sent (CLIENT)
+
+**No server change. Hard refresh required.** Files touched: `client/assets/core.js`, `client/assets/coalition-sprites.js` (build stamp), `client/citybattle-mock.html` (build stamp), `tools/chat-check.mjs` (NEW), `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.
+
+### The argument was being passed and nothing was catching it
+
+`chat_history` replays the last thirty minutes on every login and reconnect, and it has always called `addChat(m.data || m, true)`. That `true` means "this is history". `addChat` was declared `function addChat(item)`. One parameter. The flag went nowhere and had been going nowhere since the replay was written.
+
+So every refresh walked half an hour of traffic through the live path: an unread badge for each replayed message on a channel you were not looking at, and `playSound('mention')` for every historical line with your name in it. Nothing new had happened. The badge was reporting that the client had restarted.
+
+### And the live path was counting the wrong thing anyway
+
+Even with no replay, the badge incremented on ANY message on a non-active channel. A busy Global lit it permanently whether or not a word of it was addressed to anyone in particular, which makes the badge worth ignoring, which is the same as not having one.
+
+**Badges are mentions now.** One predicate, `chatMentionsMe`, asked at the one place that paints the badge rather than at the nine call sites `addChat` has collected. The highlight and the mention sound read the same predicate, so what glows in the log, what sounds, and what badges cannot give three different answers.
+
+`@Jacobson` is no longer a mention of Jacob, and neither is `@Jacob-son` or an address like `a@Jacob.io`: the name has to start a token as well as end one. A word boundary was not enough on its own, because `\b` sits happily between `b` and `-` and usernames may contain a hyphen.
+
+The whisper badge is untouched. A whisper is addressed to you by construction, which is the same thing a mention is, and dropping it would have been a change nobody asked for.
+
+### What this deliberately does not do
+
+**Chat badges are still client-side counters with no persistence.** They start at zero on every load. Under the old behaviour that barely mattered, because the replay immediately repopulated them with noise. Now it means a mention that arrives while you are logged out is not waiting for you when you come back: the message is there in the replay and the badge is not. Fixing that properly is a server-side read cursor per player per channel, which is a schema and a migration, and it is not in a client patch.
+
+**Fleshbook is unaffected.** Its badge already comes from `/api/fleshbook/unread` at auth, which is server truth rather than a counter, and it was never part of this.
+
+### Checks
+
+`tools/chat-check.mjs`, NEW, 22 assertions. The predicate is **driven**: the file is sliced, the function lifted into a sandbox and called against the substring cases that are the whole reason it is easy to get wrong. Reading a regex does not tell you whether `@Jacobson` matches; calling it does. The wiring around it is matched on text, deliberately, because "the argument reaches the parameter" and "the return sits before the badge" are facts about where tokens sit rather than about what they compute.
+
+One assertion in the new check failed on its first run and the fault was in the check, not the code: the helper reset the global regex's `lastIndex` inside the expression it returned, so it returned `!!0`. Recorded rather than quietly fixed, because a check that fails for its own reasons is how a real failure gets waved through next time.
+
+Suite 15 of 23 green, 4840 assertions. The four failures are `city-battle`, `faction`, `reach` and `reach-terrain`, all of them the gitignored vehicle, brood and terrain art that a repo clone does not have. They fail identically on an untouched checkout.
+
+---
+
 ## v1.10.1.1 (2026-08-27) - the Circuit was sealed against a passage the server had open (CLIENT)
 
 **No server change. Hard refresh required.** Files touched: `client/assets/core.js`, `client/assets/galaxy.js`, `tools/lane-check.mjs`, `client/version.json`, `docs/CHANGELOG.md`, `docs/MANIFEST.txt`.

@@ -1214,6 +1214,7 @@ window.storeSubTab=storeSubTab;
     <span id="chatChannelBadge" style="font-size:.68rem;opacity:.6;color:var(--amber);white-space:nowrap">global</span>
     <span id="whisperTargetBadge" style="display:none;font-size:.68rem;color:#a78bfa;white-space:nowrap;padding:0 4px;border:1px solid #4a3580;border-radius:4px;cursor:pointer" title="Click to clear">→ …</span>
     <input id="chatInput" placeholder="Say something… @mention" autocomplete="off" data-i18n-ph="ph.chat"/>
+    <span id="chatWordCount" style="display:none;font-size:.66rem;font-family:'Courier New',monospace;letter-spacing:.06em;color:#7a7a6a;white-space:nowrap;padding:0 2px" title="Words in this message"></span>
     <button id="chatSend" data-i18n="btn.send">Send</button>
     <div id="chatMentionDrop" style="display:none;bottom:34px;left:0"></div>
     <div style="position:absolute;right:0;bottom:calc(100% + 2px);display:flex;gap:2px">
@@ -1600,6 +1601,7 @@ function __updateEffectivePositions(){
     // Clear unread
     var unread = document.getElementById('unread-' + ch);
     if (unread) { unread.style.display = 'none'; unread.textContent = '0'; }
+    if (window.markChannelRead) window.markChannelRead(ch);
     updateRoomDots(ch);
   }
   window.switchChannelRoom = switchChannelRoom;

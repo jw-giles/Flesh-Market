@@ -892,6 +892,25 @@ export function pruneChatLog(perKeyMax) {
     stmt('DELETE FROM chat_log WHERE k=? AND id NOT IN (SELECT id FROM chat_log WHERE k=? ORDER BY id DESC LIMIT ?)').run(k, k, perKeyMax);
   }
 }
+/* The weekly wipe. A DELETE with no WHERE rather than a prune to zero: this is
+   the whole log going, and saying so in one statement is clearer than a loop
+   that happens to keep nothing.
+   Returns the row count removed so the caller can log a number rather than a
+   claim. */
+export function wipeChatLog() {
+  const before = stmt('SELECT COUNT(*) AS c FROM chat_log').get();
+  stmt('DELETE FROM chat_log').run();
+  return before?.c || 0;
+}
+/* Mentions are cleared with the messages they point at. A badge surviving the
+   wipe points at a message that no longer exists, which is a notification a
+   player cannot resolve by reading: they open the channel, find nothing, and
+   the count is still there. Scoped by time rather than truncated, so a mention
+   that lands in the same second as the wipe is not swallowed by it. */
+export function wipeChatMentionsBefore(ts) {
+  const r = stmt('DELETE FROM chat_mentions WHERE created_at < ?').run(Number(ts) || Date.now());
+  return r?.changes || 0;
+}
 
 // ─── Lane Shares ──────────────────────────────────────────────────────────────
 export function getLaneShareCount(laneKey) {
@@ -2790,8 +2809,18 @@ export function initItemTables() {
     created_at   INTEGER NOT NULL,
     seen         INTEGER NOT NULL DEFAULT 0
   );
+  CREATE TABLE IF NOT EXISTS chat_mentions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient_id TEXT NOT NULL,
+    channel      TEXT NOT NULL,
+    room         INTEGER NOT NULL DEFAULT 1,
+    from_name    TEXT NOT NULL,
+    created_at   INTEGER NOT NULL,
+    seen         INTEGER NOT NULL DEFAULT 0
+  );
   CREATE INDEX IF NOT EXISTS idx_fb_replies_post ON fb_replies(post_id);
   CREATE INDEX IF NOT EXISTS idx_fb_notif_recip ON fb_notifications(recipient_id, seen);
+  CREATE INDEX IF NOT EXISTS idx_chat_mentions_recip ON chat_mentions(recipient_id, seen);
   `);
   // Migrations for fb tables created before edited/pinned existed (e.g. test DBs)
   try { db.exec('ALTER TABLE fb_posts ADD COLUMN edited INTEGER NOT NULL DEFAULT 0'); } catch(_){}
@@ -3313,6 +3342,49 @@ export function fbUnreadCount(playerId) {
 }
 export function fbMarkSeen(playerId) {
   stmt('UPDATE fb_notifications SET seen=1 WHERE recipient_id=? AND seen=0').run(playerId);
+}
+
+/* ── Chat mention inbox ───────────────────────────────────────────────────────
+   A MENTION IS A THING THAT HAPPENED, NOT A NUMBER ON A TAB. The unread badge
+   was a client-side counter that started at zero on every load, so a mention
+   arriving while a player was logged out was simply never delivered: the
+   message sat in the scrollback and nothing pointed at it.
+
+   Deliberately an INBOX rather than a read cursor per channel. A cursor
+   ("everything since timestamp T") only answers the question while the
+   scrollback that far back still exists, and the rings are count-bounded at 200
+   per room, so a busy Global loses the evidence and the count goes wrong. A row
+   per mention is the event itself and survives the ring, a restart and any
+   length of absence.
+
+   Shaped after fb_notifications on purpose, down to the column names. The two
+   are the same problem and one of them was already solved. */
+export function chatAddMention(recipientId, channel, room, fromName) {
+  stmt('INSERT INTO chat_mentions(recipient_id,channel,room,from_name,created_at) VALUES(?,?,?,?,?)')
+    .run(recipientId, String(channel || 'global'), (room | 0) || 1, String(fromName || ''), Date.now());
+}
+// Per channel, because that is the granularity the badges are drawn at. Rooms
+// are collapsed into their channel for the same reason: there is one Global tab
+// with one badge on it, whichever room the mention landed in.
+export function chatUnreadMentions(playerId) {
+  const rows = stmt('SELECT channel, COUNT(*) AS c FROM chat_mentions WHERE recipient_id=? AND seen=0 GROUP BY channel')
+    .all(playerId);
+  const out = {};
+  for (const r of rows) out[r.channel] = r.c | 0;
+  return out;
+}
+// Scoped to one channel: opening Global must not silently clear a Guild mention
+// the player has not looked at.
+export function chatMarkMentionsSeen(playerId, channel) {
+  stmt('UPDATE chat_mentions SET seen=1 WHERE recipient_id=? AND channel=? AND seen=0')
+    .run(playerId, String(channel || 'global'));
+}
+// Seen rows are evidence of nothing once read. Trimmed on a schedule rather than
+// on read, so marking seen stays a single cheap UPDATE.
+export function chatPruneMentions(maxAgeMs) {
+  const cutoff = Date.now() - (Number(maxAgeMs) || 30 * 24 * 60 * 60 * 1000);
+  const r = stmt('DELETE FROM chat_mentions WHERE seen=1 AND created_at < ?').run(cutoff);
+  return r?.changes || 0;
 }
 export function fbPostOwner(id) {
   const r = stmt('SELECT author_id FROM fb_posts WHERE id=? AND deleted=0').get(id | 0);

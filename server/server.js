@@ -33,7 +33,7 @@ import {
   getNetWorthHistory, getFundNAVHistory, getLeaderboard,
   verifyPassword, createPasswordHash,
   saveMarketState, loadMarketState,
-  appendChatLog, loadChatLogAll, pruneChatLog,
+  appendChatLog, loadChatLogAll, pruneChatLog, wipeChatLog, wipeChatMentionsBefore,
   saveGalaxySystemsState, loadGalaxySystemsState,
   savePresidentState, loadPresidentState,
   saveLimitOrder as dbSaveLimitOrder, deleteLimitOrder as dbDeleteLimitOrder,
@@ -112,6 +112,7 @@ import {
   addAnnouncement, getActiveAnnouncements, clearAnnouncement, pruneExpiredAnnouncements,
   fbAddPost, fbGetFeed, fbGetReplies, fbAddReply, fbToggleVote,
   fbDeletePost, fbDeleteReply, fbAddNotification, fbUnreadCount, fbMarkSeen,
+  chatAddMention, chatUnreadMentions, chatMarkMentionsSeen, chatPruneMentions,
   fbPostOwner, fbReplyOwner, fbEditPost, fbEditReply, fbSetPinned,
   executeStockSplit,
   // Dividend eligibility (7-trading-day holding requirement)
@@ -2980,6 +2981,61 @@ try {
 const CHAT_COOLDOWN_MS = 500;          // min ms between messages per player
 const CHAT_BURST_LIMIT = 6;            // max messages in burst window
 const CHAT_BURST_WINDOW_MS = 3000;     // burst window duration
+
+/* ── Message length ──────────────────────────────────────────────────────────
+   THE USER-FACING RULE IS WORDS. The character ceiling under it is a defence,
+   not a second rule: 534 words says nothing about how long a word may be, and
+   without it one "word" of two hundred thousand characters is a legal message.
+   Sized generously so it never binds on real prose - 534 words of English runs
+   around 3,200 characters, and this leaves room for long compounds and CJK. */
+const CHAT_MAX_WORDS = 534;
+const CHAT_MAX_CHARS = 6000;
+/* COUNTED THE SAME WAY ON BOTH SIDES OF THE WIRE. The client draws a counter
+   from this rule and the server enforces it; two definitions of "word" means a
+   counter that reads 533 next to a server that refuses the message. */
+function countWords(s) {
+  const t = String(s || '').trim();
+  return t ? t.split(/\s+/).length : 0;
+}
+
+/* ── Wall-of-text spam ───────────────────────────────────────────────────────
+   Three maxed-out messages in a row auto-dunces.
+
+   TWO THINGS ARE ADDED TO "BACK TO BACK" HERE AND BOTH ARE DELIBERATE.
+
+   A WINDOW. Consecutive alone has no clock, so three long posts written across
+   an evening - which is a lore writer, not a spammer - would trip it. Spam is
+   rapid, so the run has to be rapid. Sixty seconds.
+
+   A FLOOR BELOW THE CAP, not the cap exactly. Somebody pasting the same wall
+   three times lands wherever their paste lands, which is rarely 534 on the
+   nose, and a rule that only catches an exact hit catches almost nobody.
+
+   The counter resets on any message that is not a wall, so an ordinary line
+   between two long ones clears it.
+
+   DEVS, ADMINS AND THE OWNER ARE EXEMPT. A GM posting three long lore drops is
+   the exact false positive this would produce, and an operator locked out of
+   his own chat by his own spam rule is worse than the spam. */
+const CHAT_WALL_WORDS = Math.ceil(CHAT_MAX_WORDS * 0.9);  // 481
+const CHAT_WALL_STREAK = 3;
+const CHAT_WALL_WINDOW_MS = 60_000;
+const chatWallMap = new Map();  // playerId -> { count, lastMs }
+/* Returns true when this message completes a spam streak. Called AFTER the
+   message has gone out, so the third wall is visible to whoever reviews the
+   dunce rather than being swallowed by the punishment it caused. */
+function noteWallOfText(playerId, words) {
+  const now = Date.now();
+  let r = chatWallMap.get(playerId);
+  if (!r) { r = { count: 0, lastMs: 0 }; chatWallMap.set(playerId, r); }
+  if (words < CHAT_WALL_WORDS) { r.count = 0; r.lastMs = now; return false; }
+  // A gap longer than the window starts the run again rather than extending it.
+  if (now - r.lastMs > CHAT_WALL_WINDOW_MS) r.count = 0;
+  r.count++;
+  r.lastMs = now;
+  if (r.count >= CHAT_WALL_STREAK) { r.count = 0; return true; }
+  return false;
+}
 const chatRateMap = new Map();          // playerId -> { lastMs, burstTs, burstCount }
 
 function chatAllowed(playerId) {
@@ -9113,6 +9169,57 @@ function restoreChatHistory() {
 }
 restoreChatHistory();
 
+/* ── Mentions, recorded server side ──────────────────────────────────────────
+   MAX_MENTIONS_PER_MSG is a spam ceiling, not a style rule. 240 characters of
+   text holds roughly fifty @tokens, and every one of them is a name lookup and
+   a row. Five is past any honest use of a mention and stops one message from
+   writing fifty rows to every reader's inbox.
+
+   THE CHANNEL GATE IS APPLIED TO THE RECIPIENT. Naming somebody in Guild chat
+   who cannot read Guild chat would otherwise light a badge on a tab they cannot
+   open, which is worse than no notification: it is an unclearable one. The test
+   is the same one the send path uses two functions down, asked of the person
+   being mentioned rather than the person listening. */
+const MAX_MENTIONS_PER_MSG = 5;
+const MAX_MENTION_TOKENS_SCANNED = 12;
+const MENTION_TOKEN = /@([A-Za-z0-9_\-]{1,32})/g;
+function canReadChannel(p, channel) {
+  if (!p) return false;
+  if (channel === 'patreon' || channel === 'unmod') return (p.patreon_tier || 0) >= 1;
+  if (channel === 'guild') return isGuildEligible(p);
+  return true;
+}
+function recordChatMentions(text, sender, channel, room) {
+  const seen = new Set();
+  let m, hits = 0, scanned = 0;
+  MENTION_TOKEN.lastIndex = 0;
+  while ((m = MENTION_TOKEN.exec(String(text || ''))) && hits < MAX_MENTIONS_PER_MSG) {
+    /* SCANNED IS CAPPED SEPARATELY FROM HITS, and that is not belt and braces.
+       hits only counts tokens that resolved to a real player, so a message of
+       fifty @tokens naming nobody records nothing and still costs fifty name
+       lookups. The cheap half of the work is the half an attacker controls. */
+    if (++scanned > MAX_MENTION_TOKENS_SCANNED) break;
+    const name = m[1];
+    const lower = name.toLowerCase();
+    if (seen.has(lower)) continue;      // @bob @bob is one mention
+    seen.add(lower);
+    let target = null;
+    try { target = getPlayerByName(name); } catch(_) { target = null; }
+    if (!target) continue;              // @nobody is just text
+    if (target.id === sender.id) continue;  // you cannot notify yourself
+    if (!canReadChannel(target, channel)) continue;
+    hits++;
+    try { chatAddMention(target.id, channel, room, sender.name); } catch(e) { console.error('[chat mention write]', e); continue; }
+    // Push the new count to the target if they happen to be connected, so a
+    // mention lands on the badge without waiting for their next login.
+    try { broadcastToPlayer(target.id, { type:'chat_mentions', data: chatUnreadMentions(target.id) }); } catch(_) {}
+  }
+}
+// Read rows are evidence of nothing. Daily, and at boot, matching how the chat
+// log itself is pruned rather than inventing a second schedule.
+try { chatPruneMentions(); } catch(e) { console.error('[chat mention prune]', e); }
+setInterval(() => { try { chatPruneMentions(); } catch(_) {} }, 24 * 60 * 60 * 1000);
+
 function broadcast(msg){const data=JSON.stringify(msg);wss.clients.forEach(ws=>{if(ws.readyState===1)ws.send(data);});
   // Track chat messages for new-login history
   if (msg.type === 'chat' || msg.type === 'system_message') pushChatHistory(msg);
@@ -10422,6 +10529,11 @@ wss.on('connection',(ws,req)=>{
     // Send last 30min of chat history to new connection
     const hist = getChatHistory();
     if (hist.length) ws.send(JSON.stringify({type:'chat_history',data:{messages:hist}}));
+    // The badges that go on top of that scrollback. Sent AFTER the history, so
+    // the replay cannot land on a badge state it did not produce.
+    try {
+      ws.send(JSON.stringify({type:'chat_mentions',data:chatUnreadMentions(player.id)}));
+    } catch(e) { console.error('[chat mentions on connect]', e); }
     // Send active pinned announcements (survives reconnect / alt-login)
     try {
       const anns = getActiveAnnouncements();
@@ -13458,8 +13570,36 @@ wss.on('connection',(ws,req)=>{
     }
 
     // ── Chat ─────────────────────────────────────────────────────────────────
+    /* The player has looked at a channel, so its mentions are read. Scoped to
+       the one channel named: opening Global must not clear a Guild mention
+       nobody has seen. The client is trusted for WHICH tab it is showing and
+       for nothing else - it sends a channel name, and the server decides whose
+       rows those are from the socket's own player id. */
+    if(msg.type==='chat_mentions_seen'){
+      const ch = String(msg.channel||'').toLowerCase();
+      if(!ch) return;
+      try {
+        chatMarkMentionsSeen(playerId, ch);
+        ws.send(JSON.stringify({type:'chat_mentions',data:chatUnreadMentions(playerId)}));
+      } catch(e) { console.error('[chat mentions seen]', e); }
+      return;
+    }
     if(msg.type==='chat'){
-      const rawText=String(msg.text||'').slice(0,240); if(!rawText)return;
+      const rawText=String(msg.text||'').slice(0,CHAT_MAX_CHARS).trim(); if(!rawText)return;
+      /* REFUSED, NOT TRUNCATED. Silently cutting a message at the cap publishes
+         half a sentence under the player's name and gives them no way to know it
+         happened. The client draws its counter from the same rule and stops the
+         send before this, so arriving here means the client was bypassed or is
+         out of date, which is exactly when the server has to be the one saying
+         no. */
+      {
+        const _w = countWords(rawText);
+        if (_w > CHAT_MAX_WORDS) {
+          ws.send(JSON.stringify({type:'error',data:{
+            msg:`Message is ${_w} words. The limit is ${CHAT_MAX_WORDS}.` }}));
+          return;
+        }
+      }
 
       // Dunce check — dunced players can only post in the dunce channel
       if(isDunced(playerId)){
@@ -13568,12 +13708,44 @@ wss.on('connection',(ws,req)=>{
           c.send(JSON.stringify(payload));
         });
       }
+
+      /* THE MENTION IS RECORDED WHERE THE MESSAGE IS SENT, not where it is
+         received. A client-side badge only exists for someone who is connected,
+         which is exactly the case that did not need help: the point of this is
+         the player who was NOT here when their name was used.
+
+         Parsed from chatText, the text that actually shipped, so a name the
+         slur filter rewrote cannot notify anyone. */
+      try { recordChatMentions(chatText, actor, channel, chatRoom); } catch(e) { console.error('[chat mention]', e); }
+
+      /* Spam check runs LAST, on the message that has already been delivered.
+         The streak is what is punished, so the evidence has to survive it. */
+      try {
+        if (!isDevAccount(actor.id) && !isAdminAccount(actor.id) && !isOwnerAccount(actor.id)
+            && noteWallOfText(actor.id, countWords(chatText))) {
+          const reason = `Automatic: ${CHAT_WALL_STREAK} maximum-length messages in a row.`;
+          setDunce(actor.id, 'SYSTEM', reason);
+          broadcastToPlayer(actor.id, { type:'dunced', data:{ by:'SYSTEM', reason } });
+          broadcastToAdmins({ type:'admin_log', data:{
+            action:'dunce_auto', by:'SYSTEM', target:actor.name, reason } });
+          console.log('[Chat] auto-dunced '+actor.name+' for wall-of-text spam');
+        }
+      } catch(e) { console.error('[chat wall]', e); }
     }
 
 
     // -- Whisper / private message
     if(msg.type==='whisper'){
-      const rawText=String(msg.text||'').slice(0,240); if(!rawText)return;
+      const rawText=String(msg.text||'').slice(0,CHAT_MAX_CHARS).trim(); if(!rawText)return;
+      // A whisper is a message. Same rule, same refusal, same reason.
+      {
+        const _w = countWords(rawText);
+        if (_w > CHAT_MAX_WORDS) {
+          ws.send(JSON.stringify({type:'error',data:{
+            msg:`Message is ${_w} words. The limit is ${CHAT_MAX_WORDS}.` }}));
+          return;
+        }
+      }
       const targetName=String(msg.to||'').trim();
       if(!targetName){ws.send(JSON.stringify({type:'error',data:{msg:'Specify a recipient: @name message'}}));return;}
       if(isDunced(playerId)){ws.send(JSON.stringify({type:'error',data:{msg:'Dunced players cannot whisper.'}}));return;}
@@ -14689,6 +14861,66 @@ function frsScheduleTick() {
   } catch(e) { console.error('[FRS] schedule tick error:', e); }
 }
 setInterval(frsScheduleTick, 60_000);
+
+/* ── The weekly chat wipe ────────────────────────────────────────────────────
+   Chat clears on the tax day boundary: Sunday 12:00 America/Los_Angeles, the
+   same instant the FRS assessment runs.
+
+   IT SHARES THE BOUNDARY AND NOT THE SCHEDULER, and that distinction is the
+   whole reason this is not four lines inside frsScheduleTick. That tick returns
+   early when FRS is disabled, and FRS ships DORMANT - getFRSSettings().enabled
+   defaults to 0. Hooking the wipe in there would have made a weekly clear that
+   silently never fires, on a switch nobody would connect it to. "The same time
+   as tax day" is a statement about the CLOCK, not about whether the tax is
+   turned on.
+
+   Own marker in city_kv for the same reason last_run_ts exists on the FRS side:
+   a server that is down across noon on Sunday runs the wipe when it comes back
+   rather than skipping the week. A missed wipe is a week of scrollback that
+   outlives its cycle, which is exactly the thing being prevented.
+
+   THE CLIENT IS TOLD. Without a broadcast the wipe is invisible to anyone
+   already connected: the server forgets and their pane does not, so they go on
+   reading and quoting a week that no longer exists, and only a refresh reveals
+   it. */
+const CHAT_WIPE_KEY = 'chat_wipe_ts';
+function chatWipeNow(boundary) {
+  const rings = getChatHistory().length;
+  chatRings.clear();
+  let rows = 0, mentions = 0;
+  try { rows = wipeChatLog(); } catch(e) { console.error('[Chat wipe] log', e); }
+  // Mentions go with the messages they point at, but only those that predate
+  // the boundary: one arriving during the wipe is about a message that survives.
+  try { mentions = wipeChatMentionsBefore(boundary); } catch(e) { console.error('[Chat wipe] mentions', e); }
+  broadcast({ type:'chat_cleared', data:{ t: boundary } });
+  // Everyone's badges are now stale by exactly the rows just removed.
+  try {
+    for (const [pid, socks] of playerSockets) {
+      if (!socks || socks.size === 0) continue;
+      broadcastToPlayer(pid, { type:'chat_mentions', data: chatUnreadMentions(pid) });
+    }
+  } catch(e) { console.error('[Chat wipe] badges', e); }
+  console.log(`[Chat] Weekly wipe at ${new Date(boundary).toISOString()}: `
+    + `${rings} in memory, ${rows} rows, ${mentions} mentions cleared.`);
+}
+function chatWipeTick() {
+  try {
+    const boundary = _frsMostRecentSundayNoonLA(Date.now());
+    let last = 0;
+    try { last = Number(getCityKV(CHAT_WIPE_KEY) || 0) || 0; } catch(_) { last = 0; }
+    /* An unset marker is NOT a missed wipe. A fresh database, or the first boot
+       after this ships, would otherwise clear a chat nobody has had a cycle to
+       fill - and worse, do it as a surprise. Record the boundary and wait for
+       the next one. */
+    if (!last) { try { setCityKV(CHAT_WIPE_KEY, String(boundary)); } catch(_) {} return; }
+    if (last < boundary) {
+      chatWipeNow(boundary);
+      try { setCityKV(CHAT_WIPE_KEY, String(boundary)); } catch(e) { console.error('[Chat wipe] persist', e); }
+    }
+  } catch(e) { console.error('[Chat wipe] tick error:', e); }
+}
+setInterval(chatWipeTick, 60_000);
+chatWipeTick();
 
 // ── Telemetry: accumulate playtime for online players, once a minute ──────────
 setInterval(() => {

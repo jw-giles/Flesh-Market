@@ -38,7 +38,7 @@
 
      The constant is bumped by hand, which would rot, so tools/reach-check.mjs
      asserts it equals client/version.json. It cannot silently fall behind. */
-  var BUILD = '1.10.1.0';
+  var BUILD = '1.10.1.5';
   /* Published, because the terrain patches need the same cache bust for the
      same reason and a SECOND hand-bumped literal is a second thing to rot.
      reach-battle.js reads this and omits the query entirely if it is absent,

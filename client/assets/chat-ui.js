@@ -41,6 +41,10 @@
       // Clear unread
       var unread = document.getElementById('unread-' + _activeChatChannel);
       if (unread) { unread.style.display = 'none'; unread.textContent = '0'; }
+      // AND TELL THE SERVER, or the badge comes back on the next refresh. The
+      // count is persisted now: clearing the element clears the picture of the
+      // state, not the state.
+      if (window.markChannelRead) window.markChannelRead(_activeChatChannel);
       var badge = document.getElementById('chatChannelBadge');
       if (badge) {
         if (_activeChatChannel === 'whisper') badge.textContent = '';
@@ -114,12 +118,59 @@
     });
   }
 
+  // ── Word counter ─────────────────────────────────────────────────────────
+  /* THE SAME COUNT THE SERVER MAKES. If these two disagree the counter reads
+     533 next to a server that refuses the message, which is worse than having
+     no counter at all: the player is told the rule and then the rule lies.
+     Mirrored from countWords in server.js. */
+  var CHAT_MAX_WORDS = 534;
+  function countWords(s){
+    var t = String(s || '').trim();
+    return t ? t.split(/\s+/).length : 0;
+  }
+  window.chatCountWords = countWords;
+  /* The counter stays out of the way until it matters. A number ticking beside
+     every three-word line is noise; what a player needs is warning that they
+     are approaching a cut off, which is the whole point of showing it. */
+  function paintWordCount(){
+    var input = document.getElementById('chatInput');
+    var out   = document.getElementById('chatWordCount');
+    if (!input || !out) return;
+    var n = countWords(input.value);
+    var over = n > CHAT_MAX_WORDS;
+    // Shown from three quarters of the way, and always once over.
+    if (n < CHAT_MAX_WORDS * 0.75) { out.style.display = 'none'; return; }
+    out.style.display = 'inline';
+    out.textContent = n + ' / ' + CHAT_MAX_WORDS;
+    out.style.color = over ? '#ff6a6a' : (n > CHAT_MAX_WORDS * 0.9 ? '#f0b454' : '#7a7a6a');
+    var btn = document.getElementById('chatSend');
+    if (btn) { btn.disabled = over; btn.style.opacity = over ? '0.45' : ''; }
+  }
+  window.paintChatWordCount = paintWordCount;
+  {
+    var wcInput = document.getElementById('chatInput');
+    if (wcInput) {
+      wcInput.addEventListener('input', paintWordCount);
+      wcInput.addEventListener('paste', function(){ setTimeout(paintWordCount, 0); });
+    }
+  }
+
   // ── Send message ─────────────────────────────────────────────────────────
   window.sendChatMsg = function(){
     var input = document.getElementById('chatInput');
     if (!input) return;
     var t = input.value.trim();
     if (!t) return;
+    /* Refused here as well as on the server, and the input is NOT cleared.
+       A message rejected for length is one the player spent time on; throwing
+       it away to punish them for going over is not a length rule, it is a
+       shredder. */
+    var wc = countWords(t);
+    if (wc > CHAT_MAX_WORDS) {
+      try { showToast('Message is ' + wc + ' words. The limit is ' + CHAT_MAX_WORDS + '.', '#ff6a6a'); } catch(e) {}
+      paintWordCount();
+      return;
+    }
     drop.style.display = 'none';
     if (typeof ws !== 'undefined' && ws) {
       if (_activeChatChannel === 'whisper') {
@@ -144,6 +195,7 @@
       }
     }
     input.value = '';
+    paintWordCount();
   };
   var sendBtn = document.getElementById('chatSend');
   if (sendBtn) sendBtn.addEventListener('click', window.sendChatMsg);
